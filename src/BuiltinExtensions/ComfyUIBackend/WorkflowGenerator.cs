@@ -1432,7 +1432,7 @@ public partial class WorkflowGenerator
         {
             return CreateNode("LTXVAudioVAEEncode", new JObject()
             {
-                ["vae"] = vae,
+                ["audio_vae"] = vae,
                 ["audio"] = audio
             }, id);
         }
@@ -1624,13 +1624,17 @@ public partial class WorkflowGenerator
                         ["length"] = Frames,
                         ["batch_size"] = 1
                     });
-                    string emptyAudio = g.CreateNode("LTXVEmptyLatentAudio", new JObject()
+                    if (g.FinalLatentAudio is null)
                     {
-                        ["audio_vae"] = g.FinalAudioVae,
-                        ["frames_number"] = Frames,
-                        ["frame_rate"] = VideoFPS,
-                        ["batch_size"] = 1
-                    });
+                        string emptyAudio = g.CreateNode("LTXVEmptyLatentAudio", new JObject()
+                        {
+                            ["audio_vae"] = g.FinalAudioVae,
+                            ["frames_number"] = Frames,
+                            ["frame_rate"] = VideoFPS,
+                            ["batch_size"] = 1
+                        });
+                        g.FinalLatentAudio = NodePath(emptyAudio, 0);
+                    }
                     string preproc = g.CreateNode("LTXVPreprocess", new JObject()
                     {
                         ["image"] = g.FinalImageOut,
@@ -1647,7 +1651,7 @@ public partial class WorkflowGenerator
                     string concatNode = g.CreateNode("LTXVConcatAVLatent", new JObject()
                     {
                         ["video_latent"] = NodePath(latentOutNode, 0),
-                        ["audio_latent"] = NodePath(emptyAudio, 0)
+                        ["audio_latent"] = g.FinalLatentAudio
                     });
                     Latent = [concatNode, 0];
                 }
