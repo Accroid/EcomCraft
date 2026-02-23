@@ -394,6 +394,15 @@ public partial class WorkflowGenerator
         return (model, clip);
     }
 
+    public string CreateAudioLoadNode(AudioFile audio, string param, string nodeId = null)
+    {
+        // TODO: Fallback for base LoadAudio node?
+        return CreateNode("SwarmLoadAudioB64", new JObject()
+        {
+            ["audio_base64"] = audio.AsBase64
+        }, nodeId);
+    }
+
     /// <summary>Creates a new node to load an image.</summary>
     public string CreateLoadImageNode(ImageFile img, string param, bool resize, string nodeId = null, int? width = null, int? height = null)
     {
@@ -1414,6 +1423,27 @@ public partial class WorkflowGenerator
             ["vae"] = vae,
             ["pixels"] = image
         }, id);
+    }
+
+    /// <summary>Encodes audio using the specified VAE into latent audio.</summary>
+    public string CreateAudioVAEEncode(JArray vae, JArray audio, string id = null)
+    {
+        if (IsLTXV2())
+        {
+            return CreateNode("LTXVAudioVAEEncode", new JObject()
+            {
+                ["vae"] = vae,
+                ["audio"] = audio
+            }, id);
+        }
+        else
+        {
+            return CreateNode("VAEEncodeAudio", new JObject()
+            {
+                ["vae"] = vae,
+                ["audio"] = audio
+            }, id);
+        }
     }
 
     /// <summary>Enables Differential Diffusion on the current model if is enabled in user settings.</summary>
