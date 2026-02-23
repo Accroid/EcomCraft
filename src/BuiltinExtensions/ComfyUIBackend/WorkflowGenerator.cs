@@ -143,6 +143,9 @@ public partial class WorkflowGenerator
     /// <summary>If true, Differential Diffusion node has been attached to the current model.</summary>
     public bool IsDifferentialDiffusion = false;
 
+    /// <summary>If true, assume all handling is video handling.</summary>
+    public bool AssumeVideo = false;
+
     /// <summary>Outputs of <see cref="CreateImageMaskCrop(JArray, JArray, int, JArray, T2IModel, double, double)"/> if used for the main image.</summary>
     public ImageMaskCropData MaskShrunkInfo = new(null, null, null, null);
 
@@ -410,10 +413,27 @@ public partial class WorkflowGenerator
             }
             else
             {
-                result = CreateNode("SwarmLoadImageB64", new JObject()
+                if (img.Type.MetaType == MediaMetaType.Video)
                 {
-                    ["image_base64"] = img.AsBase64
-                }, resize ? null : nodeId);
+                    result = CreateNode("SwarmLoadVideoB64", new JObject()
+                    {
+                        ["video_base64"] = img.AsBase64
+                    }, resize ? null : nodeId);
+                    string splitNode = CreateNode("GetVideoComponents", new JObject()
+                    {
+                        ["video"] = NodePath(result, 0)
+                    });
+                    result = splitNode;
+                    FinalAudioOut = [splitNode, 1];
+                    AssumeVideo = true;
+                }
+                else
+                {
+                    result = CreateNode("SwarmLoadImageB64", new JObject()
+                    {
+                        ["image_base64"] = img.AsBase64
+                    }, resize ? null : nodeId);
+                }
                 if (resize)
                 {
                     result = CreateNode("ImageScale", new JObject()
@@ -635,15 +655,15 @@ public partial class WorkflowGenerator
             });
             data = new NodeOutData(decoded, 0, NodeOutData.DT_AUDIO);
         }
+        if (data.DataType == NodeOutData.DT_VIDEO || AssumeVideo)
+        {
+            return CreateAnimationSaveNode([data.Path], Text2VideoFPS(), UserInput.Get(T2IParamTypes.Text2VideoFormat, "h264-mp4"), id);
+        }
         if (data.DataType == NodeOutData.DT_IMAGE)
         {
             return CreateImageSaveNode([data.Path], id);
         }
-        else if (data.DataType == NodeOutData.DT_VIDEO)
-        {
-            return CreateAnimationSaveNode([data.Path], Text2VideoFPS(), UserInput.Get(T2IParamTypes.Text2VideoFormat, "h264-mp4"), id);
-        }
-        else if (data.DataType == NodeOutData.DT_AUDIO)
+        if (data.DataType == NodeOutData.DT_AUDIO)
         {
             return CreateAudioSaveNode([data.Path], id);
         }
@@ -664,26 +684,9 @@ public partial class WorkflowGenerator
     /// <summary>Creates a node to save an image output.</summary>
     public string CreateImageSaveNode(JArray image, string id = null)
     {
-        if (IsVideoModel())
+        if (IsVideoModel() || AssumeVideo)
         {
-            if (UserInput.Get(T2IParamTypes.VideoBoomerang, false))
-            {
-                string bounced = CreateNode("SwarmVideoBoomerang", new JObject()
-                {
-                    ["images"] = image
-                });
-                image = [bounced, 0];
-            }
-            return CreateNode("SwarmSaveAnimationWS", new JObject()
-            {
-                ["images"] = image,
-                ["fps"] = Text2VideoFPS(),
-                ["lossless"] = false,
-                ["quality"] = 95,
-                ["method"] = "default",
-                ["format"] = UserInput.Get(T2IParamTypes.Text2VideoFormat, "h264-mp4"),
-                ["audio"] = FinalAudioOut
-            }, id);
+            return CreateAnimationSaveNode(image, Text2VideoFPS(), UserInput.Get(T2IParamTypes.Text2VideoFormat, "h264-mp4"), id);
         }
         else if (Features.Contains("comfy_saveimage_ws") && !RestrictCustomNodes)
         {
@@ -706,6 +709,14 @@ public partial class WorkflowGenerator
     /// <summary>Creates a node to save an animation output.</summary>
     public string CreateAnimationSaveNode(JArray anim, int fps, string format, string id = null)
     {
+        if (UserInput.Get(T2IParamTypes.VideoBoomerang, false))
+        {
+            string bounced = CreateNode("SwarmVideoBoomerang", new JObject()
+            {
+                ["images"] = anim
+            });
+            anim = [bounced, 0];
+        }
         return CreateNode("SwarmSaveAnimationWS", new JObject()
         {
             ["images"] = anim,
