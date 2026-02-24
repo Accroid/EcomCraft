@@ -1555,7 +1555,7 @@ public class WorkflowGeneratorSteps
                             }
                             newSegmentNode = g.CreateNode("SwarmYoloDetection", new JObject()
                             {
-                                ["image"] = g.CurrentMedia.AsRawImage(g.CurrentVae).Path,
+                                ["image"] = g.CurrentMedia.Path,
                                 ["model_name"] = fullname,
                                 ["index"] = index,
                                 ["class_filter"] = classFilter,
@@ -1567,7 +1567,7 @@ public class WorkflowGeneratorSteps
                         {
                             newSegmentNode = g.CreateNode("SwarmClipSeg", new JObject()
                             {
-                                ["images"] = g.CurrentMedia.AsRawImage(g.CurrentVae).Path,
+                                ["images"] = g.CurrentMedia.Path,
                                 ["match_text"] = dataText,
                                 ["threshold"] = Math.Abs(part.Strength)
                             });
@@ -1632,7 +1632,7 @@ public class WorkflowGeneratorSteps
                         new WGNodeData([imageNode, 0], g, WGNodeData.DT_IMAGE).SaveOutput(null, null, g.GetStableDynamicID(50000, 0));
                     }
                     int oversize = g.UserInput.Get(T2IParamTypes.SegmentMaskOversize, 16);
-                    g.MaskShrunkInfo = g.CreateImageMaskCrop([segmentNode, 0], g.CurrentMedia.AsRawImage(g.CurrentVae).Path, oversize, vae.Path, g.FinalLoadedModel, thresholdMax: g.UserInput.Get(T2IParamTypes.SegmentThresholdMax, 1));
+                    g.MaskShrunkInfo = g.CreateImageMaskCrop([segmentNode, 0], g.CurrentMedia.Path, oversize, vae.Path, g.FinalLoadedModel, thresholdMax: g.UserInput.Get(T2IParamTypes.SegmentThresholdMax, 1));
                     g.EnableDifferential();
                     if (part.ContextID > 0)
                     {
@@ -1647,10 +1647,11 @@ public class WorkflowGeneratorSteps
                     int startStep = (int)Math.Round(steps * (1 - part.Strength2));
                     long seed = g.UserInput.Get(T2IParamTypes.Seed) + 2 + i;
                     double cfg = g.UserInput.GetNullable(T2IParamTypes.CFGScale, part.ContextID, false) ?? g.UserInput.GetNullable(T2IParamTypes.SegmentCFGScale, part.ContextID) ?? g.UserInput.GetNullable(T2IParamTypes.RefinerCFGScale, part.ContextID) ?? g.UserInput.Get(T2IParamTypes.CFGScale, 7, sectionId: part.ContextID);
+                    WGNodeData beforeImage = g.CurrentMedia;
                     string sampler = g.CreateKSampler(model.Path, prompt, negPrompt, [g.MaskShrunkInfo.MaskedLatent, 0], cfg, steps, startStep, 10000, seed, false, true, sectionId: part.ContextID);
                     g.CurrentMedia = g.CurrentMedia.WithPath([sampler, 0], WGNodeData.DT_LATENT_IMAGE);
                     g.CurrentMedia = g.CurrentMedia.AsRawImage(vae);
-                    JArray composited = g.RecompositeCropped(g.MaskShrunkInfo.BoundsNode, [g.MaskShrunkInfo.CroppedMask, 0], g.CurrentMedia.AsRawImage(g.CurrentVae).Path, g.CurrentMedia.Path);
+                    JArray composited = g.RecompositeCropped(g.MaskShrunkInfo.BoundsNode, [g.MaskShrunkInfo.CroppedMask, 0], beforeImage.Path, g.CurrentMedia.Path);
                     g.CurrentMedia = g.CurrentMedia.WithPath(composited);
                     g.MaskShrunkInfo = new(null, null, null, null);
                 }
