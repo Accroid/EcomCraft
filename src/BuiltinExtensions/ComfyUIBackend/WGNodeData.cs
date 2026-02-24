@@ -50,6 +50,9 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
     /// <summary>The frames per second of a video, if known and valid.</summary>
     public int? FPS = null;
 
+    /// <summary>If this is a video data object, and audio is separate but tracked, this is the audio associated.</summary>
+    public WGNodeData AttachedAudio = null;
+
     /// <summary>The backing relevant workflow generator.</summary>
     public WorkflowGenerator Gen = _gen;
 
@@ -62,7 +65,7 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
     /// <summary>Create an exact copy of this object.</summary>
     public WGNodeData Duplicate() => (WGNodeData)MemberwiseClone();
 
-    /// <summary>Returns a copy of this node data with a different node path and optional different type.</summary>
+    /// <summary>Returns a copy of this node data with a different node path and optional different type. Always returns a new object instance.</summary>
     public WGNodeData WithPath(JArray path, string dataType = null)
     {
         WGNodeData dup = Duplicate();
@@ -70,9 +73,6 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
         dup.DataType = dataType ?? dup.DataType;
         return dup;
     }
-
-    /// <summary>Returns a copy of this node data with a different node path and optional different type.</summary>
-    public WGNodeData WithPath(string node, int index, string dataType = null) => WithPath([node, index], dataType);
 
     /// <summary>Decode the latent data in this object to raw media data. If it is already raw, it will be returned unmodified.</summary>
     /// <param name="vae">The VAE or AudioVAE to decode with.</param>
@@ -90,7 +90,7 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
         if (DataType == DT_LATENT_IMAGE || DataType == DT_LATENT_VIDEO)
         {
             WGAssert(!wantAudio, $"Data is {DataType} but wantAudio is true, mismatched and therefore failed.");
-            string decoded = Gen.CreateVAEDecode(vae.Path, Path, canAudioDecode: false, id: id);
+            string decoded = Gen.InternalCreateVAEDecode(vae.Path, Path, canAudioDecode: false, id: id);
             return WithPath([decoded, 0], DT_IMAGE);
         }
         if (DataType == DT_LATENT_AUDIOVIDEO)
@@ -109,6 +109,7 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
                 else
                 {
                     WGNodeData latentVideo = WithPath([separated, 0], DT_LATENT_VIDEO);
+                    latentVideo.AttachedAudio = WithPath([separated, 1], DT_LATENT_AUDIO);
                     return latentVideo.DecodeLatents(vae, false, id);
                 }
             }
@@ -208,35 +209,83 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
         return null;
     }
 
+    /// <summary>Returns an object that is definitely compatible with latent image or video inputs, encoding to latent with the VAE or separating A/V as needed, or throws an exception if not possible.</summary>
+    public WGNodeData AsLatentImage(WGNodeData vae)
+    {
+        if (DataType == DT_LATENT_VIDEO || DataType == DT_LATENT_IMAGE)
+        {
+            return this;
+        }
+        if (DataType == DT_VIDEO || DataType == DT_IMAGE)
+        {
+            return EncodeToLatent(vae);
+        }
+        else if (DataType == DT_LATENT_AUDIOVIDEO)
+        {
+            if (IsCompat(T2IModelClassSorter.CompatLtxv2))
+            {
+                string separated = Gen.CreateNode("LTXVSeparateAVLatent", new JObject()
+                {
+                    ["av_latent"] = Path
+                });
+                WGNodeData result = WithPath([separated, 0], DT_LATENT_VIDEO);
+                result.AttachedAudio = WithPath([separated, 1], DT_LATENT_AUDIO);
+                return result;
+            }
+            else
+            {
+                WGAssert(false, $"Cannot convert LATENT_AUDIOVIDEO data from compat class '{Compat}' to latent video.");
+            }
+        }
+        WGAssert(false, $"Cannot convert data of type '{DataType}' to latent video.");
+        return null;
+    }
+
+    /// <summary>Returns an object that is definitely compatible with raw image or video inputs, decoding from latent with the VAE or separating A/V as needed, or throws an exception if not possible.</summary>
+    public WGNodeData AsRawImage(WGNodeData vae)
+    {
+        if (DataType == DT_IMAGE || DataType == DT_VIDEO)
+        {
+            return this;
+        }
+        if (DataType == DT_LATENT_IMAGE || DataType == DT_LATENT_VIDEO || DataType == DT_LATENT_AUDIOVIDEO)
+        {
+            return DecodeLatents(vae, false);
+        }
+        WGAssert(false, $"Cannot convert data of type '{DataType}' to raw image/video.");
+        return null;
+    }
+
     /// <summary>Emit nodes to save this data as output. Only works with media or latent media types (latents will be autodecoded using the given VAEs).</summary>
-    public string SaveOutput(WGNodeData vae, WGNodeData audioVae, WGNodeData attachAudio = null, string id = null)
+    public string SaveOutput(WGNodeData vae, WGNodeData audioVae, string id = null)
     {
         if (DataType == DT_LATENT_IMAGE || DataType == DT_LATENT_VIDEO)
         {
-            WGNodeData decoded = DecodeLatents(vae, false);
-            return decoded.SaveOutput(vae, audioVae, attachAudio, id);
+            WGNodeData decoded = AsRawImage(vae);
+            return decoded.SaveOutput(vae, audioVae, id);
         }
         if (DataType == DT_LATENT_AUDIO)
         {
             WGNodeData decoded = DecodeLatents(audioVae, true);
-            return decoded.SaveOutput(vae, audioVae, attachAudio, id);
+            return decoded.SaveOutput(vae, audioVae, id);
         }
         if (DataType == DT_LATENT_AUDIOVIDEO)
         {
-            WGNodeData decodedVideo = DecodeLatents(vae, false);
-            WGNodeData decodedAudio = attachAudio ?? DecodeLatents(audioVae, true);
-            return decodedVideo.SaveOutput(vae, audioVae, decodedAudio, id);
+            WGNodeData decodedVideo = AsRawImage(vae);
+            return decodedVideo.SaveOutput(vae, audioVae, id);
         }
-        if (attachAudio is not null)
+        if (AttachedAudio is not null)
         {
-            if (attachAudio.DataType == DT_LATENT_AUDIO)
+            if (AttachedAudio.DataType == DT_LATENT_AUDIO)
             {
-                attachAudio = attachAudio.DecodeLatents(audioVae, true);
+                WGNodeData dup = Duplicate();
+                dup.AttachedAudio = AttachedAudio.DecodeLatents(audioVae, true);
+                return dup.SaveOutput(vae, audioVae, id);
             }
-            WGAssert(attachAudio.DataType == DT_AUDIO, $"Can only attach audio data, but attachAudio is of type {attachAudio.DataType}.");
+            WGAssert(AttachedAudio.DataType == DT_AUDIO, $"Can only attach audio data, but attachAudio is of type {AttachedAudio.DataType}.");
         }
         WGAssert(IsRawMedia, $"Can only save output from raw media data, but data is of type {DataType}.");
-        if (DataType == DT_IMAGE && attachAudio is null)
+        if (DataType == DT_IMAGE && AttachedAudio is null)
         {
             if (Features.Contains("comfy_saveimage_ws") && !WorkflowGenerator.RestrictCustomNodes)
             {
@@ -267,7 +316,7 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
                 });
                 WGNodeData newNode = WithPath([bounced, 0], DT_VIDEO);
                 newNode.Frames = Frames is not null ? Frames * 2 : null;
-                return newNode.SaveOutput(vae, audioVae, attachAudio, id);
+                return newNode.SaveOutput(vae, audioVae, id);
             }
             return Gen.CreateNode("SwarmSaveAnimationWS", new JObject()
             {
@@ -277,12 +326,12 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
                 ["quality"] = 95,
                 ["method"] = "default",
                 ["format"] = UserInput.Get(T2IParamTypes.VideoFormat, "h264-mp4"),
-                ["audio"] = attachAudio?.Path
+                ["audio"] = AttachedAudio?.Path
             }, id);
         }
         if (DataType == DT_AUDIO)
         {
-            WGAssert(attachAudio is null, $"Cannot attach audio onto other audio.");
+            WGAssert(AttachedAudio is null, $"Cannot attach audio onto other audio.");
             // TODO: SwarmSaveAudio? Better format control instead of just using mp3?
             return Gen.CreateNode("SaveAudioMP3", new JObject()
             {

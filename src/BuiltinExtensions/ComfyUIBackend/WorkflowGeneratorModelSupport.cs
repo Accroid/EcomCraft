@@ -320,7 +320,7 @@ public partial class WorkflowGenerator
                     ["batch_size"] = batchSize,
                     ["frames_number"] = UserInput.Get(T2IParamTypes.Text2VideoFrames, 97),
                     ["frame_rate"] = UserInput.Get(T2IParamTypes.VideoFPS, 24),
-                    ["audio_vae"] = FinalAudioVae
+                    ["audio_vae"] = CurrentAudioVae.Path
                 });
                 FinalLatentAudio = [emptyAudio, 0];
             }
@@ -347,7 +347,7 @@ public partial class WorkflowGenerator
                 ["length"] = UserInput.Get(T2IParamTypes.Text2VideoFrames, 81),
                 ["height"] = height,
                 ["width"] = width,
-                ["vae"] = FinalVae
+                ["vae"] = CurrentVae.Path
             }, id);
         }
         else if (IsHunyuanVideo15())
@@ -489,7 +489,7 @@ public partial class WorkflowGenerator
             {
                 ["ckpt_name"] = ckpt
             });
-            g.FinalAudioVae = [avaeLoader, 0];
+            g.CurrentAudioVae = new WGNodeData([avaeLoader, 0], g, WGNodeData.DT_AUDIOVAE, g.CurrentCompat());
         }
 
         public string RequireClipModel(string name, string url, string hash, T2IRegisteredParam<T2IModel> param)
@@ -699,6 +699,13 @@ public partial class WorkflowGenerator
     /// <summary>Creates a model loader and adapts it with any registered model adapters, and returns (Model, Clip, VAE).</summary>
     public (T2IModel, JArray, JArray, JArray) CreateStandardModelLoader(T2IModel model, string type, string id = null, bool noCascadeFix = false, int sectionId = 0)
     {
+        (T2IModel modelObj, WGNodeData modelNode, WGNodeData tencNode, WGNodeData vaeNode) = CreateModelLoader(model, type, id, noCascadeFix, sectionId);
+        return (modelObj, modelNode?.Path, tencNode?.Path, vaeNode?.Path);
+    }
+
+    /// <summary>Creates a model loader and adapts it with any registered model adapters, and returns (Model, Clip, VAE).</summary>
+    public (T2IModel, WGNodeData, WGNodeData, WGNodeData) CreateModelLoader(T2IModel model, string type, string id = null, bool noCascadeFix = false, int sectionId = 0)
+    {
         ModelLoadHelpers helpers = new(this);
         string helper = $"modelloader_{model.Name}_{type}";
         if (NodeHelpers.TryGetValue(helper, out string alreadyLoaded))
@@ -707,7 +714,10 @@ public partial class WorkflowGenerator
             LoadingModel = [parts[0], int.Parse(parts[1])];
             LoadingClip = parts[2].Length == 0 ? null : [parts[2], int.Parse(parts[3])];
             LoadingVAE = parts[4].Length == 0 ? null : [parts[4], int.Parse(parts[5])];
-            return (model, LoadingModel, LoadingClip, LoadingVAE);
+            WGNodeData modelNode = new(LoadingModel, this, WGNodeData.DT_MODEL, CurrentCompat());
+            WGNodeData tencNode = LoadingClip is null ? null : new WGNodeData(LoadingClip, this, WGNodeData.DT_TEXTENC, CurrentCompat());
+            WGNodeData vaeNode = LoadingVAE is null ? null : new WGNodeData(LoadingVAE, this, WGNodeData.DT_VAE, CurrentCompat());
+            return (model, modelNode, tencNode, vaeNode);
         }
         IsDifferentialDiffusion = false;
         LoadingModelType = type;
@@ -1114,7 +1124,7 @@ public partial class WorkflowGenerator
                 // Hypothetical approximation of what would probably be right if comfy wasn't just entirely broken on handling this
                 helpers.LoadClip2("ltxv", helpers.GetGemma3_12bModel(), helpers.GetLTX2EmbedClip());
                 helpers.DoVaeLoader(null, (string)null, "ltx2-audio-vae");
-                FinalAudioVae = LoadingVAE;
+                CurrentAudioVae = new WGNodeData([LoadingVAE, 0], this, WGNodeData.DT_AUDIOVAE, CurrentCompat());
                 helpers.DoVaeLoader(null, "lightricks-ltx-video-2", "ltx2-video-vae");
                 throw new SwarmUserErrorException("LTX2 requires the safetensors checkpoint format currently due to comfy limitations.");
             }
@@ -1213,7 +1223,7 @@ public partial class WorkflowGenerator
             {
                 helpers.DoVaeLoader(null, T2IModelClassSorter.CompatAceStep15, "ace-step-15-vae");
             }
-            FinalAudioVae = LoadingVAE;
+            CurrentAudioVae = new WGNodeData([LoadingVAE, 0], this, WGNodeData.DT_AUDIOVAE, CurrentCompat());
         }
         else if (!string.IsNullOrWhiteSpace(predType) && LoadingModel is not null)
         {
@@ -1283,6 +1293,9 @@ public partial class WorkflowGenerator
             throw new SwarmUserErrorException($"Model loader for {model.Name} didn't work - are you sure it has an architecture ID set properly? (Currently set to: '{model.Metadata?.ModelClassType}')");
         }
         NodeHelpers[helper] = $"{LoadingModel[0]}:{LoadingModel[1]}" + (LoadingClip is null ? "::" : $":{LoadingClip[0]}:{LoadingClip[1]}") + (LoadingVAE is null ? "::" : $":{LoadingVAE[0]}:{LoadingVAE[1]}");
-        return (model, LoadingModel, LoadingClip, LoadingVAE);
+        WGNodeData modelNodeData = new(LoadingModel, this, WGNodeData.DT_MODEL, CurrentCompat());
+        WGNodeData tencNodeData = LoadingClip is null ? null : new WGNodeData(LoadingClip, this, WGNodeData.DT_TEXTENC, CurrentCompat());
+        WGNodeData vaeNodeData = LoadingVAE is null ? null : new WGNodeData(LoadingVAE, this, WGNodeData.DT_VAE, CurrentCompat());
+        return (model, modelNodeData, tencNodeData, vaeNodeData);
     }
 }
