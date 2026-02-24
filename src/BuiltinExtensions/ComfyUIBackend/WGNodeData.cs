@@ -224,6 +224,7 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
         {
             return WithPath((JArray)srcInputs["samples"], DT_LATENT_AUDIO);
         }
+        WGAssert(vae is not null, $"VAE Missing for latent encoding of {DataType} data.");
         if (DataType == DT_IMAGE || DataType == DT_VIDEO)
         {
             string encoded;

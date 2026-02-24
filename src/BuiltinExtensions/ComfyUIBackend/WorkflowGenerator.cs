@@ -1442,9 +1442,8 @@ public partial class WorkflowGenerator
             NegCond = g.CreateConditioning(NegativePrompt, clip.Path, VideoModel, false, isVideo: true);
         }
 
-        public void PrepFullCond(WorkflowGenerator g)
+        public void PrepFullCond(WorkflowGenerator g, WGNodeData origSrcImg)
         {
-            WGNodeData origSrcImg = g.CurrentMedia;
             // TODO: Apply width/height/frames/FPS properly to CurrentMedia
             if (VideoModel.ModelClass?.CompatClass?.ID == T2IModelClassSorter.CompatLtxv.ID)
             {
@@ -1461,7 +1460,7 @@ public partial class WorkflowGenerator
                         ["positive"] = PosCond,
                         ["negative"] = NegCond,
                         ["vae"] = Vae.Path,
-                        ["image"] = g.CurrentMedia.Path,
+                        ["image"] = origSrcImg.Path,
                         ["width"] = Width,
                         ["height"] = Height,
                         ["length"] = Frames,
@@ -1556,7 +1555,7 @@ public partial class WorkflowGenerator
                     string latentNode = g.CreateNode("CosmosImageToVideoLatent", new JObject()
                     {
                         ["vae"] = Vae.Path,
-                        ["start_image"] = g.CurrentMedia.Path,
+                        ["start_image"] = origSrcImg.Path,
                         ["width"] = Width,
                         ["height"] = Height,
                         ["length"] = Frames,
@@ -1588,7 +1587,7 @@ public partial class WorkflowGenerator
                     ["height"] = Height,
                     ["length"] = Frames,
                     ["batch_size"] = 1,
-                    ["start_image"] = g.CurrentMedia.Path,
+                    ["start_image"] = origSrcImg.Path,
                     ["guidance_type"] = VideoModel.ModelClass?.ID == "hunyuan-video-i2v-v2" ? "v2 (replace)" : "v1 (concat)"
                 });
                 PosCond = [i2vnode, 0];
@@ -1610,7 +1609,7 @@ public partial class WorkflowGenerator
                     ["height"] = Height,
                     ["length"] = Frames,
                     ["batch_size"] = 1,
-                    ["start_image"] = g.CurrentMedia.Path
+                    ["start_image"] = origSrcImg.Path
                 });
                 PosCond = [i2vnode, 0];
                 NegCond = [i2vnode, 1];
@@ -1634,7 +1633,7 @@ public partial class WorkflowGenerator
                 string encoded = g.CreateNode("CLIPVisionEncode", new JObject()
                 {
                     ["clip_vision"] = clipLoaderNode,
-                    ["image"] = g.CurrentMedia.Path,
+                    ["image"] = origSrcImg.Path,
                     ["crop"] = "center"
                 });
                 JArray clipVis = [encoded, 0];
@@ -1647,7 +1646,7 @@ public partial class WorkflowGenerator
                     ["height"] = Height,
                     ["length"] = Frames,
                     ["batch_size"] = 1,
-                    ["start_image"] = g.CurrentMedia.Path,
+                    ["start_image"] = origSrcImg.Path,
                     ["clip_vision_output"] = clipVis
                 });
                 PosCond = [i2vnode, 0];
@@ -1673,7 +1672,7 @@ public partial class WorkflowGenerator
                     ["positive"] = PosCond,
                     ["negative"] = NegCond,
                     ["vae"] = Vae.Path,
-                    ["pixels"] = g.CurrentMedia.Path
+                    ["pixels"] = origSrcImg.Path
                 });
                 PosCond = [ip2pNode, 0];
                 NegCond = [ip2pNode, 1];
@@ -1686,7 +1685,7 @@ public partial class WorkflowGenerator
             {
                 VideoFPS ??= 24;
                 Frames ??= 49;
-                JArray imageIn = g.CurrentMedia.Path;
+                JArray imageIn = origSrcImg.Path;
                 if (BatchIndex != -1 && BatchLen != -1)
                 {
                     string fromBatch = g.CreateNode("ImageFromBatch", new JObject()
@@ -1759,7 +1758,7 @@ public partial class WorkflowGenerator
                     ["clip_name"] = targetName
                 });
                 JArray clipLoaderNode = [clipLoader, 0];
-                JArray imageIn = g.CurrentMedia.Path;
+                JArray imageIn = origSrcImg.Path;
                 if (BatchIndex != -1 && BatchLen != -1)
                 {
                     string fromBatch = g.CreateNode("ImageFromBatch", new JObject()
@@ -1849,7 +1848,7 @@ public partial class WorkflowGenerator
             {
                 VideoFPS ??= 22;
                 Frames ??= 49;
-                JArray imageIn = g.CurrentMedia.Path;
+                JArray imageIn = origSrcImg.Path;
                 if (BatchIndex != -1 && BatchLen != -1)
                 {
                     string fromBatch = g.CreateNode("ImageFromBatch", new JObject()
@@ -1931,7 +1930,7 @@ public partial class WorkflowGenerator
                 string conditioning = g.CreateNode("SVD_img2vid_Conditioning", new JObject()
                 {
                     ["clip_vision"] = clipVision,
-                    ["init_image"] = g.CurrentMedia.Path,
+                    ["init_image"] = origSrcImg.Path,
                     ["vae"] = Vae.Path,
                     ["width"] = Width,
                     ["height"] = Height,
@@ -1966,10 +1965,11 @@ public partial class WorkflowGenerator
         {
             altHandler(genInfo);
         }
+        WGNodeData srcImage = CurrentMedia;
         if (!genInfo.HasMatchedModelData)
         {
             genInfo.PrepModelAndCond(this);
-            genInfo.PrepFullCond(this);
+            genInfo.PrepFullCond(this, srcImage);
         }
         if (genInfo.AltLatent is not null)
         {
@@ -1995,6 +1995,7 @@ public partial class WorkflowGenerator
         CurrentMedia = CurrentMedia.WithPath([samplered, 0]);
         CurrentMedia.Frames = genInfo.Frames ?? CurrentMedia.Frames;
         CurrentMedia.FPS = genInfo.VideoFPS ?? CurrentMedia.FPS;
+        WGNodeData latent = CurrentMedia;
         if (genInfo.VideoSwapModel is not null)
         {
             IsImageToVideoSwap = true;
@@ -2003,14 +2004,14 @@ public partial class WorkflowGenerator
             int steps = genInfo.Steps;
             genInfo.PosCond = CreateConditioning(genInfo.Prompt, clip.Path, swapModel, true, isVideo: true, isVideoSwap: true);
             genInfo.NegCond = CreateConditioning(genInfo.NegativePrompt, clip.Path, swapModel, false, isVideo: true, isVideoSwap: true);
-            genInfo.PrepFullCond(this);
+            genInfo.PrepFullCond(this, srcImage);
             explicitSampler = UserInput.Get(ComfyUIBackendExtension.SamplerParam, null, sectionId: T2IParamInput.SectionID_VideoSwap, includeBase: false) ?? explicitSampler;
             explicitScheduler = UserInput.Get(ComfyUIBackendExtension.SchedulerParam, null, sectionId: T2IParamInput.SectionID_VideoSwap, includeBase: false) ?? explicitScheduler;
             cfg = UserInput.GetNullable(T2IParamTypes.CFGScale, T2IParamInput.SectionID_VideoSwap, false) ?? cfg;
             steps = UserInput.GetNullable(T2IParamTypes.Steps, T2IParamInput.SectionID_VideoSwap, false) ?? steps;
             endStep = (int)Math.Round(steps * (1 - genInfo.VideoSwapPercent));
             // TODO: Should class-changes be allowed (must re-emit all the model-specific cond logic, maybe a vae reencoder - this is basically a refiner run)
-            samplered = CreateKSampler(swapVideoModel.Path, genInfo.PosCond, genInfo.NegCond, CurrentMedia.Path, cfg, steps, endStep, 10000, genInfo.Seed + 1, false, false, sigmin: 0.002, sigmax: 1000, previews: previewType, defsampler: genInfo.DefaultSampler, defscheduler: genInfo.DefaultScheduler, hadSpecialCond: genInfo.HadSpecialCond, explicitSampler: explicitSampler, explicitScheduler: explicitScheduler, sectionId: T2IParamInput.SectionID_VideoSwap);
+            samplered = CreateKSampler(swapVideoModel.Path, genInfo.PosCond, genInfo.NegCond, latent.Path, cfg, steps, endStep, 10000, genInfo.Seed + 1, false, false, sigmin: 0.002, sigmax: 1000, previews: previewType, defsampler: genInfo.DefaultSampler, defscheduler: genInfo.DefaultScheduler, hadSpecialCond: genInfo.HadSpecialCond, explicitSampler: explicitSampler, explicitScheduler: explicitScheduler, sectionId: T2IParamInput.SectionID_VideoSwap);
             CurrentMedia = CurrentMedia.WithPath([samplered, 0]);
             IsImageToVideoSwap = false;
         }
