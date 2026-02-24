@@ -565,7 +565,7 @@ public class WorkflowGeneratorSteps
             if (g.UserInput.TryGet(T2IParamTypes.VideoAudioInput, out AudioFile audioData))
             {
                 string audioNode = g.CreateAudioLoadNode(audioData, "${videoaudioinput}");
-                WGNodeData encoded = new WGNodeData([audioNode, 0], g, WGNodeData.DT_AUDIO).EncodeToLatent(g.CurrentAudioVae);
+                WGNodeData encoded = new WGNodeData([audioNode, 0], g, WGNodeData.DT_AUDIO, g.CurrentCompat()).EncodeToLatent(g.CurrentAudioVae);
                 string mask = g.CreateNode("SolidMask", new JObject()
                 {
                     ["value"] = 0,
@@ -1576,7 +1576,7 @@ public class WorkflowGeneratorSteps
                             {
                                 ["mask"] = NodePath(newSegmentNode, 0)
                             });
-                            new WGNodeData([imageNode, 0], g, WGNodeData.DT_IMAGE).SaveOutput(null, null, g.GetStableDynamicID(50000, 0));
+                            new WGNodeData([imageNode, 0], g, WGNodeData.DT_IMAGE, g.CurrentCompat()).SaveOutput(null, null, g.GetStableDynamicID(50000, 0));
                         }
                         if (segmentNode is null)
                         {
@@ -1627,7 +1627,7 @@ public class WorkflowGeneratorSteps
                         {
                             ["mask"] = NodePath(segmentNode, 0)
                         });
-                        new WGNodeData([imageNode, 0], g, WGNodeData.DT_IMAGE).SaveOutput(null, null, g.GetStableDynamicID(50000, 0));
+                        new WGNodeData([imageNode, 0], g, WGNodeData.DT_IMAGE, g.CurrentCompat()).SaveOutput(null, null, g.GetStableDynamicID(50000, 0));
                     }
                     int oversize = g.UserInput.Get(T2IParamTypes.SegmentMaskOversize, 16);
                     g.MaskShrunkInfo = g.CreateImageMaskCrop([segmentNode, 0], g.CurrentMedia.Path, oversize, vae.Path, g.FinalLoadedModel, thresholdMax: g.UserInput.Get(T2IParamTypes.SegmentThresholdMax, 1));

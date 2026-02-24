@@ -9,7 +9,7 @@ using SwarmUI.Utils;
 namespace SwarmUI.Builtin_ComfyUIBackend;
 
 /// <summary>Represents data from a node output in <see cref="WorkflowGenerator"/>.</summary>
-public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, T2IModelCompatClass _compat = null)
+public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, T2IModelCompatClass _compat)
 {
     public static string DT_IMAGE = "IMAGE", DT_LATENT_IMAGE = "LATENT_IMAGE",
         DT_MODEL = "MODEL", DT_TEXTENC = "TEXTENC", DT_VAE = "VAE", DT_AUDIOVAE = "AUDIOVAE",
