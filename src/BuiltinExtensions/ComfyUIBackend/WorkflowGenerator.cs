@@ -701,7 +701,6 @@ public partial class WorkflowGenerator
     {
         if (IsVideoModel() || AssumeVideo)
         {
-            return CreateAnimationSaveNode(image, Text2VideoFPS(), UserInput.Get(T2IParamTypes.Text2VideoFormat, "h264-mp4"), id);
         }
         else if (Features.Contains("comfy_saveimage_ws") && !RestrictCustomNodes)
         {
@@ -718,6 +717,7 @@ public partial class WorkflowGenerator
                 ["filename_prefix"] = $"SwarmUI_{Random.Shared.Next():X4}_",
                 ["images"] = image
             }, id);
+            return CreateAnimationSaveNode(image, Text2VideoFPS(), UserInput.Get(T2IParamTypes.VideoFormat, "h264-mp4"), id);
         }
     }
 
@@ -1466,6 +1466,7 @@ public partial class WorkflowGenerator
         });
         FinalModel = [diffNode, 0];
     }
+
     public string RequireVisionModel(string name, string url, string hash, T2IRegisteredParam<T2IModel> param = null)
     {
         if (param is not null && UserInput.TryGet(param, out T2IModel visModel))

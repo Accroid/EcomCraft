@@ -1729,7 +1729,7 @@ public class WorkflowGeneratorSteps
                     {
                         if (g.UserInput.Get(T2IParamTypes.OutputIntermediateImages, false))
                         {
-                            g.CreateAnimationSaveNode(g.FinalImageOut, g.Text2VideoFPS(), g.UserInput.Get(T2IParamTypes.Text2VideoFormat, "mp4"), g.GetStableDynamicID(50000, 0));
+                            g.CreateAnimationSaveNode(g.FinalImageOut, g.Text2VideoFPS(), g.UserInput.Get(T2IParamTypes.VideoFormat, "mp4"), g.GetStableDynamicID(50000, 0));
                         }
                         g.FinalImageOut = g.DoInterpolation(g.FinalImageOut, method, mult);
                         int fps = g.Text2VideoFPS();
