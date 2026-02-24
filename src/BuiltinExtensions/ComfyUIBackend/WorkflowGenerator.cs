@@ -79,30 +79,61 @@ public partial class WorkflowGenerator
     /// <summary>The output workflow object.</summary>
     public JObject Workflow;
 
-    /// <summary>Represents output data from a node.</summary>
-    public record class NodeOutData(string Node, int Index, string DataType)
-    {
-        public static string DT_IMAGE = "IMAGE", DT_LATENT_IMAGE = "LATENT_IMAGE", DT_VIDEO = "VIDEO", DT_LATENT_VIDEO = "LATENT_VIDEO", DT_AUDIO = "AUDIO", DT_LATENT_AUDIO = "LATENT_AUDIO";
-
-        public JArray Path => [Node, Index];
-    }
+    /// <summary>Current node data trackers for core data that passes throughout the workflow.</summary>
+    public WGNodeData CurrentModel, CurrentTextEnc, CurrentVae, CurrentAudioVae, CurrentMedia;
 
     /// <summary>Lastmost node ID for key input trackers.</summary>
-    public JArray FinalModel = ["4", 0],
-        FinalClip = ["4", 1],
+    public JArray
         FinalInputImage = null,
         FinalMask = null,
-        FinalVae = ["4", 2],
-        FinalAudioVae = null,
-        FinalLatentImage = ["5", 0],
         FinalLatentAudio = null,
         FinalPrompt = ["6", 0],
         FinalNegativePrompt = ["7", 0],
-        FinalSamples = ["10", 0],
-        FinalImageOut = null,
         FinalAudioOut = null,
         FinalTrimLatent = null,
         LoadingModel = null, LoadingClip = null, LoadingVAE = null;
+
+    public JArray FinalModel
+    {
+        get => CurrentModel?.Path ?? ["4", 0];
+        set => CurrentModel = new WGNodeData(value, this, WGNodeData.DT_MODEL, CurrentCompat());
+    }
+
+    public JArray FinalClip
+    {
+        get => CurrentTextEnc?.Path ?? ["4", 1];
+        set => CurrentTextEnc = new WGNodeData(value, this, WGNodeData.DT_TEXTENC, CurrentCompat());
+    }
+
+    public JArray FinalVae
+    {
+        get => CurrentVae?.Path ?? ["4", 2];
+        set => CurrentVae = new WGNodeData(value, this, WGNodeData.DT_VAE, CurrentCompat());
+    }
+
+    public JArray FinalAudioVae
+    {
+        get => CurrentAudioVae?.Path;
+        set => CurrentAudioVae = new WGNodeData(value, this, WGNodeData.DT_VAE, CurrentCompat());
+    }
+
+    public JArray FinalLatentImage
+    {
+        get => CurrentMedia is null ? ["5", 0] : CurrentMedia.EncodeToLatent(CurrentVae).Path;
+        set => CurrentMedia = new WGNodeData(value, this, WGNodeData.DT_LATENT_IMAGE, CurrentCompat());
+    }
+
+    public JArray FinalSamples
+    {
+        get => CurrentMedia is null ? ["10", 0] : CurrentMedia.EncodeToLatent(CurrentVae).Path;
+        set => CurrentMedia = new WGNodeData(value, this, WGNodeData.DT_LATENT_IMAGE, CurrentCompat());
+    }
+
+    public JArray FinalImageOut
+    {
+        get => CurrentMedia?.DecodeLatents(CurrentVae, false)?.Path;
+        set => CurrentMedia = new WGNodeData(value, this, WGNodeData.DT_IMAGE, CurrentCompat());
+    }
 
     /// <summary>If true, something has required the workflow stop now.</summary>
     public bool SkipFurtherSteps = false;
@@ -648,100 +679,23 @@ public partial class WorkflowGenerator
         return UserInput.Get(T2IParamTypes.VideoFPS, fpsDefault);
     }
 
-    public string CreateSaveNode(NodeOutData data, string id = null)
-    {
-        if (data.DataType == NodeOutData.DT_LATENT_IMAGE)
-        {
-            string decoded = CreateVAEDecode(FinalVae, data.Path);
-            data = new NodeOutData(decoded, 0, NodeOutData.DT_IMAGE);
-        }
-        else if (data.DataType == NodeOutData.DT_LATENT_VIDEO)
-        {
-            string decoded = CreateVAEDecode(FinalVae, data.Path);
-            data = new NodeOutData(decoded, 0, NodeOutData.DT_VIDEO);
-        }
-        else if (data.DataType == NodeOutData.DT_LATENT_AUDIO)
-        {
-            // TODO: Proper function to handle this
-            string decoded = CreateNode("VAEDecodeAudio", new JObject()
-            {
-                ["vae"] = FinalAudioVae,
-                ["samples"] = data.Path
-            });
-            data = new NodeOutData(decoded, 0, NodeOutData.DT_AUDIO);
-        }
-        if (data.DataType == NodeOutData.DT_VIDEO || AssumeVideo)
-        {
-            return CreateAnimationSaveNode([data.Path], Text2VideoFPS(), UserInput.Get(T2IParamTypes.Text2VideoFormat, "h264-mp4"), id);
-        }
-        if (data.DataType == NodeOutData.DT_IMAGE)
-        {
-            return CreateImageSaveNode([data.Path], id);
-        }
-        if (data.DataType == NodeOutData.DT_AUDIO)
-        {
-            return CreateAudioSaveNode([data.Path], id);
-        }
-        throw new SwarmReadableErrorException($"Cannot create save node for unknown data type '{data.DataType}'.");
-    }
-
-    public string CreateAudioSaveNode(JArray audio, string id = null)
-    {
-        // TODO: SwarmSaveAudio?
-        return CreateNode("SaveAudioMP3", new JObject()
-        {
-            ["audio"] = audio,
-            ["filename_prefix"] = $"SwarmUI_{Random.Shared.Next():X4}_",
-            ["quality"] = "V0"
-        }, id);
-    }
+    public string CreateAudioSaveNode(JArray audio, string id = null) => new WGNodeData(audio, this, WGNodeData.DT_AUDIO, CurrentCompat()).SaveOutput(null, null, id: id);
 
     /// <summary>Creates a node to save an image output.</summary>
     public string CreateImageSaveNode(JArray image, string id = null)
     {
         if (IsVideoModel() || AssumeVideo)
         {
-        }
-        else if (Features.Contains("comfy_saveimage_ws") && !RestrictCustomNodes)
-        {
-            return CreateNode("SwarmSaveImageWS", new JObject()
-            {
-                ["images"] = image,
-                ["bit_depth"] = UserInput.Get(T2IParamTypes.BitDepth, "8bit")
-            }, id);
-        }
-        else
-        {
-            return CreateNode("SaveImage", new JObject()
-            {
-                ["filename_prefix"] = $"SwarmUI_{Random.Shared.Next():X4}_",
-                ["images"] = image
-            }, id);
             return CreateAnimationSaveNode(image, Text2VideoFPS(), UserInput.Get(T2IParamTypes.VideoFormat, "h264-mp4"), id);
         }
+        return new WGNodeData(image, this, WGNodeData.DT_IMAGE, CurrentCompat()).SaveOutput(null, null, id: id);
     }
 
     /// <summary>Creates a node to save an animation output.</summary>
     public string CreateAnimationSaveNode(JArray anim, int fps, string format, string id = null)
     {
-        if (UserInput.Get(T2IParamTypes.VideoBoomerang, false))
-        {
-            string bounced = CreateNode("SwarmVideoBoomerang", new JObject()
-            {
-                ["images"] = anim
-            });
-            anim = [bounced, 0];
-        }
-        return CreateNode("SwarmSaveAnimationWS", new JObject()
-        {
-            ["images"] = anim,
-            ["fps"] = fps,
-            ["lossless"] = false,
-            ["quality"] = 95,
-            ["method"] = "default",
-            ["format"] = format,
-            ["audio"] = FinalAudioOut
-        }, id);
+        WGNodeData attachAudio = FinalAudioOut is null ? null : new(FinalAudioOut, this, WGNodeData.DT_AUDIO, CurrentCompat());
+        return new WGNodeData(anim, this, WGNodeData.DT_VIDEO, CurrentCompat()) { FPS = fps }.SaveOutput(null, null, attachAudio, id: id);
     }
 
     /// <summary>Creates a VAELoader node and returns its node ID. Avoids duplication.</summary>
@@ -1393,15 +1347,6 @@ public partial class WorkflowGenerator
     /// <summary>Creates a VAE Encode node.</summary>
     public string CreateVAEEncode(JArray vae, JArray image, string id = null, bool noCascade = false, JArray mask = null)
     {
-        if (!noCascade && IsCascade())
-        {
-            return CreateNode("StableCascade_StageC_VAEEncode", new JObject()
-            {
-                ["vae"] = vae,
-                ["image"] = image,
-                ["compression"] = UserInput.Get(T2IParamTypes.CascadeLatentCompression, 32)
-            }, id);
-        }
         if (mask is not null && (UserInput.Get(T2IParamTypes.UseInpaintingEncode) || (CurrentModelClass()?.ID ?? "").EndsWith("/inpaint")))
         {
             return CreateNode("VAEEncodeForInpaint", new JObject()
@@ -1412,44 +1357,13 @@ public partial class WorkflowGenerator
                 ["grow_mask_by"] = 6
             }, id);
         }
-        if (UserInput.TryGet(T2IParamTypes.VAETileSize, out _) || UserInput.TryGet(T2IParamTypes.VAETemporalTileSize, out _))
-        {
-            return CreateNode("VAEEncodeTiled", new JObject()
-            {
-                ["vae"] = vae,
-                ["pixels"] = image,
-                ["tile_size"] = UserInput.Get(T2IParamTypes.VAETileSize, 256),
-                ["overlap"] = UserInput.Get(T2IParamTypes.VAETileOverlap, 64),
-                ["temporal_size"] = UserInput.Get(T2IParamTypes.VAETemporalTileSize, IsAnyWanModel() ? 9999 : 32),
-                ["temporal_overlap"] = UserInput.Get(T2IParamTypes.VAETemporalTileOverlap, 4)
-            }, id);
-        }
-        return CreateNode("VAEEncode", new JObject()
-        {
-            ["vae"] = vae,
-            ["pixels"] = image
-        }, id);
+        return new WGNodeData(image, this, WGNodeData.DT_IMAGE, CurrentCompat()).EncodeToLatent(new WGNodeData(vae, this, WGNodeData.DT_VAE, CurrentCompat()), id).Path[0].ToString();
     }
 
     /// <summary>Encodes audio using the specified VAE into latent audio.</summary>
     public string CreateAudioVAEEncode(JArray vae, JArray audio, string id = null)
     {
-        if (IsLTXV2())
-        {
-            return CreateNode("LTXVAudioVAEEncode", new JObject()
-            {
-                ["audio_vae"] = vae,
-                ["audio"] = audio
-            }, id);
-        }
-        else
-        {
-            return CreateNode("VAEEncodeAudio", new JObject()
-            {
-                ["vae"] = vae,
-                ["audio"] = audio
-            }, id);
-        }
+        return new WGNodeData(audio, this, WGNodeData.DT_AUDIO, CurrentCompat()).EncodeToLatent(new WGNodeData(vae, this, WGNodeData.DT_AUDIOVAE, CurrentCompat()), id).Path[0].ToString();
     }
 
     /// <summary>Enables Differential Diffusion on the current model if is enabled in user settings.</summary>
