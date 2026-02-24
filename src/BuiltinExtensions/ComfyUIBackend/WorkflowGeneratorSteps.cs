@@ -2021,6 +2021,17 @@ public class WorkflowGeneratorSteps
                     g.Workflow.Remove(id);
                 }
             });
+            g.RunOnNodesOfClass("LTXVSeparateAVLatent", (id, data) =>
+            {
+                JArray source = data["inputs"]["av_latent"] as JArray;
+                string sourceNode = $"{source[0]}";
+                JObject actualNode = g.Workflow[sourceNode] as JObject;
+                if ($"{actualNode["class_type"]}" == "LTXVConcatAVLatent")
+                {
+                    g.ReplaceNodeConnection([id, 0], actualNode["inputs"]["video_latent"] as JArray);
+                    g.ReplaceNodeConnection([id, 1], actualNode["inputs"]["audio_latent"] as JArray);
+                }
+            });
             void fixDecode(string id, JObject data)
             {
                 JArray source = data["inputs"]["samples"] as JArray;
@@ -2056,14 +2067,15 @@ public class WorkflowGeneratorSteps
             }
             g.RunOnNodesOfClass("VAEDecode", fixDecode);
             g.RunOnNodesOfClass("VAEDecodeTiled", fixDecode);
-            g.RemoveClassIfUnused("LTXVAudioVAEDecode");
-            g.RemoveClassIfUnused("LTXVSeparateAVLatent");
-            g.RemoveClassIfUnused("VAEEncode");
-            g.RemoveClassIfUnused("LTXVConditioning");
-            g.RemoveClassIfUnused("CLIPTextEncode");
-            g.RemoveClassIfUnused("CLIPTextEncodeSDXL");
-            g.RemoveClassIfUnused("SwarmClipTextEncodeAdvanced");
+            g.RemoveClassesIfUnused(AutoCleanupNodeTypes);
         }, 200);
         #endregion
     }
+
+    public static HashSet<string> AutoCleanupNodeTypes =
+    [
+        "VAEDecode", "VAEDecodeTiled", "VAEEncode", "CLIPTextEncode", "CLIPTextEncodeSDXL",
+        "LTXVAudioVAEDecode", "LTXVSeparateAVLatent", "LTXVConditioning", "LTXVEmptyLatentAudio", "LTXVConcatAVLatent",
+        "SwarmCountFrames", "SwarmClipTextEncodeAdvanced"
+    ];
 }

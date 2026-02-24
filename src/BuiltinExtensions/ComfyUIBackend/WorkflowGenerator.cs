@@ -2573,6 +2573,12 @@ public partial class WorkflowGenerator
         return [.. Workflow.Properties().Where(p => $"{p.Value["class_type"]}" == classType)];
     }
 
+    /// <summary>Returns an array of all nodes currently in the workflow with a given class_type.</summary>
+    public JProperty[] NodesOfClasses(HashSet<string> classTypes)
+    {
+        return [.. Workflow.Properties().Where(p => classTypes.Contains($"{p.Value["class_type"]}"))];
+    }
+
     /// <summary>Runs an action against all nodes of a given class_type.</summary>
     /// <param name="classType">The class_type to target.</param>
     /// <param name="action">The action(NodeID, JObject Data) to run against the node.</param>
@@ -2632,6 +2638,7 @@ public partial class WorkflowGenerator
     /// <summary>Removes a class of nodes if they are not connected to anything.</summary>
     public void RemoveClassIfUnused(string classType)
     {
+        UsedInputs = null;
         RunOnNodesOfClass(classType, (id, data) =>
         {
             if (!NodeIsConnectedAnywhere(id))
@@ -2639,5 +2646,24 @@ public partial class WorkflowGenerator
                 Workflow.Remove(id);
             }
         });
+    }
+
+    /// <summary>Removes a set of classes of nodes if they are not connected to anything.</summary>
+    public void RemoveClassesIfUnused(HashSet<string> classTypes)
+    {
+        bool run = true;
+        while (run)
+        {
+            UsedInputs = null;
+            run = false;
+            foreach (JProperty property in NodesOfClasses(classTypes))
+            {
+                if (!NodeIsConnectedAnywhere(property.Name))
+                {
+                    Workflow.Remove(property.Name);
+                    run = true;
+                }
+            }
+        }
     }
 }
