@@ -1245,6 +1245,18 @@ public partial class WorkflowGenerator
                     } // else does fit
                 }
             }
+            else if (IsAnyFlux2()) // Not strictly limited per se but if user hasn't disabled resizing, just sanity cap
+            {
+                if (actual < 512)
+                {
+                    doesFit = Math.Abs(actual - target) <= 32;
+                }
+                else if (actual > 1536)
+                {
+                    target = 1536;
+                    doesFit = false;
+                }
+            }
             else if (IsQwenImageEditPlus() && promptSize)
             {
                 target = 384;
