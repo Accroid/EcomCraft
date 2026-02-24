@@ -454,7 +454,7 @@ public class WorkflowGeneratorSteps
                     else
                     {
                         JArray masked = g.DoMaskedVAEEncode(g.CurrentVae.Path, g.BasicInputImage.Path, currentMask, "5");
-                        g.CurrentMedia = g.CurrentMedia.WithPath([masked, 0], WGNodeData.DT_LATENT_IMAGE);
+                        g.CurrentMedia = g.CurrentMedia.WithPath(masked, WGNodeData.DT_LATENT_IMAGE);
                     }
                 }
                 else
@@ -1348,6 +1348,7 @@ public class WorkflowGeneratorSteps
                     WGNodeData decoded = g.CurrentMedia.DecodeLatents(origVae, false, "24");
                     JArray maskShrunk = doMaskShrinkApply(g, decoded.Path);
                     decoded = decoded.WithPath(maskShrunk);
+                    g.CurrentMedia = decoded;
                     if (doSave)
                     {
                         decoded.SaveOutput(null, null, id: "29");
@@ -1486,12 +1487,9 @@ public class WorkflowGeneratorSteps
         #region VAEDecode
         AddStep(g =>
         {
-            if (g.CurrentMedia.IsRawMedia)
-            {
-                g.CurrentMedia = g.CurrentMedia.DecodeLatents(g.CurrentVae, false, "8");
-                JArray maskShrinkApply = doMaskShrinkApply(g, g.CurrentMedia.Path);
-                g.CurrentMedia = g.CurrentMedia.WithPath(maskShrinkApply);
-            }
+            g.CurrentMedia = g.CurrentMedia.DecodeLatents(g.CurrentVae, false, "8");
+            JArray maskShrinkApply = doMaskShrinkApply(g, g.CurrentMedia.Path);
+            g.CurrentMedia = g.CurrentMedia.WithPath(maskShrinkApply);
         }, 1);
         #endregion
         #region Segmentation Processing
