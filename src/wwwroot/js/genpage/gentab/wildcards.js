@@ -119,19 +119,67 @@ class WildcardHelpers {
             return;
         }
         let [start, end] = getTextSelRange(this.contentsElem);
-        let contents = getTextContent(this.contentsElem);
-        let lines = contents.split('\n');
+        let children = this.contentsElem.children;
+        let lines = [];
+        let nextLinePrepend = '';
+        for (let child of children) {
+            let textContent = getTextContent(child);
+            if (textContent == '\n') {
+                textContent = '\xA0';
+                start++; end++;
+            }
+            if (child.classList.contains('wc_line')) {
+                lines.push(nextLinePrepend + textContent);
+                nextLinePrepend = '';
+            }
+            else if (textContent != '\\') {
+                if (textContent.startsWith('\\')) {
+                    textContent = textContent.substring(1);
+                    nextLinePrepend += textContent;
+                }
+                else if (textContent.endsWith('\\')) {
+                    textContent = textContent.substring(0, textContent.length - 1);
+                    lines[lines.length - 1] += textContent;
+                }
+                else {
+                    lines.push(textContent);
+                }
+            }
+        }
+        if (nextLinePrepend != '') {
+            lines.push(nextLinePrepend);
+        }
+        if (lines.length == 0) {
+            lines = [''];
+        }
+        if (lines.length > this.contentsElem.dataset.lines) {
+            start++; end++;
+        }
+        this.contentsElem.dataset.lines = lines.length;
         let html = '';
+        let charCount = 0;
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i];
+            if (line.startsWith('\xA0') && line != '\xA0') {
+                line = line.substring(1);
+                if (start > charCount) { start--; }
+                if (end > charCount) { end--; }
+            }
+            else if (line.endsWith('\xA0') && line != '\xA0') {
+                line = line.substring(0, line.length - 1);
+                if (start > charCount + line.length) { start--; }
+                if (end > charCount + line.length) { end--; }
+            }
             let trimLine = line.trim();
-            let clazz = `wc_line_${i % 2}`;
+            let clazz = `wc_line wc_line_${i % 2}`;
             if (trimLine.startsWith('#')) {
                 clazz += ' wc_line_comment';
             }
-            html += `<span class="${clazz}">${line}</span>`;
+            charCount += trimLine.length == 0 ? 1 : line.length;
+            html += `<div class="${clazz}">${trimLine.length == 0 ? '\xA0' : line}</div>`;
             if (i < lines.length - 1) {
-                html += '<br>';
+                charCount++;
+                html += '<div class="wc_line_spacer">\\</div>';
             }
         }
         this.contentsElem.innerHTML = html;
