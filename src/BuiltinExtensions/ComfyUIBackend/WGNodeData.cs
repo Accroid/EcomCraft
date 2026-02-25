@@ -426,6 +426,7 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
         }
         if (DataType == DT_VIDEO || DataType == DT_IMAGE)
         {
+            JArray path = Path;
             if (UserInput.Get(T2IParamTypes.VideoBoomerang, false))
             {
                 // TODO: Should we really be doing this *here*?!
@@ -434,13 +435,11 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
                 {
                     ["images"] = Path
                 });
-                WGNodeData newNode = WithPath([bounced, 0], DT_VIDEO);
-                newNode.Frames = Frames is not null ? Frames * 2 : null;
-                return newNode.SaveOutput(vae, audioVae, id);
+                path = [bounced, 0];
             }
             return Gen.CreateNode("SwarmSaveAnimationWS", new JObject()
             {
-                ["images"] = Path,
+                ["images"] = path,
                 ["fps"] = FPS ?? Gen.Text2VideoFPS(),
                 ["lossless"] = false,
                 ["quality"] = 95,
