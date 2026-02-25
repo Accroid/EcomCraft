@@ -231,11 +231,13 @@ class WildcardHelpers {
         }
     }
 
+    /** Shows an error message in the wildcard modal. */
     wildcardModalError(error) {
         console.log(`Wildcard modal error: ${error}`);
         this.errorBoxElem.innerText = error;
     }
 
+    /** Gets the proper editor content for the wildcard contents edit box, accounting for which editor mode is in use. */
     getProperEditorContent() {
         if (this.contentsElem.tagName == 'TEXTAREA') {
             return this.contentsElem.value.trimEnd();
