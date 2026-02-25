@@ -1487,7 +1487,7 @@ public class WorkflowGeneratorSteps
         #region VAEDecode
         AddStep(g =>
         {
-            g.CurrentMedia = g.CurrentMedia.DecodeLatents(g.CurrentVae, false, "8");
+            g.CurrentMedia = g.CurrentMedia.DecodeLatents(g.CurrentVae, null, "8");
             JArray maskShrinkApply = doMaskShrinkApply(g, g.CurrentMedia.Path);
             g.CurrentMedia = g.CurrentMedia.WithPath(maskShrinkApply);
         }, 1);
@@ -1681,7 +1681,7 @@ public class WorkflowGeneratorSteps
         AddStep(g =>
         {
             PromptRegion.Part[] parts = [.. new PromptRegion(g.UserInput.Get(T2IParamTypes.Prompt, "")).Parts.Where(p => p.Type == PromptRegion.PartType.ClearSegment)];
-            g.CurrentMedia = g.CurrentMedia.AsRawImage(g.CurrentVae);
+            g.CurrentMedia = g.CurrentMedia.DecodeLatents(g.CurrentVae, null);
             foreach (PromptRegion.Part part in parts)
             {
                 if (g.UserInput.Get(T2IParamTypes.OutputIntermediateImages, false))

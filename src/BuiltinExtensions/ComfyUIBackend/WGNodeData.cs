@@ -79,13 +79,13 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
 
     /// <summary>Decode the latent data in this object to raw media data. If it is already raw, it will be returned unmodified.</summary>
     /// <param name="vae">The VAE or AudioVAE to decode with.</param>
-    /// <param name="wantAudio">True if you want audio data, false if you want image/video data.</param>
+    /// <param name="wantAudio">True if you want audio data, false if you want image/video data, null if it's irrelevant.</param>
     /// <param name="id">Optional node ID override.</param>
-    public WGNodeData DecodeLatents(WGNodeData vae, bool wantAudio, string id = null)
+    public WGNodeData DecodeLatents(WGNodeData vae, bool? wantAudio, string id = null)
     {
         if (IsRawMedia)
         {
-            WGAssert(wantAudio == (DataType == DT_AUDIO), $"Data is {DataType} but wantAudio is {wantAudio}, mismatched and therefore failed.");
+            WGAssert(wantAudio == null || wantAudio == (DataType == DT_AUDIO), $"Data is {DataType} but wantAudio is {wantAudio}, mismatched and therefore failed.");
             return this;
         }
         WGAssert(IsLatentData, $"Cannot decode latents from data of type '{DataType}'.");
@@ -97,7 +97,7 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
             {
                 return WithPath((JArray)srcInputs["pixels"], DataType == DT_LATENT_IMAGE ? DT_IMAGE : DT_VIDEO);
             }
-            WGAssert(!wantAudio, $"Data is {DataType} but wantAudio is true, mismatched and therefore failed.");
+            WGAssert(wantAudio != true, $"Data is {DataType} but wantAudio is true, mismatched and therefore failed.");
             string decoded;
             if (UserInput.TryGet(T2IParamTypes.VAETileSize, out _) || UserInput.TryGet(T2IParamTypes.VAETemporalTileSize, out _))
             {
@@ -154,7 +154,7 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
                     vidRoute = [separated, 0];
                     audRoute = [separated, 1];
                 }
-                if (wantAudio)
+                if (wantAudio == true)
                 {
                     WGNodeData latentAudio = WithPath(audRoute, DT_LATENT_AUDIO);
                     return latentAudio.DecodeLatents(vae, true, id);
@@ -173,7 +173,7 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
         }
         if (DataType == DT_LATENT_AUDIO)
         {
-            WGAssert(wantAudio, $"Data is {DataType} but wantAudio is false, mismatched and therefore failed.");
+            WGAssert(wantAudio != false, $"Data is {DataType} but wantAudio is false, mismatched and therefore failed.");
             if (sourceType == "LTXVAudioVAEEncode" && srcInputs["audio_vae"][0] == vae.Path[0])
             {
                 return WithPath((JArray)srcInputs["audio"], DT_LATENT_AUDIO);
