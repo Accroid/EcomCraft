@@ -42,7 +42,7 @@ class WildcardHelpers {
     toggleExperimentalEditor() {
         let content = null;
         if (this.contentsElem) {
-            content = getTextContent(this.contentsElem);
+            content = this.getProperEditorContent();
         }
         if (this.experimentalEditorElem.checked) {
             this.experimentalEditorSpotElem.innerHTML = '<div class="editable-textbox" id="edit_wildcard_contents" style="min-height: 15lh" contenteditable="true"></div>';
@@ -122,15 +122,17 @@ class WildcardHelpers {
         let children = this.contentsElem.children;
         let lines = [];
         let nextLinePrepend = '';
+        let realLines = 0;
         for (let child of children) {
             let textContent = getTextContent(child);
             if (textContent == '\n') {
-                textContent = '\xA0';
+                textContent = '\u2009';
                 start++; end++;
             }
             if (child.classList.contains('wc_line')) {
                 lines.push(nextLinePrepend + textContent);
                 nextLinePrepend = '';
+                realLines++;
             }
             else if (textContent != '\\') {
                 if (textContent.startsWith('\\')) {
@@ -149,6 +151,10 @@ class WildcardHelpers {
         if (nextLinePrepend != '') {
             lines.push(nextLinePrepend);
         }
+        if (realLines == 0 && this.contentsElem.textContent.length > 0) {
+            lines = [];
+            lines.push(...getTextContent(this.contentsElem).trim().split('\n'));
+        }
         if (lines.length == 0) {
             lines = [''];
         }
@@ -160,12 +166,12 @@ class WildcardHelpers {
         let charCount = 0;
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i];
-            if (line.startsWith('\xA0') && line != '\xA0') {
+            if (line.startsWith('\u2009') && line != '\u2009') {
                 line = line.substring(1);
                 if (start > charCount) { start--; }
                 if (end > charCount) { end--; }
             }
-            else if (line.endsWith('\xA0') && line != '\xA0') {
+            else if (line.endsWith('\u2009') && line != '\u2009') {
                 line = line.substring(0, line.length - 1);
                 if (start > charCount + line.length) { start--; }
                 if (end > charCount + line.length) { end--; }
@@ -176,7 +182,7 @@ class WildcardHelpers {
                 clazz += ' wc_line_comment';
             }
             charCount += trimLine.length == 0 ? 1 : line.length;
-            html += `<div class="${clazz}">${trimLine.length == 0 ? '\xA0' : line}</div>`;
+            html += `<div class="${clazz}">${trimLine.length == 0 ? '\u2009' : line}</div>`;
             if (i < lines.length - 1) {
                 charCount++;
                 html += '<div class="wc_line_spacer">\\</div>';
@@ -230,6 +236,20 @@ class WildcardHelpers {
         this.errorBoxElem.innerText = error;
     }
 
+    getProperEditorContent() {
+        if (this.contentsElem.tagName == 'TEXTAREA') {
+            return this.contentsElem.value.trimEnd();
+        }
+        let children = this.contentsElem.children;
+        let content = '';
+        for (let child of children) {
+            if (child.classList.contains('wc_line')) {
+                content += getTextContent(child) + '\n';
+            }
+        }
+        return content.trimEnd();
+    }
+
     /** Saves the edits to a wildcard from the modal created by {@link WildcardHelpers#editWildcard}. */
     saveEditWildcard() {
         this.errorBoxElem.innerText = '';
@@ -247,7 +267,7 @@ class WildcardHelpers {
             this.wildcardModalError('Cannot save a wildcard as a folder, give it a filename, or remove the trailing slash');
             return;
         }
-        let content = getTextContent(this.contentsElem).trim();
+        let content = this.getProperEditorContent();
         if (content == '') {
             this.wildcardModalError('At least one entry is required');
             return;
