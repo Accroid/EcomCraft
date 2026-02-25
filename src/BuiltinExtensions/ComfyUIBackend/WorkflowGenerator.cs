@@ -1470,7 +1470,7 @@ public partial class WorkflowGenerator
                     });
                     PosCond = [condNode, 0];
                     NegCond = [condNode, 1];
-                    g.CurrentMedia = g.CurrentMedia.WithPath([condNode, 2], WGNodeData.DT_LATENT_VIDEO);
+                    g.CurrentMedia = g.CurrentMedia.WithPath([condNode, 2], WGNodeData.DT_LATENT_VIDEO, Model.Compat);
                 }
                 DefaultCFG = 3;
                 string ltxvcond = g.CreateNode("LTXVConditioning", new JObject()
@@ -1502,7 +1502,7 @@ public partial class WorkflowGenerator
                         ["length"] = Frames,
                         ["batch_size"] = 1
                     });
-                    g.CurrentMedia = g.CurrentMedia.WithPath([emptyLatent, 0], WGNodeData.DT_LATENT_VIDEO);
+                    g.CurrentMedia = g.CurrentMedia.WithPath([emptyLatent, 0], WGNodeData.DT_LATENT_VIDEO, Model.Compat);
                     if (g.CurrentMedia.AttachedAudio is null)
                     {
                         string emptyAudio = g.CreateNode("LTXVEmptyLatentAudio", new JObject()
@@ -1527,7 +1527,7 @@ public partial class WorkflowGenerator
                         ["strength"] = 1.0,
                         ["bypass"] = false
                     });
-                    g.CurrentMedia = g.CurrentMedia.WithPath([latentOutNode, 0], WGNodeData.DT_LATENT_VIDEO);
+                    g.CurrentMedia = g.CurrentMedia.WithPath([latentOutNode, 0], WGNodeData.DT_LATENT_VIDEO, Model.Compat);
                 }
                 DefaultCFG = 3;
                 string ltxvcond = g.CreateNode("LTXVConditioning", new JObject()
@@ -1561,7 +1561,7 @@ public partial class WorkflowGenerator
                         ["length"] = Frames,
                         ["batch_size"] = 1
                     });
-                    g.CurrentMedia = g.CurrentMedia.WithPath([latentNode, 0], WGNodeData.DT_LATENT_VIDEO);
+                    g.CurrentMedia = g.CurrentMedia.WithPath([latentNode, 0], WGNodeData.DT_LATENT_VIDEO, Model.Compat);
                 }
                 string ltxvcond = g.CreateNode("LTXVConditioning", new JObject() // (Despite the name, this is just setting the framerate)
                 {
@@ -1592,7 +1592,7 @@ public partial class WorkflowGenerator
                 });
                 PosCond = [i2vnode, 0];
                 DefaultCFG = 1;
-                g.CurrentMedia = g.CurrentMedia.WithPath([i2vnode, 1], WGNodeData.DT_LATENT_VIDEO);
+                g.CurrentMedia = g.CurrentMedia.WithPath([i2vnode, 1], WGNodeData.DT_LATENT_VIDEO, Model.Compat);
                 DefaultSampler = "euler";
                 DefaultScheduler = "simple";
             }
@@ -1614,7 +1614,7 @@ public partial class WorkflowGenerator
                 PosCond = [i2vnode, 0];
                 NegCond = [i2vnode, 1];
                 DefaultCFG = 1;
-                g.CurrentMedia = g.CurrentMedia.WithPath([i2vnode, 2], WGNodeData.DT_LATENT_VIDEO);
+                g.CurrentMedia = g.CurrentMedia.WithPath([i2vnode, 2], WGNodeData.DT_LATENT_VIDEO, Model.Compat);
                 DefaultSampler = "euler";
                 DefaultScheduler = "simple";
                 DoFirstFrameLatentSwap = [i2vnode, 3];
@@ -1652,7 +1652,7 @@ public partial class WorkflowGenerator
                 PosCond = [i2vnode, 0];
                 NegCond = [i2vnode, 1];
                 DefaultCFG = 1;
-                g.CurrentMedia = g.CurrentMedia.WithPath([i2vnode, 2], WGNodeData.DT_LATENT_VIDEO);
+                g.CurrentMedia = g.CurrentMedia.WithPath([i2vnode, 2], WGNodeData.DT_LATENT_VIDEO, Model.Compat);
                 DefaultSampler = "euler";
                 DefaultScheduler = "simple";
             }
@@ -1677,7 +1677,7 @@ public partial class WorkflowGenerator
                 PosCond = [ip2pNode, 0];
                 NegCond = [ip2pNode, 1];
                 DefaultCFG = 6;
-                g.CurrentMedia = g.CurrentMedia.WithPath([latentNode, 0], WGNodeData.DT_LATENT_VIDEO);
+                g.CurrentMedia = g.CurrentMedia.WithPath([latentNode, 0], WGNodeData.DT_LATENT_VIDEO, Model.Compat);
                 DefaultSampler = "dpmpp_2m";
                 DefaultScheduler = "beta";
             }
@@ -1724,7 +1724,7 @@ public partial class WorkflowGenerator
                     });
                     PosCond = [img2vidNode, 0];
                     NegCond = [img2vidNode, 1];
-                    g.CurrentMedia = g.CurrentMedia.WithPath([img2vidNode, 2], WGNodeData.DT_LATENT_VIDEO);
+                    g.CurrentMedia = g.CurrentMedia.WithPath([img2vidNode, 2], WGNodeData.DT_LATENT_VIDEO, Model.Compat);
                 }
                 else
                 {
@@ -1741,7 +1741,7 @@ public partial class WorkflowGenerator
                     });
                     PosCond = [img2vidNode, 0];
                     NegCond = [img2vidNode, 1];
-                    g.CurrentMedia = g.CurrentMedia.WithPath([img2vidNode, 2], WGNodeData.DT_LATENT_VIDEO);
+                    g.CurrentMedia = g.CurrentMedia.WithPath([img2vidNode, 2], WGNodeData.DT_LATENT_VIDEO, Model.Compat);
                 }
                 DefaultCFG = 3.5;
                 DefaultSampler = "euler";
@@ -1820,7 +1820,7 @@ public partial class WorkflowGenerator
                     });
                     PosCond = [img2vidNode, 0];
                     NegCond = [img2vidNode, 1];
-                    g.CurrentMedia = g.CurrentMedia.WithPath([img2vidNode, 2], WGNodeData.DT_LATENT_VIDEO);
+                    g.CurrentMedia = g.CurrentMedia.WithPath([img2vidNode, 2], WGNodeData.DT_LATENT_VIDEO, Model.Compat);
                 }
                 else
                 {
@@ -1838,7 +1838,7 @@ public partial class WorkflowGenerator
                     });
                     PosCond = [img2vidNode, 0];
                     NegCond = [img2vidNode, 1];
-                    g.CurrentMedia = g.CurrentMedia.WithPath([img2vidNode, 2], WGNodeData.DT_LATENT_VIDEO);
+                    g.CurrentMedia = g.CurrentMedia.WithPath([img2vidNode, 2], WGNodeData.DT_LATENT_VIDEO, Model.Compat);
                 }
                 DefaultCFG = 6;
                 DefaultSampler = "euler";
@@ -1868,7 +1868,7 @@ public partial class WorkflowGenerator
                     ["start_image"] = imageIn,
                     ["batch_size"] = 1
                 });
-                g.CurrentMedia = g.CurrentMedia.WithPath([img2vidNode, 0], WGNodeData.DT_LATENT_VIDEO);
+                g.CurrentMedia = g.CurrentMedia.WithPath([img2vidNode, 0], WGNodeData.DT_LATENT_VIDEO, Model.Compat);
                 DefaultCFG = 5;
                 DefaultSampler = "euler";
                 DefaultScheduler = "simple";
@@ -1941,7 +1941,7 @@ public partial class WorkflowGenerator
                 });
                 PosCond = [conditioning, 0];
                 NegCond = [conditioning, 1];
-                g.CurrentMedia = g.CurrentMedia.WithPath([conditioning, 2], WGNodeData.DT_LATENT_VIDEO);
+                g.CurrentMedia = g.CurrentMedia.WithPath([conditioning, 2], WGNodeData.DT_LATENT_VIDEO, Model.Compat);
             }
         }
     }

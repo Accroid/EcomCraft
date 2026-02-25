@@ -228,7 +228,7 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
         if (DataType == DT_IMAGE || DataType == DT_VIDEO)
         {
             string encoded;
-            if (IsCompat(T2IModelClassSorter.CompatCascade))
+            if (vae.IsCompat(T2IModelClassSorter.CompatCascade))
             {
                 encoded = Gen.CreateNode("StableCascade_StageC_VAEEncode", new JObject()
                 {
@@ -261,7 +261,7 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
         }
         if (DataType == DT_AUDIO)
         {
-            if (IsCompat(T2IModelClassSorter.CompatLtxv2))
+            if (vae.IsCompat(T2IModelClassSorter.CompatLtxv2))
             {
                 string encoded = Gen.CreateNode("LTXVAudioVAEEncode", new JObject()
                 {
@@ -287,6 +287,10 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
     /// <summary>Converts this data to a format fit for sampling, generally some form of latent.</summary>
     public WGNodeData AsSamplingLatent(WGNodeData vae, WGNodeData audioVae)
     {
+        if (IsLatentData)
+        {
+            WGAssert(vae.Compat.ID == Compat.ID, $"Data is compatible with '{Compat}' but provided VAE is compatible with '{vae.Compat}', cannot encode to sampling latent, ensure correctly decoded first.");
+        }
         if (IsLatentData && AttachedAudio is null)
         {
             return this;
@@ -297,9 +301,9 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
         }
         if (DataType == DT_LATENT_VIDEO || DataType == DT_LATENT_IMAGE)
         {
-            WGNodeData audioEncoded = AttachedAudio.EncodeToLatent(audioVae);
-            if (IsCompat(T2IModelClassSorter.CompatLtxv2))
+            if (vae.IsCompat(T2IModelClassSorter.CompatLtxv2))
             {
+                WGNodeData audioEncoded = AttachedAudio.EncodeToLatent(audioVae);
                 string concatted = Gen.CreateNode("LTXVConcatAVLatent", new JObject()
                 {
                     ["video_latent"] = Path,
@@ -307,10 +311,7 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
                 });
                 return WithPath([concatted, 0], DT_LATENT_AUDIOVIDEO);
             }
-            else
-            {
-                WGAssert(false, $"Cannot combine raw video/image data with audio data for sampling in compat class '{Compat}'.");
-            }
+            return this;
         }
         if (DataType == DT_IMAGE || DataType == DT_VIDEO)
         {
@@ -327,6 +328,10 @@ public class WGNodeData(JArray _path, WorkflowGenerator _gen, string _dataType, 
     /// <summary>Returns an object that is definitely compatible with latent image or video inputs, encoding to latent with the VAE or separating A/V as needed, or throws an exception if not possible.</summary>
     public WGNodeData AsLatentImage(WGNodeData vae)
     {
+        if (IsLatentData)
+        {
+            WGAssert(vae.Compat.ID == Compat.ID, $"Data is compatible with '{Compat}' but provided VAE is compatible with '{vae.Compat}', cannot encode to sampling latent, ensure correctly decoded first.");
+        }
         if (DataType == DT_LATENT_VIDEO || DataType == DT_LATENT_IMAGE)
         {
             return this;
