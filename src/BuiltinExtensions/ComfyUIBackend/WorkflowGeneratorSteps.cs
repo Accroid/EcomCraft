@@ -538,24 +538,23 @@ public class WorkflowGeneratorSteps
                 }
                 if (g.IsLTXV2())
                 {
-                    JToken frameCount = g.UserInput.Get(T2IParamTypes.Text2VideoFrames, 97);
                     if (g.CurrentMedia.DataType == WGNodeData.DT_VIDEO)
                     {
                         string frameCountNode = g.CreateNode("SwarmCountFrames", new JObject()
                         {
                             ["image"] = g.CurrentMedia.AsRawImage(g.CurrentVae).Path
                         });
-                        frameCount = NodePath(frameCountNode, 0);
+                        string emptyAudio = g.CreateNode("LTXVEmptyLatentAudio", new JObject()
+                        {
+                            ["batch_size"] = batchSize,
+                            ["frames_number"] = NodePath(frameCountNode, 0),
+                            ["frame_rate"] = g.CurrentMedia.FPS ?? g.UserInput.Get(T2IParamTypes.VideoFPS, 24),
+                            ["audio_vae"] = g.CurrentAudioVae.Path
+                        });
+                        g.CurrentMedia = g.CurrentMedia.Duplicate();
+                        g.CurrentMedia.Frames = null;
+                        g.CurrentMedia.AttachedAudio = new([emptyAudio, 0], g, WGNodeData.DT_LATENT_AUDIO, g.CurrentCompat());
                     }
-                    string emptyAudio = g.CreateNode("LTXVEmptyLatentAudio", new JObject()
-                    {
-                        ["batch_size"] = batchSize,
-                        ["frames_number"] = frameCount,
-                        ["frame_rate"] = g.CurrentMedia.FPS ?? g.UserInput.Get(T2IParamTypes.VideoFPS, 24),
-                        ["audio_vae"] = g.CurrentAudioVae.Path
-                    });
-                    g.CurrentMedia = g.CurrentMedia.Duplicate();
-                    g.CurrentMedia.AttachedAudio = new([emptyAudio, 0], g, WGNodeData.DT_LATENT_AUDIO, g.CurrentCompat());
                 }
             }
             else
