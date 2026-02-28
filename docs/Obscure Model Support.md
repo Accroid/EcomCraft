@@ -25,7 +25,7 @@ Obscure video models are tracked at the [Video Models heading](#video-models)
 ![img](/docs/images/models/sd15.jpg)
 *(Above image is SDv1.5)*
 
-SDv1/SDv2 models work exactly as normal. Even legacy (pre-[ModelSpec](https://github.com/Stability-AI/ModelSpec) models are supported).
+SDv1/SDv2 models work exactly as normal. Even legacy (pre-[ModelSpec](<https://github.com/Stability-AI/ModelSpec>) models are supported).
 
 ### Stable Diffusion v1 Inpainting Models
 
@@ -41,7 +41,7 @@ SegMind SSD-1B models work the same as SD models.
 
 ![img](/docs/images/models/cascade.jpg)
 
-Stable Cascade is supported if you use the "ComfyUI Format" models (aka "All In One") https://huggingface.co/stabilityai/stable-cascade/tree/main/comfyui_checkpoints that come as a pair of `stage_b` and `stage_c` models.
+Stable Cascade is supported if you use the "ComfyUI Format" models (aka "All In One") <https://huggingface.co/stabilityai/stable-cascade/tree/main/comfyui_checkpoints> that come as a pair of `stage_b` and `stage_c` models.
 
 You must keep the two in the same folder, named the same with the only difference being `stage_b` vs `stage_c` in the filename.
 
@@ -52,12 +52,12 @@ Either model can be selected in the UI to use them, it will automatically use bo
 ![img](/docs/images/models/pixart-sigma-xl-2.jpg)
 *(above image is PixArt Sigma XL 2 1024 MS)*
 
-The [PixArt Sigma MS models](https://huggingface.co/PixArt-alpha/PixArt-Sigma/tree/main) are supported in Swarm with a few setup steps.
+The [PixArt Sigma MS models](<https://huggingface.co/PixArt-alpha/PixArt-Sigma/tree/main>) are supported in Swarm with a few setup steps.
 
 These steps are not friendly to beginners (if PixArt gains popularity, likely more direct/automated/native support will be added), but advanced users can follow:
 
 - After downloading the model, run Swarm's **Utilities** -> **Pickle To Safetensors** -> `Convert Models`. You need a safetensors models for Swarm to accurately identify model type.
-    - Or download a preconverted copy, like this one: https://huggingface.co/HDiffusion/Pixart-Sigma-Safetensors
+    - Or download a preconverted copy, like this one: <https://huggingface.co/HDiffusion/Pixart-Sigma-Safetensors>
 - After you have a safetensors model, find it in the Models tab and click the menu button on the model and select "`Edit Metadata`"
     - From the `Architecture` dropdown, select `PixArtMS Sigma XL 2` for 1024 or lower models, or `XL 2 (2K)` for the 2k
     - In the `Standard Resolution` box, enter `1024x1024` for 1024 or `512x512` for the 512, or `2048x2048` for the 2k
@@ -71,13 +71,13 @@ These steps are not friendly to beginners (if PixArt gains popularity, likely mo
 ![img](/docs/images/models/sana-1600m.jpg)
 *(above image is Nvidia Sana 1600M 1024)*
 
-The [Nvidia Sana models](https://huggingface.co/Efficient-Large-Model/Sana_1600M_1024px) are supported in Swarm with a few setup steps.
+The [Nvidia Sana models](<https://huggingface.co/Efficient-Large-Model/Sana_1600M_1024px>) are supported in Swarm with a few setup steps.
 
 These steps are not friendly to beginners (if Sana gains popularity, likely more direct/automated/native support will be added), but advanced users can follow:
 
-- Recommended: use the [preconverted Sana model](https://huggingface.co/mcmonkey/sana-models/blob/main/Sana_1600M_1024px.safetensors)
+- Recommended: use the [preconverted Sana model](<https://huggingface.co/mcmonkey/sana-models/blob/main/Sana_1600M_1024px.safetensors>)
 - Otherwise, if you use the original 'pth' version, after downloading the model, run Swarm's **Utilities** -> **Pickle To Safetensors** -> `Convert Models`. You need a safetensors models for Swarm to accurately identify model type.
-- The first time you run a Sana model, it will prompt you to install [Extra Models by City96](https://github.com/city96/ComfyUI_ExtraModels). You must accept this for Sana models to work.
+- The first time you run a Sana model, it will prompt you to install [Extra Models by City96](<https://github.com/city96/ComfyUI_ExtraModels>). You must accept this for Sana models to work.
 - You may need to manually install pip packages: `python -s -m pip install -U transformers`, possibly also `bitsandbytes`
 - Swarm will autodownload the Sana DCAE VAE for you on the first run.
 - The text encoder, Gemma 2B, will also be autodownloaded (in this case by the backing comfy nodes)
@@ -140,7 +140,7 @@ These steps are not friendly to beginners (if Sana gains popularity, likely more
 
 # OmniGen 2
 
-- [OmniGen 2](https://github.com/VectorSpaceLab/OmniGen2) is natively partially supported in SwarmUI.
+- [OmniGen 2](<https://github.com/VectorSpaceLab/OmniGen2>) is natively partially supported in SwarmUI.
     - It is technically an LLM, and the LLM features are not supported, only the direct raw image features.
     - Download the model here <https://huggingface.co/Comfy-Org/Omnigen2_ComfyUI_repackaged/blob/main/split_files/diffusion_models/omnigen2_fp16.safetensors>
         - Save it to `diffusion_models`
@@ -156,7 +156,7 @@ These steps are not friendly to beginners (if Sana gains popularity, likely more
 
 # Ovis
 
-- [Ovis](https://huggingface.co/AIDC-AI/Ovis-Image-7B) is supported in SwarmUI.
+- [Ovis](<https://huggingface.co/AIDC-AI/Ovis-Image-7B>) is supported in SwarmUI.
     - It is a 7B-scale MMDiT image model from Alibaba's AIDC-AI, with image quality roughly a bit above base SDXL and a focus on strong text understanding.
 - Download the model from [Comfy-Org/Ovis-Image](<https://huggingface.co/Comfy-Org/Ovis-Image/blob/main/split_files/diffusion_models/ovis_image_bf16.safetensors>)
     - Save in `diffusion_models`
@@ -171,7 +171,7 @@ These steps are not friendly to beginners (if Sana gains popularity, likely more
 
 # LongCat-Image
 
-- [LongCat-Image](https://huggingface.co/meituan-longcat/LongCat-Image) is supported in SwarmUI.
+- [LongCat-Image](<https://huggingface.co/meituan-longcat/LongCat-Image>) is supported in SwarmUI.
     - It is a 6B-scale MMDiT image model, with image quality roughly a bit above base SDXL and a fairly strong text understanding.
 - Download the model from [Comfy-Org/LongCat-Image](<https://huggingface.co/Comfy-Org/LongCat-Image/blob/main/split_files/diffusion_models/longcat_image_bf16.safetensors>)
     - Save in `diffusion_models`
@@ -181,8 +181,8 @@ These steps are not friendly to beginners (if Sana gains popularity, likely more
     - **Sampler:** Default is fine (`Euler`)
     - **Scheduler:** Default works, but `Beta` may be better
     - **CFG Scale:** Normal CFG ranges, `4` is the official recommendation
-    - **Steps:** Normal step counts (eg `20`), but they recommend `50`
-    - **Resolution:** Side length `1024`. Quickly breaks above that.
+    - **Steps:** Normal step counts (eg `20`)
+    - **Resolution:** Side length `1024` is default, but works with custom sizes freely
 
 --------------------------------------------------------------------------
 
