@@ -97,7 +97,6 @@ public class ComfyUISelfStartBackend : ComfyUIAPIAbstractBackend
         ("comfyui_frontend_package", $"comfyui_frontend_package=={SwarmValidatedFrontendVersion}"),
         ("alembic", "alembic"),
         ("pyopengl", "pyopengl"),
-        ("pyopengl_accelerate", "pyopengl-accelerate"),
         ("glfw", "glfw"),
         // Other added dependencies
         ("rembg", "rembg"),
