@@ -785,7 +785,7 @@ public partial class WorkflowGenerator
     public (JArray, JArray, JArray, JArray) BuildInputImageHandling(List<JArray> images, JArray pos, JArray neg, JArray latent)
     {
         JArray imgNeg = null;
-        if (IsKontext() || IsOmniGen() || IsQwenImage() || IsAnyFlux2() || IsBoogu() || IsMageFlow())
+        if (IsKontext() || IsOmniGen() || IsQwenImage() || IsAnyFlux2() || IsBoogu() || IsMageFlow() || IsKrea2())
         {
             if (IsOmniGen() || IsQwenImageEditPlus() || IsBoogu() || IsMageFlow())
             {
@@ -822,6 +822,15 @@ public partial class WorkflowGenerator
                 if (IsQwenImageEditPlus() || IsBoogu() || IsMageFlow())
                 {
                     neg = imgNeg;
+                }
+                if (IsKrea2())
+                {
+                    string methodNode = CreateNode("FluxKontextMultiReferenceLatentMethod", new JObject()
+                    {
+                        ["conditioning"] = pos,
+                        ["reference_latents_method"] = "index_timestep_zero" // TODO: When should this change? Automatically, or user-control?
+                    });
+                    pos = [methodNode, 0];
                 }
             }
         }
@@ -1318,6 +1327,10 @@ public partial class WorkflowGenerator
                         doesFit = false;
                     } // else does fit
                 }
+            }
+            else if (IsKrea2()) // Just match the target res.
+            {
+                doesFit = Math.Abs(actual - target) <= 64;
             }
             else if (IsAnyFlux2()) // Not strictly limited per se but if user hasn't disabled resizing, just sanity cap
             {
