@@ -883,7 +883,7 @@ public static class Utilities
                                     request.Headers.Add(key, value);
                                 }
                             }
-                            request.Headers.Range = new(totalRead, length);
+                            request.Headers.Range = new(totalRead, length - 1);
                             workingResponse = await UtilWebClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, Program.GlobalProgramCancel);
                             if (workingResponse.StatusCode != HttpStatusCode.PartialContent)
                             {
