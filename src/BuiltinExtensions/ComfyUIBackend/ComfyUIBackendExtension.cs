@@ -610,7 +610,7 @@ public class ComfyUIBackendExtension : Extension
         }
     }
 
-    public static T2IRegisteredParam<string> CustomWorkflowParam, SamplerParam, SchedulerParam, RefinerSamplerParam, RefinerSchedulerParam, RefinerUpscaleMethod, UseIPAdapterForRevision, IPAdapterWeightType, VideoPreviewType, VideoFrameInterpolationMethod, GligenModel, YoloModelInternal, PreferredDType, UseStyleModel, TeaCacheMode, EasyCacheMode, SetClipDevice, ModelAttentionBackend, SeedVRUpscaleMethod, SeedVRColorCorrectionBehavior, EnableReferenceLatents;
+    public static T2IRegisteredParam<string> CustomWorkflowParam, SamplerParam, SchedulerParam, RefinerSamplerParam, RefinerSchedulerParam, RefinerUpscaleMethod, UseIPAdapterForRevision, IPAdapterWeightType, VideoPreviewType, VideoFrameInterpolationMethod, GligenModel, YoloModelInternal, PreferredDType, UseStyleModel, TeaCacheMode, EasyCacheMode, SetClipDevice, ModelAttentionBackend, SeedVRUpscaleMethod, SeedVRColorCorrectionBehavior, EnableReferenceLatents, TextEncodedImage;
 
     public static T2IRegisteredParam<bool> AITemplateParam, DebugRegionalPrompting, ShiftedLatentAverageInit, UseCfgZeroStar, UseTCFG, SeedVRSplitLatent;
 
@@ -713,8 +713,11 @@ public class ComfyUIBackendExtension : Extension
         IPAdapterWeightType = T2IParamTypes.Register<string>(new("IP-Adapter Weight Type", "How to shift the weighting of the IP-Adapter.\nThis can produce subtle but useful different effects.",
             "standard", FeatureFlag: "ipadapter", Group: T2IParamTypes.GroupImagePrompting, ViewType: ParamViewType.SLIDER, OrderPriority: 19, IsAdvanced: true, GetValues: _ => IPAdapterWeightTypes, DependNonDefault: UseIPAdapterForRevision.Type.ID
             ));
-        EnableReferenceLatents = T2IParamTypes.Register<string>(new("Enable Reference Latents", "How to feed image prompts as Reference Latents to the model.\nNone leaves images on the text encoder only (correct for the Krea 2 base model).\nIndex Timestep Zero is for Ostris-style edit LoRAs.\nIndex is for Identity Edit LoRAs.",
+        EnableReferenceLatents = T2IParamTypes.Register<string>(new("Enable Reference Latents", "How to feed prompt images as Reference Latents to the model.\nNone leaves images on the text encoder only (correct for the Krea 2 base model).\nIndex Timestep Zero is for Ostris-style edit LoRAs.\nIndex is for Identity Edit LoRAs.",
             "none", IgnoreIf: "none", FeatureFlag: "optional_reference_latent", Group: T2IParamTypes.GroupImagePrompting, OrderPriority: 13, GetValues: _ => ["none///None (Text Encoder Only)", "index_timestep_zero///Index Timestep Zero (Ostris)", "index///Index (Identity Edit)"]
+            ));
+        TextEncodedImage = T2IParamTypes.Register<string>(new("Text Encoded Image", "How to feed prompt images into the text encoder.\nAutomatic uses the model's default (usually this is large or exact-size-as-input).\nNone skips text-encoder images (reference latents can still apply).\nSmall targets 384px, Large targets 1024px.",
+            "auto", IgnoreIf: "auto", Group: T2IParamTypes.GroupImagePrompting, OrderPriority: 13.5, GetValues: _ => ["auto///Automatic", "none///None (Do Not Encode)", "small///Small Image", "large///Large Image"]
             ));
         UseStyleModel = T2IParamTypes.Register<string>(new("Use Style Model", $"Select a Style model to use it for image-prompt input handling.\nFlux.1 Redux is an example of a style model.\nPlace these models in `(Swarm)/Models/style_models`.",
             "None", IgnoreIf: "None", GetValues: _ => StyleModels, Group: T2IParamTypes.GroupImagePrompting, OrderPriority: 14, ChangeWeight: 1, FeatureFlag: "flux-dev"

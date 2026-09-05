@@ -1304,12 +1304,27 @@ public partial class WorkflowGenerator
     {
         if (UserInput.TryGet(T2IParamTypes.PromptImages, out List<Image> images) && images.Count > index)
         {
+            string textEncodedImage = UserInput.Get(ComfyUIBackendExtension.TextEncodedImage, "auto");
+            if (promptSize && textEncodedImage == "none")
+            {
+                return null;
+            }
             WGNodeData img = LoadImage(images[index], "${promptimages." + index + "}", false);
             (int width, int height) = images[index].GetResolution();
             int genWidth = UserInput.GetImageWidth(), genHeight = UserInput.GetImageHeight();
             int actual = (int)Math.Sqrt(width * height), target = (int)Math.Sqrt(genWidth * genHeight);
             bool doesFit = true;
-            if (!UserInput.Get(T2IParamTypes.SmartImagePromptResizing, true))
+            if (promptSize && textEncodedImage == "small")
+            {
+                target = 384;
+                doesFit = Math.Abs(actual - target) <= 64;
+            }
+            else if (promptSize && textEncodedImage == "large")
+            {
+                target = 1024;
+                doesFit = Math.Abs(actual - target) <= 64;
+            }
+            else if (!UserInput.Get(T2IParamTypes.SmartImagePromptResizing, true))
             {
                 doesFit = Math.Abs(actual - target) <= 64;
             }
@@ -1344,7 +1359,7 @@ public partial class WorkflowGenerator
                     doesFit = false;
                 }
             }
-            else if ((IsBoogu() || IsQwenImageEditPlus() || IsMageFlow()) && promptSize)
+            else if ((IsBoogu() || IsQwenImageEditPlus() || IsMageFlow() || IsKrea2()) && promptSize)
             {
                 target = 384;
                 doesFit = false;
