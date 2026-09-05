@@ -785,7 +785,7 @@ public partial class WorkflowGenerator
     public (JArray, JArray, JArray, JArray) BuildInputImageHandling(List<JArray> images, JArray pos, JArray neg, JArray latent)
     {
         JArray imgNeg = null;
-        if (IsKontext() || IsOmniGen() || IsQwenImage() || IsAnyFlux2() || IsBoogu() || IsMageFlow() || IsKrea2())
+        if (IsKontext() || IsOmniGen() || IsQwenImage() || IsAnyFlux2() || IsBoogu() || IsMageFlow() || (IsKrea2() && UserInput.Get(ComfyUIBackendExtension.EnableReferenceLatents, false)))
         {
             if (IsOmniGen() || IsQwenImageEditPlus() || IsBoogu() || IsMageFlow())
             {
@@ -1328,7 +1328,7 @@ public partial class WorkflowGenerator
                     } // else does fit
                 }
             }
-            else if (IsKrea2()) // Just match the target res.
+            else if (IsKrea2() && !promptSize) // Just match the target res.
             {
                 doesFit = Math.Abs(actual - target) <= 64;
             }
