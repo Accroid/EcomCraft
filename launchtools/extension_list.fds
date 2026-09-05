@@ -366,6 +366,8 @@ KreaGoneWild:
     tags:
     - parameters
     - nodes
+    # No longer relevant for 99% of Krea usage
+    - hidden
 
 H3Attn:
     author: Juan Treminio
