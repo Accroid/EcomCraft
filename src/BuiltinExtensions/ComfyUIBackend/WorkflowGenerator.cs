@@ -785,7 +785,7 @@ public partial class WorkflowGenerator
     public (JArray, JArray, JArray, JArray) BuildInputImageHandling(List<JArray> images, JArray pos, JArray neg, JArray latent)
     {
         JArray imgNeg = null;
-        if (IsKontext() || IsOmniGen() || IsQwenImage() || IsAnyFlux2() || IsBoogu() || IsMageFlow() || (IsKrea2() && UserInput.Get(ComfyUIBackendExtension.EnableReferenceLatents, false)))
+        if (IsKontext() || IsOmniGen() || IsQwenImage() || IsAnyFlux2() || IsBoogu() || IsMageFlow() || (IsKrea2() && UserInput.Get(ComfyUIBackendExtension.EnableReferenceLatents, "none") != "none"))
         {
             if (IsOmniGen() || IsQwenImageEditPlus() || IsBoogu() || IsMageFlow())
             {
@@ -828,7 +828,7 @@ public partial class WorkflowGenerator
                     string methodNode = CreateNode("FluxKontextMultiReferenceLatentMethod", new JObject()
                     {
                         ["conditioning"] = pos,
-                        ["reference_latents_method"] = "index_timestep_zero" // TODO: When should this change? Automatically, or user-control?
+                        ["reference_latents_method"] = UserInput.Get(ComfyUIBackendExtension.EnableReferenceLatents, "none")
                     });
                     pos = [methodNode, 0];
                 }
