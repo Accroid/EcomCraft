@@ -207,6 +207,7 @@ function reviseBackendFeatureSet() {
     doCompatFeature('stable-diffusion-xl-v1', 'sdxl');
     doAnyCompatFeature(['stable-diffusion-v1', 'stable-diffusion-xl-v1'], 'model_has_ipadapter');
     doAnyCompatFeature(['stable-diffusion-v1', 'stable-diffusion-v2', 'stable-diffusion-xl-v1'], 'supports_reference_only');
+    doAnyCompatFeature(['stable-diffusion-v1', 'stable-diffusion-v2', 'stable-diffusion-xl-v1'], 'supports_hypertile');
     doAnyCompatFeature(['genmo-mochi-1', 'lightricks-ltx-video', 'hunyuan-video', 'nvidia-cosmos-1', `wan-21`, `wan-22`, 'kandinsky5-vidlite', 'kandinsky5-vidpro', 'minimax-h3'], 'text2video');
     doAnyCompatFeature(['ace-step-1_5', 'minimax-music-3'], 'text2audio');
     for (let changer of featureSetChangers) {
