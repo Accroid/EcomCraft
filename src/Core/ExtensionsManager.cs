@@ -22,7 +22,7 @@ public class ExtensionsManager
     /// <summary>Simple holder of information about extensions available online.</summary>
     public record class ExtensionInfo(string Name, string Author, string License, string Description, string URL, string OldURL, string[] Tags, string[] FolderNames)
     {
-        public bool IsDangerTags => Tags.Contains("lowquality") || Tags.Contains("conflicts") || Tags.Contains("beta");
+        public bool IsDangerTags => Tags.Contains("lowquality") || Tags.Contains("conflicts") || Tags.Contains("beta") || Tags.Contains("hidden");
     }
 
     private class SwarmExtensionLoadContext(ExtensionsManager manager, string name, string extensionDir) : AssemblyLoadContext(name, isCollectible: false)
