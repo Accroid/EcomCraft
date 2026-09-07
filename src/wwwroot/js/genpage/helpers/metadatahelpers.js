@@ -326,7 +326,7 @@ function getFormattedMetadataEntries(metadata) {
                     if (key == 'parser_warnings') {
                         added += ' param_view_block_parser_warnings';
                     }
-                    if (key.includes('prompt')) {
+                    if (key.toLowerCase().includes('prompt')) {
                         extras = `<button title="Click to copy" class="basic-button prompt-copy-button" onclick="copyText('${escapeHtmlNoBr(escapeJsString(`${val}`))}');doNoticePopover('Copied!', 'notice-pop-green');">&#x29C9;</button>`;
                     }
                     if (key == 'unused_parameters' && Array.isArray(val)) {
