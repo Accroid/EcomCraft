@@ -389,12 +389,19 @@ function getFormattedMetadataEntries(metadata) {
         let prompt = data.sui_image_params.prompt;
         if ('sui_extra_data' in data && 'original_prompt' in data.sui_extra_data) {
             let originalPrompt = data.sui_extra_data.original_prompt;
+            delete data.sui_extra_data.original_prompt;
             if (prompt.replaceAll(promptCidMatcher, '<$1>') == originalPrompt) {
                 prompt = originalPrompt;
-                delete data.sui_extra_data.original_prompt;
+            }
+            else {
+                appendEntries(appendObject({ 'Original Prompt': originalPrompt }), true);
+                appendEntries(appendObject({ 'Interpreted Prompt': prompt }), true);
+                prompt = null;
             }
         }
-        appendEntries(appendObject({ 'prompt': prompt }), true);
+        if (prompt != null) {
+            appendEntries(appendObject({ 'prompt': prompt }), true);
+        }
         delete data.sui_image_params.prompt;
     }
     if ('negativeprompt' in data.sui_image_params && data.sui_image_params.negativeprompt) {
