@@ -343,6 +343,17 @@ function getFormattedMetadataEntries(metadata) {
                                 val = param.value_names[index];
                             }
                         }
+                        if (param.view_type == 'video_frames') {
+                            let frames = parseInt(val);
+                            if (Number.isFinite(frames)) {
+                                let fps = parseFloat((data.sui_image_params && data.sui_image_params.videofps) || (getParamById('videofps') || {}).default);
+                                if (!Number.isFinite(fps) || fps <= 0) {
+                                    fps = 24;
+                                }
+                                let seconds = formatNumberClean(frames / fps, 2);
+                                val = `${seconds} second${seconds == 1 ? '' : 's'} (${frames} frames)`;
+                            }
+                        }
                     }
                     let valueHtml, compareValue;
                     if (typeof val == 'object') {
