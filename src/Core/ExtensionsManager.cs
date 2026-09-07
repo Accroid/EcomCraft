@@ -63,7 +63,7 @@ public class ExtensionsManager
                 "nodes" => "<span class=\"tag\" title=\"Adds Comfy nodes\">Nodes</span>",
                 "tools" => "<span class=\"tag\" title=\"Adds new tools to the Tools menu\">Tools</span>",
                 "backend" => "<span class=\"tag\" title=\"Adds a new backend\">Backend</span>",
-                "hidden" => "<span class=\"tag hidden-tag\" title=\"Should not be visible\">Hidden</span>",
+                "hidden" => "<span class=\"tag hidden-tag\" title=\"Should not be visible, eg broken, outdated, unsafe. Install at your own risk.\">Hidden</span>",
                 "paid" => "<span class=\"tag paid-tag\" title=\"Requires a paid account\">Paid</span>",
                 "beta" => "<span class=\"tag beta-tag\" title=\"Not ready for general use\">Beta</span>",
                 "conflicts" => "<span class=\"tag beta-tag\" title=\"may conflict with core systems or with other extensions (eg overrides core features)\">Conflicts</span>",
