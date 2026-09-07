@@ -394,8 +394,14 @@ function getFormattedMetadataEntries(metadata) {
                 prompt = originalPrompt;
             }
             else {
-                appendEntries(appendObject({ 'Original Prompt': originalPrompt }), true);
-                appendEntries(appendObject({ 'Interpreted Prompt': prompt }), true);
+                if (getUserSetting('ui.interpretedpromptontop', false)) {
+                    appendEntries(appendObject({ 'Interpreted Prompt': prompt }), true);
+                    appendEntries(appendObject({ 'Original Prompt': originalPrompt }), true);
+                }
+                else {
+                    appendEntries(appendObject({ 'Original Prompt': originalPrompt }), true);
+                    appendEntries(appendObject({ 'Interpreted Prompt': prompt }), true);
+                }
                 prompt = null;
             }
         }
