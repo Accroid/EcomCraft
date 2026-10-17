@@ -31,3 +31,19 @@ docker-compose.yml
 __pycache__/
 venv/
 *.pth
+
+# Local-only agent skills, plans, tests, and development documents
+skills/
+SKILL.md
+superpowers/
+.superpowers/
+plans/
+Tests/
+tests/
+plan.md
+PLAN.md
+*-plan.md
+/docs/
+/src/Extensions/EcomCraft/README.md
+/src/Extensions/EcomCraft/docs/
+/EcomCraft_产品需求与开发说明_V0.1.md

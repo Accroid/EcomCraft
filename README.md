@@ -14,7 +14,7 @@ EcomCraft 复用 SwarmUI 的生成能力，通过统一入口连接多台生成 
 
 ## 功能清单
 
-勾选表示相关代码已实现，不代表已通过生产验收；使用与验证说明见 [扩展文档](src/Extensions/EcomCraft/README.md)。
+`[✓]` 表示相关代码已实现，`[ ]` 表示待实现；已实现不代表已通过生产验收。
 
 ### 统一入口与权限
 
@@ -70,14 +70,8 @@ EcomCraft 复用 SwarmUI 的生成能力，通过统一入口连接多台生成 
 - [ ] 应用、配置和业务数据的备份与恢复方案。
 - [ ] 保留任务和素材数据的升级回滚能力。
 
-## 文档
-
-- [扩展使用说明](src/Extensions/EcomCraft/README.md)
-- [项目维护与上游同步](docs/EcomCraft-Maintenance.md)
-- [SwarmUI 基础文档](docs/README.md)
-
 ## 来源与许可
 
 本项目是 SwarmUI 的独立二次开发项目，非 SwarmUI 官方版本。感谢原作者 Alex “mcmonkey” Goodwin 及所有贡献者。
 
-项目沿用 [MIT License](LICENSE.txt)，保留[上游版权与第三方组件声明](docs/Third-Party-Notices.md)。模型、工作流和其他依赖仍须遵守各自许可。
+项目沿用 [MIT License](LICENSE.txt)，保留[上游版权与第三方组件声明](THIRD_PARTY_NOTICES.md)。模型、工作流和其他依赖仍须遵守各自许可。
