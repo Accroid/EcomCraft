@@ -1067,7 +1067,7 @@ function trt_modal_create() {
         'contextLen': contextLen.value
     };
     createButton.disabled = true;
-    resultBox.innerText = 'Creating TensorRT engine, please wait...';
+    resultBox.innerText = translate('Creating TensorRT engine, please wait...');
     makeWSRequest('DoTensorRTCreateWS', data, data => {
         resultBox.innerText = data.status;
         if (data.complete) {
@@ -1078,7 +1078,7 @@ function trt_modal_create() {
         }
     }, 0, err => {
         createButton.disabled = false;
-        resultBox.innerText = `Error: ${err}`;
+        resultBox.innerText = translate('Error: {0}').replace('{0}', err);
     });
 }
 

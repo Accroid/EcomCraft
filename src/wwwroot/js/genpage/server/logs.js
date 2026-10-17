@@ -36,11 +36,11 @@ class ServerLogsHelper {
     pastebinSubmitNow() {
         this.pastebinSubmitButton.disabled = true;
         this.pastebinCancelButton.innerText = translate('Close');
-        this.pastebinResultArea.innerHTML = 'Submitting...';
+        this.pastebinResultArea.innerHTML = `<span class="translate">Submitting...</span>`;
         genericRequest('LogSubmitToPastebin', { 'type': this.pastebinLogTypeSelector.value }, data => {
-            this.pastebinResultArea.innerHTML = `<br>Submitted as: <a href="${data.url}" target="_blank">${data.url}</a> (copy this link and paste it in the SwarmUI discord help-forum, alongside a description of your problem and any screenshots)`;
+            this.pastebinResultArea.innerHTML = `<br>${translate('Submitted as: ')}<a href="${data.url}" target="_blank">${data.url}</a> ${translate('(copy this link and paste it in the SwarmUI discord help-forum, alongside a description of your problem and any screenshots)')}`;
         }, 0, e => {
-            this.pastebinResultArea.innerText = 'Failed to submit: ' + e;
+            this.pastebinResultArea.innerText = translate('Failed to submit: ') + e;
             this.pastebinSubmitButton.disabled = false;
             this.pastebinCancelButton.innerText = translate('Cancel');
         });

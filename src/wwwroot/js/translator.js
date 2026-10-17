@@ -80,13 +80,13 @@ function applyTranslations(root = null) {
                 return;
             }
             let translated = translate(elem.dataset.pretranslated_title || elem.title);
-            if (translated == elem.title) {
-                return;
+            if (translated != elem.title) {
+                if (!elem.dataset.pretranslated_title) {
+                    elem.dataset.pretranslated_title = elem.title;
+                }
+                elem.title = translated;
             }
-            if (!elem.dataset.pretranslated_title) {
-                elem.dataset.pretranslated_title = elem.title;
-            }
-            elem.title = translated;
+            // If the title is not translated yet, continue to handle textContent (do not bail out)
         }
         if (elem.placeholder) {
             if (validateTranslationSafety(elem.dataset.pretranslated_placeholder || elem.placeholder, `element placeholder ${elem.id}`)) {
@@ -106,39 +106,83 @@ function applyTranslations(root = null) {
             if (validateTranslationSafety(elem.dataset.pretranslated || elem.innerHTML, `element textContent ${elem.id}`)) {
                 return;
             }
-            let rawText = elem.innerHTML;
-            let firstBracket = rawText.indexOf('<');
-            let edited = false;
-            if (firstBracket != -1) {
-                edited = true;
-                if (firstBracket > 0 && rawText.substring(0, firstBracket).trim() != "") {
-                    rawText = `<span class="translate">${rawText.substring(0, firstBracket)}</span>${rawText.substring(firstBracket)}`;
+            let hasChildElement = [...elem.childNodes].some(n => n.nodeType === 1);
+            if (hasChildElement) {
+                // Static HTML markup (eg links embedded in a sentence): try the full original innerHTML
+                // as one translation key before splitting the text into per-line spans.
+                if (!elem.dataset.pretranslated && !elem.dataset.htmlChecked) {
+                    elem.dataset.htmlChecked = '1';
+                    let htmlKey = elem.innerHTML.trim();
+                    let stored = document.documentElement.dataset.htmlkeys;
+                    let keyArr = stored ? JSON.parse(stored) : [];
+                    keyArr.push(htmlKey);
+                    document.documentElement.dataset.htmlkeys = JSON.stringify(keyArr);
+                    let htmlTranslated = translate(htmlKey);
+                    if (htmlTranslated !== htmlKey) {
+                        elem.innerHTML = safeHtmlOnly(htmlTranslated);
+                        elem.classList.add('translate-no-text');
+                        return;
+                    }
+                }
+                // If this element was built from a full multi-line description (has data-pretranslated),
+                // try the full-text translation first before splitting into per-line spans.
+                if (elem.dataset.pretranslated) {
+                    let origText = elem.dataset.pretranslated;
+                    let fullTranslated = translate(origText);
+                    if (fullTranslated !== origText) {
+                        if (origText.includes('<')) {
+                            elem.innerHTML = safeHtmlOnly(fullTranslated);
+                        }
+                        else {
+                            let toDisplayHtml = (s) => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+                                .replaceAll('"', '&quot;').replaceAll("'", '&#039;').replaceAll('\n', '<br>');
+                            elem.innerHTML = toDisplayHtml(fullTranslated);
+                        }
+                        elem.classList.add('translate-no-text');
+                        return;
+                    }
+                }
+                // Wrap EVERY direct non-empty text node (not just leading/trailing), preserving surrounding whitespace
+                let textNodes = [...elem.childNodes].filter(n => n.nodeType === 3 && n.textContent.trim() != '');
+                let wrapped = false;
+                for (let node of textNodes) {
+                    let t = node.textContent;
+                    let lead = t.match(/^\s*/)[0];
+                    let trail = t.match(/\s*$/)[0];
+                    let core = t.trim();
+                    let span = document.createElement('span');
+                    span.className = 'translate';
+                    span.dataset.pretranslated = core;
+                    span.textContent = translate(core);
+                    let frag = document.createDocumentFragment();
+                    if (lead) frag.appendChild(document.createTextNode(lead));
+                    frag.appendChild(span);
+                    if (trail) frag.appendChild(document.createTextNode(trail));
+                    node.replaceWith(frag);
+                    wrapped = true;
+                }
+                if (wrapped) {
+                    elem.classList.add("translate-no-text");
+                    for (let subElem of elem.querySelectorAll(".translate")) {
+                        doTranslateNow(subElem);
+                    }
+                    return;
                 }
             }
-            let lastEndBracket = rawText.lastIndexOf('>');
-            if (lastEndBracket != -1) {
-                edited = true;
-                if (lastEndBracket < rawText.length - 1 && rawText.substring(lastEndBracket + 1).trim() != "") {
-                    rawText = `${rawText.substring(0, lastEndBracket + 1)}<span class="translate">${rawText.substring(lastEndBracket + 1)}</span>`;
-                }
-            }
-            if (edited) {
-                elem.innerHTML = rawText;
-                elem.classList.add("translate-no-text");
-                for (let subElem of elem.querySelectorAll(".translate")) {
-                    doTranslateNow(subElem);
-                }
-                return;
-            }
-            let translated = translate(elem.dataset.pretranslated || elem.textContent);
-            if (translated == elem.textContent) {
+            // Plain text element: translate using trimmed content, preserving surrounding whitespace
+            let full = elem.textContent;
+            let lead = full.match(/^\s*/)[0];
+            let trail = full.match(/\s*$/)[0];
+            let trimmed = full.trim();
+            let translated = translate(elem.dataset.pretranslated || trimmed);
+            if (translated == trimmed) {
                 return;
             }
             if (!elem.dataset.pretranslated) {
-                elem.dataset.pretranslated = elem.textContent;
+                elem.dataset.pretranslated = trimmed;
             }
             elem.dataset.textContentWasTranslated = true;
-            elem.textContent = translated;
+            elem.textContent = lead + translated + trail;
         }
     }
     for (let elem of root.querySelectorAll(".translate")) {
@@ -146,11 +190,14 @@ function applyTranslations(root = null) {
     }
 }
 
-function loadAndApplyTranslations() {
+function loadAndApplyTranslations(callback = null) {
     genericRequest('GetLanguage', { language: language }, data => {
         language_data = data.language;
         translate_keys = data.language.keys;
         applyTranslations();
+        if (callback) {
+            callback();
+        }
     });
 }
 
@@ -168,7 +215,11 @@ function changeLanguage(code) {
         installerSetting.value = code;
         triggerChangeFor(installerSetting);
     }
-    loadAndApplyTranslations();
+    loadAndApplyTranslations(() => {
+        if (typeof installer !== 'undefined' && installer && installer.check) {
+            installer.check();
+        }
+    });
 }
 
 function translateableHtml(key) {
@@ -176,4 +227,24 @@ function translateableHtml(key) {
         return key;
     }
     return `<span class="translate" data-pretranslated="${key.replaceAll('<br>', '')}">${translate(key)}</span>`;
+}
+
+/**
+ * Renders a settings/param description into translatable HTML.
+ * Plain multi-line text is translated (with newlines rendered as <br>),
+ * while safe HTML content is passed through the safe-HTML renderer.
+ */
+function translatableDescriptionHtml(text) {
+    if (text == null || text == '') {
+        return '';
+    }
+    if (!text.includes('<')) {
+        let translated = translate(text);
+        let escDisplay = (s) => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;').replaceAll("'", '&#039;').replaceAll('\n', '<br>');
+        return `<span class="translate" data-pretranslated="${escapeHtmlNoBr(text)}">${escDisplay(translated)}</span>`;
+    }
+    // Safe HTML content: if a full-key translation exists (it must preserve safe tags), use it
+    let translatedHtml = translate(text);
+    return safeHtmlOnly(translatedHtml !== text ? translatedHtml : text);
 }

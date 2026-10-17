@@ -182,7 +182,7 @@ function enableVideoFramesInput(id, prefix) {
 function getHtmlForParam(param, prefix, isPreset = false) {
     try {
         let example = param.examples ? `<br><span class="translate">Examples</span>: <code>${param.examples.map(escapeHtmlNoBr).join(`</code>,&emsp;<code>`)}</code>` : '';
-        let pop = param.no_popover ? '' : `<div class="sui-popover sui-info-popover" id="popover_${prefix}${param.id}"><b class="translate">${escapeHtmlNoBr(param.name)}</b> (${param.type}):<br><span class="translate slight-left-margin-block">${safeHtmlOnly(param.description)}</span>${example}</div>`;
+        let pop = param.no_popover ? '' : `<div class="sui-popover sui-info-popover" id="popover_${prefix}${param.id}"><b class="translate">${escapeHtmlNoBr(param.name)}</b> (${param.type}):<br><span class="slight-left-margin-block">${translatableDescriptionHtml(param.description)}</span>${example}</div>`;
         switch (param.type) {
             case 'text':
                 let runnable = param.view_type == 'prompt' ? () => {

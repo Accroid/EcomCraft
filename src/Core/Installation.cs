@@ -26,18 +26,83 @@ public class Installation
     /// <summary>Tracker of how many steps are expected.</summary>
     public static int TotalSteps;
 
+    /// <summary>Language code selected for the current install/upgrade, used to translate server-side installer messages.</summary>
+    public static string InstallLanguage = "en";
+
+    /// <summary>Chinese translations of server-side installer messages, keyed by the English message template.</summary>
+    public static Dictionary<string, string> InstallMessagesZh = new()
+    {
+        ["Installation request received, processing..."] = "已收到安装请求，正在处理……",
+        ["Setting theme to {0}."] = "正在将主题设置为 {0}。",
+        ["Theme {0} is not valid!"] = "主题 {0} 无效！",
+        ["Configuring settings as 'just yourself' install."] = "正在按“仅本人使用”模式配置。",
+        ["Configuring settings as 'just yourself (LAN)' install."] = "正在按“仅本人使用（局域网）”模式配置。",
+        ["Downloaded! Extracting... (look in terminal window for details)"] = "下载完成！正在解压……（详细过程可查看终端窗口）",
+        ["Still extracting backend files... ({0} files so far)"] = "仍在解压后端文件……（目前已解压 {0} 个文件）",
+        ["Installing prereqs..."] = "正在安装前置依赖……",
+        ["Prepping ComfyUI's git repo..."] = "正在准备 ComfyUI 的 git 仓库……",
+        ["Ensuring all current Comfy requirements are installed..."] = "正在确保已安装 ComfyUI 的全部最新依赖……",
+        ["Installing AMD ROCm multi-architecture torch (this may take a while)..."] = "正在安装 AMD ROCm 多架构版 torch（可能需要一段时间）……",
+        ["Downloading ComfyUI backend... please wait..."] = "正在下载 ComfyUI 后端……请稍候……",
+        ["Enabling ComfyUI..."] = "正在启用 ComfyUI……",
+        ["Not installing any backend."] = "不安装任何后端。",
+        ["Downloading model from '{0}'... please wait..."] = "正在从“{0}”下载模型……请稍候……",
+        ["Failed to download '{0}' (IO): {1}: {2}"] = "下载“{0}”失败（IO）：{1}：{2}",
+        ["Failed to download '{0}' (HTTP): {1}: {2}"] = "下载“{0}”失败（HTTP）：{1}：{2}",
+        ["Model download complete."] = "模型下载完成。",
+        ["Reloading backends..."] = "正在重新加载后端……",
+        ["Installed!"] = "安装完成！",
+        ["Existing installation detected, reusing existing backend and configuration, applying upgrade..."] = "检测到已有安装，将复用现有后端与配置并进行升级……",
+        ["Re-registering existing ComfyUI backend..."] = "正在重新注册现有的 ComfyUI 后端……",
+        ["Upgrade complete!"] = "升级完成！"
+    };
+
+    /// <summary>Translate a server-side installer message template. The English template is the canonical key; falls back to English if no translation exists.</summary>
+    public static string T(string englishTemplate, params object[] args)
+    {
+        string baseText = englishTemplate;
+        if (InstallLanguage is not null && InstallLanguage.StartsWith("zh") && InstallMessagesZh.TryGetValue(englishTemplate, out string translated))
+        {
+            baseText = translated;
+        }
+        return args is null || args.Length == 0 ? baseText : string.Format(baseText, args);
+    }
+
+    /// <summary>Send a JSON object to the install websocket, but do not crash the installation if the socket dropped mid-way.</summary>
+    public static async Task SafeSocketSend(JObject obj)
+    {
+        try
+        {
+            await InstallSocket.SendJson(obj, API.WebsocketTimeout);
+        }
+        catch (Exception ex)
+        {
+            // A long-running step (eg extracting tens of thousands of files on a slow/scanned disk) can
+            // outlast an idle WebSocket timeout. The installation itself should keep running regardless;
+            // the socket is only a progress channel.
+            Logs.Error($"[Installer] Failed to send a message to the install websocket (installation will continue): {ex.Message}");
+        }
+    }
+
     /// <summary>Output a message to logs and the websocket.</summary>
     public static async Task Output(string str)
     {
         Logs.Init($"[Installer] {str}");
-        await InstallSocket.SendJson(new JObject() { ["info"] = str }, API.WebsocketTimeout);
+        await SafeSocketSend(new JObject() { ["info"] = str });
     }
 
     /// <summary>Send a progress update for the installation down the websocket.</summary>
     public static void UpdateProgress(long progress, long total, long perSec)
     {
         // TODO: better way to send these out without waiting
-        InstallSocket.SendJson(new JObject() { ["progress"] = progress, ["total"] = total, ["steps"] = StepsThusFar, ["total_steps"] = TotalSteps, ["per_second"] = perSec }, API.WebsocketTimeout).Wait();
+        try
+        {
+            InstallSocket.SendJson(new JObject() { ["progress"] = progress, ["total"] = total, ["steps"] = StepsThusFar, ["total_steps"] = TotalSteps, ["per_second"] = perSec }, API.WebsocketTimeout).Wait();
+        }
+        catch (Exception ex)
+        {
+            Logs.Error($"[Installer] Failed to send progress to the install websocket (installation will continue): {ex.Message}");
+        }
     }
 
     /// <summary>Configure the theme during installation.</summary>
@@ -45,12 +110,12 @@ public class Installation
     {
         if (Program.Web.RegisteredThemes.ContainsKey(theme))
         {
-            await Output($"Setting theme to {theme}.");
+            await Output(T("Setting theme to {0}.", theme));
             Program.ServerSettings.DefaultUser.Theme = theme;
         }
         else
         {
-            await Output($"Theme {theme} is not valid!");
+            await Output(T("Theme {0} is not valid!", theme));
             throw new SwarmUserErrorException("Invalid theme input!");
         }
     }
@@ -61,14 +126,14 @@ public class Installation
         switch (installed_for)
         {
             case "just_self":
-                await Output("Configuring settings as 'just yourself' install.");
+                await Output(T("Configuring settings as 'just yourself' install."));
                 Program.ServerSettings.Network.Host = "localhost";
                 Program.ServerSettings.Network.Port = 7801;
                 Program.ServerSettings.Network.PortCanChange = true;
                 Program.ServerSettings.LaunchMode = "web"; // TODO: Electron?
                 break;
             case "just_self_lan":
-                await Output("Configuring settings as 'just yourself (LAN)' install.");
+                await Output(T("Configuring settings as 'just yourself (LAN)' install."));
                 Program.ServerSettings.Network.Host = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "*" : "0.0.0.0";
                 Program.ServerSettings.Network.Port = 7801;
                 Program.ServerSettings.Network.PortCanChange = true;
@@ -101,9 +166,34 @@ public class Installation
         }
         StepsThusFar++;
         UpdateProgress(0, 0, 0);
-        await Output("Downloaded! Extracting... (look in terminal window for details)");
+        await Output(T("Downloaded! Extracting... (look in terminal window for details)"));
         Directory.CreateDirectory("dlbackend/tmpcomfy/");
-        await Process.Start("launchtools/7z/win/7za.exe", $"x dlbackend/comfyui_dl.7z -o\"dlbackend/tmpcomfy/\" -y").WaitForExitAsync(Program.GlobalProgramCancel);
+        Process sevenZip = Process.Start("launchtools/7z/win/7za.exe", $"x dlbackend/comfyui_dl.7z -o\"dlbackend/tmpcomfy/\" -y");
+        Task extractTask = sevenZip.WaitForExitAsync(Program.GlobalProgramCancel);
+        while (!extractTask.IsCompleted)
+        {
+            // Keep the websocket alive during a potentially long extraction (slow disks or antivirus scans
+            // can make extracting tens of thousands of files take several minutes).
+            Task heartbeatDelay = Task.Delay(TimeSpan.FromSeconds(15), Program.GlobalProgramCancel);
+            if (await Task.WhenAny(extractTask, heartbeatDelay) == extractTask)
+            {
+                break;
+            }
+            long fileCount = 0;
+            try
+            {
+                if (Directory.Exists("dlbackend/tmpcomfy"))
+                {
+                    fileCount = Directory.EnumerateFiles("dlbackend/tmpcomfy", "*", SearchOption.AllDirectories).Count();
+                }
+            }
+            catch (Exception)
+            {
+                // Counting can race with extraction or file locks; not important, the heartbeat still gets sent.
+            }
+            await SafeSocketSend(new JObject() { ["info"] = T("Still extracting backend files... ({0} files so far)", fileCount) });
+        }
+        await extractTask;
         static void moveFolder()
         {
             if (Directory.Exists("dlbackend/tmpcomfy/ComfyUI_windows_portable"))
@@ -135,7 +225,7 @@ public class Installation
                 // This has been a 20 second delay now, so either it's done now and works, or the problem can't be resolved by waiting, so don't waste the user's time with more tries.
             }
         }
-        await Output("Installing prereqs...");
+        await Output(T("Installing prereqs..."));
         try
         {
             await Utilities.DownloadFile("https://aka.ms/vs/16/release/vc_redist.x64.exe", "dlbackend/vc_redist.x64.exe", UpdateProgress);
@@ -148,17 +238,39 @@ public class Installation
         }
         string path = "dlbackend/comfy/ComfyUI/main.py";
         string comfyFolderPath = Path.GetFullPath("dlbackend/comfy");
-        await Output("Prepping ComfyUI's git repo...");
+        await Output(T("Prepping ComfyUI's git repo..."));
         string fetchResp = await Utilities.RunGitProcess($"fetch", $"{comfyFolderPath}/ComfyUI");
         Logs.Debug($"ComfyUI Install git fetch response: {fetchResp}");
         string checkoutResp = await Utilities.RunGitProcess($"checkout master --force", $"{comfyFolderPath}/ComfyUI");
         Logs.Debug($"ComfyUI Install git checkout master response: {checkoutResp}");
         string response = await Utilities.RunGitProcess($"pull", $"{comfyFolderPath}/ComfyUI");
         Logs.Debug($"ComfyUI Install git pull response: {response}");
-        await Output("Ensuring all current Comfy requirements are installed...");
+        await Output(T("Ensuring all current Comfy requirements are installed..."));
         string requirementsRaw = File.ReadAllText($"{comfyFolderPath}/ComfyUI/requirements.txt");
         // Exclude torch requirements here as pip installing those just breaks things
         string[] requirements = [.. requirementsRaw.Replace('\r', '\n').Split('\n').Select(r => r.Trim()).Where(r => !string.IsNullOrWhiteSpace(r) && !r.StartsWith('#') && !r.StartsWith("torch"))];
+        if (install_amd)
+        {
+            // The official ComfyUI Windows AMD portable bundles an older ROCm torch (rocm 7.2.1) that fails
+            // on AMD GPU architectures not in its validated manifest - notably gfx1010/gfx1012 (RDNA1,
+            // e.g. RX 5600/5700 series) - it crashes with an access violation during torch initialization.
+            // Replace it with AMD's current TheRock multi-arch wheel index, which covers all supported GPUs.
+            await Output(T("Installing AMD ROCm multi-architecture torch (this may take a while)..."));
+            ProcessStartInfo amdTorchInfo = new($"{comfyFolderPath}/python_embeded/python.exe")
+            {
+                WorkingDirectory = comfyFolderPath
+            };
+            foreach (string arg in new string[] { "-s", "-m", "pip", "install",
+                "--index-url", "https://repo.amd.com/rocm/whl-multi-arch/",
+                "--extra-index-url", "https://pypi.org/simple",
+                "torch[device-all]==2.12.0+rocm7.14.0",
+                "torchvision[device-all]==0.27.0+rocm7.14.0",
+                "torchaudio==2.11.0+rocm7.14.0" })
+            {
+                amdTorchInfo.ArgumentList.Add(arg);
+            }
+            await NetworkBackendUtils.RunProcessWithMonitoring(amdTorchInfo, "ComfyUI Install (AMD ROCm torch)", "comfyinstall");
+        }
         await NetworkBackendUtils.RunProcessWithMonitoring(new ProcessStartInfo($"{comfyFolderPath}/python_embeded/python.exe", $"-s -m pip install{(install_amd ? " -U " : "")} {requirements.JoinString(" ")}") { WorkingDirectory = comfyFolderPath }, "ComfyUI Install (python requirements)", "comfyinstall");
         string extraArgs = "";
         bool enablePreviews = true;
@@ -168,7 +280,7 @@ public class Installation
     /// <summary>Configure the backend as ComfyUI during installation.</summary>
     public static async Task BackendComfy(bool install_amd)
     {
-        await Output("Downloading ComfyUI backend... please wait...");
+        await Output(T("Downloading ComfyUI backend... please wait..."));
         Directory.CreateDirectory("dlbackend/");
         string path;
         string extraArgs = "";
@@ -207,7 +319,7 @@ public class Installation
             NvidiaUtil.NvidiaInfo mostVRAM = nv.OrderByDescending(n => n.TotalMemory.InBytes).First();
             gpu = mostVRAM.ID;
         }
-        await Output("Enabling ComfyUI...");
+        await Output(T("Enabling ComfyUI..."));
         Program.Backends.AddNewOfType(Program.Backends.BackendTypes["comfyui_selfstart"], new ComfyUISelfStartBackend.ComfyUISelfStartSettings() { StartScript = path, GPU_ID = $"{gpu}", ExtraArgs = extraArgs.Trim(), EnablePreviews = enablePreviews ? "true" : "false" });
     }
 
@@ -222,7 +334,7 @@ public class Installation
                     break;
                 }
             case "none":
-                await Output("Not installing any backend.");
+                await Output(T("Not installing any backend."));
                 break;
             default:
                 throw new SwarmReadableErrorException($"Invalid backend type '{backend}'!");
@@ -242,7 +354,7 @@ public class Installation
             {
                 throw new SwarmReadableErrorException($"Invalid model {model}!");
             }
-            await Output($"Downloading model from '{modelInfo.URL}'... please wait...");
+            await Output(T("Downloading model from '{0}'... please wait...", modelInfo.URL));
             try
             {
                 await modelInfo.DownloadNow(UpdateProgress, session);
@@ -255,17 +367,17 @@ public class Installation
             {
                 Logs.Error($"Failed to download '{modelInfo.URL}' (IO): {ex.GetType().Name}: {ex.Message}");
                 Logs.Debug($"Download exception: {ex.ReadableString()}");
-                await Output($"Failed to download '{modelInfo.URL}' (IO): {ex.GetType().Name}: {ex.Message}");
+                await Output(T("Failed to download '{0}' (IO): {1}: {2}", modelInfo.URL, ex.GetType().Name, ex.Message));
             }
             catch (HttpRequestException ex)
             {
                 Logs.Error($"Failed to download '{modelInfo.URL}' (HTTP): {ex.GetType().Name}: {ex.Message}");
                 Logs.Debug($"Download exception: {ex.ReadableString()}");
-                await Output($"Failed to download '{modelInfo.URL}' (HTTP): {ex.GetType().Name}: {ex.Message}");
+                await Output(T("Failed to download '{0}' (HTTP): {1}: {2}", modelInfo.URL, ex.GetType().Name, ex.Message));
             }
             StepsThusFar++;
             UpdateProgress(0, 0, 0);
-            await Output("Model download complete.");
+            await Output(T("Model download complete."));
         }
         Program.MainSDModels.Refresh();
     }
@@ -309,15 +421,67 @@ public class Installation
         Program.SaveSettingsFile();
     }
 
+    /// <summary>Returns true if a fully usable self-start ComfyUI backend already exists on disk (can be reused for an upgrade).</summary>
+    public static bool IsCompleteBackendPresent()
+    {
+        return File.Exists("dlbackend/comfy/ComfyUI/main.py")
+            && File.Exists("dlbackend/comfy/python_embeded/python.exe");
+    }
+
+    /// <summary>
+    /// Upgrade path: a complete backend already exists on disk. Reuse the existing portable environment (including the
+    /// expensive PyTorch install), the existing configuration (Data), and the existing models - nothing is re-downloaded.
+    /// Only re-registers the backend if it is missing from the saved config, marks the install as complete, and reloads.
+    /// </summary>
+    public static async Task Upgrade()
+    {
+        await Output(T("Existing installation detected, reusing existing backend and configuration, applying upgrade..."));
+        bool hasComfy = Program.Backends.EnumerateT2IBackends.Any(b => b.Backend is ComfyUISelfStartBackend);
+        if (!hasComfy)
+        {
+            await Output(T("Re-registering existing ComfyUI backend..."));
+            NvidiaUtil.NvidiaInfo[] nv = NvidiaUtil.QueryNvidia();
+            int gpu = 0;
+            if (nv is not null && nv.Length > 0)
+            {
+                gpu = nv.OrderByDescending(n => n.TotalMemory.InBytes).First().ID;
+            }
+            Program.Backends.AddNewOfType(Program.Backends.BackendTypes["comfyui_selfstart"], new ComfyUISelfStartBackend.ComfyUISelfStartSettings()
+            {
+                StartScript = "dlbackend/comfy/ComfyUI/main.py",
+                GPU_ID = $"{gpu}",
+                EnablePreviews = "true"
+            });
+        }
+        Program.ServerSettings.IsInstalled = true;
+        if (string.IsNullOrWhiteSpace(Program.ServerSettings.InstallDate))
+        {
+            Program.ServerSettings.InstallDate = $"{DateTimeOffset.Now:yyyy-MM-dd}";
+        }
+        Program.ServerSettings.InstallVersion = Utilities.Version;
+        Program.SaveSettingsFile();
+        await Output(T("Reloading backends..."));
+        await Program.Backends.ReloadAllBackends();
+        await Output(T("Upgrade complete!"));
+        await InstallSocket.SendJson(new JObject() { ["success"] = true }, API.WebsocketTimeout);
+    }
+
     /// <summary>Main install function entry point.</summary>
     public static async Task Install(WebSocket socket, string theme, string installed_for, string backend, string models, bool install_amd, string language, bool make_shortcut, Session session)
     {
+        InstallSocket = socket;
+        InstallLanguage = language;
         if (Directory.Exists("dlbackend/comfy"))
         {
-            throw new SwarmUserErrorException("It looks like a previous install already exists here. If you are intentionally rerunning the installer, please delete 'Data' and 'dlbackend' folders from the Swarm folder.");
+            if (IsCompleteBackendPresent())
+            {
+                // A complete backend exists - reuse it (and the existing Data/models) instead of reinstalling.
+                await Upgrade();
+                return;
+            }
+            throw new SwarmUserErrorException("An incomplete previous backend install exists at 'dlbackend/comfy'. Please delete the 'dlbackend' folder (and optionally 'Data'), then rerun the installer.");
         }
-        InstallSocket = socket;
-        await Output("Installation request received, processing...");
+        await Output(T("Installation request received, processing..."));
         await Theme(theme);
         Program.ServerSettings.DefaultUser.Language = language;
         await InstalledFor(installed_for);
@@ -345,7 +509,7 @@ public class Installation
         await Program.Backends.ReloadAllBackends();
         StepsThusFar++;
         UpdateProgress(0, 0, 0);
-        await Output("Installed!");
+        await Output(T("Installed!"));
         await socket.SendJson(new JObject() { ["success"] = true }, API.WebsocketTimeout);
     }
 }
