@@ -63,7 +63,7 @@ function currentGenString(num_waiting_gens, num_models_loading, num_live_gens, n
         }
         return `<span class="interrupt-line-part">${num} ${text.replaceAll('%', autoS(num))},</span> `;
     }
-    return `${autoBlock(num_waiting_gens, 'current generation%')}${autoBlock(num_live_gens, 'running')}${autoBlock(num_backends_waiting, 'queued')}${autoBlock(num_models_loading, waitingOnModelLoadText.get())}`;
+    return `${autoBlock(num_waiting_gens, translate('current generation%'))}${autoBlock(num_live_gens, translate('running'))}${autoBlock(num_backends_waiting, translate('queued'))}${autoBlock(num_models_loading, waitingOnModelLoadText.get())}`;
 }
 
 function updateCurrentStatusDirect(data) {

@@ -13,7 +13,7 @@
                     <span class="interrupt_line"></span>
                     <div class="main_inputs_area_wrapper" id="main_inputs_area_wrapper">
                         <div class="input_filter_container">
-                            <input type="text translate" class="main_inputs_filter auto-text" id="main_inputs_filter" oninput="hideUnsupportableParams()" placeholder="Filter parameters..." />
+                            <input type="text" class="main_inputs_filter auto-text translate" id="main_inputs_filter" oninput="hideUnsupportableParams()" placeholder="Filter parameters..." />
                             <span class="clear_input_icon" id="clear_input_icon" onclick="clearParamFilterInput()">&#x2715;</span>
                         </div>
                         <div id="main_inputs_area"></div>
@@ -140,7 +140,7 @@
                 <div class="sui_popover_model_button translate" onclick="mainGenHandler.doInterrupt(true)">Interrupt All Sessions</div>
             </div>
         </div>
-        <div id="quicktools-button" class="model-block-menu-button t2i-area-quicktools translate" onclick="doPopover('quicktools')">Quick Tools &#x2B9F;</div>
+        <div id="quicktools-button" class="model-block-menu-button t2i-area-quicktools" onclick="doPopover('quicktools')"><span class="translate">Quick Tools</span> &#x2B9F;</div>
         <div class="sui-popover sui_popover_model" id="popover_quicktools">
             <div class="sui_popover_model_button translate" onclick="genTabLayout.resetLayout()">Reset Page Layout</div>
             <div class="sui_popover_model_button translate" onclick="refreshParameterValues(true)">Reload Parameter Values</div>
@@ -159,7 +159,7 @@
         <span class="bottom-info-bar-component"><span class="other_info_span" id="other_info_span" style="min-height: 1rem"></span></span>
         <span class="bottom-info-bar-component"><b class="translate">Model</b>: <select class="auto-dropdown current_model_view" onchange="autoSelectWidth(this)" id="current_model"></select></span>
         <span class="bottom-info-bar-component" style="display:none;" id="current_presets_wrapper"><span><b class="translate">Current presets</b><span id="preset_info_slot"></span>: </span> <span id="current_preset_list_view"></span></span>
-        <span class="bottom-info-bar-component" style="display:none;" id="current_loras_wrapper"><span class="translate"><b>Current LoRAs</b><span id="lora_info_slot"></span>: </span> <span id="current_lora_list_view"></span></span>
+        <span class="bottom-info-bar-component" style="display:none;" id="current_loras_wrapper"><span class="translate"><b class="translate">Current LoRAs</b><span id="lora_info_slot"></span>: </span> <span id="current_lora_list_view"></span></span>
         <span class="bottom-info-bar-component"><span class="num_jobs_span" id="num_jobs_span" style="min-height: 1rem"></span></span>
     </div>
     <ul class="nav nav-tabs swarm-gen-tab-subnav" data-title="Bottom Bar" data-content="t2i_bottom_bar_content" role="tablist" id="bottombartabcollection">

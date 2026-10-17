@@ -209,9 +209,12 @@ public class WebServer
         });
         WebApp.UseResponseCompression();
         timer.Check("[Web] WebApp build");
+        // Always append a per-startup cache-busting suffix so the browser reloads frontend
+        // assets (JS/CSS) after every restart, rather than serving stale cached files after
+        // an upgrade or a source change.
+        Utilities.VaryID += ".R" + ((DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 10L) % 100000000L);
         if (WebApp.Environment.IsDevelopment())
         {
-            Utilities.VaryID += ".DEV" + ((DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 10L) % 1000000L);
             WebApp.UseDeveloperExceptionPage();
         }
         else

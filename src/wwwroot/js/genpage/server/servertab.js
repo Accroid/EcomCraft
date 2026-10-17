@@ -5,14 +5,14 @@ class ExtensionsManager {
 
     installExtension(name, button) {
         button.disabled = true;
-        let infoDiv = createDiv(null, 'installing_info', 'Installing (check server logs for details)...');
+        let infoDiv = createDiv(null, 'installing_info', translate('Installing (check server logs for details)...'));
         button.parentElement.querySelectorAll('.installing_info').forEach(e => e.remove());
         button.parentElement.appendChild(infoDiv);
         genericRequest('InstallExtension', {'extensionName': name}, data => {
-            button.parentElement.innerHTML = 'Installed, restart to load';
+            button.parentElement.innerHTML = translate('Installed, restart to load');
             this.newInstallsCard.style.display = 'block';
         }, 0, e => {
-            infoDiv.innerText = 'Failed to install: ' + e;
+            infoDiv.innerText = translate('Failed to install: ') + e;
             button.disabled = false;
         });
     }
@@ -20,26 +20,26 @@ class ExtensionsManager {
     restartServer() {
         let restartButton = getRequiredElementById('extension_restart_button');
         restartButton.disabled = true;
-        restartButton.parentElement.appendChild(createDiv(null, null, 'Restarting server... please wait a moment then refresh the page'));
+        restartButton.parentElement.appendChild(createDiv(null, null, translate('Restarting server... please wait a moment then refresh the page')));
         genericRequest('UpdateAndRestart', {'force': true}, data => {});
     }
 
     updateExtension(name, button) {
         button.disabled = true;
         button.parentElement.querySelectorAll('.installing_info').forEach(e => e.remove());
-        let infoDiv = createDiv(null, 'installing_info', 'Updating (check server logs for details)...');
+        let infoDiv = createDiv(null, 'installing_info', translate('Updating (check server logs for details)...'));
         button.parentElement.appendChild(infoDiv);
         genericRequest('UpdateExtension', {'extensionName': name}, data => {
             if (data.success) {
-                button.parentElement.innerHTML = 'Updated, restart to load';
+                button.parentElement.innerHTML = translate('Updated, restart to load');
                 this.newInstallsCard.style.display = 'block';
             }
             else {
                 button.disabled = false;
-                infoDiv.innerText = 'No update available';
+                infoDiv.innerText = translate('No update available');
             }
         }, 0, e => {
-            infoDiv.innerText = 'Failed to update: ' + e;
+            infoDiv.innerText = translate('Failed to update: ') + e;
             button.disabled = false;
         });
     }
@@ -47,13 +47,13 @@ class ExtensionsManager {
     uninstallExtension(name, button) {
         button.disabled = true;
         button.parentElement.querySelectorAll('.installing_info').forEach(e => e.remove());
-        let infoDiv = createDiv(null, 'installing_info', 'Uninstalling (check server logs for details)...');
+        let infoDiv = createDiv(null, 'installing_info', translate('Uninstalling (check server logs for details)...'));
         button.parentElement.appendChild(infoDiv);
         genericRequest('UninstallExtension', {'extensionName': name}, data => {
-            button.parentElement.innerHTML = 'Uninstalled, restart to apply';
+            button.parentElement.innerHTML = translate('Uninstalled, restart to apply');
             this.newInstallsCard.style.display = 'block';
         }, 0, e => {
-            infoDiv.innerText = 'Failed to uninstall: ' + e;
+            infoDiv.innerText = translate('Failed to uninstall: ') + e;
             button.disabled = false;
         });
     }
@@ -66,13 +66,13 @@ class ExtensionsManager {
     setExtensionEnabled(extensionName, enabled, button) {
         button.disabled = true;
         button.parentElement.querySelectorAll('.installing_info').forEach(e => e.remove());
-        let infoDiv = createDiv(null, 'installing_info', (enabled ? 'Enabling' : 'Disabling') + ' (restart required)...');
+        let infoDiv = createDiv(null, 'installing_info', translate((enabled ? 'Enabling' : 'Disabling') + ' (restart required)...'));
         button.parentElement.appendChild(infoDiv);
         genericRequest('SetExtensionEnabled', {'extensionName': extensionName, 'enabled': enabled}, data => {
-            button.parentElement.innerHTML = (enabled ? 'Enabled' : 'Disabled') + ', restart to apply';
+            button.parentElement.innerHTML = translate((enabled ? 'Enabled' : 'Disabled') + ', restart to apply');
             this.newInstallsCard.style.display = 'block';
         }, 0, e => {
-            infoDiv.innerText = (enabled ? 'Failed to enable: ' : 'Failed to disable: ') + e;
+            infoDiv.innerText = translate((enabled ? 'Failed to enable: ' : 'Failed to disable: ')) + e;
             button.disabled = false;
         });
     }
@@ -152,10 +152,11 @@ class UserAdminManager {
     setStaticRightBox(html) {
         this.setNothingDisplayed();
         this.rightBox.innerHTML = html;
+        applyTranslations(this.rightBox);
     }
 
     setRightboxDefault() {
-        this.setStaticRightBox(`<span class="translate">Welcome, admin! Select a user on the left to configure them.</span><br><br><b>THIS IS A WORK IN PROGRESS, IT IS NOT COMPLETE YET</b>`);
+        this.setStaticRightBox(`<span class="translate">Welcome, admin! Select a user on the left to configure them.</span><br><br><b class="translate">THIS IS A WORK IN PROGRESS, IT IS NOT COMPLETE YET</b>`);
     }
 
     setRightboxLoading() {
@@ -173,23 +174,24 @@ class UserAdminManager {
             altered: {}
         };
         let prefix = `admin_edit_user_${escapeHtml(name)}_settings_`;
-        this.rightBox.innerHTML = `<div class="admin-user-right-titlebar">User: <span class="admin-user-right-titlebar-name">${escapeHtml(name)}</span></div>`
+        this.rightBox.innerHTML = `<div class="admin-user-right-titlebar"><span class="translate">User: </span><span class="admin-user-right-titlebar-name">${escapeHtml(name)}</span></div>`
             + (name == user_id ? `<div class="admin-user-manage-notice translate">This is you! You shouldn't admin-edit yourself.</div>` : `<button type="button" class="basic-button translate" onclick="userAdminManager.deleteUser(unescapeHtml('${escapeHtml(name)}'))">Delete User</button> <button type="button" class="basic-button translate" onclick="userAdminManager.impersonateUser(unescapeHtml('${escapeHtml(name)}'))">Impersonate User</button>`)
             + `<br><br><button type="button" class="basic-button translate" onclick="userAdminManager.editUserPw(unescapeHtml('${escapeHtml(name)}'))">Change User Password</button>`
             + `&emsp;<span class="translate">Password was set by: </span><b class="translate password-set-by-field"></b>`
             + `<br><span class="translate">OAuth email: </span><input type="text" class="translate oauth-email-field" value="" /> <button type="button" class="basic-button translate" onclick="userAdminManager.editUserOAuth(unescapeHtml('${escapeHtml(name)}'))">Apply OAuth Email Change</button>`
             + `<br><br><div class="admin_edit_user_settings_container" id="admin_edit_user_settings_container"></div>
             <div class="settings_submit_confirmer" id="${prefix}confirmer">
-                <span class="settings_submit_confirmer_text">Save <span id="${prefix}edit_count">0</span> edited setting(s)?</span>
+                <span class="settings_submit_confirmer_text"><span class="translate">Save</span> <span id="${prefix}edit_count">0</span> <span class="translate">edited setting(s)?</span></span>
                 <button type="button" class="btn btn-primary basic-button translate" onclick="userAdminManager.saveUserSettings()">Save</button>
                 <button type="button" class="btn btn-secondary basic-button translate" onclick="userAdminManager.cancelUserSettings()">Cancel</button>
             </div>`;
+        applyTranslations(this.rightBox);
         let userSettingsContainer = getRequiredElementById('admin_edit_user_settings_container');
         genericRequest('AdminGetUserInfo', {'name': name}, data => {
             if (this.displayedUser != name) {
                 return;
             }
-            this.rightBox.querySelector('.password-set-by-field').innerText = data.password_set_by_admin ? 'Admin' : 'User';
+            this.rightBox.querySelector('.password-set-by-field').innerText = translate(data.password_set_by_admin ? 'Admin' : 'User');
             this.rightBox.querySelector('.oauth-email-field').value = data.oauth_email;
             buildSettingsMenu(userSettingsContainer, data.settings, prefix, this.curUserSettingsEditTracker);
         });
@@ -231,18 +233,18 @@ class UserAdminManager {
         let newPassword = getRequiredElementById('server_change_user_password_new_password');
         let newPassword2 = getRequiredElementById('server_change_user_password_new_password2');
         if (newPassword.value != newPassword2.value) {
-            resultArea.innerText = 'New passwords do not match';
+            resultArea.innerText = translate('New passwords do not match');
             return;
         }
         if (newPassword.value.length < 8) {
-            resultArea.innerText = 'New password must be at least 8 characters long';
+            resultArea.innerText = translate('New password must be at least 8 characters long');
             return;
         }
-        resultArea.innerText = 'Submitting...';
+        resultArea.innerText = translate('Submitting...');
         submitButton.disabled = true;
         let pwHash = await doPasswordClientPrehash(this.displayedUser, newPassword.value);
         genericRequest('AdminSetUserPassword', {'name': this.displayedUser, 'password': pwHash}, data => {
-            resultArea.innerText = 'Password changed.';
+            resultArea.innerText = translate('Password changed.');
             setTimeout(() => {
                 resultArea.innerText = '';
                 newPassword.value = '';
@@ -251,13 +253,13 @@ class UserAdminManager {
                 $('#server_change_user_password_modal').modal('hide');
             }, 1000);
         }, 0, e => {
-            resultArea.innerText = 'Error: ' + e;
+            resultArea.innerText = translate('Error: ') + e;
             submitButton.disabled = false;
         });
     }
 
     deleteUser(name) {
-        if (!confirm(`Are you sure you want to delete the user '${name}'?\nThis action cannot be undone.\nMost user data will be lost. Image outputs will remain on drive. Changes outside of user personal data will remain.`)) {
+        if (!confirm(translate("Are you sure you want to delete the user '") + name + translate("'?\nThis action cannot be undone.\nMost user data will be lost. Image outputs will remain on drive. Changes outside of user personal data will remain."))) {
             return;
         }
         genericRequest('AdminDeleteUser', {'name': name}, data => {
@@ -284,7 +286,7 @@ class UserAdminManager {
                 return;
             }
             let role = data.roles[roleId];
-            let html = `<div class="admin-user-right-titlebar">Role: <span class="admin-user-right-titlebar-name">${escapeHtml(role.name)}</span></div>`
+            let html = `<div class="admin-user-right-titlebar"><span class="translate">Role: </span><span class="admin-user-right-titlebar-name">${escapeHtml(role.name)}</span></div>`
                 + (role.is_auto_generated ? `<div class="admin-user-manage-notice translate">This is an auto-generated role. It may not be deleted, and some automations may apply to it (such as new permissions automatically enabling when first loaded).</div>` : `<button type="button" class="basic-button translate" onclick="userAdminManager.deleteRole('${escapeHtml(roleId)}')">Delete Role</button>`)
                 + '<br><br>'
                 + makeGenericPopover('adminrolemenu_description', 'Description', 'text', "Human-readable description text about this role.\nThis is for admin reference when picking roles.\nProbably describe here when/why a user should receive this role, and a short bit about what it unlocks.", '')
@@ -303,7 +305,7 @@ class UserAdminManager {
                 + makeTextInput(null, 'adminrolemenu_modelblacklist', '', 'Model Blacklist', '', '', 'normal', "Model Blacklist...", false, false, true)
                 + '\n<br><hr><br>\n<h4 class="translate">Permissions</h4><br>\n'
                 + `<div class="settings_submit_confirmer" id="adminrolemenu_confirmer">
-                    <span class="settings_submit_confirmer_text">Save <span id="adminrolemenu_edit_count">0</span> edited setting(s)?</span>
+                    <span class="settings_submit_confirmer_text"><span class="translate">Save</span> <span id="adminrolemenu_edit_count">0</span> <span class="translate">edited setting(s)?</span></span>
                     <button type="button" class="btn btn-primary basic-button translate" onclick="userAdminManager.saveRoleSettings()">Save</button>
                     <button type="button" class="btn btn-secondary basic-button translate" onclick="userAdminManager.cancelRoleSettings()">Cancel</button>
                 </div>`;
@@ -335,7 +337,7 @@ class UserAdminManager {
                         <span class="translate" title="${perm}">${translateableHtml(permInfo.name)}</span>${popover}
                         </td>
                         <td>
-                            <span class="form-check form-switch toggle-switch display-inline-block"><input class="auto-slider-toggle form-check-input" type="checkbox" id="${id}_toggle" title="Enable/disable ${perm}" autocomplete="off"${(role.permissions.includes(perm) ? ' checked' : '')} onchange="userAdminManager.checkShowRoleEditConfirm()"><div class="auto-slider-toggle-content"></div></span>
+                            <span class="form-check form-switch toggle-switch display-inline-block"><input class="auto-slider-toggle form-check-input" type="checkbox" id="${id}_toggle" title="${translate('Enable/disable')} ${perm}" autocomplete="off"${(role.permissions.includes(perm) ? ' checked' : '')} onchange="userAdminManager.checkShowRoleEditConfirm()"><div class="auto-slider-toggle-content"></div></span>
                         </td>
                     </tr>`;
             }
@@ -344,6 +346,7 @@ class UserAdminManager {
             this.roles = data.roles;
             this.displayedRole = roleId;
             this.rightBox.innerHTML = html;
+            applyTranslations(this.rightBox);
             let descriptionBox = getRequiredElementById('adminrolemenu_description');
             descriptionBox.value = role.description;
             dynamicSizeTextBox(descriptionBox);
@@ -450,7 +453,7 @@ class UserAdminManager {
     }
 
     deleteRole(roleId) {
-        if (!confirm(`Are you sure you want to delete the role '${roleId}'?\nThis action cannot be undone.`)) {
+        if (!confirm(translate("Are you sure you want to delete the role '") + roleId + translate("'?\nThis action cannot be undone."))) {
             return;
         }
         genericRequest('AdminDeleteRole', {'name': roleId}, data => {
@@ -477,10 +480,11 @@ class UserAdminManager {
             let optionListHtml = '';
             for (let roleId of Object.keys(data.roles)) {
                 let role = data.roles[roleId];
-                optionListHtml += `<option value="${escapeHtml(roleId)}" title="${escapeHtml(role.description)}">${escapeHtml(role.name)}</option>`;
+                optionListHtml += `<option class="translate" data-pretranslated="${escapeHtml(role.name)}" value="${escapeHtml(roleId)}" title="${escapeHtml(role.description)}">${escapeHtml(role.name)}</option>`;
             }
             this.addUserRoleInput.innerHTML = optionListHtml;
             this.addUserRoleInput.value = selected;
+            applyTranslations(this.addUserRoleInput);
             this.buildRoleList();
         });
     }
@@ -490,10 +494,11 @@ class UserAdminManager {
         for (let roleId of Object.keys(this.roles)) {
             let role = this.roles[roleId];
             if (!this.filterBox.value || role.name.includes(this.filterBox.value) || roleId.includes(this.filterBox.value)) {
-                roleListHtml += `<div class="admin-user-manage-name" onclick="userAdminManager.clickRole('${escapeHtml(roleId)}')" title="${escapeHtml(role.description)}">${escapeHtml(role.name)}</div>`;
+                roleListHtml += `<div class="admin-user-manage-name translate" onclick="userAdminManager.clickRole('${escapeHtml(roleId)}')" data-pretranslated="${escapeHtml(role.name)}" title="${escapeHtml(role.description)}">${escapeHtml(role.name)}</div>`;
             }
         }
         this.leftBoxRoleList.innerHTML = roleListHtml;
+        applyTranslations(this.leftBoxRoleList);
     }
 
     showAddUserMenu() {
@@ -507,17 +512,17 @@ class UserAdminManager {
     async addUserMenuSubmit() {
         let name = this.addUserNameInput.value;
         if (!name) {
-            alert('Please fill in the name field, or cancel');
+            alert(translate('Please fill in the name field, or cancel'));
             return;
         }
         let pass = this.addUserPassInput.value;
         let role = this.addUserRoleInput.value;
         if (!pass) {
-            alert('Please fill in the password field, or cancel');
+            alert(translate('Please fill in the password field, or cancel'));
             return;
         }
         if (pass.length < 8) {
-            alert('New password must be at least 8 characters long');
+            alert(translate('New password must be at least 8 characters long'));
             return;
         }
         $('#server_add_user_menu').modal('hide');
@@ -536,7 +541,7 @@ class UserAdminManager {
     addRoleMenuSubmit() {
         let name = this.addRoleNameInput.value;
         if (!name) {
-            alert('Please fill in the name field, or cancel');
+            alert(translate('Please fill in the name field, or cancel'));
             return;
         }
         $('#server_add_role_menu').modal('hide');
@@ -547,6 +552,24 @@ class UserAdminManager {
 }
 
 userAdminManager = new UserAdminManager();
+
+/** Formats a "time ago" value (in seconds) into localized text, eg "15 seconds ago" -> "15 秒前". */
+function timeAgoStringify(sec) {
+    sec = Math.floor(sec);
+    if (sec < 60) {
+        return `${sec} ${translate('seconds ago')}`;
+    }
+    let min = Math.floor(sec / 60);
+    if (min < 60) {
+        return `${min} ${translate('minutes ago')}`;
+    }
+    let hr = Math.floor(min / 60);
+    if (hr < 24) {
+        return `${hr} ${translate('hours ago')}`;
+    }
+    let days = Math.floor(hr / 24);
+    return `${days} ${translate('days ago')}`;
+}
 
 //// TODO: Put these in classes
 
@@ -586,12 +609,13 @@ function buildUpdateCheckRow(id, typeId, targetName, titleText, previewLines) {
     label.appendChild(titleSpan);
     let preview = document.createElement('small');
     preview.className = 'update-check-preview';
-    preview.innerText = '\n' + previewLines.map(line => {
+    let previewLineHtml = previewLines.map(line => {
         if (line.length > 100) {
             line = line.substring(0, 97) + '...';
         }
-        return line;
-    }).join('\n');
+        return `<span class="translate">${escapeHtml(line)}</span>`;
+    });
+    preview.innerHTML = '<br>' + previewLineHtml.join('<br>');
     label.appendChild(preview);
     row.appendChild(label);
     return row;
@@ -611,7 +635,7 @@ function check_for_updates() {
         if (data.server.count > 0) {
             hasAnyUpdates = true;
             let row = buildUpdateCheckRow('update_check_server', 'server', 'server',
-                `${updatesAvailableSwarmText.get()} ${data.server.count}`, data.server.preview);
+                translate('update(s) available for SwarmUI: {0}').replace('{0}', data.server.count), data.server.preview);
             noticeArea.appendChild(row);
         }
         let extensionNames = Object.keys(data.extensions);
@@ -643,7 +667,7 @@ function check_for_updates() {
         updatesCard.classList.remove('border-secondary');
         updatesCard.classList.remove('border-success');
         if (!hasAnyUpdates) {
-            noticeArea.innerText = 'No updates available';
+            noticeArea.innerText = translate('No updates available');
             updatesCard.classList.add('border-secondary');
             updateButton.disabled = true;
         }
@@ -651,6 +675,7 @@ function check_for_updates() {
             updatesCard.classList.add('border-success');
             updateButton.disabled = false;
         }
+        applyTranslations(noticeArea);
     }, 0, e => {
         noticeArea.innerText = e;
     });
@@ -736,7 +761,7 @@ class ServerStatusManager {
             this.gpuIds = gpuIds;
         }
         let cpuPct = Math.round(data.cpu.usage * 100);
-        this.setMeter(this.cpuMeter, cpuPct, `${cpuPct}% &middot; ${data.cpu.cores} cores`, true);
+        this.setMeter(this.cpuMeter, cpuPct, `${cpuPct}% &middot; ${data.cpu.cores} ${translate('cores')}`, true);
         let ramPct = Math.round(data.system_ram.used / data.system_ram.total * 100);
         this.setMeter(this.ramMeter, ramPct, `${ramPct}% &middot; ${fileSizeStringify(data.system_ram.used)} / ${fileSizeStringify(data.system_ram.total)}`, data.system_ram.total > 0);
         for (let gpu of gpus) {
@@ -759,8 +784,8 @@ class ServerStatusManager {
         }
         for (let user of users) {
             let row = this.userRows[user.id];
-            row.lastActive.innerText = user.last_active;
-            row.sessions.innerText = user.active_sessions.map(sess => `${sess.count}x from ${sess.address}`).join(', ');
+            row.lastActive.innerText = timeAgoStringify(user.last_active_seconds);
+            row.sessions.innerText = user.active_sessions.map(sess => `${sess.count} ${translate('x from')} ${sess.address}`).join(', ');
             row.gens.innerHTML = currentGenString(user.waiting_gens, user.loading_models, user.live_gens, user.waiting_backends);
             let busy = user.waiting_gens != 0 || user.loading_models != 0 || user.waiting_backends != 0 || user.live_gens != 0;
             row.button.style.display = busy ? '' : 'none';
@@ -804,7 +829,7 @@ class ServerStatusManager {
         let header = document.createElement('tr');
         for (let title of ['Name', 'Last Active', 'Active Sessions', 'Current Gens']) {
             let th = document.createElement('th');
-            th.innerText = title;
+            th.innerText = translate(title);
             header.appendChild(th);
         }
         table.appendChild(header);
@@ -818,7 +843,7 @@ class ServerStatusManager {
             let gens = document.createElement('span');
             let button = document.createElement('button');
             button.className = 'basic-button';
-            button.innerText = 'Interrupt';
+            button.innerText = translate('Interrupt');
             button.addEventListener('click', () => adminInterruptUser(user.id));
             gensCell.appendChild(gens);
             gensCell.appendChild(button);
@@ -835,7 +860,7 @@ class ServerStatusManager {
 
     /** Creates a labeled meter row with a fill bar. */
     makeMeter(labelText) {
-        let root = createDiv(null, 'server-resource-meter', `<div class="server-resource-meter-head"><span class="server-resource-meter-label">${escapeHtml(labelText)}</span><span class="server-resource-meter-value"></span></div><div class="server-resource-meter-bar"><div class="server-resource-meter-fill"></div></div>`);
+        let root = createDiv(null, 'server-resource-meter', `<div class="server-resource-meter-head"><span class="server-resource-meter-label">${escapeHtml(translate(labelText))}</span><span class="server-resource-meter-value"></span></div><div class="server-resource-meter-bar"><div class="server-resource-meter-fill"></div></div>`);
         return { root, value: root.querySelector('.server-resource-meter-value'), fill: root.querySelector('.server-resource-meter-fill') };
     }
 
@@ -857,7 +882,7 @@ class ServerStatusManager {
                 }
                 else {
                     hasEverCheckedForUpdates = true;
-                    getRequiredElementById('updates_available_notice_area').innerText = 'Automatic update checks disabled in Server Configuration';
+                    getRequiredElementById('updates_available_notice_area').innerText = translate('Automatic update checks disabled in Server Configuration');
                 }
             }
             serverStatusManager.refresh();
