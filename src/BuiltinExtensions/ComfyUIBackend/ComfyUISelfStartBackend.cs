@@ -86,7 +86,7 @@ public class ComfyUISelfStartBackend : ComfyUIAPIAbstractBackend
     };
 
     /// <summary>The current version of the comfy frontend package that has been confirmed to not break.</summary>
-    public static string SwarmValidatedFrontendVersion = "1.53.6";
+    public static string SwarmValidatedFrontendVersion = "1.55.17";
 
     /// <summary>The current known version of PyTorch.</summary>
     public static string CurrentTorchVersion = "2.13.0";
@@ -360,6 +360,12 @@ public class ComfyUISelfStartBackend : ComfyUIAPIAbstractBackend
             if (Utilities.PresumeNVidia30xx && Program.ServerSettings.Performance.AllowGpuSpecificOptimizations)
             {
                 addedArgs += " --fast fp16_accumulation cublas_ops"; // TODO: Temp due to fp8 mat mult being borked on Qwen Image
+            }
+            if (WebUtil.ProbablyHasAMDGpu())
+            {
+                // ComfyUI's DynamicVRAM (comfy-aimdo/VBAR) is not validated for RDNA1/gfx1010 and produces NaN (black) outputs on ROCm.
+                addedArgs += " --disable-dynamic-vram";
+                AddLoadStatus("AMD GPU detected: disabling ComfyUI dynamic VRAM to avoid NaN/black outputs on ROCm targets.");
             }
             if (Settings.EnablePreviews == "true")
             {

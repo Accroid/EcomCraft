@@ -42,7 +42,7 @@ class InstallerClass {
         getRequiredElementById('installer_button_confirm').addEventListener('click', this.submit.bind(this));
         getSession(() => {
             language = language || 'en';
-            loadAndApplyTranslations();
+            loadAndApplyTranslations(() => this.check());
         });
     }
 
@@ -77,6 +77,15 @@ class InstallerClass {
 
     getPageElem() {
         return getRequiredElementById(`installer_section_${this.parts[this.cur_part]}`);
+    }
+
+    /** Translate an installer message key with {0},{1},... placeholders replaced by the given args. */
+    tr(key, ...args) {
+        let text = translate(key);
+        for (let i = 0; i < args.length; i++) {
+            text = text.split(`{${i}}`).join(args[i]);
+        }
+        return text;
     }
 
     next() {
@@ -127,11 +136,11 @@ class InstallerClass {
     check() {
         let isComplete = this.isPageComplete();
         this.backButton.disabled = this.cur_part == 0;
-        this.nextButton.innerText = this.cur_part == 0 ? "Agree" : "Next";
+        this.nextButton.innerText = this.cur_part == 0 ? translate("Agree") : translate("Next");
         this.nextButton.disabled = this.cur_part == this.parts.length - 1 || !isComplete;
-        this.bottomInfo.innerText = `Step ${this.cur_part + 1} of ${this.parts.length}`;
+        this.bottomInfo.innerText = this.tr("Step {0} of {1}", this.cur_part + 1, this.parts.length);
         if (!isComplete) {
-            this.bottomInfo.innerText += ' (Must choose an option)';
+            this.bottomInfo.innerText += " " + translate("(Must choose an option)");
         }
         let data = this.getSubmittable();
         getRequiredElementById('theme_val_info').innerText = data.theme;
@@ -168,7 +177,7 @@ class InstallerClass {
         let progress = getRequiredElementById('install_progress_spot');
         let bar = getRequiredElementById('install_progress_bar');
         let stepBar = getRequiredElementById('install_progress_step_bar');
-        output.innerText = 'Sending...\n';
+        output.innerText = translate("Sending...") + "\n";
         let data = this.getSubmittable();
         getRequiredElementById('installer_button_confirm').disabled = true;
         let timeLastRestart = 0;
@@ -179,7 +188,7 @@ class InstallerClass {
             else if ('progress' in response) {
                 progress.style.display = 'block';
                 if (response.progress == 0) {
-                    progress.innerText = `Step ${response.steps} / ${response.total_steps}`;
+                    progress.innerText = this.tr("Step {0} / {1}", response.steps, response.total_steps);
                     bar.style.width = '0%';
                     timeLastRestart = Date.now();
                 }
@@ -189,7 +198,7 @@ class InstallerClass {
                     }
                     let perSecond = response.progress / (Date.now() - timeLastRestart) * 1000;
                     let percent = response.total == 0 ? 0 : (Math.round(response.progress / response.total * 10000) / 100);
-                    progress.innerText = `Progress: ${fileSizeStringify(response.progress)} / ${fileSizeStringify(response.total)} (${percent}%) (Step ${response.steps} / ${response.total_steps}) ... ${fileSizeStringify(perSecond)}/s`;
+                    progress.innerText = this.tr("Progress: {0} / {1} ({2}%) (Step {3} / {4}) ... {5}/s", fileSizeStringify(response.progress), fileSizeStringify(response.total), percent, response.steps, response.total_steps, fileSizeStringify(perSecond));
                     bar.style.width = `${percent}%`;
                 }
                 let stepPercent = Math.round(response.steps / response.total_steps * 10000) / 100;

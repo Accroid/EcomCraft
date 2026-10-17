@@ -725,7 +725,7 @@ function autoNumberWidth(elem) {
 }
 
 function makeGenericPopover(id, name, type, description, example) {
-    return `<div class="sui-popover sui-info-popover" id="popover_${id}"><b>${escapeHtml(name)}</b> (${type}):<br>&emsp;${safeHtmlOnly(description)}${example}</div>`;
+    return `<div class="sui-popover sui-info-popover" id="popover_${id}"><b class="translate">${escapeHtml(name)}</b> (${type}):<br>&emsp;${translatableDescriptionHtml(description)}${example}</div>`;
 }
 
 let popoverHoverTimer = null;
@@ -967,7 +967,8 @@ function makeDropdownInput(featureid, id, paramid, name, description, values, de
         let selected = value == defaultVal ? ' selected="true"' : '';
         let simpleName = reparse_alt_names ? htmlWithParen(alt_name) : escapeHtmlNoBr(value);
         let cleanName = reparse_alt_names ? htmlWithParen(alt_name) : alt_name;
-        html += `<option data-cleanname="${escapeHtmlNoBr(cleanName)}" value="${escapeHtmlNoBr(value)}"${selected}>${simpleName}</option>\n`;
+        let optionKey = reparse_alt_names ? alt_name : value;
+        html += `<option class="translate" data-cleanname="${escapeHtmlNoBr(cleanName)}" data-pretranslated="${escapeHtmlNoBr(optionKey)}" value="${escapeHtmlNoBr(value)}"${selected}>${simpleName}</option>\n`;
     }
     html += `
         </select>

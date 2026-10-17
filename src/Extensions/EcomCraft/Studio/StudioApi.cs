@@ -37,7 +37,7 @@ public static class StudioApi
 
     private static bool IsLocalAvailable(BackendHandler.T2IBackendData data) => data.Backend is ComfyUISelfStartBackend
         && data.Backend.IsReal && data.Backend.IsEnabled && !data.Backend.ShutDownReserve
-        && data.Backend.CanLoadModels && data.Backend.MaxUsages > 0 && data.Backend.Usages < data.Backend.MaxUsages
+        && data.Backend.CanLoadModels && data.Backend.MaxUsages > 0 && data.Usages < data.Backend.MaxUsages
         && data.Backend.Reservations == 0 && data.Backend.Status == BackendStatus.RUNNING;
 
     private static IEnumerable<T2IModel> LocalModels(Session session) =>

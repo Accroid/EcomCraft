@@ -20,27 +20,30 @@ class AuthTokenHelper {
         }
         if (!permissions.hasPermission('read_user_settings')) {
             this.container.innerHTML = '<p class="translate">You do not have permission to view auth tokens.</p>';
+            applyTranslations(this.container);
             return;
         }
         genericRequest('ListMyAuthTokens', {}, data => {
             let tokens = data.tokens;
             if (!tokens || tokens.length == 0) {
                 this.container.innerHTML = '<p class="translate">No auth tokens found.</p>';
+                applyTranslations(this.container);
                 return;
             }
             tokens.sort((a, b) => b.last_active - a.last_active);
             let html = '<table class="simple-table"><tr><th class="translate">Created</th><th class="translate">Last Active</th><th class="translate">User-Agent, Source, or Reason</th><th class="translate">Origin Address</th><th class="translate">Actions</th></tr>';
             for (let token of tokens) {
-                let created = token.created ? formatDateTime(new Date(token.created * 1000)) : 'Unknown';
-                let lastActive = token.last_active ? formatDateTime(new Date(token.last_active * 1000)) : 'Unknown';
+                let created = token.created ? formatDateTime(new Date(token.created * 1000)) : translate('Unknown');
+                let lastActive = token.last_active ? formatDateTime(new Date(token.last_active * 1000)) : translate('Unknown');
                 let originAddress = escapeHtml(token.origin_address || 'unknown');
                 let ua = token.user_agent || 'unknown';
                 let uaSimple = ua.length > 60 ? ua.substring(0, 60) + '...' : ua;
-                let revokeBtn = token.is_current ? '(Current)' : permissions.hasPermission('edit_user_settings') ? `<button class="basic-button translate" onclick="authTokenHelpers.revokeAuthToken('${escapeHtml(token.id)}')">Revoke</button>` : '';
+                let revokeBtn = token.is_current ? `<span class="translate">(Current)</span>` : permissions.hasPermission('edit_user_settings') ? `<button class="basic-button translate" onclick="authTokenHelpers.revokeAuthToken('${escapeHtml(token.id)}')">Revoke</button>` : '';
                 html += `<tr><td>${escapeHtml(created)}</td><td>${escapeHtml(lastActive)}</td><td title="${escapeHtml(ua)}">${escapeHtml(uaSimple)}</td><td>${originAddress}</td><td>${revokeBtn}</td></tr>`;
             }
             html += '</table>';
             this.container.innerHTML = html;
+            applyTranslations(this.container);
         });
     }
 
@@ -75,11 +78,11 @@ class AuthTokenHelper {
 
     copyTokenToClipboard() {
         copyText(this.createTokenRawValue.value);
-        doNoticePopover('Copied!', 'notice-pop-green');
+        doNoticePopover(translate('Copied!'), 'notice-pop-green');
     }
     
     revokeAuthToken(tokenId) {
-        if (!shiftMonitor && !confirm('Are you sure you want to revoke this auth token? Any session using it will be disconnected.')) {
+        if (!shiftMonitor && !confirm(translate('Are you sure you want to revoke this auth token? Any session using it will be disconnected.'))) {
             return;
         }
         genericRequest('RevokeMyAuthToken', { tokenId: tokenId }, data => {
@@ -115,7 +118,7 @@ class APIKeyHelper {
     onSaveButton() {
         let key = this.keyInput.value;
         if (!key) {
-            alert('Please enter a key');
+            alert(translate('Please enter a key'));
             return;
         }
         this.keySubmit.disabled = true;
@@ -133,7 +136,13 @@ class APIKeyHelper {
 
     updateStatus() {
         genericRequest('GetAPIKeyStatus', { keyType: this.keyType }, data => {
-            this.keyStatus.innerText = data.status;
+            if (data.status == 'not set') {
+                this.keyStatus.innerText = translate('not set');
+            }
+            else {
+                let date = data.status.substring('last updated '.length);
+                this.keyStatus.innerText = translate('last updated {0}').replace('{0}', date);
+            }
             this.keyRemove.disabled = data.status == 'not set';
             this.onKeyInput();
         });
@@ -192,11 +201,11 @@ class ParamConfigurationClass {
                 if (groupId) {
                     let groupPrefix = `user_param_config_group_${group.id}`;
                     let groupHtml = `
-                        <div class="param-edit-header">Group: ${group.name}</div>
-                        <div class="param-edit-part"><button id="${groupPrefix}_reset" class="basic-button">Reset</button></div>
-                        <div class="param-edit-part">Open by default: <input type="checkbox" id="${groupPrefix}__open"${group.open ? ` checked="true"` : ''} autocomplete="off"></div>
-                        <div class="param-edit-part">IsAdvanced: <input type="checkbox" id="${groupPrefix}__advanced"${group.advanced ? ` checked="true"` : ''} autocomplete="off"></div>
-                        <div class="param-edit-part">Ordering Priority: <input type="number" class="param-edit-number" id="${groupPrefix}__priority" value="${group.priority}" autocomplete="off"></div>`;
+                        <div class="param-edit-header"><span class="translate">Group:</span> ${group.name}</div>
+                        <div class="param-edit-part"><button id="${groupPrefix}_reset" class="basic-button translate">Reset</button></div>
+                        <div class="param-edit-part"><span class="translate">Open by default:</span> <input type="checkbox" id="${groupPrefix}__open"${group.open ? ` checked="true"` : ''} autocomplete="off"></div>
+                        <div class="param-edit-part"><span class="translate">IsAdvanced:</span> <input type="checkbox" id="${groupPrefix}__advanced"${group.advanced ? ` checked="true"` : ''} autocomplete="off"></div>
+                        <div class="param-edit-part"><span class="translate">Ordering Priority:</span> <input type="number" class="param-edit-number" id="${groupPrefix}__priority" value="${group.priority}" autocomplete="off"></div>`;
                     groupDiv.appendChild(createDiv(null, 'param-edit-container-for-group', groupHtml));
                     this.container.appendChild(groupDiv);
                     getRequiredElementById(`${groupPrefix}_reset`).addEventListener('click', () => {
@@ -238,35 +247,35 @@ class ParamConfigurationClass {
             }
             let paramPrefix = `user_param_config_param_${param.id}`;
             let paramHtml = `
-                <div class="param-edit-header">Param: ${param.name} (${param.type})</div>
-                <div class="param-edit-part"><button id="${paramPrefix}_reset" class="basic-button">Reset</button></div>
-                <div class="param-edit-part">Visible Normally: <input type="checkbox" id="${paramPrefix}__visible"${param.visible ? ` checked="true"` : ''} autocomplete="off"></div>
-                    <div class="param-edit-part">Do Not Save: <input type="checkbox" id="${paramPrefix}__do_not_save"${param.do_not_save ? ` checked="true"` : ''} autocomplete="off"></div>
-                    <div class="param-edit-part">IsAdvanced: <input type="checkbox" id="${paramPrefix}__advanced"${param.advanced ? ` checked="true"` : ''} autocomplete="off"></div>
-                    <div class="param-edit-part">Ordering Priority: <input type="number" class="param-edit-number" id="${paramPrefix}__priority" value="${param.priority}" autocomplete="off"></div>`;
+                <div class="param-edit-header"><span class="translate">Param:</span> ${param.name} (${param.type})</div>
+                <div class="param-edit-part"><button id="${paramPrefix}_reset" class="basic-button translate">Reset</button></div>
+                <div class="param-edit-part"><span class="translate">Visible Normally:</span> <input type="checkbox" id="${paramPrefix}__visible"${param.visible ? ` checked="true"` : ''} autocomplete="off"></div>
+                    <div class="param-edit-part"><span class="translate">Do Not Save:</span> <input type="checkbox" id="${paramPrefix}__do_not_save"${param.do_not_save ? ` checked="true"` : ''} autocomplete="off"></div>
+                    <div class="param-edit-part"><span class="translate">IsAdvanced:</span> <input type="checkbox" id="${paramPrefix}__advanced"${param.advanced ? ` checked="true"` : ''} autocomplete="off"></div>
+                    <div class="param-edit-part"><span class="translate">Ordering Priority:</span> <input type="number" class="param-edit-number" id="${paramPrefix}__priority" value="${param.priority}" autocomplete="off"></div>`;
             if (param.type == "integer" || param.type == "decimal" || (param.type == "list" && param.max)) {
                 paramHtml += `
-                    <div class="param-edit-part">Min: <input class="param-edit-number" type="number" id="${paramPrefix}__min" value="${param.min}" autocomplete="off"></div>
-                    <div class="param-edit-part">Max: <input class="param-edit-number" type="number" id="${paramPrefix}__max" value="${param.max}" autocomplete="off"></div>
-                    <div class="param-edit-part"><span title="If using a slider, this is where the slider stops">View Max</span>: <input type="number" id="${paramPrefix}__view_max" value="${param.view_max}" autocomplete="off"></div>
-                    <div class="param-edit-part">Step: <input class="param-edit-number" type="number" id="${paramPrefix}__step" value="${param.step}" autocomplete="off"></div>
-                    <div class="param-edit-part">View Type: <select id="${paramPrefix}__view_type" autocomplete="off">`;
+                    <div class="param-edit-part"><span class="translate">Min:</span> <input class="param-edit-number" type="number" id="${paramPrefix}__min" value="${param.min}" autocomplete="off"></div>
+                    <div class="param-edit-part"><span class="translate">Max:</span> <input class="param-edit-number" type="number" id="${paramPrefix}__max" value="${param.max}" autocomplete="off"></div>
+                    <div class="param-edit-part"><span class="translate" title="If using a slider, this is where the slider stops">View Max</span>: <input type="number" id="${paramPrefix}__view_max" value="${param.view_max}" autocomplete="off"></div>
+                    <div class="param-edit-part"><span class="translate">Step:</span> <input class="param-edit-number" type="number" id="${paramPrefix}__step" value="${param.step}" autocomplete="off"></div>
+                    <div class="param-edit-part"><span class="translate">View Type:</span> <select id="${paramPrefix}__view_type" autocomplete="off">`;
                 for (let type of ['small', 'big', 'seed', 'slider', 'pot_slider', 'video_frames']) {
                     paramHtml += `<option value="${type}"${param.view_type == type ? ` selected="true"` : ''}>${type}</option>`;
                 }
                 paramHtml += `</select></div>`;
             }
             else if (param.type == "text") {
-                paramHtml += `<div class="param-edit-part">View Type: <select id="${paramPrefix}__view_type" autocomplete="off">`;
+                paramHtml += `<div class="param-edit-part"><span class="translate">View Type:</span> <select id="${paramPrefix}__view_type" autocomplete="off">`;
                 for (let type of ['normal', 'prompt']) {
                     paramHtml += `<option value="${type}"${param.view_type == type ? ` selected="true"` : ''}>${type}</option>`;
                 }
                 paramHtml += `</select></div>`;
             }
             if (!param.values && param.type != "boolean") {
-                paramHtml += `<div class="param-edit-part">Examples: <input class="param-edit-text" type="text" id="${paramPrefix}__examples" value="${param.examples ? param.examples.join(' || ') : ''}" autocomplete="off"></div>`;
+                paramHtml += `<div class="param-edit-part"><span class="translate">Examples:</span> <input class="param-edit-text" type="text" id="${paramPrefix}__examples" value="${param.examples ? param.examples.join(' || ') : ''}" autocomplete="off"></div>`;
             }
-            paramHtml += `<div class="param-edit-part">Group: <select id="${paramPrefix}__group" autocomplete="off">`;
+            paramHtml += `<div class="param-edit-part"><span class="translate">Group:</span> <select id="${paramPrefix}__group" autocomplete="off">`;
             for (let groupOpt of Object.values(rawGroupMapFromServer)) {
                 paramHtml += `<option value="${groupOpt.id}"${groupId == groupOpt.id ? ` selected="true"` : ''}>${groupOpt.name}</option>`;
             }
@@ -318,6 +327,7 @@ class ParamConfigurationClass {
                 });
             }
         }
+        applyTranslations(this.container);
     }
 
     /** Applies a map of parameter edits provided by the server. */
@@ -446,23 +456,23 @@ async function doPasswordChangeSubmit() {
     let newPassword = getRequiredElementById('change_password_new_password');
     let newPassword2 = getRequiredElementById('change_password_new_password2');
     if (newPassword.value != newPassword2.value) {
-        resultArea.innerText = 'New passwords do not match';
+        resultArea.innerText = translate('New passwords do not match');
         return;
     }
     if (newPassword.value == oldPassword.value) {
-        resultArea.innerText = 'New password cannot be the same as the old password';
+        resultArea.innerText = translate('New password cannot be the same as the old password');
         return;
     }
     if (newPassword.value.length < 8) {
-        resultArea.innerText = 'New password must be at least 8 characters long';
+        resultArea.innerText = translate('New password must be at least 8 characters long');
         return;
     }
     let oldPwHash = await doPasswordClientPrehash(user_id, oldPassword.value);
     let newPwHash = await doPasswordClientPrehash(user_id, newPassword.value);
-    resultArea.innerText = 'Submitting...';
+    resultArea.innerText = translate('Submitting...');
     submitButton.disabled = true;
     genericRequest('ChangePassword', { oldPassword: oldPwHash, newPassword: newPwHash }, data => {
-        resultArea.innerText = 'Password changed.';
+        resultArea.innerText = translate('Password changed.');
         setTimeout(() => {
             resultArea.innerText = '';
             oldPassword.value = '';
@@ -472,13 +482,13 @@ async function doPasswordChangeSubmit() {
             $('#change_password_modal').modal('hide');
         }, 1000);
     }, 0, e => {
-        resultArea.innerText = 'Error: ' + e;
+        resultArea.innerText = translate('Error:') + ' ' + e;
         submitButton.disabled = false;
     });
 }
 
 function doUserLogout() {
-    if (!confirm('Are you sure you want to logout? This will close all current sessions originating from this browser.')) {
+    if (!confirm(translate('Are you sure you want to logout? This will close all current sessions originating from this browser.'))) {
         return;
     }
     clearParamStorage();
