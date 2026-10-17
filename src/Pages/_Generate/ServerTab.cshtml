@@ -26,13 +26,13 @@
             <div class="card-header translate">Server</div>
             <div class="card-body">
                 <div class="card-text">
-                    The "Server" tab provides access to SwarmUI's server internals, including:
-                    <span data-requiredpermission="view_backends_list"><br>&bullet; The <a href="#Settings-Backends" onclick="getRequiredElementById('serverbackendstabbutton').click()">Backends</a> tab, which allows you to configure and manage backends (the underlying engines that provide the generation core, or remote instances of swarm this instance is connected to)</span>
-                    <span data-requiredpermission="read_server_settings"><br>&bullet; The <a href="#Settings-Server" onclick="getRequiredElementById('serverconfigtabbutton').click()">Server Configuration</a> tab, which allows you to configure and manage Swarm's settings (such as models directory, server host port, etc)</span>
-                    <span data-requiredpermission="manage_extensions"><br>&bullet; The <a href="#Server-Extensions" onclick="getRequiredElementById('extensionstabbutton').click()">Extensions</a> tab, which provides ways to manage your Swarm extensions or install new ones</span>
-                    <span data-requiredpermission="view_logs"><br>&bullet; The <a href="#Server-Logs" onclick="getRequiredElementById('logtabbutton').click()">Logs</a> tab, which allows you to view the server logs (eg if you get an error, check Logs -&gt; Debug)</span>
+                    <span class="translate">The "Server" tab provides access to SwarmUI's server internals, including:</span>
+                    <span data-requiredpermission="view_backends_list"><br>&bullet; <a href="#Settings-Backends" onclick="getRequiredElementById('serverbackendstabbutton').click()"><span class="translate">Backends</span></a> <span class="translate">tab: configure and manage backends (the underlying engines that provide the generation core, or remote instances of swarm this instance is connected to)</span></span>
+                    <span data-requiredpermission="read_server_settings"><br>&bullet; <a href="#Settings-Server" onclick="getRequiredElementById('serverconfigtabbutton').click()"><span class="translate">Server Configuration</span></a> <span class="translate">tab: configure and manage Swarm's settings (such as models directory, server host port, etc)</span></span>
+                    <span data-requiredpermission="manage_extensions"><br>&bullet; <a href="#Server-Extensions" onclick="getRequiredElementById('extensionstabbutton').click()"><span class="translate">Extensions</span></a> <span class="translate">tab: manage your Swarm extensions or install new ones</span></span>
+                    <span data-requiredpermission="view_logs"><br>&bullet; <a href="#Server-Logs" onclick="getRequiredElementById('logtabbutton').click()"><span class="translate">Logs</span></a> <span class="translate">tab: view the server logs (eg if you get an error, check Logs -> Debug)</span></span>
                     <br>
-                    <br>This is not to be confused with the <a href="#user_tab" onclick="getRequiredElementById('usersettingstabbutton').click();getRequiredElementById('userconfigtabbutton').click()">User Settings</a> tab, which allows you to configure your user settings (eg save path/format, default VAE choice, etc)
+                    <br><span class="translate">This is not to be confused with the</span> <a href="#user_tab" onclick="getRequiredElementById('usersettingstabbutton').click();getRequiredElementById('userconfigtabbutton').click()"><span class="translate">User Settings</span></a> <span class="translate">tab, which allows you to configure your user settings (eg save path/format, default VAE choice, etc)</span>
                 </div>
             </div>
         </div>
@@ -40,15 +40,15 @@
             @if (Utilities.DotNetVersMissing is not null)
             {
                 <div class="card border-red mb-3 card-center-container">
-                    <div class="card-header">DotNET @Utilities.DotNetVersMissing Missing</div>
+                    <div class="card-header translate">DotNET @Utilities.DotNetVersMissing Missing</div>
                     <div class="card-body">
                         <div id="dotnet_missing_message" class="card-text">
-                            You do not seem to have DotNET @Utilities.DotNetVersMissing installed - this will be required in a future version of SwarmUI.
-                            <br>Please install DotNET SDK @(Utilities.DotNetVersMissing).0 from <a target="_blank" href="https://dotnet.microsoft.com/en-us/download/dotnet/@(Utilities.DotNetVersMissing).0">https://dotnet.microsoft.com/en-us/download/dotnet/@(Utilities.DotNetVersMissing).0</a>
+                            <span class="translate">You do not seem to have DotNET @Utilities.DotNetVersMissing installed - this will be required in a future version of SwarmUI.</span>
+                            <br><span class="translate">Please install DotNET SDK @(Utilities.DotNetVersMissing).0 from</span> <a target="_blank" href="https://dotnet.microsoft.com/en-us/download/dotnet/@(Utilities.DotNetVersMissing).0">https://dotnet.microsoft.com/en-us/download/dotnet/@(Utilities.DotNetVersMissing).0</a>
                             @if (WebUtil.IsWindows())
                             {
                                 <span data-requiredpermission="install">
-                                    <br>Or click here: <button id="dotnet_install_update_button" class="basic-button translate" onclick="genericRequest('InstallDotnetUpdate', {}, () => {});getRequiredElementById('dotnet_install_update_button').disabled = true">Install DotNET SDK @(Utilities.DotNetVersMissing).0</button>
+                                    <br><span class="translate">Or click here:</span> <button id="dotnet_install_update_button" class="basic-button translate" onclick="genericRequest('InstallDotnetUpdate', {}, () => {});getRequiredElementById('dotnet_install_update_button').disabled = true">Install DotNET SDK @(Utilities.DotNetVersMissing).0</button>
                                 </span>
                             }
                         </div>
@@ -58,11 +58,11 @@
             @if (Program.CurrentGitDate == "Git failed to load")
             {
                 <div class="card border-red mb-3 card-center-container">
-                    <div class="card-header">Git Failed To Load</div>
+                    <div class="card-header translate">Git Failed To Load</div>
                     <div class="card-body">
                         <div id="git_failed_message" class="card-text">
-                            You seem to have installed SwarmUI improperly. Many features, including auto-updating, will not work.
-                            <br>Please install SwarmUI as explained in <a target="_blank" href="https://github.com/mcmonkeyprojects/SwarmUI?tab=readme-ov-file#installing-on-windows">The readme install instructions.</a>
+                            <span class="translate">You seem to have installed SwarmUI improperly. Many features, including auto-updating, will not work.</span>
+                            <br><span class="translate">Please install SwarmUI as explained in</span> <a target="_blank" href="https://github.com/mcmonkeyprojects/SwarmUI?tab=readme-ov-file#installing-on-windows"><span class="translate">The readme install instructions.</span></a>
                         </div>
                     </div>
                 </div>
@@ -100,13 +100,13 @@
                     </div>
                     <div class="server-status-section">
                         <div class="server-status-section-title translate">Resource Usage</div>
-                        <div class="card-text" id="resource_usage_area">
+                        <div class="card-text translate" id="resource_usage_area">
                             (Loading...)
                         </div>
                     </div>
                     <div class="server-status-section">
                         <div class="server-status-section-title translate">Connected Users</div>
-                        <div class="card-text" id="connected_users_list">
+                        <div class="card-text translate" id="connected_users_list">
                             (Loading...)
                         </div>
                     </div>
@@ -122,7 +122,7 @@
                             {
                                 <div>@(new HtmlString(Program.VersionUpdateMessageShort))</div>
                             }
-                            <span id="updates_available_notice_area" style="white-space:pre-wrap">(Loading...)</span>
+                            <span id="updates_available_notice_area" class="translate" style="white-space:pre-wrap">(Loading...)</span>
                             <hr>
                             <input class="form-check-input" type="checkbox" id="server_update_aggressive" autocomplete="off"> <label for="server_update_aggressive" class="translate">Aggressive Update</label>
                             &emsp;
@@ -139,8 +139,8 @@
                         <div class="card-text">
                             <span class="translate">You can free up the VRAM usage, or system memory usage (cache) from backends with the two buttons below.</span>
                             <br>
-                            <button class="basic-button danger-button" onclick="server_clear_vram()">Free VRAM</button>
-                            <button class="basic-button danger-button" onclick="server_clear_sysram()">Free System RAM</button>
+                            <button class="basic-button danger-button translate" onclick="server_clear_vram()">Free VRAM</button>
+                            <button class="basic-button danger-button translate" onclick="server_clear_sysram()">Free System RAM</button>
                         </div>
                     </div>
                     <div class="server-manage-section" data-requiredpermission="shutdown">
@@ -162,9 +162,9 @@
     </div>
     <div class="tab-pane scroll-within-tab" id="Settings-Backends" role="tabpanel">
         <div class="backend_add_button_container">
-            Add new backend of type:
+            <span class="translate">Add new backend of type:</span>
             <span class="form-check form-switch display-inline-block">
-                <input class="form-check-input translate" type="checkbox" id="backends_show_advanced" title="Show Advanced Backend Types" onclick="toggleShowAdvancedBackends()" autocomplete="off"> Show Advanced
+                <input class="form-check-input translate" type="checkbox" id="backends_show_advanced" title="Show Advanced Backend Types" onclick="toggleShowAdvancedBackends()" autocomplete="off"> <span class="translate">Show Advanced</span>
             </span>
             <div id="backend_add_buttons"></div>
         </div>
@@ -176,7 +176,7 @@
     <div class="tab-pane scroll-within-tab" id="Settings-Server" role="tabpanel">
         <div id="server_settings_container" class="settings-container"></div>
         <div class="settings_submit_confirmer" id="serversettings_confirmer">
-            <span class="settings_submit_confirmer_text">Save <span id="serversettings_edit_count">0</span> edited setting(s)?</span>
+            <span class="settings_submit_confirmer_text"><span class="translate">Save</span> <span id="serversettings_edit_count">0</span> <span class="translate">edited setting(s)?</span></span>
             <button type="button" class="btn btn-primary basic-button translate" onclick="save_server_settings()">Save</button>
             <button type="button" class="btn btn-secondary basic-button translate" onclick="cancel_server_settings_edit()">Cancel</button>
         </div>
@@ -184,10 +184,10 @@
     <div class="tab-pane" id="Server-Logs" role="tabpanel">
         @WebUtil.ModalHeader("do_log_pastebin_modal", "Submit Logs To Pastebin")
             <div class="modal-body">
-                <p class="translate">This will submit the text of your server logs to a <a target="_blank" href="https://paste.denizenscript.com/New/Swarm">public pastebin service</a>. This is to make it easy to share debug logs when getting support on the <a target="_blank" href="https://discord.gg/q2y38cqjNw">SwarmUI discord</a>.</p>
+                <p class="translate">This will submit the text of your server logs to a <a target="_blank" class="translate" href="https://paste.denizenscript.com/New/Swarm">public pastebin service</a>. This is to make it easy to share debug logs when getting support on the <a target="_blank" class="translate" href="https://discord.gg/q2y38cqjNw">SwarmUI discord</a>.</p>
                 <p class="translate">Once submitted, your server logs will be visible to the public and not easily deletable. Please ensure your logs do not contain private information (eg personal prompts) before autosubmitting.</p>
                 <p class="translate">(If your logs do have private information, please restart and replicate whatever you need to show, then pastebin the logs).</p>
-                <p class="translate">(Alternately, you can manually submit and edit the content first via <a target="_blank" href="https://paste.denizenscript.com/New/Swarm">this link</a>, just be sure not to delete anything important).</p>
+                <p class="translate">(Alternately, you can manually submit and edit the content first via <a target="_blank" class="translate" href="https://paste.denizenscript.com/New/Swarm">this link</a>, just be sure not to delete anything important).</p>
                 <span class="translate">Which minimum log level would you like to submit?</span> <select id="log_pastebin_type" autocomplete="off"><option>verbose</option><option selected>debug</option><option>info</option></select>
                 <div id="log_pastebin_result_area"></div>
             </div>
@@ -196,7 +196,7 @@
                 <button type="button" class="btn btn-secondary basic-button translate" id="log_cancel_pastebin_button" onclick="$('#do_log_pastebin_modal').modal('hide')">Cancel</button>
             </div>
         @WebUtil.ModalFooter()
-        <center>View: <select id="server_log_type_selector"></select> Filter: <input type="text" id="server_log_filter" placeholder="Filter" /> <button class="basic-button" id="server_log_pastebin">Pastebin</button></center>
+        <center><span class="translate">View:</span> <select id="server_log_type_selector"></select> <span class="translate">Filter:</span> <input type="text" id="server_log_filter" class="translate" placeholder="Filter" /> <button class="basic-button translate" id="server_log_pastebin">Pastebin</button></center>
         <div id="server_logs_container" class="server_logs_container"></div>
     </div>
     <div class="tab-pane scroll-within-tab" id="Server-Extensions" role="tabpanel">
@@ -218,17 +218,17 @@
             </div>
         </div>
         <center>
-            <h3>Installed Extensions</h3>
+            <h3 class="translate">Installed Extensions</h3>
             <table class="simple-table">
                 <tr>
-                    <th>Name</th>
-                    <th>Version</th>
-                    <th>Tags</th>
-                    <th>Author</th>
-                    <th>Description</th>
-                    <th>Readme</th>
-                    <th>License</th>
-                    <th>Actions</th>
+                    <th class="translate">Name</th>
+                    <th class="translate">Version</th>
+                    <th class="translate">Tags</th>
+                    <th class="translate">Author</th>
+                    <th class="translate">Description</th>
+                    <th class="translate">Readme</th>
+                    <th class="translate">License</th>
+                    <th class="translate">Actions</th>
                 </tr>
                 @foreach (Extension ext in Program.Extensions.Extensions.Where(e => !e.IsCore && !Program.Extensions.IsDisabled(ExtensionsManager.GetFolderNameFromPath(e.FilePath))))
                 {
@@ -238,21 +238,21 @@
                         <td>@ExtensionsManager.HtmlTags(ext.Tags)</td>
                         <td>@ext.ExtensionAuthor</td>
                         <td>
-                            @ext.Description
+                            <span class="translate">@ext.Description</span>
                             @if (ext.IsOldRepo)
                             {
                                 <br><span class="translate modal_error_bottom">!! You have an old version of this extension installed. It has been replaced by a new repo. Please uninstall, restart, then reinstall. See the README for any extension-specific instructions. !!</span>
                             }
                         </td>
-                        <td>@(ext.ReadmeURL == "" ? "(Missing)": new HtmlString($"<a target=\"_blank\" href=\"{ext.ReadmeURL}\">Here</a>"))</td>
+                        <td>@(ext.ReadmeURL == "" ? new HtmlString("<span class=\"translate\">(Missing)</span>") : new HtmlString($"<a target=\"_blank\" class=\"translate\" href=\"{ext.ReadmeURL}\">Here</a>"))</td>
                         <td class="@(WebUtil.LicenseIsFoss(ext.License) ? "" : "ext-danger-license")">@ext.License</td>
                         <td>
                             <button class="basic-button danger-button translate" onclick="extensionsManager.setExtensionEnabled('@ext.ExtensionName', false, this)">Disable</button>
                             @if (ext.CanUpdate)
                             {
-                                <button class="basic-button" onclick="extensionsManager.updateExtension('@ext.ExtensionName', this)">Update</button>
+                                <button class="basic-button translate" onclick="extensionsManager.updateExtension('@ext.ExtensionName', this)">Update</button>
                             }
-                            <button class="basic-button" onclick="extensionsManager.uninstallExtension('@ext.ExtensionName', this)">Uninstall</button>
+                            <button class="basic-button translate" onclick="extensionsManager.uninstallExtension('@ext.ExtensionName', this)">Uninstall</button>
                         </td>
                     </tr>
                 }
@@ -260,31 +260,31 @@
                 {
                     <tr>
                         <td>@ext.Name</td>
-                        <td><code>(Disabled)</code></td>
+                        <td><code class="translate">(Disabled)</code></td>
                         <td class="@(ext.IsDangerTags ? "ext-danger-license" : "")">@ExtensionsManager.HtmlTags(ext.Tags)</td>
                         <td>@ext.Author</td>
-                        <td>@ext.Description</td>
-                        <td>@(ext.URL == "" ? "(Missing)" : new HtmlString($"<a target=\"_blank\" href=\"{ext.URL}\">Here</a>"))</td>
+                        <td><span class="translate">@ext.Description</span></td>
+                        <td>@(ext.URL == "" ? new HtmlString("<span class=\"translate\">(Missing)</span>") : new HtmlString($"<a target=\"_blank\" class=\"translate\" href=\"{ext.URL}\">Here</a>"))</td>
                         <td class="@(WebUtil.LicenseIsFoss(ext.License) ? "" : "ext-danger-license")">@ext.License</td>
                         <td>
                             <button class="basic-button translate" onclick="extensionsManager.setExtensionEnabled('@ext.FolderNames[0]', true, this)">Enable</button>
-                            <button class="basic-button" onclick="extensionsManager.uninstallExtension('@ext.FolderNames[0]', this)">Uninstall</button>
+                            <button class="basic-button translate" onclick="extensionsManager.uninstallExtension('@ext.FolderNames[0]', this)">Uninstall</button>
                         </td>
                     </tr>
                 }
             </table>
             <br>
-            <h3>Available Extensions</h3>
-            <input class="form-check-input" type="checkbox" id="extensions_show_hidden" title="Show Hidden Extensions" onclick="extensionsManager.toggleShowHidden()" autocomplete="off"> <label for="extensions_show_hidden" class="translate">Show Hidden</label>
+            <h3 class="translate">Available Extensions</h3>
+            <input class="form-check-input translate" type="checkbox" id="extensions_show_hidden" title="Show Hidden Extensions" onclick="extensionsManager.toggleShowHidden()" autocomplete="off"> <label for="extensions_show_hidden" class="translate">Show Hidden</label>
             <table class="simple-table" id="available_extensions_table">
                 <tr>
-                    <th>Name</th>
-                    <th>Tags</th>
-                    <th>Author</th>
-                    <th>Description</th>
-                    <th>Readme</th>
-                    <th>License</th>
-                    <th>Actions</th>
+                    <th class="translate">Name</th>
+                    <th class="translate">Tags</th>
+                    <th class="translate">Author</th>
+                    <th class="translate">Description</th>
+                    <th class="translate">Readme</th>
+                    <th class="translate">License</th>
+                    <th class="translate">Actions</th>
                 </tr>
                 @foreach (ExtensionsManager.ExtensionInfo ext in Program.Extensions.KnownExtensions.Where(e => !e.FolderNames.Any(fn => Program.Extensions.LoadedExtensionFolders.Contains(fn))).OrderBy(e => e.IsDangerTags ? 1 : 0))
                 {
@@ -292,11 +292,11 @@
                         <td>@ext.Name</td>
                         <td class="@(ext.IsDangerTags ? "ext-danger-license" : "")">@ExtensionsManager.HtmlTags(ext.Tags)</td>
                         <td>@ext.Author</td>
-                        <td>@ext.Description</td>
-                        <td><a target="_blank" href="@ext.URL">Here</a></td>
+                        <td><span class="translate">@ext.Description</span></td>
+                        <td><a target="_blank" href="@ext.URL" class="translate">Here</a></td>
                         <td class="@(WebUtil.LicenseIsFoss(ext.License) ? "" : "ext-danger-license")">@ext.License</td>
                         <td>
-                            <button class="basic-button" onclick="extensionsManager.installExtension('@ext.Name', this)">Install</button>
+                            <button class="basic-button translate" onclick="extensionsManager.installExtension('@ext.Name', this)">Install</button>
                         </td>
                     </tr>
                 }
@@ -332,8 +332,8 @@
         @WebUtil.ModalHeader("server_change_user_password_modal", "Change User Password")
             <div class="modal-body">
                 <p class="translate">This form lets you change another user's password. Be sure to tell them what their new password is, and that they should change their password themself after.</p>
-                <br>New Password: <input type="text" class="auto-text auto-text-block password translate translate-no-text" id="server_change_user_password_new_password" placeholder="Enter new password..." autocomplete="off" value="" />
-                <br>Confirm New Password: <input type="text" class="auto-text auto-text-block password translate translate-no-text" id="server_change_user_password_new_password2" placeholder="Confirm new password..." autocomplete="off" value="" />
+                <br><span class="translate">New Password:</span> <input type="text" class="auto-text auto-text-block password translate translate-no-text" id="server_change_user_password_new_password" placeholder="Enter new password..." autocomplete="off" value="" />
+                <br><span class="translate">Confirm New Password:</span> <input type="text" class="auto-text auto-text-block password translate translate-no-text" id="server_change_user_password_new_password2" placeholder="Confirm new password..." autocomplete="off" value="" />
                 <div id="server_change_user_password_result_area"></div>
             </div>
             <div class="modal-footer">

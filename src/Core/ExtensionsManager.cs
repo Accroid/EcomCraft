@@ -57,18 +57,18 @@ public class ExtensionsManager
         {
             return t switch
             {
-                "parameters" => "<span class=\"tag\" title=\"Adds new T2I Parameters\">Parameters</span>",
-                "tabs" => "<span class=\"tag\" title=\"Adds new tabs on the main page\">Tabs</span>",
-                "ui" => "<span class=\"tag\" title=\"modifies the visual user interface\">UI</span>",
-                "nodes" => "<span class=\"tag\" title=\"Adds Comfy nodes\">Nodes</span>",
-                "tools" => "<span class=\"tag\" title=\"Adds new tools to the Tools menu\">Tools</span>",
-                "backend" => "<span class=\"tag\" title=\"Adds a new backend\">Backend</span>",
-                "hidden" => "<span class=\"tag hidden-tag\" title=\"Should not be visible, eg broken, outdated, unsafe. Install at your own risk.\">Hidden</span>",
-                "paid" => "<span class=\"tag paid-tag\" title=\"Requires a paid account\">Paid</span>",
-                "beta" => "<span class=\"tag beta-tag\" title=\"Not ready for general use\">Beta</span>",
-                "conflicts" => "<span class=\"tag beta-tag\" title=\"may conflict with core systems or with other extensions (eg overrides core features)\">Conflicts</span>",
-                "lowquality" => "<span class=\"tag lowquality-tag\" title=\"This extension has known quality issues, such as improper implementation methods or a fully vibecoded development approach, adding significant changes outside of the intended scope, or simply is a feature that does not work as well as one might hope\">Low-Quality</span>",
-                "none" => "<span class=\"tag\" title=\"No tags\">None</span>",
+                "parameters" => "<span class=\"tag translate\" title=\"Adds new T2I Parameters\">Parameters</span>",
+                "tabs" => "<span class=\"tag translate\" title=\"Adds new tabs on the main page\">Tabs</span>",
+                "ui" => "<span class=\"tag translate\" title=\"modifies the visual user interface\">UI</span>",
+                "nodes" => "<span class=\"tag translate\" title=\"Adds Comfy nodes\">Nodes</span>",
+                "tools" => "<span class=\"tag translate\" title=\"Adds new tools to the Tools menu\">Tools</span>",
+                "backend" => "<span class=\"tag translate\" title=\"Adds a new backend\">Backend</span>",
+                "hidden" => "<span class=\"tag hidden-tag translate\" title=\"Should not be visible, eg broken, outdated, unsafe. Install at your own risk.\">Hidden</span>",
+                "paid" => "<span class=\"tag paid-tag translate\" title=\"Requires a paid account\">Paid</span>",
+                "beta" => "<span class=\"tag beta-tag translate\" title=\"Not ready for general use\">Beta</span>",
+                "conflicts" => "<span class=\"tag beta-tag translate\" title=\"may conflict with core systems or with other extensions (eg overrides core features)\">Conflicts</span>",
+                "lowquality" => "<span class=\"tag lowquality-tag translate\" title=\"This extension has known quality issues, such as improper implementation methods or a fully vibecoded development approach, adding significant changes outside of the intended scope, or simply is a feature that does not work as well as one might hope\">Low-Quality</span>",
+                "none" => "<span class=\"tag translate\" title=\"No tags\">None</span>",
                 _ => $"<abbr class=\"tag\" title=\"Unrecognized tag\">{t}</abbr>"
             };
         }).JoinString(", "));

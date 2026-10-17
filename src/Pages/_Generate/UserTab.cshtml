@@ -21,7 +21,7 @@
             <div class="card-body">
                 @if (!Model.IsLoginEnabled)
                 {
-                    <p class="translate">User accounts are not enabled. You are the local default user. You can enable multi-user accounts in the <a href="#Settings-Server" onclick="getRequiredElementById('servertabbutton').click();getRequiredElementById('serverconfigtabbutton').click()">Server Configuration</a> tab.</p>
+                    <p class="translate">User accounts are not enabled. You are the local default user. You can enable multi-user accounts in the <a class="translate" href="#Settings-Server" onclick="getRequiredElementById('servertabbutton').click();getRequiredElementById('serverconfigtabbutton').click()">Server Configuration</a> tab.</p>
                 }
                 else
                 {
@@ -43,9 +43,9 @@
         @WebUtil.ModalHeader("change_password_modal", "Change Password")
             <div class="modal-body">
                 <p class="translate">This form lets you change your user password. If you never had a password before, leave the old password blank.</p>
-                <br>Old/Current Password: <input type="text" class="auto-text auto-text-block password translate translate-no-text" id="change_password_old_password" placeholder="Enter old/current password..." autocomplete="off" value="" />
-                <br>New Password: <input type="text" class="auto-text auto-text-block password translate translate-no-text" id="change_password_new_password" placeholder="Enter new password..." autocomplete="off" value="" />
-                <br>Confirm New Password: <input type="text" class="auto-text auto-text-block password translate translate-no-text" id="change_password_new_password2" placeholder="Confirm new password..." autocomplete="off" value="" />
+                <br><span class="translate">Old/Current Password:</span> <input type="text" class="auto-text auto-text-block password translate translate-no-text" id="change_password_old_password" placeholder="Enter old/current password..." autocomplete="off" value="" />
+                <br><span class="translate">New Password:</span> <input type="text" class="auto-text auto-text-block password translate translate-no-text" id="change_password_new_password" placeholder="Enter new password..." autocomplete="off" value="" />
+                <br><span class="translate">Confirm New Password:</span> <input type="text" class="auto-text auto-text-block password translate translate-no-text" id="change_password_new_password2" placeholder="Confirm new password..." autocomplete="off" value="" />
                 <div id="change_password_result_area"></div>
             </div>
             <div class="modal-footer">
@@ -95,18 +95,18 @@
                     To use remote APIs in SwarmUI, you must set the key for it. If you have an API key for any of the below APIs, paste it into the corresponding box and click 'Save'.
                 </div>
                 <table class="simple-table" id="api_keys_table">
-                    <tr><th>API</th><th>Status</th><th>Actions</th><th>Link</th><th>Info</th></tr>
+                    <tr><th class="translate">API</th><th class="translate">Status</th><th class="translate">Actions</th><th class="translate">Link</th><th class="translate">Info</th></tr>
                     @foreach (UserUpstreamApiKeys.ApiKeyInfo keyInfo in UserUpstreamApiKeys.KeysByType.Values)
                     {
                         <tr data-prefix="@keyInfo.JSPrefix" data-key="@keyInfo.KeyType">
-                            <td><b>@keyInfo.Title</b></td>
-                            <td><span id="@(keyInfo.JSPrefix)_key_status">(Unknown)</span></td>
+                            <td><b class="translate">@keyInfo.Title</b></td>
+                            <td><span class="translate" id="@(keyInfo.JSPrefix)_key_status">(Unknown)</span></td>
                             <td>
                                 <input type="text" id="@(keyInfo.JSPrefix)_api_key" placeholder="@keyInfo.Title API Key" autocomplete="off" oninput="apiHelpers['@keyInfo.KeyType'].onKeyInput()" />
                                 <button class="basic-button translate" id="@(keyInfo.JSPrefix)_key_submit" onclick="apiHelpers['@keyInfo.KeyType'].onSaveButton()" disabled autocomplete="off">Save</button>
                                 <button class="basic-button translate" id="@(keyInfo.JSPrefix)_key_remove" onclick="apiHelpers['@keyInfo.KeyType'].onRemoveButton()" disabled autocomplete="off">Remove</button>
                             </td>
-                            <td><a href="@keyInfo.CreateLink" target="_blank" rel="noreferrer noopener">Go here to create a key</a></td>
+                            <td><a class="translate" href="@keyInfo.CreateLink" target="_blank" rel="noreferrer noopener">Go here to create a key</a></td>
                             <td>@keyInfo.InfoHtml</td>
                         </tr>
                     }
@@ -140,7 +140,7 @@
             <div id="user_settings_container"></div>
         </div>
         <div class="settings_submit_confirmer" id="usersettings_confirmer">
-            <span class="settings_submit_confirmer_text">Save <span id="usersettings_edit_count">0</span> edited setting(s)?</span>
+            <span class="settings_submit_confirmer_text translate">Save <span id="usersettings_edit_count">0</span> edited setting(s)?</span>
             <button type="button" class="btn btn-primary basic-button translate" onclick="save_user_settings()">Save</button>
             <button type="button" class="btn btn-secondary basic-button translate" onclick="cancel_user_settings_edit()">Cancel</button>
         </div>
@@ -150,14 +150,14 @@
         <h4 class="translate">Notice: this is raw internal configuration of parameters. Don't mess with this unless you know what you're doing.</h4>
         <div id="user_param_config_container" class="settings-container"></div>
         <div class="settings_submit_confirmer" id="user_param_config_confirmer">
-            <span class="settings_submit_confirmer_text">Save <span id="user_param_config_edit_count">0</span> edited parameter setting(s)?</span>
+            <span class="settings_submit_confirmer_text translate">Save <span id="user_param_config_edit_count">0</span> edited parameter setting(s)?</span>
             <button type="button" class="btn btn-primary basic-button translate" onclick="paramConfig.saveEdits()">Save</button>
             <button type="button" class="btn btn-secondary basic-button translate" onclick="paramConfig.cancelEdits()">Cancel</button>
         </div>
     </div>
     <div class="tab-pane" id="Layout-Config-User" role="tabpanel">
         <div class="card border-secondary mb-3 card-center-container">
-            <div class="card-header">Generate Tab Layout Configuration</div>
+            <div class="card-header translate">Generate Tab Layout Configuration</div>
             <div class="card-body">
                 <p class="card-text translate">
                     The settings below let you reorganize the sub-tabs within the Generate tab.
@@ -167,9 +167,9 @@
                     <br>
                     <br>
                     <b><span class="translate">Mobile/Desktop Layout</span></b>: <select id="mobile_desktop_layout_selector" onchange="genTabLayout.onMobileDesktopLayoutChange()">
-                        <option value="auto" selected>Auto</option>
-                        <option value="mobile">Mobile</option>
-                        <option value="desktop">Desktop</option>
+                        <option value="auto" selected class="translate">Auto</option>
+                        <option value="mobile" class="translate">Mobile</option>
+                        <option value="desktop" class="translate">Desktop</option>
                     </select>
                     <br>
                     <div id="layoutconfigarea">

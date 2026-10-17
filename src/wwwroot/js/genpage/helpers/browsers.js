@@ -348,7 +348,8 @@ class GenPageBrowserClass {
             trueOffset /= 2;
         }
         span.style.left = `${trueOffset}px`;
-        span.innerHTML = `<span class="browser-folder-tree-part-symbol" data-issymbol="true"></span> ${escapeHtml(tree.name || 'Root')}`;
+        let folderLabel = tree.name ? escapeHtml(tree.name) : `<span class="translate">Root</span>`;
+        span.innerHTML = `<span class="browser-folder-tree-part-symbol" data-issymbol="true"></span> ${folderLabel}`;
         span.dataset.path = path;
         container.appendChild(span);
         if ((Object.keys(tree.children).length == 0 && tree.hasOpened) || tree.fileData) {
@@ -836,6 +837,7 @@ class GenPageBrowserClass {
         this.headerCount.innerText = files.length;
         this.headerBar.appendChild(this.headerCount);
         this.buildTreeElements(this.folderTreeDiv, '', this.tree);
+        applyTranslations(this.folderTreeDiv);
         applyTranslations(this.headerBar);
         if (!this.noContentUpdates) {
             this.buildContentList(this.contentDiv, files);

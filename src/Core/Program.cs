@@ -233,6 +233,13 @@ public class Program
             try
             {
                 string showOutput = await Utilities.RunGitProcess("show --no-patch --format=%h^%ci^%s HEAD");
+                if (string.IsNullOrWhiteSpace(showOutput) || showOutput.Split('^').Length < 3)
+                {
+                    // Not a git repository (eg copied/non-git deployment) or git returned an unexpected empty format.
+                    Logs.Verbose("Git commit info not available (not a git repository, or unexpected git output).");
+                    CurrentGitDate = "Git failed to load";
+                    return;
+                }
                 string[] parts = showOutput.SplitFast('^', 2);
                 DateTimeOffset date = DateTimeOffset.Parse(parts[1].Trim()).ToUniversalTime();
                 CurrentGitDate = $"{date:yyyy-MM-dd HH:mm:ss}";

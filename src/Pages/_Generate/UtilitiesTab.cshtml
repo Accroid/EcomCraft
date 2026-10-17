@@ -20,7 +20,7 @@
 <div class="tab-content scroll-within-tab">
     <div class="tab-pane show active" id="Utilities-Info-Tab" role="tabpanel">
         <div class="card border-secondary mb-3 card-center-container">
-            <div class="card-header">Utilities</div>
+            <div class="card-header translate">Utilities</div>
             <div class="card-body">
                 <div class="card-text translate">
                     The "Utilities" tab provides a variety of general utilities and tools in the subtabs above, and the quicktools below.
@@ -37,53 +37,53 @@
                         &emsp;
                         <button id="util_massmetadataclear_model_button" class="basic-button translate" onclick="util_massMetadataClear('model')">Reset Model Metadata</button>
                     </div>
-                    <br>If you click this button, all Model or Image metadata datastores will be reset, and they will be reloaded from source files.
-                    <br>This is useful for example if you've externally modified your model or image files and want to clean out or update Swarm's metadata tracking.
-                    <br>Note that this does not remove metadata from the models or images themselves, just from the databases that keep an efficient tracker of them.
-                    <br>This may take a moment to run.
+                    <br><span class="translate">If you click this button, all Model or Image metadata datastores will be reset, and they will be reloaded from source files.</span>
+                    <br><span class="translate">This is useful for example if you've externally modified your model or image files and want to clean out or update Swarm's metadata tracking.</span>
+                    <br><span class="translate">Note that this does not remove metadata from the models or images themselves, just from the databases that keep an efficient tracker of them.</span>
+                    <br><span class="translate">This may take a moment to run.</span>
                     <hr>
                     <span data-requiredpermission="edit_model_metadata">
                         <div class="card-center-container">
                             <button id="util_modelmetadatascanner_button" class="basic-button translate" onclick="modelMetadataScanner.run()">Scan Civitai For Metadata</button>
                         </div>
-                        <br>Model Sub-type: <select id="util_modelmetadatascanner_subtype" class="auto-dropdown">
+                        <br><span class="translate">Model Sub-type:</span> <select id="util_modelmetadatascanner_subtype" class="auto-dropdown">
                             <option value="all" class="translate" selected>all</option>
                             @foreach (string key in Program.T2IModelSets.Keys)
                             {
                                 <option value="@key" class="translate">@key</option>
                             }
                         </select>
-                        &emsp;Date range: <select id="util_modelmetadatascanner_date" class="auto-dropdown">
+                        &emsp;<span class="translate">Date range:</span> <select id="util_modelmetadatascanner_date" class="auto-dropdown">
                             <option value="all" class="translate" selected>All (ignore time)</option>
                             <option value="today" class="translate">Models downloaded today (24 hours)</option>
                             <option value="week" class="translate">Models downloaded this week (7 days)</option>
                             <option value="month" class="translate">Models downloaded this month (31 days)</option>
                         </select>
-                        <br>Filter: <select id="util_modelmetadatascanner_requirements" class="auto-dropdown">
+                        <br><span class="translate">Filter:</span> <select id="util_modelmetadatascanner_requirements" class="auto-dropdown">
                             <option value="all" class="translate" selected>All</option>
                             <option value="no_thumbnail" class="translate">Only models without a thumbnail</option>
                             <option value="no_description" class="translate">Only models without a description</option>
                             <option value="no_author" class="translate">Only models without an author</option>
                             <option value="explicit_url" class="translate">Only models with an explicit civitai url in the description</option>
                         </select>
-                        &emsp;Replace: <select id="util_modelmetadatascanner_replace" class="auto-dropdown">
+                        &emsp;<span class="translate">Replace:</span> <select id="util_modelmetadatascanner_replace" class="auto-dropdown">
                             <option value="only_missing" class="translate" selected>Only missing data</option>
                             <option value="all" class="translate">All (Replace everything)</option>
                             <option value="only_thumbnail" class="translate">Only the thumbnail image</option>
                             <option value="only_text" class="translate">Only the basic text inputs (eg description)</option>
                         </select>
                         <br>
-                        Model filename filter: <input type="text" id="util_modelmetadatascanner_filter" class="auto-text" placeholder="Filter by filename" />
+                        <span class="translate">Model filename filter:</span> <input type="text" id="util_modelmetadatascanner_filter" class="auto-text translate" placeholder="Filter by filename" />
                         <br><span id="util_modelmetadatascanner_result"></span>
                         <br>
-                        <br>If you click this button, Swarm will scan Civitai for metadata on models, and update the metadata database with any information found.
-                        <br>You can filter by date range (eg only recently downloaded model files), and/or by required missing content (eg only scan those without images).
-                        <br>You can also choose what metadata gets updated (eg only the image).
-                        <br>Optionally use the model filename filter to only scan models with a specific filename. Use '*' as a wildcard.
-                        <br>(For example, 'SDXL/*' will scan only models within a folder named 'SDXL/'. This is case-insensitive.)
-                        <br>Will take a while, and may seem to freeze up if it has to apply edits. This is normal.
-                        <br>Additional debug info while running can be found in the browser console.
-                        <br><b>Be careful!</b> If you have manually edited metadata, you can easily accidentally delete it. There is no undo for unwanted changes, they are applied rapidly in bulk.
+                        <br><span class="translate">If you click this button, Swarm will scan Civitai for metadata on models, and update the metadata database with any information found.</span>
+                        <br><span class="translate">You can filter by date range (eg only recently downloaded model files), and/or by required missing content (eg only scan those without images).</span>
+                        <br><span class="translate">You can also choose what metadata gets updated (eg only the image).</span>
+                        <br><span class="translate">Optionally use the model filename filter to only scan models with a specific filename. Use '*' as a wildcard.</span>
+                        <br><span class="translate">(For example, 'SDXL/*' will scan only models within a folder named 'SDXL/'. This is case-insensitive.)</span>
+                        <br><span class="translate">Will take a while, and may seem to freeze up if it has to apply edits. This is normal.</span>
+                        <br><span class="translate">Additional debug info while running can be found in the browser console.</span>
+                        <br><b class="translate">Be careful!</b> <span class="translate">If you have manually edited metadata, you can easily accidentally delete it. There is no undo for unwanted changes, they are applied rapidly in bulk.</span>
                     </span>
                 </div>
             </div>
@@ -113,7 +113,7 @@
             <div class="card-body">
                 <div class="card-text translate">
                     This is a tool to quickly convert legacy Pickle (.pt, .ckpt, .bin) files to modern Safetensors files.
-                    <br><b>WARNING:</b> Pickle files may contain malicious code. Do not use this tool or otherwise load pickle files unless you trust their source.
+                    <br><b class="translate">WARNING:</b> Pickle files may contain malicious code. Do not use this tool or otherwise load pickle files unless you trust their source.
                     <br>The pickle files will be moved to a "backups" folder, and the safetensors files left in place where the pickles originally were.
                     <br>You may delete the backups folder after confirming the new safetensors files work as intended.
                     <br>Be aware that this may temporarily use a large amount of filespace.
@@ -123,7 +123,7 @@
             </div>
         </div>
         <div class="card-center-container">
-            <input type="checkbox" id="pickle2safetensor_fp16" checked> <label for="pickle2safetensor_fp16" class="translate">Convert to FP16?</label> (This will save filespace with minimal side effects, highly recommended)
+            <input type="checkbox" id="pickle2safetensor_fp16" checked> <label for="pickle2safetensor_fp16" class="translate">Convert to FP16?</label> <span class="translate">(This will save filespace with minimal side effects, highly recommended)</span>
         </div>
         <div class="card-center-container" id="pickle2safetensor_text_area">
         </div>
@@ -157,10 +157,10 @@
             </div>
         </div>
         <div class="card-center-container">
-            Base model: <select class="auto-dropdown" id="lora_extractor_base_model"></select>
-            <br>Other model: <select class="auto-dropdown" id="lora_extractor_other_model"></select>
-            <br>Rank: <input type="number" id="lora_extractor_rank" value="16" min="1" max="320" />
-            <br>Save as: <input type="text" id="lora_extractor_name" placeholder="LoRA Name" />
+            <span class="translate">Base model:</span> <select class="auto-dropdown" id="lora_extractor_base_model"></select>
+            <br><span class="translate">Other model:</span> <select class="auto-dropdown" id="lora_extractor_other_model"></select>
+            <br><span class="translate">Rank:</span> <input type="number" id="lora_extractor_rank" value="16" min="1" max="320" />
+            <br><span class="translate">Save as:</span> <input type="text" id="lora_extractor_name" class="translate" placeholder="LoRA Name" />
             <br>
             <br>
             <center>
@@ -188,27 +188,27 @@
         <div class="model-downloader-section-wrapper">
             <div class="model-downloader-main-section">
                 <div style="width: 100%">
-                    <div class="model-downloader-field">@WebUtil.TextPopoverButton("modeldownloaderurl", "Exact web URL to the model.\nCivitai URLs are fully supported and will load metadata.\nHuggingFace URLs will be recognized.\nFor anything else, make sure the URL is a direct download URL, not a webpage.\nNote only '.safetensors' or '.gguf' models are allowed.") <b>URL</b> <input type="text" id="model_downloader_url" class="auto-text auto-text-wide" placeholder="Model URL" oninput="modelDownloader.urlInput()" autocomplete="off" /></div>
-                    <div class="model-downloader-field">@WebUtil.TextPopoverButton("modeldownloaderstatus", "This section will update after you input a URL to inform you if the URL is valid.\nThe box below will display loaded metadata if you use a civitai URL.") <b>Status</b> <span class="model-downloader-status" id="model_downloader_status">(...)</span></div>
+                    <div class="model-downloader-field">@WebUtil.TextPopoverButton("modeldownloaderurl", "Exact web URL to the model.\nCivitai URLs are fully supported and will load metadata.\nHuggingFace URLs will be recognized.\nFor anything else, make sure the URL is a direct download URL, not a webpage.\nNote only '.safetensors' or '.gguf' models are allowed.") <b class="translate">URL</b> <input type="text" id="model_downloader_url" class="auto-text auto-text-wide translate" placeholder="Model URL" oninput="modelDownloader.urlInput()" autocomplete="off" /></div>
+                    <div class="model-downloader-field">@WebUtil.TextPopoverButton("modeldownloaderstatus", "This section will update after you input a URL to inform you if the URL is valid.\nThe box below will display loaded metadata if you use a civitai URL.") <b class="translate">Status</b> <span class="model-downloader-status" id="model_downloader_status">(...)</span></div>
                     <div class="model-downloader-preview">
                         <div class="model_downloader_metadatazone" id="model_downloader_metadatazone"></div>
                         <div class="model_downloader_imageside" id="model_downloader_imageside"></div>
                     </div>
                     <div class="model_downloader_input_wrap" id="model_downloader_version_wrap" style="display: none;">
-                    <div class="model-downloader-field">@WebUtil.TextPopoverButton("modeldownloaderversion", "Which Civitai model version to download.\nThis is filled in automatically when you load a Civitai model URL.") <b>Version</b> <select class="auto-dropdown" id="model_downloader_version" autocomplete="off"></select></div>
+                    <div class="model-downloader-field">@WebUtil.TextPopoverButton("modeldownloaderversion", "Which Civitai model version to download.\nThis is filled in automatically when you load a Civitai model URL.") <b class="translate">Version</b> <select class="auto-dropdown" id="model_downloader_version" autocomplete="off"></select></div>
                     </div>
                     <div class="model_downloader_input_wrap" id="model_downloader_file_wrap" style="display: none;">
-                    <div class="model-downloader-field">@WebUtil.TextPopoverButton("modeldownloaderfile", "Which file to download from this Civitai version.\nSome versions include multiple variants or optional files.") <b>File</b> <select class="auto-dropdown" id="model_downloader_file" autocomplete="off"></select></div>
+                    <div class="model-downloader-field">@WebUtil.TextPopoverButton("modeldownloaderfile", "Which file to download from this Civitai version.\nSome versions include multiple variants or optional files.") <b class="translate">File</b> <select class="auto-dropdown" id="model_downloader_file" autocomplete="off"></select></div>
                     </div>
-                    <div class="model-downloader-field">@WebUtil.TextPopoverButton("modeldownloadertype", "The base model sub-type to use, ie what category it gets saved to.\nMake sure this is correct, you don't want a LoRA in your base models folder or similar.\nCivitai links will autoset this when they load metadata.") <b>Model Type</b> <select class="auto-dropdown" id="model_downloader_type" autocomplete="off">
-                        <option value="Stable-Diffusion">Base Model</option>
-                        <option value="LoRA">LoRA</option>
-                        <option value="VAE">VAE</option>
-                        <option value="Embedding">Embedding</option>
-                        <option value="ControlNet">ControlNet</option>
+                    <div class="model-downloader-field">@WebUtil.TextPopoverButton("modeldownloadertype", "The base model sub-type to use, ie what category it gets saved to.\nMake sure this is correct, you don't want a LoRA in your base models folder or similar.\nCivitai links will autoset this when they load metadata.") <b class="translate">Model Type</b> <select class="auto-dropdown" id="model_downloader_type" autocomplete="off">
+                        <option value="Stable-Diffusion" class="translate">Base Model</option>
+                        <option value="LoRA" class="translate">LoRA</option>
+                        <option value="VAE" class="translate">VAE</option>
+                        <option value="Embedding" class="translate">Embedding</option>
+                        <option value="ControlNet" class="translate">ControlNet</option>
                     </select></div>
-                    <div class="model-downloader-field">@WebUtil.TextPopoverButton("modeldownloaderfolder", "What folder to put the model in.\nTo create new folders, simply type paths with '/' in them into the 'Save as:' name box below.") <b>Folder</b> <select class="auto-dropdown" id="model_downloader_folder" autocomplete="off"></select><span class="model-downloader-new-folder-wrap" id="model_downloader_new_folder_wrap" hidden><input type="text" id="model_downloader_new_folder" class="auto-text auto-text-wide" placeholder="New Folder" autocomplete="off" /><button type="button" class="auto-dropdown model-downloader-folder-select-button" id="model_downloader_folder_select_button">&#x25BE;</button></span></div>
-                    <div class="model-downloader-field">@WebUtil.TextPopoverButton("modeldownloadersaveas", "File name to save as. Don't include the '.safetensors' file extension, just the name.\nYou can use a folder path with the '/' symbol.") <b>Save as</b> <input type="text" id="model_downloader_name" class="auto-text auto-text-wide" placeholder="Model Name" autocomplete="off" oninput="modelDownloader.nameInput()" /></div>
+                    <div class="model-downloader-field">@WebUtil.TextPopoverButton("modeldownloaderfolder", "What folder to put the model in.\nTo create new folders, simply type paths with '/' in them into the 'Save as:' name box below.") <b class="translate">Folder</b> <select class="auto-dropdown" id="model_downloader_folder" autocomplete="off"></select><span class="model-downloader-new-folder-wrap" id="model_downloader_new_folder_wrap" hidden><input type="text" id="model_downloader_new_folder" class="auto-text auto-text-wide translate" placeholder="New Folder" autocomplete="off" /><button type="button" class="auto-dropdown model-downloader-folder-select-button" id="model_downloader_folder_select_button">&#x25BE;</button></span></div>
+                    <div class="model-downloader-field">@WebUtil.TextPopoverButton("modeldownloadersaveas", "File name to save as. Don't include the '.safetensors' file extension, just the name.\nYou can use a folder path with the '/' symbol.") <b class="translate">Save as</b> <input type="text" id="model_downloader_name" class="auto-text auto-text-wide translate" placeholder="Model Name" autocomplete="off" oninput="modelDownloader.nameInput()" /></div>
                     <center>
                         <button id="model_downloader_button" class="basic-button translate" onclick="modelDownloader.run()" disabled>Download</button>
                     </center>
