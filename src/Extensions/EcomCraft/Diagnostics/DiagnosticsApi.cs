@@ -16,7 +16,7 @@ public class DiagnosticsApi(PermInfo permission)
     [API.APIDescription("Read an administrator-only EcomCraft M0 snapshot from host memory. Does not contact backends. sampled_at is not a heartbeat; backend IDs are host references, not stable EcomCraft node IDs. Unknown capabilities and live evidence remain unverified.",
         """
             "schema_version": 1,
-            "extension_version": "0.1.0",
+            "extension_version": "0.2.0",
             "scope": "configuration_snapshot_only",
             "sampled_at": "2026-10-17T00:00:00.0000000+00:00",
             "m0_status": "blocked", // or pending_verification; never ready

@@ -1,15 +1,17 @@
 using EcomCraftStudio.Diagnostics;
+using EcomCraftStudio.Studio;
+using SwarmUI.Text2Image;
 using SwarmUI.Accounts;
 using SwarmUI.Core;
 using SwarmUI.WebAPI;
 
 namespace EcomCraftStudio;
 
-/// <summary>Read-only EcomCraft M0 diagnostics, isolated from SwarmUI's generation and scheduling.</summary>
+/// <summary>EcomCraft creative workspace and separate read-only administrator diagnostics.</summary>
 public class EcomCraft : Extension
 {
-    /// <summary>Version of this diagnostic slice, not a claim of MVP completion.</summary>
-    public const string ExtensionVersion = "0.1.0";
+    /// <summary>Extension version, not a claim of MVP completion or production readiness.</summary>
+    public const string ExtensionVersion = "0.2.0";
 
     /// <summary>Must match the permission ID derived by SwarmUI for Tabs/Text2Image/EcomCraft.html.</summary>
     public const string DiagnosticsPermissionId = "view_extension_tab_ecomcraft";
@@ -19,7 +21,7 @@ public class EcomCraft : Extension
     {
         Version = ExtensionVersion;
         ExtensionAuthor = "EcomCraft Studio";
-        Description = "EcomCraft M0: read-only administrator node diagnostics; no generation or routing.";
+        Description = "EcomCraft image/video workspace with local-only generation adapter and read-only administrator diagnostics.";
         License = "MIT";
         Tags = ["tabs", "ui"];
     }
@@ -35,5 +37,17 @@ public class EcomCraft : Extension
         API.RegisterAPICall(api.EcomCraftGetDiagnostics, false, permission);
         ScriptFiles.Add("Assets/ecomcraft.js");
         StyleSheetFiles.Add("Assets/ecomcraft.css");
+        ScriptFiles.Add("Assets/studio-entry.js");
+        OtherAssets.Add("Studio/studio.css");
+        OtherAssets.Add("Studio/studio.js");
+        API.RegisterAPICall(StudioApi.EcomCraftStudioCatalog, false, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(StudioApi.EcomCraftStudioGenerate, true, Permissions.BasicImageGeneration);
+        T2IEngine.AltBackendValidators.Add(StudioApi.ValidateLocalBackend);
+    }
+
+    /// <inheritdoc/>
+    public override void OnPreLaunch()
+    {
+        StudioRoutes.Map(this);
     }
 }
