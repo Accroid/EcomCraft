@@ -1,9 +1,12 @@
+using System.Net.Http;
+using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
 using SwarmUI.Backends;
 using SwarmUI.Builtin_ComfyUIBackend;
 using SwarmUI.Core;
 using SwarmUI.Text2Image;
+using SwarmUI.Utils;
 using SwarmUI.WebAPI;
 
 namespace EcomCraftStudio.Studio;
@@ -14,6 +17,7 @@ public static class StudioApi
 {
     public const string LocalScopeKey = "ecomcraft_execution_scope";
     private const int MaxReferenceBytes = 5 * 1024 * 1024;
+    private const int MaxLoras = 5;
 
     /// <summary>Additional restriction, never an override of native backend matching or user permissions.</summary>
     public static bool ValidateLocalBackend(T2IParamInput input, BackendHandler.T2IBackendData backend)
@@ -43,6 +47,22 @@ public static class StudioApi
     private static IEnumerable<T2IModel> LocalModels(Session session) =>
         Program.T2IModelSets.TryGetValue("Stable-Diffusion", out T2IModelHandler handler)
             ? handler.Models.Values.Where(m => m.IsSupportedModelType && session.User.IsAllowedModel(m.Name)) : [];
+
+    private static List<string> LocalLoras(Session session) =>
+        Program.T2IModelSets.TryGetValue("LoRA", out T2IModelHandler handler)
+            ? handler.ListModelNamesFor(session).Where(n => n != "(None)").ToList() : [];
+
+    private static JArray OptionPairs(IEnumerable<string> values)
+    {
+        JArray array = new();
+        foreach (string value in values)
+        {
+            string id = value.Before("///");
+            string name = value.Contains("///") ? value.After("///") : value;
+            array.Add(new JObject() { ["id"] = id, ["name"] = name });
+        }
+        return array;
+    }
 
     private static string Kind(T2IModel model)
     {
@@ -82,7 +102,10 @@ public static class StudioApi
                 ["height"] = m.StandardHeight > 0 ? m.StandardHeight : m.ModelClass.StandardHeight,
                 ["resolution_step"] = Math.Max(8, m.ModelClass.CompatClass.ResolutionPrecision),
                 ["image_reference"] = Kind(m) == "image"
-            }))
+            })),
+            ["loras"] = new JArray(LocalLoras(session).OrderBy(n => n)),
+            ["samplers"] = OptionPairs(ComfyUIBackendExtension.Samplers),
+            ["schedulers"] = OptionPairs(ComfyUIBackendExtension.Schedulers)
         };
         return Task.FromResult(result);
     }
@@ -98,6 +121,11 @@ public static class StudioApi
         {
             return Error("云端服务尚未配置；任务未提交，也不会自动切换服务商。", "cloud_unavailable");
         }
+        string mode = (string)rawInput["mode"] ?? "text2img";
+        if (mode is not ("text2img" or "img2img" or "inpaint" or "outpaint" or "upscale" or "video"))
+        {
+            return Error("未知的创作方式。", "invalid_mode");
+        }
         string kind = (string)rawInput["kind"];
         string modelId = (string)rawInput["model"];
         T2IModel model = LocalModels(session).FirstOrDefault(m => m.Name == modelId);
@@ -105,9 +133,12 @@ public static class StudioApi
         {
             return Error("模型不可用、权限已变化或模型类型不匹配。请刷新模型列表。", "invalid_model");
         }
-        if (kind == "video" && !session.User.HasPermission(Permissions.ParamVideo))
+        if (kind == "video" || mode == "video")
         {
-            return Error("此账号没有视频参数权限。请联系管理员。", "bad_permissions");
+            if (mode != "video" || !session.User.HasPermission(Permissions.ParamVideo))
+            {
+                return Error("此账号没有视频参数权限，或视频流程选择有误。请联系管理员。", "bad_permissions");
+            }
         }
         if (!Program.Backends.EnumerateT2IBackends.Any(IsLocalAvailable))
         {
@@ -145,7 +176,101 @@ public static class StudioApi
         {
             return Error("种子、步数或提示词强度不在允许范围内。", "invalid_parameters");
         }
-        if (kind == "video")
+
+        // ----- Reference / edit images -----
+        string reference = (string)rawInput["initimage"];
+        bool needsReference = mode is "img2img" or "inpaint" or "outpaint" or "upscale";
+        if (needsReference && string.IsNullOrEmpty(reference))
+        {
+            return Error("该创作方式需要先提供初始图。", "invalid_reference");
+        }
+        if (!string.IsNullOrEmpty(reference))
+        {
+            if (kind != "image" || !ValidReference(reference))
+            {
+                return Error("仅图片流程支持初始图；请使用不超过 5 MB 的 PNG、JPEG 或 WebP。", "invalid_reference");
+            }
+            int refWidth = 0, refHeight = 0;
+            try
+            {
+                SwarmUI.Media.ImageFile decoded = SwarmUI.Media.ImageFile.FromDataString(reference);
+                (refWidth, refHeight) = decoded.GetResolution();
+                if (refWidth > 8192 || refHeight > 8192 || (long)refWidth * refHeight > 40_000_000)
+                {
+                    return Error("初始图尺寸过大，请缩小到最长边 8192 像素以内且不超过 4000 万像素。", "invalid_reference");
+                }
+            }
+            catch (Exception)
+            {
+                return Error("无法解码初始图，请重新导出为 PNG、JPEG 或 WebP。", "invalid_reference");
+            }
+            input["initimage"] = reference;
+            // Img2img / inpaint / outpaint need a creativity value; upscale keeps it optional.
+            if (mode is "img2img" or "inpaint" or "outpaint")
+            {
+                if (!CopyOptionalNumber(rawInput, input, "initimagecreativity", 0, 1, false) || input["initimagecreativity"] is null)
+                {
+                    return Error("请提供 0–1 的重绘幅度。", "invalid_parameters");
+                }
+            }
+        }
+
+        // ----- Mask (inpaint / outpaint) -----
+        string mask = (string)rawInput["maskimage"];
+        if (mode is "inpaint" or "outpaint")
+        {
+            if (string.IsNullOrEmpty(mask) || !ValidReference(mask)
+                || !Integer(rawInput, "maskshrinkgrow", 0, 512, out int shrink)
+                || !Integer(rawInput, "maskblur", 0, 64, out int blur))
+            {
+                return Error("局部重绘/扩图需要有效的蒙版，蒙版收缩 0–512、羽化 0–64。", "invalid_mask");
+            }
+            input["maskimage"] = mask;
+            input["maskshrinkgrow"] = shrink;
+            input["maskblur"] = blur;
+            input["initimagerecompositemask"] = true;
+        }
+
+        // ----- Upscale -----
+        if (mode == "upscale")
+        {
+            if (!CopyOptionalNumber(rawInput, input, "refinerupscale", 1.5, 4, false) || input["refinerupscale"] is null)
+            {
+                return Error("请提供 1.5–4 的放大倍数。", "invalid_parameters");
+            }
+            // Keep the base stage close to the supplied image, then refine at the larger size.
+            input["initimagecreativity"] = 0.25;
+        }
+
+        // ----- LoRAs -----
+        JToken loraToken = rawInput["loras"];
+        if (loraToken is not null && loraToken.Type != JTokenType.Null)
+        {
+            JArray loras = null;
+            JArray weights = null;
+            string loraError = null;
+            if (loraToken.Type != JTokenType.Array || !TryBuildLoras(loraToken as JArray, rawInput["loraweights"], LocalLoras(session), out loras, out weights, out loraError))
+            {
+                return Error(loraError ?? "LoRA 配置无效。", "invalid_loras");
+            }
+            if (loras.Count > 0)
+            {
+                input["loras"] = loras;
+                input["loraweights"] = weights;
+            }
+        }
+
+        // ----- Sampler / scheduler -----
+        if (!MatchOption(rawInput, "sampler", ComfyUIBackendExtension.Samplers, out string samplerError))
+        {
+            return Error(samplerError, "invalid_sampler");
+        }
+        if (!MatchOption(rawInput, "scheduler", ComfyUIBackendExtension.Schedulers, out string schedulerError))
+        {
+            return Error(schedulerError, "invalid_scheduler");
+        }
+
+        if (mode == "video")
         {
             if (!Integer(rawInput, "text2videoframes", 1, 129, out int frames))
             {
@@ -157,29 +282,6 @@ public static class StudioApi
             {
                 return Error("视频帧率须为 1–60，或留空以使用引擎默认值。", "invalid_parameters");
             }
-        }
-        string reference = (string)rawInput["initimage"];
-        if (!string.IsNullOrEmpty(reference))
-        {
-            if (kind != "image" || !ValidReference(reference)
-                || !CopyOptionalNumber(rawInput, input, "initimagecreativity", 0, 1, false))
-            {
-                return Error("仅图片流程支持初始图；请使用不超过 5 MB 的 PNG、JPEG 或 WebP。", "invalid_reference");
-            }
-            try
-            {
-                SwarmUI.Media.ImageFile decoded = SwarmUI.Media.ImageFile.FromDataString(reference);
-                (int imageWidth, int imageHeight) = decoded.GetResolution();
-                if (imageWidth > 8192 || imageHeight > 8192 || (long)imageWidth * imageHeight > 40_000_000)
-                {
-                    return Error("初始图尺寸过大，请缩小到最长边 8192 像素以内且不超过 4000 万像素。", "invalid_reference");
-                }
-            }
-            catch (Exception)
-            {
-                return Error("无法解码初始图，请重新导出为 PNG、JPEG 或 WebP。", "invalid_reference");
-            }
-            input["initimage"] = reference;
         }
         try
         {
@@ -195,6 +297,67 @@ public static class StudioApi
             // No exception text in browser responses: upstream messages can contain paths or backend credentials.
             return Error("无法确认引擎执行结果。请在原生引擎核对队列和个人历史后再重试。", "generation_uncertain");
         }
+    }
+
+    private static bool TryBuildLoras(JArray loraArray, JToken weightToken, List<string> allowed, out JArray loras, out JArray weights, out string error)
+    {
+        loras = new JArray();
+        weights = new JArray();
+        error = null;
+        if (loraArray.Count > MaxLoras)
+        {
+            error = $"LoRA 最多 {MaxLoras} 个。";
+            return false;
+        }
+        double[] providedWeights = new double[loraArray.Count];
+        if (weightToken is not null && weightToken.Type != JTokenType.Null)
+        {
+            if (weightToken.Type != JTokenType.Array || weightToken.Count() != loraArray.Count)
+            {
+                error = "LoRA 权重数量必须与 LoRA 数量一致。";
+                return false;
+            }
+            for (int i = 0; i < loraArray.Count; i++)
+            {
+                if (!double.TryParse(weightToken[i]?.ToString(), out double w) || !double.IsFinite(w) || w < -10 || w > 10)
+                {
+                    error = "LoRA 权重须为 -10 到 10 的数字。";
+                    return false;
+                }
+                providedWeights[i] = w;
+            }
+        }
+        HashSet<string> seen = new();
+        for (int i = 0; i < loraArray.Count; i++)
+        {
+            string name = loraArray[i]?.ToString();
+            if (string.IsNullOrWhiteSpace(name) || !allowed.Contains(name) || !seen.Add(name))
+            {
+                error = "LoRA 不存在、无权限或重复选择，请刷新后重试。";
+                return false;
+            }
+            loras.Add(name);
+            weights.Add(weightToken is null ? "1" : providedWeights[i].ToString());
+        }
+        return true;
+    }
+
+    private static bool MatchOption(JObject source, string key, List<string> allowed, out string error)
+    {
+        error = null;
+        JToken token = source[key];
+        if (token is null || token.Type == JTokenType.Null || token.ToString() == "")
+        {
+            return true;
+        }
+        string value = token.ToString();
+        HashSet<string> ids = new(allowed.Select(v => v.Before("///")));
+        if (!ids.Contains(value))
+        {
+            error = $"{key} 取值不受支持，请使用列表中的选项。";
+            return false;
+        }
+        return true;
     }
 
     private static bool Integer(JObject input, string key, int min, int max, out int value)

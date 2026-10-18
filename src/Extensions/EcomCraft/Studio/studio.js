@@ -1,29 +1,39 @@
 (() => {
     'use strict';
 
+    /* ============================================================
+       Helpers
+       ============================================================ */
     const $ = id => document.getElementById(id);
-    const draftFields = ['prompt', 'negative', 'model', 'width', 'height', 'images', 'frames', 'fps', 'steps', 'cfg', 'seed', 'creativity'];
-    const makeDraft = kind => ({ prompt: '', negative: '', model: '', width: kind === 'image' ? 1024 : 768,
-        height: kind === 'image' ? 1024 : 512, images: 1, frames: 81, fps: '', steps: '', cfg: '', seed: '', creativity: 0.6 });
-    const initialNote = '等待首次创作。模型兼容性与实际生成仍需在部署环境验证。';
+    const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+    const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+    class ApiError extends Error { constructor(message, code) { super(message); this.code = code; } }
+
     const state = {
-        kind: 'image', session: null, catalog: null, catalogLoading: false, busy: false, uncertain: false,
-        drafts: { image: makeDraft('image'), video: makeDraft('video') },
-        results: { image: [], video: [] }, notes: { image: initialNote, video: initialNote },
-        reference: null, referenceLoading: false, referenceRevision: 0, timer: null
+        session: null, catalog: null, catalogLoading: false,
+        userId: null, outputAppendUser: false,
+        view: 'create', type: 'image', mode: 'text2img',
+        busy: false, uncertain: false,
+        reference: null, referenceLoading: false, referenceRevision: 0,
+        loras: [], results: [], timer: null,
+        gallery: { items: [], filter: 'all', search: '', sort: 'Date', loading: false, current: null }
     };
-    const safeErrors = new Set(['bad_permissions', 'cloud_unavailable', 'invalid_model', 'local_unavailable', 'invalid_prompt',
-        'unsupported_prompt_syntax', 'invalid_parameters', 'invalid_reference', 'generation_failed', 'generation_uncertain']);
-    const uncertainErrors = new Set(['generation_failed', 'generation_uncertain', 'transport_error', 'api_error']);
 
-    class ApiError extends Error {
-        constructor(message, code) { super(message); this.code = code; }
+    // Builds a viewable URL for a path returned by ListImages (relative to the user output root).
+    function viewUrl(src) {
+        const encoded = String(src).split('/').map(seg => encodeURIComponent(seg)).join('/');
+        const prefix = state.outputAppendUser ? `View/${encodeURIComponent(state.userId)}` : 'Output';
+        return `/${prefix}/${encoded}`;
     }
+    const safeErrors = new Set(['bad_permissions','cloud_unavailable','invalid_model','invalid_mode','local_unavailable','invalid_prompt',
+        'unsupported_prompt_syntax','invalid_parameters','invalid_reference','invalid_mask','invalid_loras','invalid_sampler',
+        'invalid_scheduler','generation_failed','generation_uncertain',
+        'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
+    const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
 
-    // Generation is deliberately never retried, timed out or silently redirected to another provider.
     async function request(route, body = {}) {
-        let response;
-        let data;
+        let response, data;
         try {
             response = await fetch(`/API/${route}`, {
                 method: 'POST', credentials: 'same-origin', cache: 'no-store',
@@ -31,14 +41,18 @@
                 body: JSON.stringify({ ...body, ...(state.session ? { session_id: state.session } : {}) })
             });
             data = await response.json();
-        }
-        catch {
+        } catch {
             throw new ApiError('与服务的连接中断，无法确认执行结果。请先核对原生队列和个人历史。', 'transport_error');
         }
         if (data.error || !response.ok) {
             if (data.error_id === 'invalid_session_id' || response.status === 401) {
                 state.session = null;
-                throw new ApiError('账号会话已失效。请刷新模型列表重新连接；如果需要，请先在原生引擎登录。任务不会自动重试。', 'invalid_session_id');
+                throw new ApiError('账号会话已失效。请刷新重新连接；任务不会自动重试。', 'invalid_session_id');
+            }
+            // Business-level error returned normally (HTTP 200) with a user-facing message but no
+            // whitelisted error_id (e.g. MagicPrompt's formatted upstream errors): pass it through.
+            if (response.ok && data.error_id == null) {
+                throw new ApiError(String(data.error), 'api_error');
             }
             const code = safeErrors.has(data.error_id) ? data.error_id : 'api_error';
             throw new ApiError(safeErrors.has(code) ? String(data.error) : '服务未正常返回，请检查登录状态或联系管理员。', code);
@@ -46,48 +60,77 @@
         return data;
     }
 
-    function status(text, error = false) {
-        $('result-status').textContent = text;
-        $('result-status').classList.toggle('error', error);
-        state.notes[state.kind] = text;
+    /* ============================================================
+       Theme
+       ============================================================ */
+    function initTheme() {
+        const saved = localStorage.getItem('ecomcraft-theme');
+        const theme = saved === 'dark' || saved === 'light' ? saved
+            : (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+    }
+    function toggleTheme() {
+        const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('ecomcraft-theme', next);
     }
 
+    /* ============================================================
+       View routing
+       ============================================================ */
+    function setView(view) {
+        if (!['create', 'gallery'].includes(view)) { view = 'create'; }
+        state.view = view;
+        $('view-create').hidden = view !== 'create';
+        $('view-gallery').hidden = view !== 'gallery';
+        $('crumb-title').textContent = view === 'create' ? '创作工作台' : '作品画廊';
+        document.querySelectorAll('.rail-item[data-view]').forEach(i =>
+            i.classList.toggle('active', i.dataset.view === view));
+        if (view === 'gallery') { loadGallery(); }
+    }
+    function route() {
+        const hash = (location.hash || '').replace('#', '');
+        setView(hash === 'gallery' ? 'gallery' : 'create');
+    }
+
+    /* ============================================================
+       Catalog / models
+       ============================================================ */
     function currentModel() {
-        return state.catalog?.models.find(model => model.id === $('model').value && model.kind === state.kind);
+        return state.catalog?.models.find(m => m.id === $('model').value && m.kind === state.type);
     }
 
-    function saveDraft() {
-        for (const field of draftFields) { state.drafts[state.kind][field] = $(field).value; }
-    }
-
-    function loadModels(keepSelection = true) {
-        const previous = keepSelection ? state.drafts[state.kind].model : '';
-        const models = (state.catalog?.models || []).filter(model => model.kind === state.kind);
-        $('model').replaceChildren();
+    function populateModels() {
+        const models = (state.catalog?.models || []).filter(m => m.kind === state.type);
+        const select = $('model');
+        select.replaceChildren();
         if (!models.length) {
-            const option = new Option(state.kind === 'video' ? '没有可访问的文生视频模型' : '没有可访问的图片模型', '');
-            $('model').append(option);
+            select.append(new Option(state.type === 'video' ? '没有可访问的文生视频模型' : '没有可访问的图片模型', ''));
+        } else {
+            for (const m of models) { select.append(new Option(m.id, m.id)); }
         }
-        else {
-            for (const model of models) { $('model').append(new Option(model.id, model.id)); }
-            if (models.some(model => model.id === previous)) { $('model').value = previous; }
-        }
-        state.drafts[state.kind].model = $('model').value;
-        updateModelHelp();
+        updateModelMeta();
     }
 
-    function updateModelHelp() {
+    function populateSamplers() {
+        const samplers = state.catalog?.samplers || [];
+        const schedulers = state.catalog?.schedulers || [];
+        $('sampler').replaceChildren(new Option('默认（由模型决定）', ''));
+        $('scheduler').replaceChildren(new Option('默认（由模型决定）', ''));
+        for (const s of samplers) { $('sampler').append(new Option(s.name, s.id)); }
+        for (const s of schedulers) { $('scheduler').append(new Option(s.name, s.id)); }
+    }
+
+    function updateModelMeta() {
         const model = currentModel();
         const step = model?.resolution_step || 16;
         for (const field of ['width', 'height']) {
             $(field).step = step;
-            // HTML number step is based on min, so align min to the model's precision too.
             $(field).min = Math.ceil(256 / step) * step;
         }
         $('resolution-hint').textContent = `256–2048 px · ${step} 的倍数`;
-        $('model-help').textContent = model ? `${model.class_name} · 类型来自模型元数据，兼容性待实测。` :
-            '请在原生引擎配置模型，或由管理员检查模型类型与账号权限。';
-        $('reference-section').hidden = state.kind !== 'image' || !model?.image_reference;
+        $('model-help').textContent = model ? `${model.class_name} · 类型来自模型元数据，兼容性待实测。`
+            : '请在原生引擎配置模型，或由管理员检查模型类型与账号权限。';
         updateControls();
     }
 
@@ -96,94 +139,27 @@
         if (!model) { return; }
         const step = model.resolution_step || 16;
         for (const field of ['width', 'height']) {
-            const fallback = state.kind === 'image' ? 1024 : (field === 'width' ? 768 : 512);
+            const fallback = state.type === 'image' ? 1024 : (field === 'width' ? 768 : 512);
             const suggested = Number(model[field]) || fallback;
-            $(field).value = Math.max(Math.ceil(256 / step) * step, Math.min(Math.floor(2048 / step) * step, Math.round(suggested / step) * step));
+            $(field).value = Math.max(Math.ceil(256 / step) * step,
+                Math.min(Math.floor(2048 / step) * step, Math.round(suggested / step) * step));
         }
-    }
-
-    function updateControls() {
-        const cloud = $('source').value === 'cloud';
-        $('cloud-notice').hidden = !cloud;
-        $('source-help').textContent = cloud ? '未连接任何云端服务，不会发送提示词或素材。' : '只向部署本服务的机器路由，不会自动转到远程或云端。';
-        $('location-badge').textContent = cloud ? '云端未配置' : '部署机执行';
-        $('model').disabled = cloud || state.busy;
-        $('refresh-models').disabled = state.catalogLoading || state.busy;
-        $('creation-fields').disabled = state.busy;
-        $('mode-image').disabled = state.busy || state.uncertain;
-        $('mode-video').disabled = state.busy || state.uncertain || !state.catalog?.can_generate_video;
-        $('frames').disabled = state.kind !== 'video';
-        $('fps').disabled = state.kind !== 'video';
-        let hint = '';
-        if (state.busy) { hint = '任务已发送到原生引擎，请勿刷新或重复提交。'; }
-        else if (state.uncertain) { hint = '执行结果待核对，请先在右侧确认后再提交。'; }
-        else if (state.catalogLoading) { hint = '正在刷新模型和节点信息…'; }
-        else if (cloud) { hint = '云端平台未配置，当前不能提交。'; }
-        else if (!state.session || !state.catalog) { hint = '尚未连接服务，请刷新模型列表或先登录。'; }
-        else if (!state.catalog.can_generate) { hint = '此账号没有生成权限，请联系管理员。'; }
-        else if (state.kind === 'video' && !state.catalog.can_generate_video) { hint = '此账号没有视频参数权限，请联系管理员。'; }
-        else if (!state.catalog.local_backends_observed) { hint = '未观测到可用的部署机 ComfyUI 节点。'; }
-        else if (!currentModel()) { hint = '请先在原生引擎配置此类型的模型。'; }
-        else if (state.referenceLoading) { hint = '正在读取初始图，请稍候。'; }
-        $('submit-hint').textContent = hint || '将提交到部署机的 ComfyUI；实际耗时与显存取决于模型。';
-        $('generate').disabled = Boolean(hint);
-        $('generate-label').textContent = state.busy ? '引擎处理中…' : (state.kind === 'image' ? '生成图片' : '生成视频');
-        $('prompt-count').textContent = `${$('prompt').value.length} / 12000`;
-        $('uncertain-actions').hidden = !state.uncertain;
-    }
-
-    function renderReference() {
-        $('upload-zone').hidden = Boolean(state.reference);
-        $('reference-preview').hidden = !state.reference;
-        $('creativity-field').hidden = !state.reference;
-        if (state.reference) {
-            $('reference-image').src = state.reference.url;
-            $('reference-name').textContent = state.reference.name;
-        }
-        else {
-            $('reference-image').removeAttribute('src');
-            $('reference-file').value = '';
-        }
-    }
-
-    function switchMode(kind) {
-        if (kind === state.kind || state.busy || state.uncertain || (kind === 'video' && !state.catalog?.can_generate_video)) { return; }
-        saveDraft();
-        state.kind = kind;
-        for (const field of draftFields) { $(field).value = state.drafts[kind][field]; }
-        const video = kind === 'video';
-        for (const mode of ['image', 'video']) {
-            $(`mode-${mode}`).classList.toggle('selected', mode === kind);
-            $(`mode-${mode}`).setAttribute('aria-pressed', String(mode === kind));
-        }
-        $('workflow-label').textContent = video ? '文生视频' : '文生图 / 图生图';
-        $('preview-kind').textContent = video ? 'VIDEO CANVAS' : 'IMAGE CANVAS';
-        $('video-fields').hidden = !video;
-        $('image-count-row').hidden = video;
-        $('preview-stage').classList.toggle('video-mode', video);
-        $('empty-title').textContent = video ? '让商品故事，动起来。' : '下一张商品图，从这里开始。';
-        $('prompt').placeholder = video ? '例如：镜头缓慢环绕一双白色运动鞋，鞋底细节逐渐进入画面，柔和棚拍灯光，背景保持简洁。' : '例如：一瓶透明玻璃精华液，置于浅灰色石台，柔和侧光，突出瓶身质感，画面右侧留白用于排版。';
-        loadModels();
-        if (!state.drafts[kind].sizeInitialized && currentModel()) {
-            applyModelSize(); state.drafts[kind].sizeInitialized = true;
-        }
-        renderResults();
-        status(state.notes[kind]);
-        updateControls();
     }
 
     async function refreshCatalog() {
         if (state.catalogLoading || state.busy) { return; }
         state.catalogLoading = true;
-        saveDraft();
-        $('connection-message').textContent = '正在读取账号、模型与部署机节点信息…';
-        $('connection-message').classList.remove('error');
+        const msg = $('connection-message');
+        msg.textContent = '正在读取账号、模型与部署机节点信息…';
+        msg.classList.remove('error');
         updateControls();
         try {
             if (!state.session) {
                 const session = await request('GetNewSession');
                 if (!session.session_id) { throw new ApiError('未能建立账号会话，请先登录原生引擎。', 'api_error'); }
                 state.session = session.session_id;
+                state.userId = session.user_id;
+                state.outputAppendUser = !!session.output_append_user;
             }
             const catalog = await request('EcomCraftStudioCatalog');
             if (!Array.isArray(catalog.models)) { throw new ApiError('模型列表格式不兼容，请联系管理员。', 'api_error'); }
@@ -191,24 +167,107 @@
             $('user-name').textContent = catalog.user_name;
             $('avatar').textContent = String(catalog.user_name || 'E').slice(0, 1).toUpperCase();
             $('diagnostics-link').hidden = !catalog.can_diagnose;
-            $('connection-message').textContent = `部署机节点观测：${catalog.local_backends_observed} 个可用 · ${catalog.models.length} 个可访问模型 · 云端未配置。此信息不是成功心跳或生成验收。`;
-            loadModels();
-            if (!state.drafts[state.kind].sizeInitialized && currentModel()) {
-                applyModelSize(); state.drafts[state.kind].sizeInitialized = true;
-            }
+            $('enhancer-settings').hidden = !catalog.can_diagnose;
+            msg.textContent = `部署机节点观测：${catalog.local_backends_observed} 个可用 · ${catalog.models.length} 个可访问模型 · 云端未配置。此信息不是成功心跳或生成验收。`;
+            populateModels();
+            populateSamplers();
+            applyModelSize();
+            updateHealth();
+        } catch (error) {
+            state.catalog = null;
+            populateModels();
+            msg.textContent = error.message;
+            msg.classList.add('error');
+            msg.append(Object.assign(document.createElement('a'), { href: '/Login', textContent: '打开登录页' }));
+            updateHealth();
+        } finally {
+            state.catalogLoading = false;
+            updateControls();
         }
-        catch (error) {
-            state.catalog = null; // Do not allow generation from stale permissions or node observations.
-            loadModels();
-            $('connection-message').textContent = error.message;
-            $('connection-message').classList.add('error');
-            if (!state.session) {
-                const login = document.createElement('a');
-                login.href = '/Login'; login.textContent = '打开登录页';
-                $('connection-message').append(login);
-            }
+    }
+
+    function updateHealth() {
+        const h = $('health');
+        const dot = $('health-dot');
+        const text = $('health-text');
+        h.classList.remove('ok', 'warn', 'err');
+        const count = state.catalog?.local_backends_observed || 0;
+        if (state.catalog && count > 0) { h.classList.add('ok'); text.textContent = `${count} 个节点可用`; }
+        else if (state.catalog) { h.classList.add('warn'); text.textContent = '无可用节点'; }
+        else { h.classList.add('err'); text.textContent = '未连接'; }
+    }
+
+    /* ============================================================
+       Type (image/video) & create mode
+       ============================================================ */
+    function setType(type) {
+        if (type === state.type || state.busy || state.uncertain) { return; }
+        if (type === 'video' && !state.catalog?.can_generate_video) { return; }
+        state.type = type;
+        $('mode-image').classList.toggle('selected', type === 'image');
+        $('mode-video').classList.toggle('selected', type === 'video');
+        $('mode-image').setAttribute('aria-pressed', String(type === 'image'));
+        $('mode-video').setAttribute('aria-pressed', String(type === 'video'));
+        $('video-fields').hidden = type !== 'video';
+        $('image-count-row').hidden = type === 'video';
+        $('image-mode-tabs').style.display = type === 'video' ? 'none' : '';
+        if (type === 'video') { setMode('text2img'); }
+        else if (state.mode === 'video') { setMode('text2img'); }
+        $('empty-title').textContent = type === 'video' ? '让商品故事，动起来。' : '下一张商品图，从这里开始。';
+        $('empty-desc').textContent = type === 'video' ? '描述镜头与运动，生成一段商品视频。' : '填写描述、选择模型，结果会出现在这里。';
+        $('prompt').placeholder = type === 'video'
+            ? '例如：镜头缓慢环绕一双白色运动鞋，鞋底细节逐渐进入画面，柔和棚拍灯光，背景保持简洁。'
+            : '例如：一瓶透明玻璃精华液，置于浅灰色石台，柔和侧光，突出瓶身质感，画面右侧留白用于排版。';
+        populateModels();
+        applyModelSize();
+        renderResults();
+    }
+
+    const modeMeta = {
+        text2img: { tag: '文生图', needsRef: false, mask: false, creativity: false, outpaint: false, upscale: false },
+        img2img:  { tag: '图生图', needsRef: true,  mask: false, creativity: true,  outpaint: false, upscale: false },
+        inpaint:  { tag: '局部重绘', needsRef: true, mask: true,  creativity: true,  outpaint: false, upscale: false },
+        outpaint: { tag: '扩图', needsRef: true,   mask: true,  creativity: false,  outpaint: true,  upscale: false },
+        upscale:  { tag: '放大', needsRef: true,   mask: false, creativity: false,  outpaint: false, upscale: true }
+    };
+
+    function setMode(mode) {
+        if (!modeMeta[mode] || state.busy || state.uncertain) { return; }
+        state.mode = mode;
+        const meta = modeMeta[mode];
+        document.querySelectorAll('.mode-tab').forEach(t =>
+            t.classList.toggle('active', t.dataset.mode === mode));
+        $('workflow-tag').textContent = meta.tag;
+        // Reference block
+        $('reference-fld').hidden = !meta.needsRef;
+        $('ref-optional').textContent = meta.tag;
+        $('mask-wrap').hidden = !meta.mask || mode === 'outpaint';
+        $('creativity-fld').hidden = !meta.creativity;
+        $('outpaint-fld').hidden = !meta.outpaint;
+        $('upscale-fld').hidden = !meta.upscale;
+        $('reference-help').textContent = mode === 'inpaint'
+            ? '涂抹需要修改的区域，其余部分保持不变。'
+            : mode === 'upscale' ? '放大后会用模型重新精炼细节。'
+            : mode === 'outpaint' ? '向指定方向扩展画面，扩展区域由 AI 补全。'
+            : '图生图会重绘原图，不保证商品细节、文字或标志完全不变。';
+        if (meta.mask && mode === 'inpaint' && state.reference) { MaskEditor.init(); }
+        if (meta.outpaint) { /* mask generated at submit */ }
+        updateControls();
+    }
+
+    /* ============================================================
+       Reference image
+       ============================================================ */
+    function renderReference() {
+        $('dropzone').style.display = state.reference ? 'none' : '';
+        $('reference-preview').hidden = !state.reference;
+        if (state.reference) {
+            $('reference-image').src = state.reference.url;
+            $('reference-name').textContent = state.reference.name;
+        } else {
+            $('reference-image').removeAttribute('src');
+            $('reference-file').value = '';
         }
-        finally { state.catalogLoading = false; updateControls(); }
     }
 
     function clearReference() {
@@ -216,173 +275,1009 @@
         state.referenceLoading = false;
         if (state.reference) { URL.revokeObjectURL(state.reference.url); }
         state.reference = null;
-        renderReference(); updateControls();
+        MaskEditor.reset();
+        renderReference();
+        updateControls();
     }
 
     async function readReference() {
         const file = $('reference-file').files[0];
         if (!file) { return; }
         const revision = ++state.referenceRevision;
-        if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024 || !file.size) {
+        if (!['image/png','image/jpeg','image/webp'].includes(file.type) || !file.size || file.size > 5 * 1024 * 1024) {
             $('reference-file').value = '';
-            status('请选择不超过 5 MB 的 PNG、JPEG 或 WebP 图片。文件尚未上传。', true);
+            setStatus('请选择不超过 5 MB 的 PNG、JPEG 或 WebP 图片。文件尚未上传。', true);
             return;
         }
-        state.referenceLoading = true; updateControls();
-        const url = URL.createObjectURL(file);
+        state.referenceLoading = true;
+        updateControls();
+        const objectUrl = URL.createObjectURL(file);
         try {
-            const image = new Image(); image.src = url;
+            const image = new Image(); image.src = objectUrl;
             await image.decode();
             if (image.width > 8192 || image.height > 8192 || image.width * image.height > 40000000) {
                 throw new Error('初始图尺寸过大，请先缩小到最长边 8192 像素以内且不超过 4000 万像素。');
             }
             const data = await new Promise((resolve, reject) => {
-                const reader = new FileReader(); reader.onload = () => resolve(reader.result);
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
                 reader.onerror = () => reject(new Error('无法读取文件，请重新选择。'));
                 reader.readAsDataURL(file);
             });
-            if (revision !== state.referenceRevision) { URL.revokeObjectURL(url); return; }
+            if (revision !== state.referenceRevision) { URL.revokeObjectURL(objectUrl); return; }
             if (state.reference) { URL.revokeObjectURL(state.reference.url); }
-            state.reference = { data, url, name: file.name };
+            state.reference = { data, url: objectUrl, name: file.name, width: image.width, height: image.height };
             renderReference();
-            status('初始图已选好，尚未上传。提交图片生成时才发送给部署机服务。');
-        }
-        catch (error) {
-            URL.revokeObjectURL(url);
+            setStatus('初始图已选好，提交生成时才发送给服务。');
+            if (state.mode === 'inpaint') { MaskEditor.init(); }
+            if (state.mode === 'upscale') { syncUpscaleSize(); }
+        } catch (error) {
+            URL.revokeObjectURL(objectUrl);
             if (revision === state.referenceRevision) {
                 $('reference-file').value = '';
-                status(error.message || '无法读取图片，请重新选择。文件尚未上传。', true);
+                setStatus(error.message || '无法读取图片，请重新选择。文件尚未上传。', true);
             }
-        }
-        finally {
+        } finally {
             if (revision === state.referenceRevision) { state.referenceLoading = false; updateControls(); }
         }
     }
 
+    /* ============================================================
+       Mask editor (inpaint)
+       ============================================================ */
+    const MaskEditor = {
+        canvas: null, ctx: null, mask: null, mctx: null, history: [], drawing: false, last: null,
+        reset() {
+            this.canvas = null; this.ctx = null; this.mask = null; this.mctx = null;
+            this.history = []; this.drawing = false; this.last = null;
+        },
+        init() {
+            const ref = state.reference;
+            if (!ref) { return; }
+            const canvas = $('mask-canvas');
+            canvas.width = ref.width;
+            canvas.height = ref.height;
+            this.canvas = canvas;
+            this.ctx = canvas.getContext('2d');
+            this.mask = document.createElement('canvas');
+            this.mask.width = ref.width;
+            this.mask.height = ref.height;
+            this.mctx = this.mask.getContext('2d');
+            this.history = [];
+            this.redraw();
+        },
+        pushHistory() {
+            this.history.push(this.mctx.getImageData(0, 0, this.mask.width, this.mask.height));
+            if (this.history.length > 20) { this.history.shift(); }
+        },
+        undo() {
+            if (!this.history.length) { return; }
+            const item = this.history.pop();
+            this.mctx.putImageData(item, 0, 0);
+            this.redraw();
+            updateControls();
+        },
+        clear() {
+            if (!this.mctx) { return; }
+            this.pushHistory();
+            this.mctx.clearRect(0, 0, this.mask.width, this.mask.height);
+            this.redraw();
+            updateControls();
+        },
+        redraw() {
+            const img = new Image();
+            img.onload = () => {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.drawImage(img, 0, 0);
+                this.ctx.save();
+                this.ctx.globalAlpha = 0.5;
+                this.ctx.drawImage(this.mask, 0, 0);
+                this.ctx.restore();
+            };
+            img.src = state.reference.url;
+        },
+        pos(e) {
+            const rect = this.canvas.getBoundingClientRect();
+            const sx = this.canvas.width / rect.width;
+            const sy = this.canvas.height / rect.height;
+            return { x: (e.clientX - rect.left) * sx, y: (e.clientY - rect.top) * sy, sx, sy };
+        },
+        start(e) {
+            if (!this.mctx) { return; }
+            e.preventDefault();
+            this.pushHistory();
+            this.drawing = true;
+            this.last = this.pos(e);
+            this.stroke(this.last, this.last);
+        },
+        move(e) {
+            if (!this.drawing) { return; }
+            e.preventDefault();
+            const p = this.pos(e);
+            this.stroke(this.last, p);
+            this.last = p;
+        },
+        end() {
+            if (!this.drawing) { return; }
+            this.drawing = false;
+            updateControls();
+        },
+        stroke(a, b) {
+            const scale = a.sx;
+            const size = Number($('brush-size').value) * scale;
+            this.mctx.lineCap = 'round';
+            this.mctx.lineJoin = 'round';
+            this.mctx.lineWidth = size;
+            this.mctx.strokeStyle = '#ffffff';
+            this.mctx.beginPath();
+            this.mctx.moveTo(a.x, a.y);
+            this.mctx.lineTo(b.x, b.y);
+            this.mctx.stroke();
+            // also draw a dot so single clicks register
+            this.mctx.beginPath();
+            this.mctx.fillStyle = '#ffffff';
+            this.mctx.arc(b.x, b.y, size / 2, 0, Math.PI * 2);
+            this.mctx.fill();
+            this.ctx.save();
+            this.ctx.globalAlpha = 0.5;
+            this.ctx.drawImage(this.mask, 0, 0);
+            this.ctx.restore();
+        },
+        hasMask() {
+            if (!this.mctx) { return false; }
+            const data = this.mctx.getImageData(0, 0, this.mask.width, this.mask.height).data;
+            for (let i = 3; i < data.length; i += 4) { if (data[i] > 0) { return true; } }
+            return false;
+        },
+        dataURL() { return this.mask.toDataURL('image/png'); }
+    };
+
+    /* ============================================================
+       Outpaint (build composite + mask at submit)
+       ============================================================ */
+    const outpaintDirs = new Set();
+    function toggleOutpaintDir(btn) {
+        const dir = btn.dataset.dir;
+        if (outpaintDirs.has(dir)) { outpaintDirs.delete(dir); btn.classList.remove('on'); }
+        else { outpaintDirs.add(dir); btn.classList.add('on'); }
+        updateControls();
+    }
+    function outpaintTarget() {
+        const ref = state.reference;
+        const amount = Number($('outpaint-amount').value) || 0;
+        const left = outpaintDirs.has('l') || outpaintDirs.has('tl') || outpaintDirs.has('bl') ? amount : 0;
+        const right = outpaintDirs.has('r') || outpaintDirs.has('tr') || outpaintDirs.has('br') ? amount : 0;
+        const top = outpaintDirs.has('t') || outpaintDirs.has('tl') || outpaintDirs.has('tr') ? amount : 0;
+        const bottom = outpaintDirs.has('b') || outpaintDirs.has('bl') || outpaintDirs.has('br') ? amount : 0;
+        return {
+            newW: ref.width + left + right,
+            newH: ref.height + top + bottom,
+            left, top, right, bottom
+        };
+    }
+    // Build a stretched-edge composite and an extension mask.
+    function buildOutpaint() {
+        const ref = state.reference;
+        const t = outpaintTarget();
+        const comp = document.createElement('canvas');
+        comp.width = t.newW; comp.height = t.newH;
+        const cctx = comp.getContext('2d');
+        const maskC = document.createElement('canvas');
+        maskC.width = t.newW; maskC.height = t.newH;
+        const mctx = maskC.getContext('2d');
+        // Fill new canvas with edge-stretched pixels (a simple heuristic), then draw original.
+        const img = new Image();
+        return new Promise((resolve, reject) => {
+            img.onload = () => {
+                cctx.fillStyle = '#888';
+                cctx.fillRect(0, 0, t.newW, t.newH);
+                // stretch each edge band
+                cctx.drawImage(img, 0, 0, img.width, 1, 0, 0, t.newW, t.top); // top
+                cctx.drawImage(img, 0, img.height - 1, img.width, 1, 0, t.newH - t.bottom, t.newW, t.bottom); // bottom
+                cctx.drawImage(img, 0, 0, 1, img.height, 0, 0, t.left, t.newH); // left
+                cctx.drawImage(img, img.width - 1, 0, 1, img.height, t.newW - t.right, 0, t.right, t.newH); // right
+                cctx.drawImage(img, t.left, t.top);
+                // mask: white where extended, black over the original
+                mctx.fillStyle = '#ffffff';
+                mctx.fillRect(0, 0, t.newW, t.newH);
+                mctx.fillStyle = '#000000';
+                mctx.fillRect(t.left, t.top, ref.width, ref.height);
+                resolve({
+                    init: comp.toDataURL('image/png'),
+                    mask: maskC.toDataURL('image/png'),
+                    width: t.newW, height: t.newH
+                });
+            };
+            img.onerror = () => reject(new Error('无法生成扩图画布。'));
+            img.src = ref.url;
+        });
+    }
+
+    /* ============================================================
+       Upscale
+       ============================================================ */
+    function syncUpscaleSize() {
+        const ref = state.reference;
+        if (!ref) { return; }
+        const step = currentModel()?.resolution_step || 16;
+        const align = v => Math.round(v / step) * step;
+        $('width').value = Math.max(256, Math.min(2048, align(ref.width)));
+        $('height').value = Math.max(256, Math.min(2048, align(ref.height)));
+    }
+
+    /* ============================================================
+       LoRAs
+       ============================================================ */
+    function renderLoraList() {
+        const holder = $('lora-list');
+        holder.replaceChildren();
+        if (!state.loras.length) {
+            holder.append(el('p', 'hint', 'LoRA 可定制商品风格、人物等，最多 5 个。'));
+            return;
+        }
+        for (const item of state.loras) { holder.append(item.row); }
+    }
+
+    function addLoraRow(id = '', weight = 1) {
+        if (state.loras.length >= 5) { return; }
+        const row = el('div', 'lora-row');
+        const select = el('select');
+        select.append(new Option('选择 LoRA', ''));
+        for (const name of (state.catalog?.loras || [])) { select.append(new Option(name, name)); }
+        select.value = id;
+        const w = el('input'); w.type = 'number'; w.min = '-10'; w.max = '10'; w.step = '0.1'; w.value = weight;
+        const remove = el('button', 'icon-btn sm');
+        remove.textContent = '✕';
+        remove.setAttribute('aria-label', '移除 LoRA');
+        row.append(select, w, remove);
+        const item = { select, w, row };
+        state.loras.push(item);
+        renderLoraList();
+        remove.addEventListener('click', () => {
+            const idx = state.loras.indexOf(item);
+            if (idx >= 0) { state.loras.splice(idx, 1); }
+            renderLoraList();
+            updateControls();
+        });
+        updateControls();
+    }
+
+    function collectLoras() {
+        const ids = [], weights = [];
+        for (const item of state.loras) {
+            const id = item.select.value;
+            if (!id) { continue; }
+            ids.push(id);
+            weights.push(String(item.w.value || 1));
+        }
+        return { ids, weights };
+    }
+
+    /* ============================================================
+       Controls / status
+       ============================================================ */
+    function setStatus(text, error = false) {
+        const s = $('result-status');
+        s.textContent = text;
+        s.classList.toggle('error', error);
+    }
+
+    /* ============================================================
+       Prompt enhancement
+       ============================================================ */
+    // Backend metadata: keyType maps to SwarmUI UserUpstreamApiKeys; null means no key needed.
+    const MP_BACKENDS = {
+        ollama:     { keyType: null,              editableUrl: true,  url: 'http://localhost:11434' },
+        openaiapi:  { keyType: 'openaiapi_local', editableUrl: true,  url: 'http://localhost:1234/v1' },
+        openrouter: { keyType: 'openrouter_api',  editableUrl: false, url: 'https://openrouter.ai' },
+        openai:     { keyType: 'openai_api',      editableUrl: false, url: 'https://api.openai.com' },
+        anthropic:  { keyType: 'anthropic_api',   editableUrl: false, url: 'https://api.anthropic.com' },
+        grok:       { keyType: 'grok_api',        editableUrl: false, url: 'https://api.x.ai' }
+    };
+    let enhanceBusy = false;
+    let enhancedText = '';
+    let mpSettings = null;
+
+    function showEnhanceCard(mode) {
+        const card = $('enhance-card');
+        const loading = $('enhance-loading');
+        const result = $('enhance-result');
+        const actions = $('enhance-card-actions');
+        card.hidden = false;
+        card.classList.toggle('is-error', mode === 'error');
+        const spinner = loading.querySelector('.spinner');
+        if (spinner) { spinner.hidden = mode === 'error'; }
+        loading.hidden = mode !== 'loading' && mode !== 'error';
+        result.hidden = mode !== 'result';
+        actions.hidden = mode !== 'result' && mode !== 'error';
+        $('enhance-apply').hidden = mode !== 'result';
+        $('enhance-retry').hidden = false;
+        $('enhance-dismiss').hidden = false;
+    }
+
+    function resetEnhanceCard() {
+        $('enhance-card').hidden = true;
+        enhancedText = '';
+    }
+
+    async function enhancePrompt() {
+        const original = $('prompt').value.trim();
+        if (!original) {
+            setStatus('请先填写原始提示词，再进行优化。', true);
+            $('prompt').focus();
+            return;
+        }
+        if (enhanceBusy) { return; }
+        enhanceBusy = true;
+        showEnhanceCard('loading');
+        $('enhance-loading').children[1].textContent = '正在调用提示词优化服务…';
+        try {
+            const cfg = await request('GetMagicPromptSettings');
+            mpSettings = cfg.settings;
+            const modelId = mpSettings.model;
+            if (!modelId) {
+                throw new ApiError('尚未选择提示词模型，请先在“设置”中选择。', 'magicprompt_no_model');
+            }
+            const res = await request('MagicPromptPhoneHome', {
+                messageContent: { text: original },
+                modelId: modelId,
+                messageType: 'Text',
+                action: 'prompt'
+            });
+            enhancedText = res.response;
+            if (!enhancedText) {
+                throw new ApiError('优化服务返回为空，请更换模型或稍后重试。', 'magicprompt_empty');
+            }
+            $('enhance-result').textContent = enhancedText;
+            showEnhanceCard('result');
+        } catch (err) {
+            $('enhance-loading').children[1].textContent = err.message;
+            showEnhanceCard('error');
+        } finally {
+            enhanceBusy = false;
+        }
+    }
+
+    function applyEnhanced() {
+        if (!enhancedText) { return; }
+        $('prompt').value = enhancedText;
+        $('prompt').focus();
+        resetEnhanceCard();
+        updateControls();
+        setStatus('已采用优化后的提示词，可直接生成。');
+    }
+
+    // ----- Admin settings modal -----
+    // Shows/hides the Base-URL and API-Key fields based on the selected backend.
+    function applyBackendFields() {
+        const backend = $('enh-cfg-backend').value;
+        const meta = MP_BACKENDS[backend];
+        $('enh-cfg-url-fld').hidden = !meta.editableUrl;
+        $('enh-cfg-key-fld').hidden = meta.keyType === null;
+    }
+
+    // On backend switch: refresh the Base-URL (saved value or default) and the API-key status.
+    async function onBackendChange() {
+        applyBackendFields();
+        const backend = $('enh-cfg-backend').value;
+        const meta = MP_BACKENDS[backend];
+        $('enh-cfg-endpoint').value = mpSettings?.backends?.[backend]?.baseurl || meta.url;
+        $('enh-cfg-key').value = '';
+        if (meta.keyType) {
+            try {
+                const st = await request('GetAPIKeyStatus', { keyType: meta.keyType });
+                $('enh-cfg-key-status').textContent = st.status === 'not set' ? '尚未设置 Key' : `Key ${st.status}`;
+            } catch (err) {
+                $('enh-cfg-key-status').textContent = '';
+            }
+        } else {
+            $('enh-cfg-key-status').textContent = '';
+        }
+    }
+
+    async function openEnhancerSettings() {
+        $('enhancer-modal').hidden = false;
+        $('enh-cfg-message').hidden = true;
+        $('enh-cfg-key').value = '';
+        $('enh-cfg-model-list').innerHTML = '';
+        try {
+            const cfg = await request('GetMagicPromptSettings');
+            mpSettings = cfg.settings;
+            const backend = mpSettings.backend || 'ollama';
+            $('enh-cfg-backend').value = backend;
+            $('enh-cfg-endpoint').value = mpSettings.backends?.[backend]?.baseurl || MP_BACKENDS[backend].url;
+            $('enh-cfg-model').value = mpSettings.model || '';
+            applyBackendFields();
+            const meta = MP_BACKENDS[backend];
+            if (meta.keyType) {
+                const st = await request('GetAPIKeyStatus', { keyType: meta.keyType });
+                $('enh-cfg-key-status').textContent = st.status === 'not set' ? '尚未设置 Key' : `Key ${st.status}`;
+            } else {
+                $('enh-cfg-key-status').textContent = '';
+            }
+        } catch (err) {
+            showEnhCfgMessage(err.message, true);
+        }
+    }
+
+    // Saves backend/model/base-url into MagicPrompt settings (keys are handled separately).
+    async function saveMpCore(partial) {
+        const backend = partial.backend;
+        const meta = MP_BACKENDS[backend];
+        const settings = {
+            backend: backend,
+            visionbackend: backend,
+            model: partial.model,
+            visionmodel: partial.model
+        };
+        if (meta.editableUrl && partial.baseurl) {
+            settings.baseurl = partial.baseurl;
+        }
+        return await request('SaveMagicPromptSettings', { settings });
+    }
+
+    async function fetchMpModels() {
+        const btn = $('enh-cfg-fetch-models');
+        btn.disabled = true;
+        btn.textContent = '拉取中…';
+        try {
+            const backend = $('enh-cfg-backend').value;
+            const meta = MP_BACKENDS[backend];
+            const model = $('enh-cfg-model').value.trim();
+            const baseurl = meta.editableUrl ? $('enh-cfg-endpoint').value.trim() : null;
+            if (meta.editableUrl && !baseurl) {
+                showEnhCfgMessage('请先填写服务地址。', true);
+                return;
+            }
+            // Persist the current backend/url so GetMagicPromptModels reads the right target.
+            await saveMpCore({ backend, model: model || 'placeholder', baseurl });
+            const res = await request('GetMagicPromptModels');
+            const list = $('enh-cfg-model-list');
+            list.innerHTML = '';
+            (res.models || []).forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.model;
+                opt.label = m.name || m.model;
+                list.appendChild(opt);
+            });
+            if (!res.models || res.models.length === 0) {
+                showEnhCfgMessage('未拉取到模型，请确认服务已启动、地址与 Key 正确。', true);
+            } else {
+                showEnhCfgMessage(`已拉取 ${res.models.length} 个模型，可在模型框中选择。`, false);
+            }
+        } catch (err) {
+            showEnhCfgMessage(err.message, true);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '拉取';
+        }
+    }
+
+    function closeEnhancerSettings() {
+        $('enhancer-modal').hidden = true;
+    }
+
+    async function saveEnhancerSettings() {
+        const saveBtn = $('enh-cfg-save');
+        saveBtn.disabled = true;
+        try {
+            const backend = $('enh-cfg-backend').value;
+            const meta = MP_BACKENDS[backend];
+            const model = $('enh-cfg-model').value.trim();
+            if (!model) {
+                showEnhCfgMessage('请选择或填写提示词模型。', true);
+                return;
+            }
+            const baseurl = meta.editableUrl ? $('enh-cfg-endpoint').value.trim() : null;
+            if (meta.editableUrl && !baseurl) {
+                showEnhCfgMessage('请填写服务地址。', true);
+                return;
+            }
+            // 1) Save the key if provided.
+            const key = $('enh-cfg-key').value;
+            if (meta.keyType && key) {
+                const kr = await request('SetAPIKey', { keyType: meta.keyType, key: key });
+                if (!kr.success) { throw new ApiError('Key 保存失败。', 'magicprompt_key'); }
+            }
+            // 2) Save backend/model/url settings.
+            await saveMpCore({ backend, model, baseurl });
+            // 3) Report status.
+            if (meta.keyType) {
+                const st = await request('GetAPIKeyStatus', { keyType: meta.keyType });
+                $('enh-cfg-key-status').textContent = st.status === 'not set' ? '尚未设置 Key' : `Key ${st.status}`;
+                if (backend === 'openaiapi') {
+                    // Local OpenAI-compatible servers usually need no key; reachability is checked on use.
+                    showEnhCfgMessage('已保存配置。请确保本地 OpenAI 兼容服务已运行。', false);
+                } else {
+                    showEnhCfgMessage(st.status === 'not set'
+                        ? '已保存设置，但当前后端未设置 Key，优化暂不可用。'
+                        : '已保存，提示词优化可用。', st.status === 'not set');
+                }
+            } else {
+                $('enh-cfg-key-status').textContent = '';
+                showEnhCfgMessage('已保存配置。请确保本地 Ollama 服务已运行，并已拉取所选模型。', false);
+            }
+            $('enh-cfg-key').value = '';
+        } catch (err) {
+            showEnhCfgMessage(err.message, true);
+        } finally {
+            saveBtn.disabled = false;
+        }
+    }
+
+    function showEnhCfgMessage(text, isError) {
+        const msg = $('enh-cfg-message');
+        msg.hidden = false;
+        msg.textContent = text;
+        msg.classList.toggle('is-error', !!isError);
+    }
+
+    function updateControls() {
+        $('creation-fields').disabled = state.busy;
+        $('refresh-models').disabled = state.catalogLoading || state.busy;
+        $('model').disabled = state.busy;
+        $('mode-image').disabled = state.busy || state.uncertain;
+        $('mode-video').disabled = state.busy || state.uncertain || !state.catalog?.can_generate_video;
+        let hint = '';
+        if (state.busy) { hint = '任务已发送到原生引擎，请勿刷新或重复提交。'; }
+        else if (state.uncertain) { hint = '执行结果待核对，请先在右侧确认后再提交。'; }
+        else if (state.catalogLoading) { hint = '正在刷新模型和节点信息…'; }
+        else if (!state.session || !state.catalog) { hint = '尚未连接服务，请刷新或先登录。'; }
+        else if (!state.catalog.can_generate) { hint = '此账号没有生成权限，请联系管理员。'; }
+        else if (state.type === 'video' && !state.catalog.can_generate_video) { hint = '此账号没有视频参数权限，请联系管理员。'; }
+        else if (!state.catalog.local_backends_observed) { hint = '未观测到可用的部署机 ComfyUI 节点。'; }
+        else if (!currentModel()) { hint = '请先在原生引擎配置此类型的模型。'; }
+        else if (state.referenceLoading) { hint = '正在读取初始图，请稍候。'; }
+        else if ((state.mode === 'inpaint') && state.reference && !MaskEditor.hasMask()) {
+            hint = '请先在图上涂抹要修改的区域。';
+        }
+        else if (state.mode === 'outpaint' && state.reference && !outpaintDirs.size) { hint = '请先选择至少一个扩图方向。'; }
+        $('submit-hint').textContent = hint || '将提交到部署机的 ComfyUI；实际耗时与显存取决于模型。';
+        $('generate').disabled = Boolean(hint);
+        const isVideo = state.type === 'video';
+        $('generate-label').textContent = state.busy ? '引擎处理中…' : (isVideo ? '生成视频' : '生成图片');
+        $('preview-tag').textContent = isVideo ? 'VIDEO' : 'IMAGE';
+        $('prompt-count').textContent = `${$('prompt').value.length} / 12000`;
+        $('recover').hidden = !state.uncertain;
+    }
+
+    /* ============================================================
+       Results
+       ============================================================ */
     function safeMedia(raw) {
         if (typeof raw !== 'string' || !raw) { return null; }
-        if (/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$/.test(raw)) {
-            return { url: raw, video: false };
-        }
+        if (/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=\r\n]+$/.test(raw)) { return { url: raw, video: false }; }
         try {
             const url = new URL(raw, `${window.location.origin}/`);
-            if (url.origin !== window.location.origin || url.username || url.password
-                || !/^\/(View|Output)\//.test(url.pathname)) { return null; }
+            if (url.origin !== window.location.origin || url.username || url.password || !/^\/(View|Output)\//.test(url.pathname)) { return null; }
             const path = url.pathname.toLowerCase();
             const video = /\.(mp4|webm)$/.test(path);
             if (!video && !/\.(png|jpe?g|webp|gif|avif)$/.test(path)) { return null; }
             return { url: url.href, video };
-        }
-        catch { return null; }
+        } catch { return null; }
     }
 
     function renderResults() {
-        const results = state.results[state.kind];
+        const results = state.results;
         $('results').replaceChildren();
         $('results').hidden = !results.length;
         $('results').classList.toggle('multiple', results.length > 1);
         $('empty-state').hidden = Boolean(results.length) || state.busy;
         $('pending-state').hidden = !state.busy;
-        for (let index = 0; index < results.length; index++) {
-            const media = results[index];
-            const card = document.createElement('figure'); card.className = 'result-card';
-            const element = document.createElement(media.video ? 'video' : 'img');
-            if (media.video) { element.controls = true; element.preload = 'metadata'; element.playsInline = true; }
-            else { element.alt = `本次创作结果 ${index + 1}`; element.loading = 'lazy'; }
-            element.src = media.url;
-            element.addEventListener('error', () => status('引擎返回了地址，但当前无法预览。请在原生引擎核对文件保存、权限或浏览器格式支持。', true));
-            const caption = document.createElement('figcaption');
-            const label = document.createElement('span'); label.textContent = `${media.video ? '视频' : '画面'} ${String(index + 1).padStart(2, '0')} · 本次结果`;
-            const download = document.createElement('a'); download.href = media.url; download.download = '';
+        for (let i = 0; i < results.length; i++) {
+            const media = results[i];
+            const card = el('figure', 'result-card');
+            const node = el(media.video ? 'video' : 'img');
+            if (media.video) { node.controls = true; node.preload = 'metadata'; node.playsInline = true; }
+            else { node.alt = `本次创作结果 ${i + 1}`; node.loading = 'lazy'; }
+            node.src = media.url;
+            node.addEventListener('error', () => setStatus('引擎返回了地址，但当前无法预览。请在原生引擎核对。', true));
+            const caption = el('figcaption');
+            const label = el('span', null, `${media.video ? '视频' : '画面'} ${String(i + 1).padStart(2, '0')} · 本次结果`);
+            const download = el('a'); download.href = media.url; download.download = '';
             download.textContent = '下载原文件 ↓';
-            caption.append(label, download); card.append(element, caption); $('results').append(card);
+            caption.append(label, download);
+            card.append(node, caption);
+            $('results').append(card);
         }
     }
 
-    function buildPayload() {
-        const payload = { source: $('source').value, kind: state.kind, model: $('model').value,
-            prompt: $('prompt').value.trim(), negativeprompt: $('negative').value.trim(),
-            width: Number($('width').value), height: Number($('height').value), images: state.kind === 'video' ? 1 : Number($('images').value) };
-        for (const [field, key] of [['steps', 'steps'], ['cfg', 'cfgscale'], ['seed', 'seed']]) {
+    /* ============================================================
+       Generate
+       ============================================================ */
+    async function buildPayload() {
+        const isVideo = state.type === 'video';
+        const payload = {
+            source: 'local',
+            mode: isVideo ? 'video' : state.mode,
+            kind: state.type,
+            model: $('model').value,
+            prompt: $('prompt').value.trim(),
+            negativeprompt: $('negative').value.trim(),
+            width: Number($('width').value),
+            height: Number($('height').value),
+            images: isVideo ? 1 : Number($('images').value)
+        };
+        for (const [field, key] of [['steps','steps'], ['cfg','cfgscale'], ['seed','seed']]) {
             if ($(field).value !== '') { payload[key] = Number($(field).value); }
         }
-        if (state.kind === 'video') {
+        if ($('sampler').value) { payload.sampler = $('sampler').value; }
+        if ($('scheduler').value) { payload.scheduler = $('scheduler').value; }
+        if (isVideo) {
             payload.text2videoframes = Number($('frames').value);
             if ($('fps').value !== '') { payload.videofps = Number($('fps').value); }
+            return payload;
         }
-        else if (state.reference && currentModel()?.image_reference) {
+        // Image edits
+        if (state.mode === 'outpaint') {
+            const built = await buildOutpaint();
+            payload.initimage = built.init;
+            payload.maskimage = built.mask;
+            payload.width = built.width;
+            payload.height = built.height;
+            payload.maskshrinkgrow = 0;
+            payload.maskblur = 8;
+            payload.initimagecreativity = 1;
+            return payload;
+        }
+        if (state.reference) {
             payload.initimage = state.reference.data;
-            payload.initimagecreativity = Number($('creativity').value);
+            if (state.mode === 'inpaint') {
+                payload.maskimage = MaskEditor.dataURL();
+                payload.maskshrinkgrow = 8;
+                payload.maskblur = 4;
+                payload.initimagecreativity = Number($('creativity').value);
+            } else if (state.mode === 'img2img') {
+                payload.initimagecreativity = Number($('creativity').value);
+            } else if (state.mode === 'upscale') {
+                payload.refinerupscale = Number($('upscale').value);
+            }
         }
+        const { ids, weights } = collectLoras();
+        if (ids.length) { payload.loras = ids; payload.loraweights = weights; }
         return payload;
     }
 
     async function generate(event) {
         event.preventDefault();
         if (state.busy || state.uncertain || $('generate').disabled || !$('creation-form').reportValidity()) { return; }
-        const payload = buildPayload();
-        if (!payload.prompt) { status('请先填写创作描述。', true); $('prompt').focus(); return; }
+        let payload;
+        try { payload = await buildPayload(); }
+        catch (error) { setStatus(error.message || '无法组装请求。', true); return; }
+        if (!payload.prompt) { setStatus('请先填写创作描述。', true); $('prompt').focus(); return; }
         if (/[<>]|__/.test(payload.prompt + payload.negativeprompt)) {
-            status('本版只支持普通描述。原生 <…> 指令、预设或 __通配符__ 请在原生引擎使用。', true); return;
+            setStatus('本版只支持普通描述。原生 <…> 指令、预设或 __通配符__ 请在原生引擎使用。', true);
+            return;
         }
-        if (state.results[state.kind].length && !window.confirm('开始新创作会替换当前预览。需要的结果请先下载。继续吗？')) { return; }
-        saveDraft();
+        if (state.results.length && !window.confirm('开始新创作会替换当前预览。需要的结果请先下载。继续吗？')) { return; }
         state.busy = true;
-        state.results[state.kind] = [];
+        state.results = [];
         const started = Date.now();
         $('elapsed').textContent = '已等待 0 秒';
-        state.timer = window.setInterval(() => { $('elapsed').textContent = `已等待 ${Math.floor((Date.now() - started) / 1000)} 秒`; }, 1000);
-        status('请求已发送，等待引擎返回。当前接口不提供百分比进度。');
-        updateControls(); renderResults();
+        state.timer = setInterval(() => { $('elapsed').textContent = `已等待 ${Math.floor((Date.now() - started) / 1000)} 秒`; }, 1000);
+        setStatus('请求已发送，等待引擎返回。当前接口不提供百分比进度。');
+        updateControls();
+        renderResults();
         try {
             const result = await request('EcomCraftStudioGenerate', payload);
             if (!Array.isArray(result.images)) { throw new ApiError('引擎响应格式不兼容，请到原生引擎核对结果。', 'generation_uncertain'); }
             const media = result.images.map(safeMedia).filter(Boolean);
             if (!media.length || media.length !== result.images.length) {
-                throw new ApiError('没有完整收到可安全预览的部署机输出地址，请在原生引擎核对个人历史。', 'generation_uncertain');
+                throw new ApiError('没有完整收到可安全预览的输出地址，请在原生引擎核对个人历史。', 'generation_uncertain');
             }
-            state.results[state.kind] = media;
-            status(`引擎已返回 ${media.length} 个结果。请核对画面并下载；集中归档尚未接入。`);
-        }
-        catch (error) {
+            state.results = media;
+            setStatus(`引擎已返回 ${media.length} 个结果。请核对画面并下载。`);
+        } catch (error) {
             state.uncertain = uncertainErrors.has(error.code) || !(error instanceof ApiError);
-            status(error.message || '无法确认执行结果，请在原生引擎核对。', true);
+            setStatus(error.message || '无法确认执行结果，请在原生引擎核对。', true);
             if (error.code === 'invalid_session_id') {
                 state.catalog = null;
-                $('connection-message').textContent = '会话已失效。请刷新模型列表重新连接；不会自动重试任务。';
-                $('connection-message').classList.add('error');
+                const m = $('connection-message');
+                m.textContent = '会话已失效。请刷新重新连接；不会自动重试任务。';
+                m.classList.add('error');
             }
-        }
-        finally {
-            clearInterval(state.timer); state.timer = null; state.busy = false;
-            renderResults(); updateControls();
+        } finally {
+            clearInterval(state.timer);
+            state.timer = null;
+            state.busy = false;
+            renderResults();
+            updateControls();
         }
     }
 
-    $('mode-image').addEventListener('click', () => switchMode('image'));
-    $('mode-video').addEventListener('click', () => switchMode('video'));
-    $('source').addEventListener('change', updateControls);
-    $('refresh-models').addEventListener('click', refreshCatalog);
-    $('model').addEventListener('change', () => { updateModelHelp(); applyModelSize(); });
-    $('prompt').addEventListener('input', updateControls);
-    $('reference-file').addEventListener('change', readReference);
-    $('remove-reference').addEventListener('click', clearReference);
-    $('swap-dimensions').addEventListener('click', () => {
-        const width = $('width').value; $('width').value = $('height').value; $('height').value = width;
-    });
-    $('insert-example').addEventListener('click', () => {
-        if ($('prompt').value.trim() && !window.confirm('用示例替换当前描述？')) { return; }
-        $('prompt').value = state.kind === 'image' ? '一瓶透明玻璃精华液，置于浅灰色石台，柔和侧光，突出瓶身质感，画面右侧留白用于排版。' : '镜头缓慢环绕一双白色运动鞋，鞋底细节逐渐进入画面，柔和棚拍灯光，背景保持简洁，镜头运动平稳。';
-        $('prompt').focus(); updateControls();
-    });
-    $('unlock-generation').addEventListener('click', () => {
-        if (!window.confirm('请确认已在原生引擎核对队列和个人历史。重新提交可能产生第二个任务，确定解锁吗？')) { return; }
-        state.uncertain = false; updateControls();
-    });
-    $('creation-form').addEventListener('submit', generate);
-    window.addEventListener('beforeunload', event => {
-        if (state.busy || state.uncertain) { event.preventDefault(); event.returnValue = ''; }
-    });
+    /* ============================================================
+       Gallery
+       ============================================================ */
+    async function loadGallery() {
+        if (state.gallery.loading) { return; }
+        const g = state.gallery;
+        g.loading = true;
+        const message = $('gallery-message');
+        message.hidden = true;
+        try {
+            if (!state.session) {
+                const session = await request('GetNewSession');
+                state.session = session.session_id;
+                state.userId = session.user_id;
+                state.outputAppendUser = !!session.output_append_user;
+            }
+            const res = await request('ListImages', {
+                path: '', depth: 3,
+                sortBy: g.sort,
+                sortReverse: g.sort === 'Date',
+                filter: g.search || null
+            });
+            if (res.error) { throw new ApiError(res.error, 'api_error'); }
+            g.items = (res.files || []).map(f => {
+                const src = f.src;
+                const name = src.split('/').pop();
+                const starred = src.startsWith('Starred/');
+                return { src, name, url: viewUrl(src), starred, video: /\.(mp4|webm)$/i.test(name) };
+            });
+            renderGallery();
+        } catch (error) {
+            message.textContent = error.message;
+            message.classList.add('error');
+            message.hidden = false;
+            g.items = [];
+            renderGallery();
+        } finally {
+            g.loading = false;
+        }
+    }
+
+    function renderGallery() {
+        const g = state.gallery;
+        let items = g.items;
+        if (g.filter === 'star') { items = items.filter(i => i.starred); }
+        const grid = $('gallery-grid');
+        grid.replaceChildren();
+        const empty = $('gallery-empty');
+        $('gallery-count').textContent = g.items.length;
+        if (!items.length) {
+            empty.hidden = false;
+            empty.querySelector('h3').textContent = g.items.length ? '没有符合条件的作品' : '还没有作品';
+            empty.querySelector('p').textContent = g.items.length
+                ? '试试切换筛选或清空搜索。'
+                : '去创作工作台生成第一张商品图吧。';
+            empty.querySelector('button').style.display = g.items.length ? 'none' : '';
+            return;
+        }
+        empty.hidden = true;
+        for (const item of items) {
+            const card = el('div', `gallery-item${item.starred ? ' starred' : ''}`);
+            const img = el('img');
+            img.src = item.url; img.alt = item.name; img.loading = 'lazy';
+            const star = el('span', 'g-star');
+            star.textContent = item.starred ? '★' : '☆';
+            const name = el('span', 'g-name', item.name);
+            card.append(img, star, name);
+            card.addEventListener('click', e => {
+                if (e.target === star) { e.stopPropagation(); toggleStar(item); return; }
+                openLightbox(item);
+            });
+            star.addEventListener('click', e => { e.stopPropagation(); toggleStar(item); });
+            grid.append(card);
+        }
+    }
+
+    async function toggleStar(item) {
+        try {
+            const res = await request('ToggleImageStarred', { path: item.src });
+            if (res.error) { throw new Error(res.error); }
+            // refresh to reflect Starred/ path changes
+            await loadGallery();
+        } catch (error) {
+            const m = $('gallery-message');
+            m.textContent = '收藏失败：' + (error.message || '请重试');
+            m.classList.add('error'); m.hidden = false;
+        }
+    }
+
+    async function deleteItem(item) {
+        try {
+            const res = await request('DeleteImage', { path: item.src });
+            if (res.error) { throw new Error(res.error); }
+            closeLightbox();
+            await loadGallery();
+        } catch (error) {
+            closeLightbox();
+            const m = $('gallery-message');
+            m.textContent = '删除失败：' + (error.message || '请重试');
+            m.classList.add('error'); m.hidden = false;
+        }
+    }
+
+    /* ---------- Lightbox ---------- */
+    function openLightbox(item) {
+        state.gallery.current = item;
+        const media = $('lightbox-media');
+        media.replaceChildren();
+        const node = el(item.video ? 'video' : 'img');
+        node.src = item.url;
+        if (item.video) { node.controls = true; node.playsInline = true; }
+        media.append(node);
+        $('lightbox-name').textContent = item.name;
+        $('lb-star').textContent = item.starred ? '★' : '☆';
+        $('lb-download').href = item.url;
+        $('lb-download').setAttribute('download', item.name);
+        $('lightbox').hidden = false;
+    }
+    function closeLightbox() {
+        $('lightbox').hidden = true;
+        state.gallery.current = null;
+    }
+
+    // Load a gallery image into the image-to-image composer.
+    async function editFromGallery(item) {
+        try {
+            const response = await fetch(item.url, { cache: 'no-store' });
+            const blob = await response.blob();
+            const data = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error('无法读取该图片。'));
+                reader.readAsDataURL(blob);
+            });
+            const image = new Image();
+            const objectUrl = URL.createObjectURL(blob);
+            await new Promise((res, rej) => { image.onload = res; image.onerror = rej; image.src = objectUrl; });
+            if (state.reference) { URL.revokeObjectURL(state.reference.url); }
+            state.reference = { data, url: objectUrl, name: item.name, width: image.width, height: image.height };
+            closeLightbox();
+            setType('image');
+            setMode('img2img');
+            renderReference();
+            setView('create');
+            location.hash = 'create';
+            setStatus('已载入该图，可直接图生图，或切换到局部重绘/放大。');
+        } catch (error) {
+            alert('无法将该图载入创作：' + (error.message || '请重试'));
+        }
+    }
+
+    /* ============================================================
+       Bindings
+       ============================================================ */
+    function bind() {
+        $('theme-toggle').addEventListener('click', toggleTheme);
+        window.addEventListener('hashchange', route);
+
+        $('mode-image').addEventListener('click', () => setType('image'));
+        $('mode-video').addEventListener('click', () => setType('video'));
+        document.querySelectorAll('.mode-tab').forEach(t =>
+            t.addEventListener('click', () => setMode(t.dataset.mode)));
+
+        $('refresh-models').addEventListener('click', refreshCatalog);
+        $('model').addEventListener('change', () => { updateModelMeta(); applyModelSize(); });
+
+        $('reference-file').addEventListener('change', readReference);
+        $('remove-reference').addEventListener('click', clearReference);
+        const dz = $('dropzone');
+        ['dragenter','dragover'].forEach(ev => dz.addEventListener(ev, e => {
+            e.preventDefault(); dz.classList.add('dragging');
+        }));
+        ['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e => {
+            e.preventDefault(); dz.classList.remove('dragging');
+            if (ev === 'drop' && e.dataTransfer.files[0]) {
+                $('reference-file').files = e.dataTransfer.files;
+                readReference();
+            }
+        }));
+
+        // Mask canvas events
+        const mc = $('mask-canvas');
+        mc.addEventListener('pointerdown', e => MaskEditor.start(e));
+        mc.addEventListener('pointermove', e => MaskEditor.move(e));
+        mc.addEventListener('pointerup', () => MaskEditor.end());
+        mc.addEventListener('pointerleave', () => MaskEditor.end());
+        $('mask-undo').addEventListener('click', () => MaskEditor.undo());
+        $('mask-clear').addEventListener('click', () => MaskEditor.clear());
+
+        // Outpaint
+        document.querySelectorAll('.op-cell').forEach(b =>
+            b.addEventListener('click', () => toggleOutpaintDir(b)));
+
+        // Upscale slider
+        $('upscale').addEventListener('input', () => {
+            $('upscale-val').textContent = `${Number($('upscale').value).toFixed(2)}×`;
+        });
+        $('creativity').addEventListener('input', () => {
+            $('creativity-val').textContent = Number($('creativity').value).toFixed(2);
+        });
+
+        // LoRA
+        $('add-lora').addEventListener('click', () => addLoraRow());
+
+        // Dims
+        $('swap-dims').addEventListener('click', () => {
+            const w = $('width').value; $('width').value = $('height').value; $('height').value = w;
+        });
+        $('insert-example').addEventListener('click', () => {
+            if ($('prompt').value.trim() && !window.confirm('用示例替换当前描述？')) { return; }
+            $('prompt').value = state.type === 'image'
+                ? '一瓶透明玻璃精华液，置于浅灰色石台，柔和侧光，突出瓶身质感，画面右侧留白用于排版。'
+                : '镜头缓慢环绕一双白色运动鞋，鞋底细节逐渐进入画面，柔和棚拍灯光，背景保持简洁，镜头运动平稳。';
+            $('prompt').focus();
+            updateControls();
+        });
+
+        $('unlock').addEventListener('click', () => {
+            if (!window.confirm('请确认已在原生引擎核对队列和个人历史。重新提交可能产生第二个任务，确定解锁吗？')) { return; }
+            state.uncertain = false;
+            updateControls();
+        });
+
+        // Prompt enhancement
+        $('enhance-prompt').addEventListener('click', () => enhancePrompt());
+        $('enhance-apply').addEventListener('click', applyEnhanced);
+        $('enhance-retry').addEventListener('click', () => enhancePrompt());
+        $('enhance-dismiss').addEventListener('click', resetEnhanceCard);
+        $('enhancer-settings').addEventListener('click', openEnhancerSettings);
+        $('enhancer-modal-close').addEventListener('click', closeEnhancerSettings);
+        $('enhancer-modal-backdrop').addEventListener('click', closeEnhancerSettings);
+        $('enh-cfg-cancel').addEventListener('click', closeEnhancerSettings);
+        $('enh-cfg-save').addEventListener('click', saveEnhancerSettings);
+        $('enh-cfg-backend').addEventListener('change', onBackendChange);
+        $('enh-cfg-fetch-models').addEventListener('click', fetchMpModels);
+
+        $('creation-form').addEventListener('submit', generate);
+
+        // Gallery
+        $('gal-all').addEventListener('click', () => {
+            state.gallery.filter = 'all';
+            $('gal-all').classList.add('selected'); $('gal-all').setAttribute('aria-pressed', 'true');
+            $('gal-star').classList.remove('selected'); $('gal-star').setAttribute('aria-pressed', 'false');
+            renderGallery();
+        });
+        $('gal-star').addEventListener('click', () => {
+            state.gallery.filter = 'star';
+            $('gal-star').classList.add('selected'); $('gal-star').setAttribute('aria-pressed', 'true');
+            $('gal-all').classList.remove('selected'); $('gal-all').setAttribute('aria-pressed', 'false');
+            renderGallery();
+        });
+        $('gallery-search').addEventListener('input', debounce(() => {
+            state.gallery.search = $('gallery-search').value.trim();
+            loadGallery();
+        }, 350));
+        $('gallery-sort').addEventListener('change', () => {
+            state.gallery.sort = $('gallery-sort').value;
+            loadGallery();
+        });
+        $('gallery-refresh').addEventListener('click', loadGallery);
+        $('gallery-gocreate').addEventListener('click', () => { location.hash = 'create'; });
+
+        // Lightbox
+        $('lightbox-backdrop').addEventListener('click', closeLightbox);
+        $('lb-close').addEventListener('click', closeLightbox);
+        $('lb-star').addEventListener('click', () => state.gallery.current && toggleStar(state.gallery.current));
+        $('lb-delete').addEventListener('click', () => {
+            const item = state.gallery.current;
+            if (item && window.confirm(`确定删除「${item.name}」？可在回收站找回（若已启用）。`)) { deleteItem(item); }
+        });
+        $('lb-edit').addEventListener('click', () => state.gallery.current && editFromGallery(state.gallery.current));
+        window.addEventListener('keydown', e => {
+            if (!$('lightbox').hidden) {
+                if (e.key === 'Escape') { closeLightbox(); }
+            }
+        });
+
+        // Mobile rail toggle
+        $('rail-toggle').addEventListener('click', () => $('.rail').classList.toggle('open'));
+
+        window.addEventListener('beforeunload', e => {
+            if (state.busy || state.uncertain) { e.preventDefault(); e.returnValue = ''; }
+        });
+    }
+
+    /* ============================================================
+       Init
+       ============================================================ */
+    initTheme();
+    bind();
     updateControls();
+    setType('image');
+    setMode('text2img');
+    route();
     refreshCatalog();
 })();
