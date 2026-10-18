@@ -19,7 +19,8 @@ Directory.Build.props
 /Data
 /Models
 tmp/
-/src/Extensions
+/src/Extensions/*
+!/src/Extensions/EcomCraft
 /dlbackend
 *.debug
 custom-launch-docker.sh
@@ -43,7 +44,9 @@ tests/
 plan.md
 PLAN.md
 *-plan.md
-/docs/
+/docs/*
+!/docs/EcomCraft Prompt Enhancement.md
 /src/Extensions/EcomCraft/README.md
 /src/Extensions/EcomCraft/docs/
+/src/Extensions/EcomCraft/Data/
 /EcomCraft_产品需求与开发说明_V0.1.md

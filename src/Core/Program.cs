@@ -113,6 +113,9 @@ public class Program
     /// <summary>If true, Swarm has been launched in CI Test boot mode and should test extensions.</summary>
     public static bool IsCiTestExtensions = false;
 
+    /// <summary>Set by the EcomCraft extension when enabled. When the server is installed, the root URL lands on the EcomCraft Studio instead of the raw Text2Image page.</summary>
+    public static bool EcomCraftWantsHome = false;
+
     /// <summary>Primary execution entry point.</summary>
     public static void Main(string[] args)
     {
