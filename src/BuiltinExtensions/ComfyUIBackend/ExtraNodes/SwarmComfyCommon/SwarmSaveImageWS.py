@@ -1,6 +1,6 @@
 from PIL import Image
 import numpy as np
-import av, comfy.audio
+import av
 from server import PromptServer, BinaryEventTypes
 import time, io, struct
 
@@ -108,6 +108,7 @@ class SwarmSaveAudioWS:
         for batch_number, waveform in enumerate(audio["waveform"].cpu()):
             sample_rate = audio["sample_rate"]
             if format == "ogg" and sample_rate not in self.opus_rates:
+                import comfy.audio
                 sample_rate = min((rate for rate in self.opus_rates if rate > sample_rate), default=48000)
                 waveform = comfy.audio.resample(waveform, audio["sample_rate"], sample_rate)
 

@@ -223,7 +223,7 @@ public class Program
                 }
                 else if (tags.IsEmpty())
                 {
-                    Logs.Error($"Swarm failed to check for updates! Tag list empty?!");
+                    Logs.Warning("Swarm could not check for updates because no valid release tags were found in the configured Git repository. Forks that do not mirror upstream SwarmUI tags will show this warning.");
                 }
                 else
                 {
@@ -463,7 +463,7 @@ public class Program
             throw new Exception($"Desktop build failed (code {desktopBuildCode}): {desktopBuildOut}");
         }
         Logs.Init("Launch desktop app...");
-        string desktopExe = $"{desktopOut}/SwarmUIDesktopView{(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "")}";
+        string desktopExe = $"{desktopOut}/EcomCraftStudio{(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "")}";
         if (!File.Exists(desktopExe))
         {
             throw new Exception($"Desktop build succeeded but exe not found at '{desktopExe}'");

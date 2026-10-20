@@ -229,6 +229,10 @@ public static class NetworkBackendUtils
     {
         string path = script.Replace('\\', '/');
         string dir = Path.GetDirectoryName(path);
+        if (File.Exists($"{dir}/.venv/Scripts/python.exe"))
+        {
+            return Path.GetFullPath($"{dir}/.venv/Lib/site-packages/");
+        }
         if (File.Exists($"{dir}/venv/Scripts/python.exe"))
         {
             return Path.GetFullPath($"{dir}/venv/Lib/site-packages/");
@@ -290,10 +294,29 @@ public static class NetworkBackendUtils
         string dir = Path.GetDirectoryName(path);
         start.WorkingDirectory = dir;
         preArgs = "-s " + path.AfterLast("/");
+        if (nameSimple.Contains("ComfyUI", StringComparison.OrdinalIgnoreCase)
+            && !start.Environment.ContainsKey("NUMBA_CACHE_DIR"))
+        {
+            // ComfyUI's built-in mesh nodes use Numba caching, which can stall on an unwritable install folder.
+            start.Environment["NUMBA_CACHE_DIR"] = Path.Combine(Path.GetTempPath(), "SwarmUI", "numba-cache");
+        }
+        if (nameSimple.Contains("ComfyUI", StringComparison.OrdinalIgnoreCase)
+            && Path.GetFullPath(path).Equals(Path.GetFullPath("dlbackend/comfy/ComfyUI/main.py"), StringComparison.OrdinalIgnoreCase))
+        {
+            string compatPath = Path.GetFullPath("runtime/comfy_rocm_compat");
+            string existingPythonPath = start.Environment.TryGetValue("PYTHONPATH", out string currentPythonPath) ? currentPythonPath : "";
+            start.Environment["PYTHONPATH"] = string.IsNullOrWhiteSpace(existingPythonPath) ? compatPath : $"{compatPath}{Path.PathSeparator}{existingPythonPath}";
+            preArgs = path.AfterLast("/");
+        }
         forcePrior = "";
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            if (File.Exists($"{dir}/venv/Scripts/python.exe"))
+            if (File.Exists($"{dir}/.venv/Scripts/python.exe"))
+            {
+                start.FileName = Path.GetFullPath($"{dir}/.venv/Scripts/python.exe");
+                AddPath(Path.GetFullPath($"{dir}/.venv"));
+            }
+            else if (File.Exists($"{dir}/venv/Scripts/python.exe"))
             {
                 start.FileName = Path.GetFullPath($"{dir}/venv/Scripts/python.exe");
                 AddPath(Path.GetFullPath($"{dir}/venv"));

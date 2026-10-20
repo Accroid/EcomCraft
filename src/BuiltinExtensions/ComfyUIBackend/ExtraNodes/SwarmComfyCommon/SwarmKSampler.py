@@ -3,7 +3,7 @@ from io import BytesIO
 from PIL import Image
 import latent_preview, comfy
 from server import PromptServer
-from comfy.model_base import SDXL, SVD_img2vid, Flux, Flux2, WAN21, Chroma, QwenImage21
+from comfy.model_base import SDXL, SVD_img2vid, Flux, Flux2, WAN21, Chroma
 from comfy import nested_tensor
 import numpy as np
 from math import ceil
@@ -441,7 +441,7 @@ class SwarmKSampler:
                 model_type = "Wan"
             elif isinstance(model.model, Chroma):
                 model_type = "Chroma"
-            elif isinstance(model.model, QwenImage21):
+            elif hasattr(comfy.model_base, "QwenImage21") and isinstance(model.model, comfy.model_base.QwenImage21):
                 model_type = "QwenImage21"
             else:
                 print(f"AlignYourSteps: Unknown model type: {type(model.model)}, defaulting to SD1")
