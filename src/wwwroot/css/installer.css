@@ -30,7 +30,7 @@
     max-height: 44rem;
     overflow-y: auto;
 }
-.theme_preview .form-check {
+.theme_preview.form-check {
     display: inline-block;
     width: 49%;
     height: 22rem;
@@ -39,7 +39,7 @@
     padding-left: 0;
     position: relative;
 }
-.theme_preview .form-check:has(.form-check-input:checked) {
+.theme_preview.form-check:has(.form-check-input:checked) {
     border: 1px solid var(--emphasis);
 }
 .theme_preview label {
@@ -50,6 +50,11 @@
 .theme_preview .form-check-input {
     margin-left: 0.5rem;
     margin-top: 0.5rem;
+}
+@media (max-width: 600px) {
+    .theme_preview.form-check {
+        width: 100%;
+    }
 }
 .form-check .form-check-iframe {
     width: 100%;
