@@ -2,95 +2,74 @@
 
 > **语言：** 简体中文 · [English](README.en.md)
 
-**面向电商设计团队的内网 AI 创作工作台，基于 [SwarmUI](https://github.com/mcmonkeyprojects/SwarmUI) 进行二次开发。**
+EcomCraft Studio 是基于 [SwarmUI](https://github.com/mcmonkeyprojects/SwarmUI) 的电商创作工作台。本仓库包含 SwarmUI 服务器源码及 EcomCraft 扩展，**无需另行安装上游 SwarmUI**。项目仍在开发中，尚未完成生产环境验收。
 
-EcomCraft 复用 SwarmUI 的图像与视频生成能力，并逐步扩展团队需要的统一入口、节点管理、任务追踪、素材共享和数据处理策略。
+## 快速开始
 
-> **项目状态：** 仍在积极开发中。下方 `✓` 表示功能已有代码实现，不代表已通过完整构建、端到端或生产环境验收；未完成的规划不会被描述为可用功能。
+### 安装要求
 
-## 目录
+- [Git](https://git-scm.com/downloads) 和 [.NET SDK](https://dotnet.microsoft.com/download)：建议安装 .NET 10 SDK；项目以 .NET 8 为目标框架。运行 `git --version` 和 `dotnet --list-sdks` 可检查安装情况。
+- 首次构建需要访问 NuGet；安装 ComfyUI 和下载模型也需要网络连接。
+- 若在 **Linux** 上通过首次设置安装本机 ComfyUI，需预先安装 Python（建议 3.10–3.12）及其 `venv` 模块。**Windows** 安装向导使用带 Python 的 ComfyUI 便携包，无需先单独安装 Python。复用已有 ComfyUI 时，需提供可运行的环境与启动脚本。
+- 生成图像或视频需要所选模型、相应的 ComfyUI 节点及兼容的计算设备；所需显存取决于模型。仅启动网页服务无需 GPU，也无需 Node.js。
 
-- [项目定位](#项目定位)
-- [当前能力](#当前能力)
-- [路线图](#路线图)
-- [技术结构](#技术结构)
-- [开始使用](#开始使用)
-- [文档](#文档)
-- [隐私与安全原则](#隐私与安全原则)
-- [来源与许可](#来源与许可)
+### 获取源码并启动
 
-## 项目定位
+```bash
+git clone https://github.com/Accroid/EcomCraft.git
+cd EcomCraft
+```
 
-EcomCraft 是 SwarmUI 的二次开发项目，而不是 SwarmUI 官方发行版。当前以 SwarmUI 扩展的形式集成，尽可能复用原生生成引擎和后端管理能力，并在其上建设面向团队协作的业务功能。
+在仓库根目录运行对应命令：
 
-设计目标：
-
-- **统一入口：** 员工通过一个内网地址访问创作工作台。
-- **算力可见：** 统一查看已登记后端的状态、启用情况与容量信号。
-- **任务可追溯：** 逐步关联提交者、处理策略、执行节点、错误和生成结果。
-- **处理范围明确：** 本地与云端服务应有清晰边界；未经明确授权不得自动上传素材或故障转云端。
-- **共享与隐私分离：** 私有输入与结果不应因团队共享功能而自动公开。
-- **升级可控：** 上游同步、测试、发布和回滚需要明确流程。
-
-## 当前能力
-
-### 已实现
-
-- [✓] 以 `src/Extensions/EcomCraft` 扩展接入 SwarmUI。
-- [✓] 提供图片与视频创作工作台，复用 SwarmUI 的生成流程。
-- [✓] 工作台请求限定本机自启动 ComfyUI，并在服务端校验后端、模型、权限和参数；不会自动回退到远程或云端。
-- [✓] 支持管理员发布 ComfyUI 工作流供客户机在网页工作台选择；动态参数经过服务端白名单校验，并提供 `EcomCraftStudioCatalog` 与 `EcomCraftStudioGenerate` API。
-- [✓] 内置 MagicPrompt 提示词优化功能，可配置本地或云端提示词模型。
-- [✓] Windows 安装流程可创建 EcomCraft Studio 桌面启动入口，并支持应用窗口模式。
-- [✓] 提供中英文项目 README，以及可从英文原文切换的多份中文使用和开发文档。
-
-### 尚在规划
-
-- [ ] 可持久化的团队节点登记、健康检查、能力审批与智能路由。
-- [ ] 持久化任务队列、状态流转、取消、重试及实际执行端记录。
-- [ ] 输入、模型、工作流版本与结果之间的完整追溯关系。
-- [ ] 按任务授权的云端服务接入、上传记录和统一出网策略。
-- [ ] 团队公共素材库、私有素材的访问控制和发布/下架流程。
-- [ ] 上游集成、回归测试、发布审批、备份恢复和业务数据回滚机制。
-
-## 技术结构
-
-| 组成 | 位置 | 用途 |
+| 系统 | 常规启动 | 开发启动（强制重建） |
 |---|---|---|
-| EcomCraft 扩展 | `src/Extensions/EcomCraft/` | 工作台与工作流业务逻辑 |
-| 工作台页面 | `src/Extensions/EcomCraft/Studio/` | 浏览器端创作界面 |
-| SwarmUI 核心 | `src/` | 会话、权限、API、模型与生成能力 |
-| 后端与工作流 | SwarmUI / ComfyUI | 实际执行图像与视频生成 |
+| Windows（PowerShell） | `.\launch-windows.bat` | `.\launch-windows-dev.ps1` |
+| Linux | `./launch-linux.sh` | `./launch-linux-dev.sh` |
+| macOS | `./launch-macos.sh` | — |
 
-EcomCraft 不是独立生成引擎。修改时应优先通过扩展和公开 API 接入，只有确有需要时才调整 SwarmUI 核心代码。
+首次启动会构建服务器并还原 .NET 依赖，可能需要几分钟。开发启动脚本会重新生成构建文件，日常运行使用常规启动脚本。macOS 提供服务器启动脚本，但仓库的 ComfyUI 自动安装流程只覆盖 Windows 及 Linux 的 NVIDIA/AMD 路径；在 macOS 上使用本机生成功能需自行准备兼容的 ComfyUI 环境并验证。
 
-## 开始使用
+### 首次配置
 
-1. 先按 [SwarmUI 上游安装说明](https://github.com/mcmonkeyprojects/SwarmUI#installing-on-windows) 安装并启动兼容的 SwarmUI 环境。
-2. 确认已配置可用的 ComfyUI 后端；当前 EcomCraft 工作台只允许使用本机自启动 ComfyUI，不会自动回退到远程或云端后端。
-3. 打开 SwarmUI，进入 EcomCraft 创作工作台。提示词优化配置请参考[《EcomCraft 提示词优化指南》](docs/EcomCraft%20Prompt%20Enhancement.md)。
+1. 在本机浏览器打开 `http://127.0.0.1:7801`。如果已修改服务器端口或监听地址，以实际配置为准。
+2. 按首次设置页面选择使用范围、安装 **ComfyUI Self-Starting** 后端并下载模型，或跳过后端和模型安装后再配置。默认的“仅自己使用”模式会将本机访问者视为管理员；多人账号需要安装后另行配置。
+3. 确认本机 ComfyUI 后端运行后，打开 `http://127.0.0.1:7801/EcomCraft` 进入工作台。工作台需要相应的生成页面和模型访问权限。
 
-如需理解 SwarmUI 的基础操作，可阅读[中文基础使用指南](docs/Basic%20Usage.zh-CN.md)。
+工作台的生成请求只允许本机自启动 ComfyUI，不会在本机不可用时自动改用远程或云端后端。配置提示词优化可阅读[提示词优化指南](docs/EcomCraft%20Prompt%20Enhancement.md)。若构建时出现 NuGet 连接错误，检查网络、代理和 `https://api.nuget.org/v3/index.json` 的访问情况。
+
+## 功能状态
+
+当前已实现：
+
+- 图片与视频创作工作台，复用 SwarmUI 的生成能力；可用模式取决于已安装的模型、节点和账号权限。
+- 管理员发布 ComfyUI 工作流供工作台选用；服务端校验工作流 ID 和已发布参数白名单，提供 `EcomCraftStudioCatalog`、`EcomCraftStudioGenerate` API。
+- MagicPrompt 提示词优化，可配置本地或云端语言模型服务。
+- Windows 首次安装时可创建 EcomCraft Studio 桌面快捷方式。
+
+规划中：团队节点管理、持久化任务队列与追踪、公共素材库，以及按任务授权的云端生成。上述规划功能当前不可作为可用功能使用。
+
+## 项目结构
+
+| 位置 | 用途 |
+|---|---|
+| `src/` | SwarmUI 服务器与浏览器前端 |
+| `src/Extensions/EcomCraft/` | EcomCraft 工作台、MagicPrompt 与工作流接口 |
+| `Desktop/` | 桌面启动入口 |
+| `docs/` | 使用与开发文档 |
 
 ## 文档
 
-- [中文文档总览](docs/README.zh-CN.md) · [English documentation index](docs/README.md)
-- [EcomCraft 提示词优化与部署](docs/EcomCraft%20Prompt%20Enhancement.md)
-- [EcomCraft ComfyUI 工作流调用（中文）](docs/EcomCraft%20ComfyUI%20工作流.zh-CN.md)
-- [SwarmUI 基础使用（中文）](docs/Basic%20Usage.zh-CN.md)
-- [高级使用（中文）](docs/Advanced%20Usage.zh-CN.md)
-- [常见问题排查（中文）](docs/Troubleshooting.zh-CN.md)
-- [API 使用说明（中文）](docs/API.zh-CN.md)
-- [命令行参数（中文）](docs/Command%20Line%20Arguments.zh-CN.md)
+- [中文文档总览](docs/README.zh-CN.md) · [英文文档总览](docs/README.md)
+- [基础使用](docs/Basic%20Usage.zh-CN.md) · [常见问题排查](docs/Troubleshooting.zh-CN.md)
+- [EcomCraft ComfyUI 工作流调用](docs/EcomCraft%20ComfyUI%20工作流.zh-CN.md)
+- [提示词优化与部署](docs/EcomCraft%20Prompt%20Enhancement.md)
+- [API 使用说明](docs/API.zh-CN.md) · [命令行参数](docs/Command%20Line%20Arguments.zh-CN.md)
 
-## 隐私与安全原则
+## 数据与权限
 
-- 本地生成和提示词优化是不同的数据处理路径。选择云端提示词模型时，输入文本会发送到所配置的服务商；请先确认数据使用政策。
-- 当前工作台的生成请求限定在本机自启动 ComfyUI 后端；云端生成服务与逐任务授权机制尚未完成。
-- 在将工作台开放给局域网多人使用前，应审查账号权限、网络暴露面、后端访问和素材目录权限。
+选择云端提示词模型时，输入文本会发送给所配置的服务商；这与限定在本机 ComfyUI 的生成请求是两条不同路径。安装向导的“仅自己使用，但允许局域网访问”模式仍将访问者视为管理员；用于多人访问前，必须另行配置账号认证与权限，并检查监听地址、后端访问和素材目录权限。默认的 `Data/`、`Models/`、`Output/` 目录保存本地设置、模型和生成数据；若修改了目录配置，也请保留实际使用的目录。
 
 ## 来源与许可
 
-本项目是 SwarmUI 的独立二次开发项目，**非 SwarmUI 官方版本**。感谢原作者 Alex “mcmonkey” Goodwin 及所有贡献者。
-
-项目沿用 [MIT License](LICENSE.txt)，并保留[上游版权与第三方组件声明](THIRD_PARTY_NOTICES.md)。模型、工作流、扩展和其他依赖的使用仍须遵守各自许可。
+本项目是 SwarmUI 的独立二次开发项目，**不是 SwarmUI 官方发行版**。感谢原作者 Alex “mcmonkey” Goodwin 及所有贡献者。项目沿用 [MIT License](LICENSE.txt)，并保留[上游版权与第三方组件声明](THIRD_PARTY_NOTICES.md)。模型、工作流和其他依赖须遵守各自许可。
