@@ -1391,7 +1391,9 @@ public static class Utilities
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            UseShellExecute = false
+            UseShellExecute = false,
+            StandardOutputEncoding = StringConversionHelper.UTF8Encoding,
+            StandardErrorEncoding = StringConversionHelper.UTF8Encoding
         };
         if (workingDirectory is not null)
         {

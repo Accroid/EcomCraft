@@ -46,6 +46,10 @@ PLAN.md
 *-plan.md
 /docs/*
 !/docs/EcomCraft Prompt Enhancement.md
+!/docs/README.zh-CN.md
+!/docs/*.zh-CN.md
+!/docs/Features/
+!/docs/Features/*.zh-CN.md
 /src/Extensions/EcomCraft/README.md
 /src/Extensions/EcomCraft/docs/
 /src/Extensions/EcomCraft/Data/

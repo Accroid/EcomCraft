@@ -288,6 +288,28 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 .gallery-empty p{font-size:13px;color:var(--ink-2);margin-bottom:18px}
 .gallery-empty .btn-primary{width:auto;margin:0 auto;padding:11px 26px}
 
+/* ---------- Queue ---------- */
+.queue-backends{display:grid;gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.queue-backend{display:grid;grid-template-columns:minmax(150px,1fr) minmax(170px,1fr) auto;align-items:center;gap:16px;min-height:58px;padding:12px 4px;border-bottom:1px solid var(--line);font-size:13px}
+.queue-backend:last-child{border-bottom:0}
+.queue-backend strong{font-weight:650}
+.queue-backend>span:nth-child(2){color:var(--ink-2)}
+.queue-state{font-size:12px;color:var(--warn)}
+.queue-state.is-running{color:var(--success)}
+.queue-list-head{display:flex;align-items:baseline;justify-content:space-between;margin:28px 0 10px}
+.queue-list-head h2{font-size:17px}
+.queue-list-head span,.queue-task-age{font-size:12px;color:var(--ink-3)}
+.queue-list{border-top:1px solid var(--line)}
+.queue-task{display:grid;grid-template-columns:minmax(180px,1fr) 110px 88px;align-items:center;gap:16px;min-height:68px;padding:10px 4px;border-bottom:1px solid var(--line)}
+.queue-task-main{display:flex;flex-direction:column;min-width:0}
+.queue-task-main strong{font-size:13px;font-weight:650;overflow-wrap:anywhere}
+.queue-task-main span{font-size:12px;color:var(--ink-2)}
+.queue-native-task{grid-template-columns:minmax(0,1fr) auto}
+.queue-progress{display:block;width:min(100%,420px);height:7px;margin-top:8px;accent-color:var(--success)}
+.queue-cancel{grid-column:3;white-space:nowrap;color:var(--danger)}
+.queue-empty{padding:26px 4px;color:var(--ink-3);font-size:13px}
+@media(max-width:600px){.queue-backend{grid-template-columns:1fr auto;gap:4px 10px}.queue-backend>span:nth-child(2){grid-row:2}.queue-task{grid-template-columns:minmax(0,1fr) auto;gap:5px 10px}.queue-cancel{grid-column:2;grid-row:1 / span 2}}
+
 /* ---------- Lightbox ---------- */
 .lightbox{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center}
 .lightbox-backdrop{position:absolute;inset:0;background:rgba(10,14,25,.72);backdrop-filter:blur(4px)}

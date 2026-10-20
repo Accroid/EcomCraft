@@ -38,16 +38,20 @@ The first launch builds the server and restores .NET dependencies, which may tak
 
 Workspace generation uses only local self-starting ComfyUI; it does not switch to a remote or cloud backend when the local backend is unavailable. For prompt enhancement, see the [Prompt Enhancement Guide](docs/EcomCraft%20Prompt%20Enhancement.md). If NuGet connection errors occur during the build, check your network, proxy, and access to `https://api.nuget.org/v3/index.json`.
 
+After opening the workspace, switch to the task queue to see running local ComfyUI jobs, queue positions, and node progress. Users with generation permission can stop their own active tasks. Queue state is runtime information and is not retained after a server restart.
+
 ## Feature Status
 
 Implemented:
 
 - An image and video creation workspace that reuses SwarmUI generation. Available modes depend on installed models, nodes, and account permissions.
-- Administrator-published ComfyUI workflows that users can select in the workspace. The server checks workflow IDs and published input allowlists; APIs include `EcomCraftStudioCatalog` and `EcomCraftStudioGenerate`.
+- Administrator-published ComfyUI workflows that users can select in the workspace. The server checks workflow IDs and published input allowlists; APIs include `EcomCraftStudioCatalog`, `EcomCraftStudioGenerate`, `EcomCraftStudioQueue`, and `EcomCraftStudioCancelTask`.
+- Automatic discovery of native workflows in local ComfyUI workflow directories, converted into safe workspace workflows. Additional directories can be configured with `Settings.EcomCraft.ComfyWorkflowSearchPaths`; discovered workflows must still contain recognizable positive and negative prompt inputs.
+- A live task queue showing local ComfyUI running jobs, pending jobs, current nodes, and node progress, with support for stopping the current user's active generation tasks.
 - MagicPrompt prompt enhancement with configurable local or cloud language-model services.
 - An optional EcomCraft Studio desktop shortcut during Windows initial setup.
 
-Planned: team node management, a persistent task queue and history, a shared asset library, and per-task authorization for cloud generation. These planned features are not yet available.
+Planned: team node management, persistent task history, a shared asset library, and per-task authorization for cloud generation. These planned features are not yet available.
 
 ## Repository Layout
 
