@@ -1,5 +1,7 @@
 # Auto-Scaling Backend (WIP)
 
+> **Language / 语言:** English (original) · [简体中文](AutoScalingBackend.zh-CN.md)
+
 ## WARNING: THE AUTO-SCALING BACKEND IS A WORK IN PROGRESS.
 
 SwarmUI supports spreading across multiple backend systems, see [Using More GPUS](/docs/Using%20More%20GPUs.md) for info on this.

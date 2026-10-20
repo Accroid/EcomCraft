@@ -1,5 +1,7 @@
 # Audio Model Type Support In SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](Audio%20Model%20Support.zh-CN.md)
+
 
 | Model | Year | Author | Scale | Type | Quality/Status |
 | ----  | ---- | ---- | ---- | ---- | ---- |

@@ -1,5 +1,7 @@
 # Sharing Your SwarmUI Instance
 
+> **Language / 语言:** English (original) · [简体中文](Sharing%20Your%20Swarm.zh-CN.md)
+
 SwarmUI is designed to be sharable - that is, you can give other people access to your AI Generation capabilities!
 
 There's two "groups of people" you might want to share to:

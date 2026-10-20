@@ -1,5 +1,7 @@
 # Using SwarmUI in Docker
 
+> **Language / 语言:** English (original) · [简体中文](Docker.zh-CN.md)
+
 This document explains why and how to use SwarmUI in a Docker container. This is primarily intended for advanced users. If you've never used a Linux terminal before, this is likely too complicated for you.
 
 # Table of Contents

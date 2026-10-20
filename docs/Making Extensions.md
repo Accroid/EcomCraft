@@ -1,5 +1,7 @@
 # Making Extensions for SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](Making%20Extensions.zh-CN.md)
+
 So, you want to make a Swarm extension, eh? You've come to the right place!
 
 Here's some general info:

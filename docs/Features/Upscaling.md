@@ -1,5 +1,7 @@
 # Upscaling In SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](Upscaling.zh-CN.md)
+
 (TODO)
 
 # Pixel Decoder (PiD)

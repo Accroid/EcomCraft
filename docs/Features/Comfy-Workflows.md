@@ -1,5 +1,7 @@
 # Custom Comfy Workflows In SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](Comfy-Workflows.zh-CN.md)
+
 (Placeholder)
 
 **TODO:**

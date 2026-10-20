@@ -1,5 +1,7 @@
 # SwarmUI Feature List & Documentation
 
+> **Language / 语言:** English (original) · [简体中文](README.zh-CN.md)
+
 See [The Docs Readme](/docs/README.md) for general listing of documentation and basic usage info, this section here is a subfolder for specific individual features listed out file-by-file. This is not a complete list of all features in SwarmUI, just the ones that need their one big doc file.
 
 - [Presets](/docs/Features/Presets.md) for info about presets, and a download of an official list of high quality SDXL presets.

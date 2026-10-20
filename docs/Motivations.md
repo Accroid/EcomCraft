@@ -1,5 +1,7 @@
 # Motivations
 
+> **Language / 语言:** English (original) · [简体中文](Motivations.zh-CN.md)
+
 This document explains the reasoning behind some core choices for the design of the project. These are not necessarily sweeping statements, reasons to make the same choices, or even absolutely true facts - these are the reasons that choices were made, and nothing more.
 
 ## Origin

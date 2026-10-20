@@ -1,5 +1,7 @@
 # Video Model Type Support In SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](Video%20Model%20Support.zh-CN.md)
+
 | Model | Year | Author | Scale | Type | Censored? | Quality/Status |
 | ----  | ---- | ---- | ---- | ---- | ---- | ---- |
 [Hunyuan Video](#hunyuan-video) | 2024 | Tencent | 12B MMDiT | Text2Video and Image2Video variants | No | Legacy, was good quality at the time |

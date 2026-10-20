@@ -1,0 +1,47 @@
+# SwarmUI 文档总览
+
+> **语言：** [English 原文](README.md) · 简体中文
+
+本目录包含 SwarmUI 的使用、配置、API、扩展和功能说明。已翻译文档与英文原文并行维护；阅读配有中文译本的英文文档时，可通过文首的“简体中文”链接切换语言。模型支持、视频模型支持和少见模型支持目前提供中文导读，完整型号表、示例和细节以英文原文为准；自动生成的 API 路由参考也暂未翻译。
+
+## 入门与日常使用
+
+- [基础使用指南（中文）](Basic%20Usage.zh-CN.md) · [English](Basic%20Usage.md)：安装、配置、首次生成、参数与常用工具。
+- [高级使用指南（中文）](Advanced%20Usage.zh-CN.md) · [English](Advanced%20Usage.md)：局域网访问、远程访问、自定义 ComfyUI 工作流、多模型目录及性能优化。
+- [用户设置指南（中文）](User%20Settings.zh-CN.md) · [English](User%20Settings.md)：用户设置和输出路径命名模板。
+- [常见问题排查（中文）](Troubleshooting.zh-CN.md) · [English](Troubleshooting.md)：安装失败、依赖错误、后端异常与重新安装。
+
+## 部署、隐私与管理
+
+- [Docker 部署（中文）](Docker.zh-CN.md) · [English](Docker.md)
+- [隐私说明（中文）](Privacy.zh-CN.md) · [English](Privacy.md)
+- [扩展使用（中文）](Extensions.zh-CN.md) · [English](Extensions.md)
+- [命令行参数（中文）](Command%20Line%20Arguments.zh-CN.md) · [English](Command%20Line%20Arguments.md)
+- [AMD Radeon GPU（中文）](AMD%20Radeon%20GPUs.zh-CN.md) · [English](AMD%20Radeon%20GPUs.md)
+- [使用多张 GPU（中文）](Using%20More%20GPUs.zh-CN.md) · [English](Using%20More%20GPUs.md)
+- [共享 SwarmUI 实例（中文）](Sharing%20Your%20Swarm.zh-CN.md) · [English](Sharing%20Your%20Swarm.md)
+
+## 开发与集成
+
+- [HTTP 与 WebSocket API（中文）](API.zh-CN.md) · [English](API.md)
+- [扩展开发指南（中文）](Making%20Extensions.zh-CN.md) · [English](Making%20Extensions.md)
+- [图像元数据格式（中文）](Image%20Metadata%20Format.zh-CN.md) · [English](Image%20Metadata%20Format.md)
+- [EcomCraft 提示词优化与部署指南（中文）](EcomCraft%20Prompt%20Enhancement.md)
+- [EcomCraft ComfyUI 工作流调用（中文）](EcomCraft%20ComfyUI%20工作流.zh-CN.md)
+- [SwarmUI 设计动机（中文）](Motivations.zh-CN.md) · [English](Motivations.md)
+
+## 模型与功能专题
+
+- [模型支持列表（中文）](Model%20Support.zh-CN.md) · [English](Model%20Support.md)
+- [视频模型支持（中文）](Video%20Model%20Support.zh-CN.md) · [English](Video%20Model%20Support.md)
+- [音频模型支持（中文）](Audio%20Model%20Support.zh-CN.md) · [English](Audio%20Model%20Support.md)
+- [较少见的模型支持（中文）](Obscure%20Model%20Support.zh-CN.md) · [English](Obscure%20Model%20Support.md)
+- [为什么使用 SwarmUI（中文）](Why%20Use%20Swarm.zh-CN.md) · [English](Why%20Use%20Swarm.md)
+- [功能专题索引（中文）](Features/README.zh-CN.md) · [English](Features/README.md)
+- [高级提示词语法（中文）](Features/Prompt%20Syntax.zh-CN.md) · [English](Features/Prompt%20Syntax.md)
+
+## 文档语言与维护说明
+
+- 中文文档使用 `.zh-CN.md` 后缀，英文原文文件名保持不变。
+- 命令、API 路由、配置键、参数名、模型 ID 和代码示例会保留原始拼写，避免复制后无法执行。
+- 功能状态、硬件表现和第三方服务限制可能随上游变化；操作前应以当前版本和相关项目文档为准。

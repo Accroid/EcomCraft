@@ -1,5 +1,7 @@
 # User Settings in SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](User%20Settings.zh-CN.md)
+
 (TODO: general info about settings)
 
 ## Path Format

@@ -1,5 +1,7 @@
 # AMD Radeon GPU Support in SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](AMD%20Radeon%20GPUs.zh-CN.md)
+
 Swarm automatically installs proper-ish support for AMD Radeon graphics cards when you first install, and will prompt you to confirm during the install process.
 
 This is driven by ROCm, AMD's AI accelerator internals (the equivalent to Nvidia CUDA), via a pytorch version compiled for it. Because this pytorch version is a direct compatibility port, logs from torch will generally still say 'cuda' where in fact rocm is in use.

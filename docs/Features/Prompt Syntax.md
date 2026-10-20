@@ -1,5 +1,7 @@
 # Advanced Prompt Syntax
 
+> **Language / 语言:** English (original) · [简体中文](Prompt%20Syntax.zh-CN.md)
+
 ## Weighting
 
 ![img](/docs/images/prompt-weight.jpg)

@@ -1,5 +1,7 @@
 # Webhooks
 
+> **Language / 语言:** English (original) · [简体中文](Webhooks.zh-CN.md)
+
 SwarmUI can automatically trigger Webhooks in a few different conditions.
 
 Webhooks are a simple common standard way for unrelated processes to trigger interactions with each other, useful for user customization and automation. They work through automatically sending HTTP POST requests with simple JSON content bodies to user-defined URLs, corresponding to some webserver which listens for matching requests and performs an action when received.

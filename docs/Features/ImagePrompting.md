@@ -1,5 +1,7 @@
 # SwarmUI Image Prompting - Edit Models, IP-Adapter, Revision, Etc.
 
+> **Language / 语言:** English (original) · [简体中文](ImagePrompting.zh-CN.md)
+
 - To use image-prompting features in Swarm, simply drag an image into the prompt box, or copy an image and while in the prompt box press `CTRL+V` to paste.
 - When you do this, the **Image Prompting** control panel will open on the left at the top of the parameters listing.
 
