@@ -280,6 +280,22 @@ public class Installation
     /// <summary>Configure the backend as ComfyUI during installation.</summary>
     public static async Task BackendComfy(bool install_amd)
     {
+        string existingComfy = FindExistingComfyScript();
+        if (!string.IsNullOrWhiteSpace(existingComfy))
+        {
+            await Output(T($"Found existing ComfyUI at '{existingComfy}', using it as the default backend..."));
+            NvidiaUtil.NvidiaInfo[] detectedNvidia = NvidiaUtil.QueryNvidia();
+            int detectedGpu = detectedNvidia is null || detectedNvidia.Length == 0
+                ? 0
+                : detectedNvidia.OrderByDescending(n => n.TotalMemory.InBytes).First().ID;
+            Program.Backends.AddNewOfType(Program.Backends.BackendTypes["comfyui_selfstart"], new ComfyUISelfStartBackend.ComfyUISelfStartSettings()
+            {
+                StartScript = existingComfy,
+                GPU_ID = $"{detectedGpu}",
+                EnablePreviews = "true"
+            });
+            return;
+        }
         await Output(T("Downloading ComfyUI backend... please wait..."));
         Directory.CreateDirectory("dlbackend/");
         string path;
@@ -389,16 +405,60 @@ public class Installation
         {
             return;
         }
-        string path = $"{Environment.GetFolderPath(Environment.SpecialFolder.Desktop)}/SwarmUI.url";
+        string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         string curDir = Directory.GetCurrentDirectory().TrimEnd('\\');
-        string content =
-            $"""
-            [InternetShortcut]
-            URL="{curDir}\launch-windows.bat"
-            IconFile="{curDir}\src\wwwroot\favicon.ico"
-            IconIndex=0
-            """;
-        File.WriteAllText(path, content);
+        string shortcutPath = Path.Combine(desktopPath, "EcomCraft Studio.lnk");
+        string legacyShortcutPath = Path.Combine(desktopPath, "EcomCraft Studio.url");
+        string legacyPath = Path.Combine(desktopPath, "SwarmUI.url");
+        string launcher = Path.Combine(curDir, "launch-windows.bat");
+        string icon = Path.Combine(curDir, "src", "wwwroot", "ecomcraft.ico");
+        try
+        {
+            Type shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType is not null)
+            {
+                object shell = Activator.CreateInstance(shellType);
+                object shortcut = shellType.InvokeMember("CreateShortcut", System.Reflection.BindingFlags.InvokeMethod, null, shell, [shortcutPath]);
+                Type shortcutType = shortcut.GetType();
+                shortcutType.InvokeMember("TargetPath", System.Reflection.BindingFlags.SetProperty, null, shortcut, [launcher]);
+                shortcutType.InvokeMember("Arguments", System.Reflection.BindingFlags.SetProperty, null, shortcut, ["--launch_mode app"]);
+                shortcutType.InvokeMember("WorkingDirectory", System.Reflection.BindingFlags.SetProperty, null, shortcut, [curDir]);
+                shortcutType.InvokeMember("IconLocation", System.Reflection.BindingFlags.SetProperty, null, shortcut, [$"{icon},0"]);
+                shortcutType.InvokeMember("Description", System.Reflection.BindingFlags.SetProperty, null, shortcut, ["EcomCraft Studio"]);
+                shortcutType.InvokeMember("Save", System.Reflection.BindingFlags.InvokeMethod, null, shortcut, null);
+                if (File.Exists(legacyShortcutPath))
+                {
+                    File.Delete(legacyShortcutPath);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logs.Warning($"Could not create the EcomCraft desktop application shortcut: {ex.Message}");
+        }
+        if (File.Exists(legacyPath))
+        {
+            string legacyContent = File.ReadAllText(legacyPath);
+            if (legacyContent.Contains($"URL=\"{curDir}\\launch-windows.bat\"", StringComparison.OrdinalIgnoreCase))
+            {
+                File.Delete(legacyPath);
+            }
+        }
+        if (!File.Exists(shortcutPath))
+        {
+            string fallbackPath = Path.Combine(desktopPath, "EcomCraft Studio.bat");
+            string content =
+                $"""
+                @echo off
+                cd /d "{curDir}"
+                call launch-windows.bat --launch_mode app
+                """;
+            File.WriteAllText(fallbackPath, content);
+            if (File.Exists(legacyShortcutPath))
+            {
+                File.Delete(legacyShortcutPath);
+            }
+        }
     }
 
     /// <summary>Apply changes to server settings.</summary>
@@ -428,6 +488,52 @@ public class Installation
             && File.Exists("dlbackend/comfy/python_embeded/python.exe");
     }
 
+    /// <summary>Finds an existing ComfyUI main.py in the usual Windows installation locations.</summary>
+    public static string FindExistingComfyScript()
+    {
+        List<string> candidates =
+        [
+            Path.GetFullPath("dlbackend/comfy/ComfyUI/main.py"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "ComfyUI", "main.py"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "ComfyUI_windows_portable", "ComfyUI", "main.py"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ComfyUI", "main.py"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ComfyUI_windows_portable", "ComfyUI", "main.py")
+        ];
+        foreach (string candidate in candidates)
+        {
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+        string[] roots =
+        [
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+        ];
+        foreach (string root in roots.Distinct(StringComparer.OrdinalIgnoreCase).Where(Directory.Exists))
+        {
+            try
+            {
+                foreach (string candidate in Directory.EnumerateFiles(root, "main.py", SearchOption.AllDirectories))
+                {
+                    string parent = Directory.GetParent(candidate)?.Name ?? "";
+                    string grandParent = Directory.GetParent(candidate)?.Parent?.Name ?? "";
+                    if (parent.Equals("ComfyUI", StringComparison.OrdinalIgnoreCase)
+                        || grandParent.Equals("ComfyUI", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return Path.GetFullPath(candidate);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logs.Debug($"Could not scan for an existing ComfyUI under '{root}': {ex.Message}");
+            }
+        }
+        return null;
+    }
+
     /// <summary>
     /// Upgrade path: a complete backend already exists on disk. Reuse the existing portable environment (including the
     /// expensive PyTorch install), the existing configuration (Data), and the existing models - nothing is re-downloaded.
@@ -446,9 +552,10 @@ public class Installation
             {
                 gpu = nv.OrderByDescending(n => n.TotalMemory.InBytes).First().ID;
             }
+            string discoveredComfy = FindExistingComfyScript();
             Program.Backends.AddNewOfType(Program.Backends.BackendTypes["comfyui_selfstart"], new ComfyUISelfStartBackend.ComfyUISelfStartSettings()
             {
-                StartScript = "dlbackend/comfy/ComfyUI/main.py",
+                StartScript = discoveredComfy ?? "dlbackend/comfy/ComfyUI/main.py",
                 GPU_ID = $"{gpu}",
                 EnablePreviews = "true"
             });
@@ -471,19 +578,23 @@ public class Installation
     {
         InstallSocket = socket;
         InstallLanguage = language;
+        Program.ServerSettings.DefaultUser.Language = language;
         if (Directory.Exists("dlbackend/comfy"))
         {
             if (IsCompleteBackendPresent())
             {
                 // A complete backend exists - reuse it (and the existing Data/models) instead of reinstalling.
                 await Upgrade();
+                if (make_shortcut)
+                {
+                    MakeShortcut();
+                }
                 return;
             }
             throw new SwarmUserErrorException("An incomplete previous backend install exists at 'dlbackend/comfy'. Please delete the 'dlbackend' folder (and optionally 'Data'), then rerun the installer.");
         }
         await Output(T("Installation request received, processing..."));
         await Theme(theme);
-        Program.ServerSettings.DefaultUser.Language = language;
         await InstalledFor(installed_for);
         StepsThusFar = 1;
         TotalSteps = 4;

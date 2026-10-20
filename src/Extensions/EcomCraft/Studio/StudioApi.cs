@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http;
 using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json.Linq;
@@ -18,6 +19,24 @@ public static class StudioApi
     public const string LocalScopeKey = "ecomcraft_execution_scope";
     private const int MaxReferenceBytes = 5 * 1024 * 1024;
     private const int MaxLoras = 5;
+    public const string PublishedWorkflowScopeKey = "ecomcraft_published_workflow";
+
+    private static readonly HashSet<string> WorkflowFormParameterIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "prompt", "negativeprompt", "model", "width", "height", "images", "steps", "cfgscale", "seed", "sampler", "scheduler"
+    };
+
+    private static readonly HashSet<string> WorkflowDeniedParameterIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "comfyworkflowraw", "comfyworkflowparammetadata", "comfyuicustomworkflow", "extra_metadata", "session_id",
+        "backend", "backendtype", "exactbackendid", "donotsave", "webhooks", "forwardrawbackenddata",
+        "forwardswarmdata", "continueaftererrors", "nointernalSpecialHandling"
+    };
+
+    private static readonly HashSet<string> SupportedWorkflowInputTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "text", "integer", "decimal", "boolean", "dropdown", "image", "model", "list"
+    };
 
     /// <summary>Additional restriction, never an override of native backend matching or user permissions.</summary>
     public static bool ValidateLocalBackend(T2IParamInput input, BackendHandler.T2IBackendData backend)
@@ -90,8 +109,12 @@ public static class StudioApi
             ["user_name"] = session.User.UserID,
             ["can_generate"] = session.User.HasPermission(Permissions.BasicImageGeneration),
             ["can_generate_video"] = session.User.HasPermission(Permissions.BasicImageGeneration) && session.User.HasPermission(Permissions.ParamVideo),
-            ["can_diagnose"] = session.User.HasPermission(Permissions.Registered[EcomCraft.DiagnosticsPermissionId]),
+            ["can_manage_settings"] = session.User.HasPermission(Permissions.EditServerSettings),
             ["local_backends_observed"] = Program.Backends.EnumerateT2IBackends.Count(IsLocalAvailable),
+            ["local_backends_starting"] = Program.Backends.EnumerateT2IBackends.Count(data => data.Backend is ComfyUISelfStartBackend
+                && data.Backend.IsReal && data.Backend.IsEnabled && data.Backend.Status is BackendStatus.WAITING or BackendStatus.LOADING),
+            ["local_backends_errored"] = Program.Backends.EnumerateT2IBackends.Count(data => data.Backend is ComfyUISelfStartBackend
+                && data.Backend.IsReal && data.Backend.IsEnabled && data.Backend.Status == BackendStatus.ERRORED),
             ["cloud_configured"] = false,
             ["models"] = new JArray(LocalModels(session).Where(m => Kind(m) is not null).OrderBy(m => m.Name).Select(m => new JObject()
             {
@@ -105,7 +128,8 @@ public static class StudioApi
             })),
             ["loras"] = new JArray(LocalLoras(session).OrderBy(n => n)),
             ["samplers"] = OptionPairs(ComfyUIBackendExtension.Samplers),
-            ["schedulers"] = OptionPairs(ComfyUIBackendExtension.Schedulers)
+            ["schedulers"] = OptionPairs(ComfyUIBackendExtension.Schedulers),
+            ["workflows"] = PublishedWorkflowCatalog(session)
         };
         return Task.FromResult(result);
     }
@@ -120,6 +144,11 @@ public static class StudioApi
         if ((string)rawInput["source"] != "local")
         {
             return Error("云端服务尚未配置；任务未提交，也不会自动切换服务商。", "cloud_unavailable");
+        }
+        string requestedWorkflow = (string)rawInput["workflow_id"];
+        if (!string.IsNullOrWhiteSpace(requestedWorkflow))
+        {
+            return await GeneratePublishedWorkflow(session, rawInput, requestedWorkflow);
         }
         string mode = (string)rawInput["mode"] ?? "text2img";
         if (mode is not ("text2img" or "img2img" or "inpaint" or "outpaint" or "upscale" or "video"))
@@ -297,6 +326,500 @@ public static class StudioApi
             // No exception text in browser responses: upstream messages can contain paths or backend credentials.
             return Error("无法确认引擎执行结果。请在原生引擎核对队列和个人历史后再重试。", "generation_uncertain");
         }
+    }
+
+    /// <summary>Allows the stored-workflow selector only for a published workflow in an EcomCraft-local request.</summary>
+    public static bool PublishedWorkflowPermissionOverride(string parameterName, string value, T2IParamInput input)
+    {
+        if (!string.Equals(parameterName, "comfyuicustomworkflow", StringComparison.OrdinalIgnoreCase)
+            || input?.SourceSession?.User is not User user
+            || !user.HasPermission(EcomCraft.PermUsePublishedWorkflows)
+            || !input.ExtraMeta.TryGetValue(LocalScopeKey, out object scope) || scope?.ToString() != "local_self_start"
+            || !input.ExtraMeta.TryGetValue(PublishedWorkflowScopeKey, out object requested) || requested?.ToString() != value)
+        {
+            return false;
+        }
+        return TryGetPublishedWorkflow(value, out _, out _, out _);
+    }
+
+    /// <summary>Provides the saved parameter schema only for an approved workflow; arbitrary client-supplied schemas are ignored.</summary>
+    public static T2IParamType PublishedWorkflowDynamicParamProvider(string name, T2IParamInput context)
+    {
+        if (context?.SourceSession?.User is not User user
+            || user.HasPermission(ComfyUIBackendExtension.PermDynamicCustomWorkflows)
+            || !user.HasPermission(EcomCraft.PermUsePublishedWorkflows)
+            || !context.ExtraMeta.TryGetValue(LocalScopeKey, out object scope) || scope?.ToString() != "local_self_start"
+            || !context.ExtraMeta.TryGetValue(PublishedWorkflowScopeKey, out object requested)
+            || !TryGetPublishedWorkflow(requested?.ToString(), out _, out JObject metadata, out JObject savedValues))
+        {
+            return null;
+        }
+        if (string.Equals(name, "comfyworkflowparammetadata", StringComparison.OrdinalIgnoreCase))
+        {
+            return ComfyUIBackendExtension.FakeParameterMetadata;
+        }
+        if (WorkflowDeniedParameterIds.Contains(name) || WorkflowFormParameterIds.Contains(name))
+        {
+            return null;
+        }
+        JArray exposedFields = PublishedWorkflowInputs(context.SourceSession, metadata, savedValues, out bool supported);
+        if (!supported || !exposedFields.OfType<JObject>().Any(field =>
+            string.Equals(field["id"]?.ToString(), name, StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+        if (metadata.TryGetValue(name, out JToken parameter) && parameter is JObject parameterObject)
+        {
+            return T2IParamType.FromNet(parameterObject);
+        }
+        return null;
+    }
+
+    private static JArray PublishedWorkflowCatalog(Session session)
+    {
+        JArray published = new();
+        if (session?.User is null || !session.User.HasPermission(EcomCraft.PermUsePublishedWorkflows))
+        {
+            return published;
+        }
+        foreach (string name in ComfyUIBackendExtension.CustomWorkflows.Keys.OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
+        {
+            if (!TryGetPublishedWorkflow(name, out ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
+                out JObject metadata, out JObject savedValues))
+            {
+                continue;
+            }
+            JArray fields = PublishedWorkflowInputs(session, metadata, savedValues, out bool supported);
+            if (!supported)
+            {
+                continue;
+            }
+            published.Add(new JObject()
+            {
+                ["id"] = workflow.Name,
+                ["name"] = workflow.Name,
+                ["kind"] = InferWorkflowKind(workflow),
+                ["description"] = workflow.Description ?? "",
+                ["inputs"] = fields
+            });
+        }
+        return published;
+    }
+
+    private static JArray PublishedWorkflowInputs(Session session, JObject metadata, JObject savedValues, out bool supported)
+    {
+        JArray fields = new();
+        supported = true;
+        foreach (JProperty property in metadata.Properties())
+        {
+            if (property.Value is not JObject definition || WorkflowDeniedParameterIds.Contains(property.Name)
+                || WorkflowFormParameterIds.Contains(property.Name))
+            {
+                continue;
+            }
+            if (definition["visible"] is not null && bool.TryParse(definition["visible"].ToString(), out bool visible) && !visible)
+            {
+                continue;
+            }
+            string type = definition["type"]?.ToString()?.ToLowerInvariant() ?? "";
+            if (!SupportedWorkflowInputTypes.Contains(type))
+            {
+                continue; // Keep fixed/hidden values from the saved template, but never expose unknown input types to the browser.
+            }
+            if (type == "dropdown")
+            {
+                if (definition["values"] is not JArray dropdownValues || dropdownValues.Count == 0)
+                {
+                    supported = false;
+                    return fields;
+                }
+            }
+            JToken defaultValue = savedValues[property.Name]?.DeepClone() ?? definition["default"]?.DeepClone();
+            if (type == "image")
+            {
+                // Never disclose a workflow owner's default image data or their private output path to other users.
+                defaultValue = new JValue("");
+            }
+            JObject field = new()
+            {
+                ["id"] = property.Name,
+                ["name"] = definition["name"]?.ToString() ?? property.Name,
+                ["type"] = type,
+                ["description"] = definition["description"]?.ToString() ?? "",
+                ["default"] = defaultValue,
+                ["min"] = definition["min"]?.DeepClone() ?? new JValue(0),
+                ["max"] = definition["max"]?.DeepClone() ?? new JValue(0),
+                ["step"] = definition["step"]?.DeepClone() ?? new JValue(1),
+                ["subtype"] = definition["subtype"]?.DeepClone()
+            };
+            if (type == "model")
+            {
+                string subtype = definition["subtype"]?.ToString() ?? "Stable-Diffusion";
+                if (Program.T2IModelSets.TryGetValue(subtype, out T2IModelHandler handler))
+                {
+                    List<string> allowedModels = handler.ListModelNamesFor(session);
+                    if (allowedModels.Count == 0)
+                    {
+                        supported = false;
+                        return fields;
+                    }
+                    field["values"] = new JArray(allowedModels);
+                }
+                else
+                {
+                    supported = false;
+                    return fields;
+                }
+            }
+            else if (definition["values"] is not null)
+            {
+                field["values"] = definition["values"].DeepClone();
+            }
+            fields.Add(field);
+        }
+        return fields;
+    }
+
+    private static string InferWorkflowKind(ComfyUIBackendExtension.ComfyCustomWorkflow workflow)
+    {
+        JObject graph = ParseWorkflowObject(workflow?.Prompt);
+        bool containsVideoNode = graph?.Properties().Any(property =>
+        {
+            string classType = property.Value is JObject node ? node["class_type"]?.ToString() ?? "" : "";
+            return classType.Contains("video", StringComparison.OrdinalIgnoreCase)
+                || classType.Contains("VHS_", StringComparison.OrdinalIgnoreCase)
+                || classType.Contains("AnimateDiff", StringComparison.OrdinalIgnoreCase);
+        }) == true;
+        return containsVideoNode ? "video" : "image";
+    }
+
+    private static bool TryGetPublishedWorkflow(string name, out ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
+        out JObject metadata, out JObject savedValues)
+    {
+        workflow = null;
+        metadata = null;
+        savedValues = new JObject();
+        if (string.IsNullOrWhiteSpace(name) || !ComfyUIBackendExtension.CustomWorkflows.ContainsKey(name))
+        {
+            return false;
+        }
+        workflow = ComfyUIBackendExtension.GetWorkflowByName(name);
+        if (workflow is null || !workflow.EnableInSimple || string.IsNullOrWhiteSpace(workflow.Prompt))
+        {
+            workflow = null;
+            return false;
+        }
+        metadata = ParseWorkflowObject(workflow.CustomParams);
+        savedValues = ParseWorkflowObject(workflow.ParamValues) ?? new JObject();
+        if (metadata is null || ParseWorkflowObject(workflow.Prompt) is null)
+        {
+            workflow = null;
+            return false;
+        }
+        return true;
+    }
+
+    private static JObject ParseWorkflowObject(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+        try
+        {
+            return JToken.Parse(json) as JObject;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static async Task<JObject> GeneratePublishedWorkflow(Session session, JObject rawInput, string workflowId)
+    {
+        if (!session.User.HasPermission(EcomCraft.PermUsePublishedWorkflows))
+        {
+            return Error("此账号没有使用已发布工作流的权限。", "bad_permissions");
+        }
+        if (!TryGetPublishedWorkflow(workflowId, out ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
+            out JObject metadata, out JObject savedValues))
+        {
+            return Error("工作流不存在、未发布到简单工作台，或工作流配置无效。请刷新工作流列表。", "invalid_workflow");
+        }
+        string kind = (string)rawInput["kind"];
+        if (kind is not ("image" or "video"))
+        {
+            return Error("未知的创作类型。", "invalid_mode");
+        }
+        if (kind == "video" && !session.User.HasPermission(Permissions.ParamVideo))
+        {
+            return Error("此账号没有视频生成权限。", "bad_permissions");
+        }
+        if (kind != InferWorkflowKind(workflow))
+        {
+            return Error("所选工作流与当前创作类型不匹配，请切换图片/视频类型或选择其他工作流。", "invalid_mode");
+        }
+        string modelId = (string)rawInput["model"];
+        T2IModel model = LocalModels(session).FirstOrDefault(m => m.Name == modelId && Kind(m) == kind);
+        if (model is null)
+        {
+            return Error("模型不可用、账号无权访问，或模型类型与当前创作类型不匹配。", "invalid_model");
+        }
+        if (!Program.Backends.EnumerateT2IBackends.Any(IsLocalAvailable))
+        {
+            return Error("没有可用的本机自启动 ComfyUI 节点；不会转发到远程或云端。", "local_unavailable");
+        }
+        string prompt = (string)rawInput["prompt"];
+        string negative = (string)rawInput["negativeprompt"] ?? "";
+        if (string.IsNullOrWhiteSpace(prompt) || prompt.Length > 12000 || negative.Length > 6000)
+        {
+            return Error("请填写创作描述（最多 12000 字符），排除内容最多 6000 字符。", "invalid_prompt");
+        }
+        if (new[] { prompt, negative }.Any(p => p.Contains('<') || p.Contains('>') || p.Contains("__")))
+        {
+            return Error("本版工作台只接受普通描述，不支持原生 <…> 指令、预设或 __通配符__。", "unsupported_prompt_syntax");
+        }
+        int step = Math.Max(8, model.ModelClass.CompatClass.ResolutionPrecision);
+        int imageLimit = kind == "video" ? 1 : 4;
+        if (!Integer(rawInput, "width", 256, 2048, out int width) || width % step != 0
+            || !Integer(rawInput, "height", 256, 2048, out int height) || height % step != 0
+            || !Integer(rawInput, "images", 1, imageLimit, out int images))
+        {
+            return Error($"尺寸须为 256–2048 且是 {step} 的倍数；图片每批 1–4 张，视频每批 1 条。", "invalid_parameters");
+        }
+        JToken rawWorkflowParams = rawInput["workflow_params"];
+        if (rawWorkflowParams is not null && rawWorkflowParams.Type is not (JTokenType.Object or JTokenType.Null))
+        {
+            return Error("工作流参数格式无效。", "invalid_workflow_parameters");
+        }
+        JObject requestedParams = rawWorkflowParams as JObject ?? new JObject();
+        if (requestedParams.Count > 60)
+        {
+            return Error("工作流参数数量超过限制。", "invalid_workflow_parameters");
+        }
+        JArray publishedFields = PublishedWorkflowInputs(session, metadata, savedValues, out bool workflowInputsSupported);
+        if (!workflowInputsSupported)
+        {
+            return Error("该工作流包含暂不支持的网页输入定义，请在 SwarmUI 工作流编辑器中修正后重新发布。", "invalid_workflow_parameters");
+        }
+        HashSet<string> allowedWorkflowInputIds = new(publishedFields.OfType<JObject>()
+            .Select(field => field["id"]?.ToString()).Where(id => !string.IsNullOrWhiteSpace(id)), StringComparer.OrdinalIgnoreCase);
+        JObject input = new()
+        {
+            // This must precede dynamic input IDs so SwarmUI recognizes them as parameters of this stored workflow.
+            ["comfyuicustomworkflow"] = workflow.Name
+        };
+        foreach (JProperty property in savedValues.Properties())
+        {
+            if (!metadata.TryGetValue(property.Name, out JToken savedDefinition)
+                || savedDefinition is not JObject savedDefinitionObject
+                || WorkflowDeniedParameterIds.Contains(property.Name))
+            {
+                continue;
+            }
+            JToken value = property.Value;
+            string type = savedDefinitionObject["type"]?.ToString()?.ToLowerInvariant() ?? "";
+            // A published workflow may contain an owner's local image path or image data. It is a template,
+            // not a shared asset, so require each user to provide image inputs explicitly.
+            if (value.Type == JTokenType.Null || type == "image")
+            {
+                continue;
+            }
+            if (SupportedWorkflowInputTypes.Contains(type)
+                && !ValidatePublishedWorkflowInput(session, property.Name, value, savedDefinitionObject, out _))
+            {
+                continue;
+            }
+            input[property.Name] = value.DeepClone();
+        }
+        input["comfyworkflowparammetadata"] = workflow.CustomParams;
+        foreach (JProperty property in requestedParams.Properties())
+        {
+            if (!allowedWorkflowInputIds.Contains(property.Name)
+                || WorkflowFormParameterIds.Contains(property.Name) || WorkflowDeniedParameterIds.Contains(property.Name)
+                || !metadata.TryGetValue(property.Name, out JToken definition) || definition is not JObject definitionObject)
+            {
+                return Error($"工作流参数“{property.Name}”不在此工作流的允许输入列表中。", "invalid_workflow_parameters");
+            }
+            if (!ValidatePublishedWorkflowInput(session, property.Name, property.Value, definitionObject, out string validationError))
+            {
+                return Error(validationError, "invalid_workflow_parameters");
+            }
+            string type = definitionObject["type"]?.ToString()?.ToLowerInvariant() ?? "";
+            if (type == "image" && string.IsNullOrWhiteSpace(property.Value.ToString()))
+            {
+                input.Remove(property.Name);
+            }
+            else
+            {
+                input[property.Name] = property.Value.DeepClone();
+            }
+        }
+        // Build the root request from a strict allowlist; never forward arbitrary client-supplied routes, metadata or workflow JSON.
+        input["model"] = model.Name;
+        input["prompt"] = prompt;
+        input["negativeprompt"] = negative;
+        input["width"] = width;
+        input["height"] = height;
+        input["images"] = images;
+        input["webhooks"] = "None";
+        input["donotsave"] = false;
+        if (!CopyOptionalNumber(rawInput, input, "seed", -1, uint.MaxValue, true)
+            || !CopyOptionalNumber(rawInput, input, "steps", 1, 100, true)
+            || !CopyOptionalNumber(rawInput, input, "cfgscale", 0, 30, false))
+        {
+            return Error("种子、步数或提示词强度不在允许范围内。", "invalid_parameters");
+        }
+        if (!MatchOption(rawInput, "sampler", ComfyUIBackendExtension.Samplers, out string samplerError))
+        {
+            return Error(samplerError, "invalid_sampler");
+        }
+        if (!MatchOption(rawInput, "scheduler", ComfyUIBackendExtension.Schedulers, out string schedulerError))
+        {
+            return Error(schedulerError, "invalid_scheduler");
+        }
+        if (kind == "video")
+        {
+            if (!Integer(rawInput, "text2videoframes", 1, 129, out int frames))
+            {
+                return Error("视频帧数须为 1–129。", "invalid_parameters");
+            }
+            input["text2videoframes"] = frames;
+            input["videoformat"] = "h264-mp4";
+            if (!CopyOptionalNumber(rawInput, input, "videofps", 1, 60, true))
+            {
+                return Error("视频帧率须为 1–60，或留空以使用引擎默认值。", "invalid_parameters");
+            }
+        }
+        input["extra_metadata"] = new JObject()
+        {
+            [LocalScopeKey] = "local_self_start",
+            [PublishedWorkflowScopeKey] = workflow.Name
+        };
+        try
+        {
+            JObject result = await T2IAPI.GenerateText2Image(session, images, input);
+            if (result.ContainsKey("error"))
+            {
+                return Error("引擎未完整返回结果。请在原生引擎检查工作流依赖、参数和个人历史；可能已有部分输出，请勿直接重复提交。", "generation_failed");
+            }
+            return result;
+        }
+        catch (Exception)
+        {
+            return Error("无法确认工作流执行结果。请在原生引擎核对队列和个人历史后再重试。", "generation_uncertain");
+        }
+    }
+
+    private static bool ValidatePublishedWorkflowInput(Session session, string id, JToken value, JObject definition, out string error)
+    {
+        error = null;
+        string type = definition["type"]?.ToString()?.ToLowerInvariant() ?? "";
+        if (value.Type == JTokenType.Null)
+        {
+            return true;
+        }
+        string raw = value.Type == JTokenType.String ? value.Value<string>() ?? "" : value.ToString();
+        double min = ReadWorkflowBound(definition["min"]);
+        double max = ReadWorkflowBound(definition["max"]);
+        bool hasBounds = min != 0 || max != 0;
+        switch (type)
+        {
+            case "text":
+                if (value.Type != JTokenType.String || raw.Length > 12000 || raw.Contains('<') || raw.Contains('>') || raw.Contains("__"))
+                {
+                    error = $"工作流参数“{id}”必须是普通文本，不能超过 12000 个字符，也不能包含原生指令语法。";
+                    return false;
+                }
+                return true;
+            case "integer":
+                if (!long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out long integerValue)
+                    || (hasBounds && (integerValue < min || integerValue > max)))
+                {
+                    error = $"工作流参数“{id}”的整数值无效或超出允许范围。";
+                    return false;
+                }
+                return true;
+            case "decimal":
+                if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out double decimalValue)
+                    || !double.IsFinite(decimalValue) || (hasBounds && (decimalValue < min || decimalValue > max)))
+                {
+                    error = $"工作流参数“{id}”的数值无效或超出允许范围。";
+                    return false;
+                }
+                return true;
+            case "boolean":
+                if (!bool.TryParse(raw, out _))
+                {
+                    error = $"工作流参数“{id}”必须是布尔值。";
+                    return false;
+                }
+                return true;
+            case "dropdown":
+                if (value.Type != JTokenType.String || definition["values"] is not JArray choices || choices.Count == 0
+                    || !choices.Any(choice => choice.ToString() == raw || choice.ToString().Before("///") == raw))
+                {
+                    error = $"工作流参数“{id}”不是当前工作流允许的选项。";
+                    return false;
+                }
+                return true;
+            case "model":
+                string subtype = definition["subtype"]?.ToString() ?? "Stable-Diffusion";
+                if (value.Type != JTokenType.String || !Program.T2IModelSets.TryGetValue(subtype, out T2IModelHandler handler)
+                    || T2IParamTypes.GetBestModelInList(raw, handler.ListModelNamesFor(session)) is null)
+                {
+                    error = $"工作流参数“{id}”引用了不存在或当前账号无权访问的模型。";
+                    return false;
+                }
+                return true;
+            case "image":
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    return true;
+                }
+                if (raw.StartsWith("inputs/", StringComparison.Ordinal) || raw.StartsWith("raw/", StringComparison.Ordinal)
+                    || raw.StartsWith("Starred/", StringComparison.Ordinal))
+                {
+                    return true; // SwarmUI validates and resolves these within the user's own output directory.
+                }
+                if (!ValidReference(raw))
+                {
+                    error = $"工作流图片参数“{id}”必须是 PNG、JPEG 或 WebP，且不超过 5 MB。";
+                    return false;
+                }
+                try
+                {
+                    SwarmUI.Media.ImageFile decoded = SwarmUI.Media.ImageFile.FromDataString(raw);
+                    (int imageWidth, int imageHeight) = decoded.GetResolution();
+                    if (imageWidth > 8192 || imageHeight > 8192 || (long)imageWidth * imageHeight > 40_000_000)
+                    {
+                        error = $"工作流图片参数“{id}”尺寸过大。";
+                        return false;
+                    }
+                }
+                catch (Exception)
+                {
+                    error = $"无法解码工作流图片参数“{id}”。";
+                    return false;
+                }
+                return true;
+            case "list":
+                if (value.Type != JTokenType.String || raw.Length > 4000 || raw.Contains('<') || raw.Contains('>') || raw.Contains("__"))
+                {
+                    error = $"工作流列表参数“{id}”格式无效，或包含不支持的原生指令语法。";
+                    return false;
+                }
+                return true;
+            default:
+                error = $"工作流参数“{id}”的数据类型“{type}”暂不支持由网页修改，请调整工作流的默认值或输入类型。";
+                return false;
+        }
+    }
+
+    private static double ReadWorkflowBound(JToken token)
+    {
+        return token is not null && double.TryParse(token.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
+            && double.IsFinite(value) ? value : 0;
     }
 
     private static bool TryBuildLoras(JArray loraArray, JToken weightToken, List<string> allowed, out JArray loras, out JArray weights, out string error)

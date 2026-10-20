@@ -9,6 +9,9 @@ set PATH=C:\Program Files\dotnet;%PATH%
 
 set DOTNET_CLI_TELEMETRY_OPTOUT=1
 
+rem Prevent the bundled ROCm PyTorch CUDA probe from crashing ComfyUI on AMD/Windows.
+set "PYTHONPATH=%~dp0runtime\comfy_rocm_compat;%PYTHONPATH%"
+
 rem Server settings option
 if exist .\src\bin\always_pull (
     echo Pulling latest changes...

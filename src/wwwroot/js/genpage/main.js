@@ -374,9 +374,8 @@ function loadUserData(callback) {
         else {
             autoCompletionsList = null;
         }
-        if (!language) {
-            language = data.language;
-        }
+        // The saved user setting is authoritative; an old browser cookie must not override it on startup.
+        language = data.language || language || 'en';
         allPresetsUnsorted = data.presets;
         modelPresetLinkManager.loadFromServer(data.model_preset_links);
         sortPresets();

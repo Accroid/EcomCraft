@@ -4,14 +4,14 @@
         <InvariantGlobalization>true</InvariantGlobalization>
         <ApplicationManifest>app.manifest</ApplicationManifest>
         <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-        <AssemblyName>SwarmUIDesktopView</AssemblyName>
-        <Title>SwarmUI Desktop</Title>
-        <Product>SwarmUI Desktop</Product>
+        <AssemblyName>EcomCraftStudio</AssemblyName>
+        <Title>EcomCraft Studio</Title>
+        <Product>EcomCraft Studio</Product>
         <Authors>Alex "mcmonkey" Goodwin</Authors>
         <Copyright>Copyright (c) 2026 Alex "mcmonkey" Goodwin</Copyright>
-        <Description>A desktop interface for SwarmUI, an AI Media Generation User-Interface.</Description>
+        <Description>A desktop interface for the EcomCraft Studio creative workspace, built on SwarmUI.</Description>
         <OutputType>exe</OutputType>
-        <ApplicationIcon>../src/wwwroot/favicon.ico</ApplicationIcon>
+        <ApplicationIcon>../src/wwwroot/ecomcraft.ico</ApplicationIcon>
         <RollForward>Major</RollForward>
     </PropertyGroup>
 

@@ -14,6 +14,7 @@
         session: null, catalog: null, catalogLoading: false,
         userId: null, outputAppendUser: false,
         view: 'create', type: 'image', mode: 'text2img',
+        workflowId: '', workflowValues: {},
         busy: false, uncertain: false,
         reference: null, referenceLoading: false, referenceRevision: 0,
         loras: [], results: [], timer: null,
@@ -26,14 +27,51 @@
         const prefix = state.outputAppendUser ? `View/${encodeURIComponent(state.userId)}` : 'Output';
         return `/${prefix}/${encoded}`;
     }
-    const safeErrors = new Set(['bad_permissions','cloud_unavailable','invalid_model','invalid_mode','local_unavailable','invalid_prompt',
-        'unsupported_prompt_syntax','invalid_parameters','invalid_reference','invalid_mask','invalid_loras','invalid_sampler',
+    const safeErrors = new Set(['bad_permissions','cloud_unavailable','invalid_model','invalid_mode','invalid_workflow','invalid_workflow_parameters',
+        'local_unavailable','invalid_prompt','unsupported_prompt_syntax','invalid_parameters','invalid_reference','invalid_mask','invalid_loras','invalid_sampler',
         'invalid_scheduler','generation_failed','generation_uncertain',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
     const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
 
+    function magicPromptError(message) {
+        const raw = String(message || '');
+        const title = raw.split(/\r?\n/).map(line => line.trim()).find(Boolean) || '';
+        const detail = raw.includes('Original error:') ? raw.split('Original error:').pop() : title;
+        if (/Failed to fetch (vision )?models/i.test(title)) {
+            return '拉取模型失败。请检查服务地址、API Key，以及服务是否提供 /v1/models 接口。';
+        }
+        if (/401|403|unauthorized|forbidden|invalid.api.key|authentication/i.test(detail)
+            || /API Key Error/i.test(title)) {
+            return '身份验证失败。请检查 API Key 是否正确，以及账号是否有权使用该模型。';
+        }
+        if (/404|not found|does not exist/i.test(detail) || /Model Not Found/i.test(title)) {
+            return '接口或模型不存在。请检查 Base URL 是否重复包含 /v1，并核对模型 ID。';
+        }
+        if (/429|rate.limit|quota|insufficient.credits/i.test(detail) || /API Usage Limit/i.test(title)) {
+            return '服务额度或调用频率已达上限，请检查服务商账号额度后重试。';
+        }
+        if (/timeout|timed out|request exceeded/i.test(detail) || /Request Timeout/i.test(title)) {
+            return '请求超时。请检查模型服务状态、网络连接，或稍后重试。';
+        }
+        if (/max.tokens|temperature|top.p|unsupported.parameter|invalid.parameter/i.test(detail)
+            || /Parameter Error/i.test(title)) {
+            return '模型不接受当前请求参数。请确认该模型支持 OpenAI 兼容聊天接口。';
+        }
+        if (/connection|connect|network|dns|http request/i.test(detail)) {
+            return '无法连接模型服务。请检查 Base URL、网络连接和服务状态。';
+        }
+        if (/Configuration not found|Failed to load settings/i.test(title)) {
+            return '提示词优化配置不可用，请重新保存设置后重试。';
+        }
+        if (/^[\u3400-\u9fff\s\d，。！？：；、（）《》“”‘’.-]+$/.test(raw)) {
+            return raw;
+        }
+        return '提示词优化服务返回错误。请检查服务地址、模型 ID 和服务端日志。';
+    }
+
     async function request(route, body = {}) {
         let response, data;
+        const isMagicPromptRoute = /MagicPrompt/.test(route) || route === 'SetAPIKey' || route === 'GetAPIKeyStatus';
         try {
             response = await fetch(`/API/${route}`, {
                 method: 'POST', credentials: 'same-origin', cache: 'no-store',
@@ -42,7 +80,10 @@
             });
             data = await response.json();
         } catch {
-            throw new ApiError('与服务的连接中断，无法确认执行结果。请先核对原生队列和个人历史。', 'transport_error');
+            const message = isMagicPromptRoute
+                ? '无法连接提示词优化服务，请检查网络和服务状态。'
+                : '与服务的连接中断，无法确认执行结果。请先核对原生队列和个人历史。';
+            throw new ApiError(message, 'transport_error');
         }
         if (data.error || !response.ok) {
             if (data.error_id === 'invalid_session_id' || response.status === 401) {
@@ -52,7 +93,8 @@
             // Business-level error returned normally (HTTP 200) with a user-facing message but no
             // whitelisted error_id (e.g. MagicPrompt's formatted upstream errors): pass it through.
             if (response.ok && data.error_id == null) {
-                throw new ApiError(String(data.error), 'api_error');
+                const message = isMagicPromptRoute ? magicPromptError(data.error) : String(data.error);
+                throw new ApiError(message, 'api_error');
             }
             const code = safeErrors.has(data.error_id) ? data.error_id : 'api_error';
             throw new ApiError(safeErrors.has(code) ? String(data.error) : '服务未正常返回，请检查登录状态或联系管理员。', code);
@@ -121,6 +163,168 @@
         for (const s of schedulers) { $('scheduler').append(new Option(s.name, s.id)); }
     }
 
+    function currentWorkflow() {
+        return (state.catalog?.workflows || []).find(workflow => workflow.id === state.workflowId && (!workflow.kind || workflow.kind === state.type)) || null;
+    }
+
+    function populateWorkflows() {
+        const select = $('workflow-select');
+        const previous = state.workflowId;
+        const workflows = (state.catalog?.workflows || []).filter(workflow => !workflow.kind || workflow.kind === state.type);
+        select.replaceChildren(new Option('标准工作台（当前模式）', ''));
+        for (const workflow of workflows) {
+            select.append(new Option(workflow.name || workflow.id, workflow.id));
+        }
+        state.workflowId = workflows.some(workflow => workflow.id === previous) ? previous : '';
+        select.value = state.workflowId;
+        if (state.workflowId !== previous) { state.workflowValues = {}; }
+        renderWorkflowFields();
+        updateWorkflowUi();
+    }
+
+    function selectWorkflow() {
+        const next = $('workflow-select').value;
+        if (next !== state.workflowId) { state.workflowValues = {}; }
+        state.workflowId = next;
+        renderWorkflowFields();
+        updateWorkflowUi();
+        updateControls();
+    }
+
+    function updateWorkflowUi() {
+        const workflow = currentWorkflow();
+        const selected = Boolean(workflow);
+        $('image-mode-tabs').style.display = selected || state.type === 'video' ? 'none' : '';
+        $('workflow-description').textContent = selected
+            ? `${workflow.description || '使用管理员登记的工作流模板与参数。'} 创作方式由工作流节点决定。使用标准图生图、局部重绘等模式请切回标准工作台；工作流处理初始图或蒙版需要发布包含对应输入和节点的工作流。`
+            : ((state.catalog?.workflows || []).length
+                ? '可选择管理员发布到简单工作台的 ComfyUI 工作流。'
+                : '暂未发布可供员工使用的工作流；请管理员在 SwarmUI 工作流编辑器中启用“简单工作台”。');
+        $('workflow-params').hidden = !selected || !(workflow.inputs || []).length;
+        const meta = modeMeta[state.mode] || modeMeta.text2img;
+        $('reference-fld').hidden = selected || !meta.needsRef;
+        $('mask-wrap').hidden = selected || !meta.mask || state.mode === 'outpaint';
+        $('creativity-fld').hidden = selected || !meta.creativity;
+        $('outpaint-fld').hidden = selected || !meta.outpaint;
+        $('upscale-fld').hidden = selected || !meta.upscale;
+        $('lora-fld').hidden = selected;
+        $('workflow-tag').textContent = selected ? (workflow.name || '自定义工作流') : meta.tag;
+    }
+
+    function workflowDefaultValue(field) {
+        return field && field.default !== undefined && field.default !== null ? field.default : '';
+    }
+
+    function workflowInputValue(field) {
+        if (Object.prototype.hasOwnProperty.call(state.workflowValues, field.id)) {
+            return state.workflowValues[field.id];
+        }
+        return workflowDefaultValue(field);
+    }
+
+    function setWorkflowValue(id, value) {
+        state.workflowValues[id] = value;
+        updateControls();
+    }
+
+    function renderWorkflowFields() {
+        const container = $('workflow-params');
+        container.replaceChildren();
+        const workflow = currentWorkflow();
+        if (!workflow) {
+            container.hidden = true;
+            return;
+        }
+        const fields = Array.isArray(workflow.inputs) ? workflow.inputs : [];
+        container.hidden = !fields.length;
+        let index = 0;
+        for (const field of fields) {
+            if (!field || !field.id) { continue; }
+            const wrapper = el('div', 'fld');
+            const labelId = `workflow-field-${index++}`;
+            const label = el('label', null, field.name || field.id);
+            label.htmlFor = labelId;
+            const head = el('div', 'fld-head');
+            head.append(label);
+            wrapper.append(head);
+            const type = String(field.type || 'text').toLowerCase();
+            const initial = workflowInputValue(field);
+            let control;
+            if (type === 'dropdown' || (type === 'model' && Array.isArray(field.values) && field.values.length)) {
+                control = document.createElement('select');
+                const values = Array.isArray(field.values) ? field.values : [];
+                for (const option of values) {
+                    const raw = String(option ?? '');
+                    const split = raw.indexOf('///');
+                    const value = split >= 0 ? raw.slice(0, split) : raw;
+                    const title = split >= 0 ? raw.slice(split + 3) : raw;
+                    control.append(new Option(title, value));
+                }
+                if (initial !== '') {
+                    const rawInitial = String(initial);
+                    const found = [...control.options].some(option => option.value === rawInitial || option.textContent === rawInitial);
+                    if (found) { control.value = rawInitial; }
+                }
+                if (control.selectedIndex < 0 && control.options.length) { control.selectedIndex = 0; }
+                control.addEventListener('change', () => setWorkflowValue(field.id, control.value));
+            }
+            else if (type === 'boolean') {
+                control = document.createElement('input');
+                control.type = 'checkbox';
+                control.checked = initial === true || String(initial).toLowerCase() === 'true';
+                control.addEventListener('change', () => setWorkflowValue(field.id, control.checked));
+            }
+            else if (type === 'image') {
+                control = document.createElement('input');
+                control.type = 'file';
+                control.accept = 'image/png,image/jpeg,image/webp';
+                control.addEventListener('change', () => {
+                    const file = control.files?.[0];
+                    if (!file) { return; }
+                    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || !file.size || file.size > 5 * 1024 * 1024) {
+                        control.value = '';
+                        setStatus(`“${field.name || field.id}”需要不超过 5 MB 的 PNG、JPEG 或 WebP 图片。`, true);
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        if (typeof reader.result === 'string') {
+                            setWorkflowValue(field.id, reader.result);
+                            setStatus(`已读取工作流图片参数“${field.name || field.id}”，提交生成时才发送。`);
+                        }
+                    };
+                    reader.onerror = () => setStatus(`无法读取工作流图片参数“${field.name || field.id}”。`, true);
+                    reader.readAsDataURL(file);
+                });
+                if (initial && String(initial).startsWith('data:image/')) {
+                    wrapper.append(el('p', 'hint', '此工作流有默认图片；选择新文件即可覆盖。'));
+                }
+            }
+            else if (type === 'integer' || type === 'decimal') {
+                control = document.createElement('input');
+                control.type = 'number';
+                if (field.min !== undefined && field.min !== null) { control.min = field.min; }
+                if (field.max !== undefined && field.max !== null && Number(field.max) !== 0) { control.max = field.max; }
+                if (field.step !== undefined && field.step !== null && Number(field.step) > 0) { control.step = field.step; }
+                control.value = initial === null || initial === undefined ? '' : initial;
+                control.addEventListener('change', () => {
+                    if (control.value !== '') { setWorkflowValue(field.id, control.value); }
+                });
+            }
+            else {
+                control = type === 'text' && String(initial ?? '').length > 100 ? document.createElement('textarea') : document.createElement('input');
+                if (control.tagName === 'INPUT') { control.type = 'text'; }
+                control.value = initial === null || initial === undefined ? '' : (typeof initial === 'object' ? JSON.stringify(initial) : String(initial));
+                control.maxLength = type === 'list' ? 4000 : 12000;
+                control.addEventListener('input', () => setWorkflowValue(field.id, control.value));
+            }
+            control.id = labelId;
+            wrapper.append(control);
+            if (field.description) { wrapper.append(el('p', 'hint', field.description)); }
+            container.append(wrapper);
+        }
+    }
+
     function updateModelMeta() {
         const model = currentModel();
         const step = model?.resolution_step || 16;
@@ -163,18 +367,27 @@
             }
             const catalog = await request('EcomCraftStudioCatalog');
             if (!Array.isArray(catalog.models)) { throw new ApiError('模型列表格式不兼容，请联系管理员。', 'api_error'); }
+            catalog.workflows = Array.isArray(catalog.workflows) ? catalog.workflows : [];
             state.catalog = catalog;
+            populateWorkflows();
             $('user-name').textContent = catalog.user_name;
             $('avatar').textContent = String(catalog.user_name || 'E').slice(0, 1).toUpperCase();
-            $('diagnostics-link').hidden = !catalog.can_diagnose;
-            $('enhancer-settings').hidden = !catalog.can_diagnose;
-            msg.textContent = `部署机节点观测：${catalog.local_backends_observed} 个可用 · ${catalog.models.length} 个可访问模型 · 云端未配置。此信息不是成功心跳或生成验收。`;
+            $('enhancer-settings').hidden = !catalog.can_manage_settings;
+            const backendState = catalog.local_backends_observed > 0
+                ? `${catalog.local_backends_observed} 个可用`
+                : catalog.local_backends_starting > 0 ? '正在启动'
+                : catalog.local_backends_errored > 0 ? '启动失败，请检查服务器日志'
+                : '未配置可用节点';
+            msg.textContent = `本机 ComfyUI：${backendState} · ${catalog.models.length} 个可用模型`;
             populateModels();
             populateSamplers();
             applyModelSize();
             updateHealth();
         } catch (error) {
             state.catalog = null;
+            state.workflowId = '';
+            state.workflowValues = {};
+            populateWorkflows();
             populateModels();
             msg.textContent = error.message;
             msg.classList.add('error');
@@ -193,7 +406,11 @@
         h.classList.remove('ok', 'warn', 'err');
         const count = state.catalog?.local_backends_observed || 0;
         if (state.catalog && count > 0) { h.classList.add('ok'); text.textContent = `${count} 个节点可用`; }
-        else if (state.catalog) { h.classList.add('warn'); text.textContent = '无可用节点'; }
+        else if (state.catalog) {
+            h.classList.add('warn');
+            text.textContent = state.catalog.local_backends_starting > 0 ? '节点正在启动'
+                : state.catalog.local_backends_errored > 0 ? '节点启动失败' : '无可用节点';
+        }
         else { h.classList.add('err'); text.textContent = '未连接'; }
     }
 
@@ -220,7 +437,9 @@
             : '例如：一瓶透明玻璃精华液，置于浅灰色石台，柔和侧光，突出瓶身质感，画面右侧留白用于排版。';
         populateModels();
         applyModelSize();
+        populateWorkflows();
         renderResults();
+        updateWorkflowUi();
     }
 
     const modeMeta = {
@@ -252,6 +471,7 @@
             : '图生图会重绘原图，不保证商品细节、文字或标志完全不变。';
         if (meta.mask && mode === 'inpaint' && state.reference) { MaskEditor.init(); }
         if (meta.outpaint) { /* mask generated at submit */ }
+        updateWorkflowUi();
         updateControls();
     }
 
@@ -659,6 +879,7 @@
     // On backend switch: refresh the Base-URL (saved value or default) and the API-key status.
     async function onBackendChange() {
         applyBackendFields();
+        $('enh-cfg-model-options').hidden = true;
         const backend = $('enh-cfg-backend').value;
         const meta = MP_BACKENDS[backend];
         $('enh-cfg-endpoint').value = mpSettings?.backends?.[backend]?.baseurl || meta.url;
@@ -679,7 +900,7 @@
         $('enhancer-modal').hidden = false;
         $('enh-cfg-message').hidden = true;
         $('enh-cfg-key').value = '';
-        $('enh-cfg-model-list').innerHTML = '';
+        $('enh-cfg-model-options').hidden = true;
         try {
             const cfg = await request('GetMagicPromptSettings');
             mpSettings = cfg.settings;
@@ -723,23 +944,20 @@
         try {
             const backend = $('enh-cfg-backend').value;
             const meta = MP_BACKENDS[backend];
-            const model = $('enh-cfg-model').value.trim();
             const baseurl = meta.editableUrl ? $('enh-cfg-endpoint').value.trim() : null;
             if (meta.editableUrl && !baseurl) {
                 showEnhCfgMessage('请先填写服务地址。', true);
                 return;
             }
-            // Persist the current backend/url so GetMagicPromptModels reads the right target.
-            await saveMpCore({ backend, model: model || 'placeholder', baseurl });
+            // Model listing reads the shared backend URL. Keep the selected model unchanged until Save.
+            await saveMpCore({ backend, baseurl });
             const res = await request('GetMagicPromptModels');
-            const list = $('enh-cfg-model-list');
-            list.innerHTML = '';
-            (res.models || []).forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m.model;
-                opt.label = m.name || m.model;
-                list.appendChild(opt);
-            });
+            const list = $('enh-cfg-model-options');
+            list.replaceChildren(new Option('从已拉取的模型中选择…', ''));
+            for (const m of res.models || []) {
+                list.add(new Option(m.name && m.name !== m.model ? `${m.name} — ${m.model}` : m.model, m.model));
+            }
+            list.hidden = !res.models?.length;
             if (!res.models || res.models.length === 0) {
                 showEnhCfgMessage('未拉取到模型，请确认服务已启动、地址与 Key 正确。', true);
             } else {
@@ -827,11 +1045,11 @@
         else if (state.type === 'video' && !state.catalog.can_generate_video) { hint = '此账号没有视频参数权限，请联系管理员。'; }
         else if (!state.catalog.local_backends_observed) { hint = '未观测到可用的部署机 ComfyUI 节点。'; }
         else if (!currentModel()) { hint = '请先在原生引擎配置此类型的模型。'; }
-        else if (state.referenceLoading) { hint = '正在读取初始图，请稍候。'; }
-        else if ((state.mode === 'inpaint') && state.reference && !MaskEditor.hasMask()) {
+        else if (!state.workflowId && state.referenceLoading) { hint = '正在读取初始图，请稍候。'; }
+        else if (!state.workflowId && state.mode === 'inpaint' && state.reference && !MaskEditor.hasMask()) {
             hint = '请先在图上涂抹要修改的区域。';
         }
-        else if (state.mode === 'outpaint' && state.reference && !outpaintDirs.size) { hint = '请先选择至少一个扩图方向。'; }
+        else if (!state.workflowId && state.mode === 'outpaint' && state.reference && !outpaintDirs.size) { hint = '请先选择至少一个扩图方向。'; }
         $('submit-hint').textContent = hint || '将提交到部署机的 ComfyUI；实际耗时与显存取决于模型。';
         $('generate').disabled = Boolean(hint);
         const isVideo = state.type === 'video';
@@ -903,6 +1121,15 @@
         }
         if ($('sampler').value) { payload.sampler = $('sampler').value; }
         if ($('scheduler').value) { payload.scheduler = $('scheduler').value; }
+        if (state.workflowId) {
+            payload.workflow_id = state.workflowId;
+            payload.workflow_params = { ...state.workflowValues };
+            if (isVideo) {
+                payload.text2videoframes = Number($('frames').value);
+                if ($('fps').value !== '') { payload.videofps = Number($('fps').value); }
+            }
+            return payload;
+        }
         if (isVideo) {
             payload.text2videoframes = Number($('frames').value);
             if ($('fps').value !== '') { payload.videofps = Number($('fps').value); }
@@ -1150,6 +1377,7 @@
 
         $('refresh-models').addEventListener('click', refreshCatalog);
         $('model').addEventListener('change', () => { updateModelMeta(); applyModelSize(); });
+        $('workflow-select').addEventListener('change', selectWorkflow);
 
         $('reference-file').addEventListener('change', readReference);
         $('remove-reference').addEventListener('click', clearReference);
@@ -1220,6 +1448,9 @@
         $('enh-cfg-save').addEventListener('click', saveEnhancerSettings);
         $('enh-cfg-backend').addEventListener('change', onBackendChange);
         $('enh-cfg-fetch-models').addEventListener('click', fetchMpModels);
+        $('enh-cfg-model-options').addEventListener('change', event => {
+            if (event.target.value) { $('enh-cfg-model').value = event.target.value; }
+        });
 
         $('creation-form').addEventListener('submit', generate);
 

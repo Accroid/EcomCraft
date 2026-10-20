@@ -1200,6 +1200,9 @@ public class T2IParamTypes
         return $"data:{contentType};base64,{Convert.ToBase64String(data)}";
     }
 
+    /// <summary>Extension-provided, narrowly scoped alternatives for parameter permissions. Validators must re-check the value and request context.</summary>
+    public static List<Func<string, string, T2IParamInput, bool>> ParameterPermissionOverrideValidators = [];
+
     /// <summary>Takes user input of a parameter and applies it to the parameter tracking data object.</summary>
     public static void ApplyParameter(string paramTypeName, string value, T2IParamInput data, int sectionId = 0)
     {
@@ -1212,12 +1215,10 @@ public class T2IParamTypes
             data.Remove(type, sectionId);
             return;
         }
-        if (type.Permission is not null)
+        if (type.Permission is not null && !data.SourceSession.User.HasPermission(type.Permission)
+            && !ParameterPermissionOverrideValidators.Any(validator => validator(paramTypeName, value, data)))
         {
-            if (!data.SourceSession.User.HasPermission(type.Permission))
-            {
-                throw new SwarmUserErrorException($"You do not have permission to use parameter {type.Name}.");
-            }
+            throw new SwarmUserErrorException($"You do not have permission to use parameter {type.Name}.");
         }
         try
         {

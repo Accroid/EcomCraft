@@ -6,7 +6,7 @@
     <meta name="color-scheme" content="light dark">
     <title>EcomCraft Studio · 创作工作台</title>
     <link rel="stylesheet" href="/ExtensionFile/EcomCraft/Studio/studio.css?v=0.3.0">
-    <script src="/ExtensionFile/EcomCraft/Studio/studio.js?v=0.3.0" defer></script>
+    <script src="/ExtensionFile/EcomCraft/Studio/studio.js?v=0.3.1-workflow-mode-hint" defer></script>
 </head>
 <body>
     <a class="skip-link" href="#studio-main">跳到创作区</a>
@@ -21,14 +21,11 @@
         <nav class="rail-nav">
             <a class="rail-item" data-view="create" href="#create"><span class="ri" aria-hidden="true">◫</span><span class="rt">创作工作台</span></a>
             <a class="rail-item" data-view="gallery" href="#gallery"><span class="ri" aria-hidden="true">▦</span><span class="rt">作品画廊</span><span class="rail-count" id="gallery-count">0</span></a>
-            <div class="rail-item unavailable"><span class="ri" aria-hidden="true">▤</span><span class="rt">批量任务</span><small>待接入</small></div>
-            <div class="rail-item unavailable"><span class="ri" aria-hidden="true">▧</span><span class="rt">团队素材</span><small>待接入</small></div>
         </nav>
 
         <div class="rail-bottom">
             <p class="rail-label">高级</p>
             <a class="rail-item" href="/Text2Image"><span class="ri" aria-hidden="true">⚙</span><span class="rt">原生引擎 / 高级功能</span></a>
-            <a class="rail-item" id="diagnostics-link" href="/Text2Image#Text2Image,ecomcraft" hidden><span class="ri" aria-hidden="true">☷</span><span class="rt">管理员诊断</span></a>
             <div class="profile">
                 <span id="avatar" aria-hidden="true">·</span>
                 <div class="profile-meta"><div id="user-name" class="profile-name">正在连接…</div><small id="profile-sub">团队工作空间</small></div>
@@ -85,6 +82,13 @@
                         <form id="creation-form" autocomplete="off">
                             <fieldset id="creation-fields" disabled>
 
+                                <!-- 已发布的 ComfyUI 工作流 -->
+                                <div class="fld" id="workflow-select-fld">
+                                    <div class="fld-head"><label for="workflow-select">创作工作流</label></div>
+                                    <select id="workflow-select"><option value="">标准工作台（当前模式）</option></select>
+                                    <p class="hint" id="workflow-description">可选择管理员发布到简单工作台的 ComfyUI 工作流。</p>
+                                </div>
+
                                 <!-- 提示词 -->
                                 <div class="fld">
                                     <div class="fld-head"><label for="prompt">创作描述<span class="req">*</span></label><span class="counter" id="prompt-count">0 / 12000</span></div>
@@ -112,6 +116,9 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- 初始图（图生图/重绘/扩图/放大） -->
+                                <div id="workflow-params" hidden aria-label="工作流参数"></div>
 
                                 <!-- 初始图（图生图/重绘/扩图/放大） -->
                                 <div class="fld" id="reference-fld" hidden>
@@ -356,10 +363,10 @@
                 <div class="fld">
                     <label for="enh-cfg-model">提示词模型</label>
                     <div class="input-row">
-                        <input id="enh-cfg-model" type="text" spellcheck="false" list="enh-cfg-model-list" placeholder="点“拉取”选择，或手动填写">
-                        <datalist id="enh-cfg-model-list"></datalist>
+                        <input id="enh-cfg-model" type="text" spellcheck="false" placeholder="点“拉取”选择，或手动填写">
                         <button class="btn-ghost btn-sm" type="button" id="enh-cfg-fetch-models">拉取</button>
                     </div>
+                    <select id="enh-cfg-model-options" aria-label="从已拉取的模型中选择" hidden></select>
                 </div>
                 <div class="fld" id="enh-cfg-key-fld">
                     <label for="enh-cfg-key">API Key</label>
