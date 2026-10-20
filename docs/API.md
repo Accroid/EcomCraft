@@ -1,5 +1,7 @@
 # SwarmUI API Documentation
 
+> **Language / 语言:** English (original) · [简体中文](API.zh-CN.md)
+
 ### The Basics
 
 SwarmUI has a full-capability network API that you can use from external programs, both to use Swarm features (eg generate images) and to manage the Swarm instance (eg modify backends).

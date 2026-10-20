@@ -1,5 +1,7 @@
 # Troubleshooting Issues in SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](Troubleshooting.zh-CN.md)
+
 First of all: when in doubt, restart. The tried and true classic of solving IT problems is as true in SwarmUI as anywhere else - when you restart, a lot of problems solve themselves.
 
 Second, feel free to open [issues here on GitHub](https://github.com/mcmonkeyprojects/SwarmUI/issues) or ask on [the SwarmUI Discord](https://discord.gg/q2y38cqjNw) where we have a `#help-forum` available for questions. These are also both great places to search for if anyone else has had the same problem before and already gotten an answer.

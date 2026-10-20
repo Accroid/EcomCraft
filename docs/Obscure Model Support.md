@@ -1,5 +1,7 @@
 # Obscure Model Support in SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](Obscure%20Model%20Support.zh-CN.md)
+
 See [Model Support](/docs/Model%20Support.md) for general information about model support.
 
 This doc tracks specifically the old, bad, unpopular, etc. models that are supported in SwarmUI but not relevant for most people to use.

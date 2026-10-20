@@ -1,5 +1,7 @@
 # SwarmUI Autocompletions Engine
 
+> **Language / 语言:** English (original) · [简体中文](Autocompletions.zh-CN.md)
+
 When you're typing into a prompt box within Swarm, the **autocompletions engine** is looking for ways to help you.
 
 ### Prompt Syntax

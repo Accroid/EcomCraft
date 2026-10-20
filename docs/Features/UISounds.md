@@ -1,5 +1,7 @@
 # UI Sounds in SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](UISounds.zh-CN.md)
+
 If you want to to have the UI play sounds in specific situations, you just need to add a sound file and select it for the relevant context.
 
 ### Add a sound file

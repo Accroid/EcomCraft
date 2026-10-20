@@ -1,5 +1,7 @@
 # Privacy of SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](Privacy.zh-CN.md)
+
 SwarmUI is free-and-open-source pure-local runnable software. That means, in short, the answer to "Swarm has good privacy?" is "Yes Swarm is very private."
 
 ## Longer Answer

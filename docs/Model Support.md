@@ -1,5 +1,7 @@
 # Model Type Support In SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](Model%20Support.zh-CN.md)
+
 | Model | Architecture | Year | Author | Scale | Censored? | Quality/Status |
 | ----  | ---- | ---- | ---- | ---- | ---- | ---- |
 [Stable Diffusion XL](#stable-diffusion-xl) | unet | 2023 | Stability AI | 2B | Partial | Old but some finetunes remain popular |

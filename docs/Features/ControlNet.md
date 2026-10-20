@@ -1,5 +1,7 @@
 # ControlNets in SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](ControlNet.zh-CN.md)
+
 - ControlNets are a form of guidance for Stable Diffusion that take in a reference image, and copy some feature set from it
     - For example, "Canny" controlnets copy the linework for images. This is useful for image to easily turn a sketch into a photo, while keeping the same structure.
     - Or, "Depth" controlnets copy the 3D structure of an image. This is useful to convert between image content while keeping otherwise the same, such as replacing one person for another, or a cat for a dog, while keeping them in the same pose/situation/etc.

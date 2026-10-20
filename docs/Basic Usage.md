@@ -1,5 +1,7 @@
 # Basic Usage of SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](Basic%20Usage.zh-CN.md)
+
 So you want to know how to get started with SwarmUI, huh? It's easy!
 
 For the most part, just download the installer and follow the instructions on screen. Everything explains itself, even the settings and parameters all have `?` clickables that explain what they do!
@@ -8,7 +10,7 @@ Nonetheless, here's a step-by-step you can follow:
 
 ## Installing
 
-Step one: [Install SwarmUI](/README.md#installing-on-windows).
+Step one: [Install SwarmUI](https://github.com/mcmonkeyprojects/SwarmUI#installing-on-windows).
 
 Once you've ran the basic program-installation, if all went well, it will open a web interface to select basic install settings.
 - It starts with an option to skip the installer and use defaults. New users might prefer this. Otherwise:

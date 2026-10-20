@@ -1,5 +1,7 @@
 # Advanced Usage
 
+> **Language / 语言:** English (original) · [简体中文](Advanced%20Usage.zh-CN.md)
+
 - [Accessing SwarmUI From Other Devices](#accessing-swarmui-from-other-devices)
 - [Hosting SwarmUI On The Web](#hosting-swarmui-on-the-web)
 - [Custom Workflows (ComfyUI)](#custom-workflows-comfyui)

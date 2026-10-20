@@ -1,5 +1,7 @@
 # Presets
 
+> **Language / 语言:** English (original) · [简体中文](Presets.zh-CN.md)
+
 (TODO: Info about how presets work and all that)
 
 # Official SDXL Preset Pack

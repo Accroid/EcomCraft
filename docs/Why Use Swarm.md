@@ -1,5 +1,7 @@
 # Why Use Swarm?
 
+> **Language / 语言:** English (original) · [简体中文](Why%20Use%20Swarm.zh-CN.md)
+
 Why should you use Swarm, a series of 'sales'\* pitches:
 \*(Swarm is and always will be 100% free and open source)
 

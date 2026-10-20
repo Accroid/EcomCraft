@@ -1,5 +1,7 @@
 # SwarmUI Image Metadata Format
 
+> **Language / 语言:** English (original) · [简体中文](Image%20Metadata%20Format.zh-CN.md)
+
 This page is to document the metadata format SwarmUI applies to generated images.
 
 By default, when generating an image through SwarmUI, it applies metadata to the image file that identifies the image generation parameters. You can view the SwarmUI parameters for an image with this metadata by simply dragging the image into the center area of Swarm's generate tab.

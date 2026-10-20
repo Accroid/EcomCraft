@@ -1,5 +1,7 @@
 # Command Line Arguments
 
+> **Language / 语言:** English (original) · [简体中文](Command%20Line%20Arguments.zh-CN.md)
+
 Most settings are configurable entirely via UI (or the `Settings.fds` file) and generally most users never need to touch the CLI - however a few key settings intended for automated or dev usage are provided by command line instead (notably the path to the settings file itself for example). Additionally, some settings in the UI can be overridden by command line (eg host/port).
 
 # Usage

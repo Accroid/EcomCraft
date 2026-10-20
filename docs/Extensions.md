@@ -1,5 +1,7 @@
 # SwarmUI Extensions
 
+> **Language / 语言:** English (original) · [简体中文](Extensions.zh-CN.md)
+
 Currently there are only a few extensions out there, and they can be found on the Extensions tab.
 
 ### How To Find and Install Extensions

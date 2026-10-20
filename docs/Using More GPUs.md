@@ -1,5 +1,7 @@
 # Using More GPUs in SwarmUI
 
+> **Language / 语言:** English (original) · [简体中文](Using%20More%20GPUs.zh-CN.md)
+
 There are two primary ways to use more GPUs:
 - More GPUs in your machine
 - More machines with GPUs
