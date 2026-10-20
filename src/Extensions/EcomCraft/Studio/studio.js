@@ -11,14 +11,15 @@
     class ApiError extends Error { constructor(message, code) { super(message); this.code = code; } }
 
     const state = {
-        session: null, catalog: null, catalogLoading: false,
+        session: null, catalog: null, catalogLoading: false, backendStatusLoading: false,
         userId: null, outputAppendUser: false,
         view: 'create', type: 'image', mode: 'text2img',
         workflowId: '', workflowValues: {},
         busy: false, uncertain: false,
         reference: null, referenceLoading: false, referenceRevision: 0,
         loras: [], results: [], timer: null,
-        gallery: { items: [], filter: 'all', search: '', sort: 'Date', loading: false, current: null }
+        gallery: { items: [], filter: 'all', search: '', sort: 'Date', loading: false, current: null },
+        queue: { loading: false, timer: null, stopping: new Set() }
     };
 
     // Builds a viewable URL for a path returned by ListImages (relative to the user output root).
@@ -29,7 +30,7 @@
     }
     const safeErrors = new Set(['bad_permissions','cloud_unavailable','invalid_model','invalid_mode','invalid_workflow','invalid_workflow_parameters',
         'local_unavailable','invalid_prompt','unsupported_prompt_syntax','invalid_parameters','invalid_reference','invalid_mask','invalid_loras','invalid_sampler',
-        'invalid_scheduler','generation_failed','generation_uncertain',
+        'invalid_scheduler','generation_failed','generation_uncertain','task_not_found',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
     const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
 
@@ -121,18 +122,20 @@
        View routing
        ============================================================ */
     function setView(view) {
-        if (!['create', 'gallery'].includes(view)) { view = 'create'; }
+        if (!['create', 'gallery', 'queue'].includes(view)) { view = 'create'; }
         state.view = view;
         $('view-create').hidden = view !== 'create';
         $('view-gallery').hidden = view !== 'gallery';
-        $('crumb-title').textContent = view === 'create' ? '创作工作台' : '作品画廊';
+        $('view-queue').hidden = view !== 'queue';
+        $('crumb-title').textContent = view === 'create' ? '创作工作台' : view === 'gallery' ? '作品画廊' : '任务队列';
         document.querySelectorAll('.rail-item[data-view]').forEach(i =>
             i.classList.toggle('active', i.dataset.view === view));
         if (view === 'gallery') { loadGallery(); }
+        if (view === 'queue') { loadQueue(); }
     }
     function route() {
         const hash = (location.hash || '').replace('#', '');
-        setView(hash === 'gallery' ? 'gallery' : 'create');
+        setView(['gallery', 'queue'].includes(hash) ? hash : 'create');
     }
 
     /* ============================================================
@@ -145,11 +148,13 @@
     function populateModels() {
         const models = (state.catalog?.models || []).filter(m => m.kind === state.type);
         const select = $('model');
+        const previous = select.value;
         select.replaceChildren();
         if (!models.length) {
             select.append(new Option(state.type === 'video' ? '没有可访问的文生视频模型' : '没有可访问的图片模型', ''));
         } else {
             for (const m of models) { select.append(new Option(m.id, m.id)); }
+            if (models.some(m => m.id === previous)) { select.value = previous; }
         }
         updateModelMeta();
     }
@@ -157,10 +162,14 @@
     function populateSamplers() {
         const samplers = state.catalog?.samplers || [];
         const schedulers = state.catalog?.schedulers || [];
+        const previousSampler = $('sampler').value;
+        const previousScheduler = $('scheduler').value;
         $('sampler').replaceChildren(new Option('默认（由模型决定）', ''));
         $('scheduler').replaceChildren(new Option('默认（由模型决定）', ''));
         for (const s of samplers) { $('sampler').append(new Option(s.name, s.id)); }
         for (const s of schedulers) { $('scheduler').append(new Option(s.name, s.id)); }
+        if (samplers.some(s => s.id === previousSampler)) { $('sampler').value = previousSampler; }
+        if (schedulers.some(s => s.id === previousScheduler)) { $('scheduler').value = previousScheduler; }
     }
 
     function currentWorkflow() {
@@ -354,6 +363,7 @@
         if (state.catalogLoading || state.busy) { return; }
         state.catalogLoading = true;
         const msg = $('connection-message');
+        const previousModel = $('model').value;
         msg.textContent = '正在读取账号、模型与部署机节点信息…';
         msg.classList.remove('error');
         updateControls();
@@ -381,7 +391,7 @@
             msg.textContent = `本机 ComfyUI：${backendState} · ${catalog.models.length} 个可用模型`;
             populateModels();
             populateSamplers();
-            applyModelSize();
+            if ($('model').value !== previousModel) { applyModelSize(); }
             updateHealth();
         } catch (error) {
             state.catalog = null;
@@ -396,6 +406,48 @@
         } finally {
             state.catalogLoading = false;
             updateControls();
+        }
+    }
+
+    /** Keeps the displayed ComfyUI availability current while the Studio remains open. */
+    async function pollBackendStatus() {
+        if (document.hidden || state.backendStatusLoading || state.catalogLoading || state.busy) { return; }
+        state.backendStatusLoading = true;
+        try {
+            if (!state.session || !state.catalog) {
+                await refreshCatalog();
+                return;
+            }
+            let status;
+            try {
+                status = await request('EcomCraftStudioBackendStatus');
+            } catch (error) {
+                if (!['api_error', 'transport_error'].includes(error.code)) { throw error; }
+                status = await request('EcomCraftStudioCatalog');
+            }
+            if (state.catalogLoading || state.busy) { return; }
+            const previous = state.catalog.local_backends_observed || 0;
+            state.catalog.local_backends_observed = status.local_backends_observed;
+            state.catalog.local_backends_starting = status.local_backends_starting;
+            state.catalog.local_backends_errored = status.local_backends_errored;
+            updateHealth();
+            updateControls();
+            $('connection-message').classList.remove('error');
+            if (previous !== status.local_backends_observed || !status.local_backends_observed) {
+                const backendState = status.local_backends_observed > 0 ? `${status.local_backends_observed} 个可用`
+                    : status.local_backends_starting > 0 ? '正在启动'
+                    : status.local_backends_errored > 0 ? '启动失败，请检查服务器日志' : '未配置可用节点';
+                $('connection-message').textContent = `本机 ComfyUI：${backendState} · ${state.catalog.models.length} 个可用模型`;
+            }
+            if (previous === 0 && status.local_backends_observed > 0 && !currentModel()) { await refreshCatalog(); }
+        } catch (error) {
+            if (state.catalog) { state.catalog.local_backends_observed = 0; }
+            updateHealth();
+            updateControls();
+            $('connection-message').textContent = error.message;
+            $('connection-message').classList.add('error');
+        } finally {
+            state.backendStatusLoading = false;
         }
     }
 
@@ -1004,8 +1056,7 @@
                 const st = await request('GetAPIKeyStatus', { keyType: meta.keyType });
                 $('enh-cfg-key-status').textContent = st.status === 'not set' ? '尚未设置 Key' : `Key ${st.status}`;
                 if (backend === 'openaiapi') {
-                    // Local OpenAI-compatible servers usually need no key; reachability is checked on use.
-                    showEnhCfgMessage('已保存配置。请确保本地 OpenAI 兼容服务已运行。', false);
+                    showEnhCfgMessage('已保存配置。请确认服务地址、网络和所需的 Key 均可用。', false);
                 } else {
                     showEnhCfgMessage(st.status === 'not set'
                         ? '已保存设置，但当前后端未设置 Key，优化暂不可用。'
@@ -1209,6 +1260,116 @@
             state.busy = false;
             renderResults();
             updateControls();
+        }
+    }
+
+    /* ============================================================
+       Queue
+       ============================================================ */
+    /** Reads local backend queue counts and the server's active generation claims. */
+    async function loadQueue() {
+        if (state.queue.loading) { return; }
+        state.queue.loading = true;
+        try {
+            if (!state.session) {
+                let session = await request('GetNewSession');
+                state.session = session.session_id;
+            }
+            let result = await request('EcomCraftStudioQueue');
+            renderQueue(result);
+            $('queue-message').hidden = true;
+            $('queue-updated').textContent = `更新于 ${new Date().toLocaleTimeString('zh-CN')}`;
+        }
+        catch (error) {
+            $('queue-message').textContent = error.message || '队列读取失败。';
+            $('queue-message').hidden = false;
+        }
+        finally {
+            state.queue.loading = false;
+        }
+    }
+
+    /** Renders native ComfyUI entries and SwarmUI claims without exposing workflow inputs. */
+    function renderQueue(result) {
+        let backendList = $('queue-backends');
+        backendList.replaceChildren();
+        for (let backend of result.backends || []) {
+            let row = el('div', 'queue-backend');
+            let name = el('strong', '', `本机 ComfyUI #${backend.id}`);
+            let counts = el('span', '', backend.running == null
+                ? '节点无响应'
+                : `执行中 ${backend.running} · 等待中 ${backend.pending}`);
+            let status = el('span', `queue-state ${backend.status === 'running' ? 'is-running' : 'is-waiting'}`,
+                backend.status === 'running' ? '运行中' : backend.status === 'unresponsive' ? '无响应' : '启动中');
+            row.append(name, counts, status);
+            backendList.append(row);
+        }
+        if (!backendList.children.length) { backendList.append(el('p', 'queue-empty', '没有本机 ComfyUI 节点。')); }
+
+        let tasks = result.tasks || [];
+        let nativeTasks = result.native_tasks || [];
+        $('queue-count').textContent = nativeTasks.length || tasks.length;
+        $('queue-task-count').textContent = `${nativeTasks.length} 项原生任务 · ${tasks.length} 项已登记请求`;
+        let list = $('queue-list');
+        list.replaceChildren();
+        $('queue-empty').hidden = nativeTasks.length > 0 || tasks.length > 0;
+        $('queue-empty').textContent = '当前没有已登记的生成任务。';
+        for (let task of nativeTasks) {
+            let row = el('div', 'queue-task queue-native-task');
+            let main = el('div', 'queue-task-main');
+            main.append(el('strong', '', `ComfyUI #${task.backend_id} · ${task.state === 'running' ? '执行中' : `等待中（第 ${task.position} 位）`}`));
+            let node = task.current_node
+                ? `节点 ${task.current_node}${task.node_type ? ` · ${task.node_type}` : ''}`
+                : task.state === 'running' ? '当前节点暂无数据' : `${task.total_nodes} 个节点`;
+            main.append(el('span', '', node));
+            if (task.state === 'running') {
+                let overall = Number.isFinite(task.overall_percent) ? Math.round(task.overall_percent) : null;
+                let current = Number.isFinite(task.node_percent) ? Math.round(task.node_percent) : null;
+                main.append(el('span', '', `节点进度 ${current == null ? '暂无数据' : `${current}%`} · 总体进度 ${overall == null ? '暂无数据' : `约 ${overall}%`}`));
+                if (overall != null) {
+                    let bar = el('progress', 'queue-progress');
+                    bar.max = 100;
+                    bar.value = overall;
+                    bar.setAttribute('aria-label', '工作流总体进度');
+                    main.append(bar);
+                }
+            }
+            row.append(main, el('span', 'queue-task-age', '原生队列'));
+            list.append(row);
+        }
+        let labels = { running: '执行中', waiting_backend: '等待节点', queued: '排队中', stopping: '正在结束' };
+        for (let task of tasks) {
+            let row = el('div', 'queue-task');
+            let main = el('div', 'queue-task-main');
+            main.append(el('strong', '', task.mine ? `我的请求 #${task.request_id || task.id}` : '其他用户的请求'));
+            main.append(el('span', '', `${labels[task.state] || '处理中'} · ${task.count} 张`));
+            let age = el('span', 'queue-task-age', `${Math.floor(task.elapsed_seconds / 60)} 分 ${task.elapsed_seconds % 60} 秒`);
+            row.append(main, age);
+            if (task.mine && task.state !== 'stopping') {
+                let button = el('button', 'btn-ghost btn-sm queue-cancel', '结束任务');
+                button.type = 'button';
+                button.disabled = state.queue.stopping.has(task.id);
+                button.addEventListener('click', () => cancelQueueTask(task.id));
+                row.append(button);
+            }
+            list.append(row);
+        }
+    }
+
+    /** Cancels one task after the server verifies its authenticated owner. */
+    async function cancelQueueTask(id) {
+        if (state.queue.stopping.has(id) || !window.confirm('结束这个任务？已经生成的结果可能仍会保留。')) { return; }
+        state.queue.stopping.add(id);
+        try {
+            await request('EcomCraftStudioCancelTask', { task_id: id });
+            await loadQueue();
+        }
+        catch (error) {
+            $('queue-message').textContent = error.message || '任务结束失败。';
+            $('queue-message').hidden = false;
+        }
+        finally {
+            state.queue.stopping.delete(id);
         }
     }
 
@@ -1477,6 +1638,14 @@
         });
         $('gallery-refresh').addEventListener('click', loadGallery);
         $('gallery-gocreate').addEventListener('click', () => { location.hash = 'create'; });
+        $('queue-refresh').addEventListener('click', loadQueue);
+        setInterval(pollBackendStatus, 5000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) { pollBackendStatus(); }
+        });
+        state.queue.timer = setInterval(() => {
+            if (state.view === 'queue') { loadQueue(); }
+        }, 5000);
 
         // Lightbox
         $('lightbox-backdrop').addEventListener('click', closeLightbox);

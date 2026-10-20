@@ -38,16 +38,20 @@ cd EcomCraft
 
 工作台的生成请求只允许本机自启动 ComfyUI，不会在本机不可用时自动改用远程或云端后端。配置提示词优化可阅读[提示词优化指南](docs/EcomCraft%20Prompt%20Enhancement.md)。若构建时出现 NuGet 连接错误，检查网络、代理和 `https://api.nuget.org/v3/index.json` 的访问情况。
 
+进入工作台后可以切换到“任务队列”查看本机 ComfyUI 后端的运行任务、等待位置和节点进度。拥有生成权限的账号可以结束自己发起的活动任务；队列状态是运行时信息，服务重启后不会保留历史记录。
+
 ## 功能状态
 
 当前已实现：
 
 - 图片与视频创作工作台，复用 SwarmUI 的生成能力；可用模式取决于已安装的模型、节点和账号权限。
-- 管理员发布 ComfyUI 工作流供工作台选用；服务端校验工作流 ID 和已发布参数白名单，提供 `EcomCraftStudioCatalog`、`EcomCraftStudioGenerate` API。
+- 管理员发布 ComfyUI 工作流供工作台选用；服务端校验工作流 ID 和已发布参数白名单，提供 `EcomCraftStudioCatalog`、`EcomCraftStudioGenerate`、`EcomCraftStudioQueue` 和 `EcomCraftStudioCancelTask` API。
+- 自动发现本机 ComfyUI 工作流目录中的原生工作流，并转换为工作台可选的安全工作流。也可以在 `Settings` 的 `EcomCraft.ComfyWorkflowSearchPaths` 中配置额外目录；发现的工作流仍须包含可识别的正向和负向提示词输入。
+- 实时任务队列展示本机 ComfyUI 的运行任务、排队任务、当前节点和节点进度，并支持结束当前账号自己的活动生成任务。
 - MagicPrompt 提示词优化，可配置本地或云端语言模型服务。
 - Windows 首次安装时可创建 EcomCraft Studio 桌面快捷方式。
 
-规划中：团队节点管理、持久化任务队列与追踪、公共素材库，以及按任务授权的云端生成。上述规划功能当前不可作为可用功能使用。
+规划中：团队节点管理、持久化任务历史、公共素材库，以及按任务授权的云端生成。上述规划功能当前不可作为可用功能使用。
 
 ## 项目结构
 

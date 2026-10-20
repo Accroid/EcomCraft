@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.IO;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
@@ -20,6 +22,155 @@ public static class StudioApi
     private const int MaxReferenceBytes = 5 * 1024 * 1024;
     private const int MaxLoras = 5;
     public const string PublishedWorkflowScopeKey = "ecomcraft_published_workflow";
+
+    /// <summary>IDs imported from native ComfyUI directories during the preceding catalog refresh.</summary>
+    private static readonly HashSet<string> NativeWorkflowIds = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Serializes native workflow catalog refreshes and ownership updates.</summary>
+    private static readonly object NativeWorkflowLock = new();
+
+    /// <summary>Recent progress from ComfyUI sockets owned by SwarmUI generation requests.</summary>
+    private static readonly Dictionary<string, ComfyQueueProgress> ComfyProgress = new();
+
+    /// <summary>Protects progress snapshots shared by generation and API request threads.</summary>
+    private static readonly object ComfyProgressLock = new();
+
+    private sealed class ComfyQueueProgress
+    {
+        public int TotalNodes;
+        public int FinishedNodes;
+        public HashSet<string> CompletedNodeIds = new();
+        public string CurrentNode;
+        public double? NodePercent;
+        public long Updated = Environment.TickCount64;
+    }
+
+    /// <summary>Records server-observed progress without retaining prompt text or workflow inputs.</summary>
+    public static void ObserveComfyProgress(int backendId, string promptId, int expectedNodes, JObject message)
+    {
+        if (string.IsNullOrWhiteSpace(promptId) || message?["data"] is not JObject data)
+        {
+            return;
+        }
+        string type = message["type"]?.ToString();
+        string key = $"{backendId}:{promptId}";
+        lock (ComfyProgressLock)
+        {
+            if (!ComfyProgress.TryGetValue(key, out ComfyQueueProgress progress))
+            {
+                progress = new ComfyQueueProgress();
+                ComfyProgress[key] = progress;
+            }
+            progress.TotalNodes = Math.Max(0, expectedNodes);
+            progress.Updated = Environment.TickCount64;
+            if (type == "progress_state" && data["nodes"] is JObject nodes)
+            {
+                progress.FinishedNodes = nodes.Properties().Count(node => node.Value?["state"]?.ToString() == "finished");
+                foreach (JProperty finished in nodes.Properties().Where(node => node.Value?["state"]?.ToString() == "finished"))
+                {
+                    progress.CompletedNodeIds.Add(finished.Name);
+                }
+                JProperty running = nodes.Properties().FirstOrDefault(node => node.Value?["state"]?.ToString() == "running");
+                if (running is not null)
+                {
+                    progress.CurrentNode = running.Name;
+                    double value = running.Value.Value<double?>("value") ?? 0;
+                    double max = running.Value.Value<double?>("max") ?? 0;
+                    progress.NodePercent = max > 0 ? Math.Clamp(value / max * 100, 0, 100) : null;
+                }
+                else
+                {
+                    progress.NodePercent = null;
+                }
+            }
+            else if (type == "executing")
+            {
+                string nextNode = data["node"]?.ToString();
+                if (!string.IsNullOrWhiteSpace(progress.CurrentNode) && progress.CurrentNode != nextNode)
+                {
+                    progress.CompletedNodeIds.Add(progress.CurrentNode);
+                    progress.FinishedNodes = Math.Max(progress.FinishedNodes, progress.CompletedNodeIds.Count);
+                }
+                progress.CurrentNode = nextNode;
+                progress.NodePercent = null;
+            }
+            else if (type == "execution_cached" && data["nodes"] is JArray cached)
+            {
+                foreach (JToken node in cached)
+                {
+                    progress.CompletedNodeIds.Add(node.ToString());
+                }
+                progress.FinishedNodes = Math.Max(progress.FinishedNodes, progress.CompletedNodeIds.Count);
+            }
+            else if (type == "progress" && progress.CurrentNode is not null)
+            {
+                double value = data.Value<double?>("value") ?? 0;
+                double max = data.Value<double?>("max") ?? 0;
+                // SwarmUI uses these sentinel maxima for output transfer, not sampling progress.
+                if (max > 0 && max < 12345)
+                {
+                    progress.NodePercent = Math.Clamp(value / max * 100, 0, 100);
+                }
+            }
+        }
+    }
+
+    private static JArray NativeQueueEntries(JArray entries, int backendId, bool running)
+    {
+        JArray result = new();
+        if (entries is null)
+        {
+            return result;
+        }
+        foreach (JArray entry in entries.OfType<JArray>())
+        {
+            if (entry.Count < 3 || entry[1]?.Type != JTokenType.String || entry[2] is not JObject graph)
+            {
+                continue;
+            }
+            string promptId = entry[1].ToString();
+            string key = $"{backendId}:{promptId}";
+            JObject item = new()
+            {
+                ["backend_id"] = backendId,
+                ["state"] = running ? "running" : "queued",
+                ["position"] = running ? null : result.Count + 1,
+                ["total_nodes"] = graph.Count,
+                ["current_node"] = null,
+                ["node_type"] = null,
+                ["node_percent"] = null,
+                ["overall_percent"] = null,
+                ["finished_nodes"] = null
+            };
+            if (running)
+            {
+                lock (ComfyProgressLock)
+                {
+                    if (ComfyProgress.TryGetValue(key, out ComfyQueueProgress progress))
+                    {
+                        item["current_node"] = progress.CurrentNode;
+                        item["node_percent"] = progress.NodePercent;
+                        if (progress.FinishedNodes > 0 || progress.NodePercent.HasValue)
+                        {
+                            int total = Math.Max(1, graph.Count);
+                            item["finished_nodes"] = Math.Min(progress.FinishedNodes, total);
+                            item["overall_percent"] = Math.Clamp((progress.FinishedNodes + (progress.NodePercent ?? 0) / 100) / total * 100, 0, 100);
+                        }
+                    }
+                }
+                if (item["current_node"] is JValue nodeId && graph[nodeId.ToString()] is JObject node)
+                {
+                    string classType = node["class_type"]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(classType))
+                    {
+                        item["node_type"] = classType.Length <= 80 ? classType : classType[..80];
+                    }
+                }
+            }
+            result.Add(item);
+        }
+        return result;
+    }
 
     private static readonly HashSet<string> WorkflowFormParameterIds = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -97,6 +248,135 @@ public static class StudioApi
         return compat.IsImage2Video ? null : "image";
     }
 
+    [API.APIDescription("List local ComfyUI queue entries and active SwarmUI generation claims without disclosing prompts or session IDs.", "backends: [], native_tasks: [], tasks: []")]
+    public static async Task<JObject> EcomCraftStudioQueue(Session session)
+    {
+        if (!CanView(session))
+        {
+            return Error("无权查看任务队列。", "bad_permissions");
+        }
+        JArray backends = new();
+        JArray nativeTasks = new();
+        HashSet<string> activeProgress = new();
+        foreach (BackendHandler.T2IBackendData data in Program.Backends.EnumerateT2IBackends.Where(b => b.Backend is ComfyUISelfStartBackend && b.Backend.IsReal))
+        {
+            ComfyUISelfStartBackend backend = (ComfyUISelfStartBackend)data.Backend;
+            JObject item = new()
+            {
+                ["id"] = data.ID,
+                ["status"] = backend.Status.ToString().ToLowerFast(),
+                ["running"] = JValue.CreateNull(),
+                ["pending"] = JValue.CreateNull()
+            };
+            if (backend.Status == BackendStatus.RUNNING)
+            {
+                try
+                {
+                    using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(3));
+                    using HttpResponseMessage response = await ComfyUIAPIAbstractBackend.HttpClient.GetAsync($"{backend.APIAddress}/queue", timeout.Token);
+                    response.EnsureSuccessStatusCode();
+                    JObject queue = JObject.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
+                    item["running"] = (queue["queue_running"] as JArray)?.Count;
+                    item["pending"] = (queue["queue_pending"] as JArray)?.Count;
+                    foreach (JArray entry in new[] { queue["queue_running"] as JArray, queue["queue_pending"] as JArray }.Where(array => array is not null).SelectMany(array => array.OfType<JArray>()))
+                    {
+                        if (entry.Count > 1 && entry[1]?.Type == JTokenType.String)
+                        {
+                            activeProgress.Add($"{data.ID}:{entry[1]}");
+                        }
+                    }
+                    foreach (JToken task in NativeQueueEntries(queue["queue_running"] as JArray, data.ID, true))
+                    {
+                        nativeTasks.Add(task);
+                    }
+                    foreach (JToken task in NativeQueueEntries(queue["queue_pending"] as JArray, data.ID, false))
+                    {
+                        nativeTasks.Add(task);
+                    }
+                }
+                catch (Exception)
+                {
+                    item["status"] = "unresponsive";
+                }
+            }
+            backends.Add(item);
+        }
+        lock (ComfyProgressLock)
+        {
+            foreach (string key in ComfyProgress.Keys.Where(key => !activeProgress.Contains(key)
+                && Environment.TickCount64 - ComfyProgress[key].Updated > 30000).ToArray())
+            {
+                ComfyProgress.Remove(key);
+            }
+        }
+        JArray tasks = new();
+        foreach (Session ownerSession in Program.Sessions.Sessions.Values)
+        {
+            foreach (Session.GenClaim claim in ownerSession.Claims.Values)
+            {
+                int waiting = Volatile.Read(ref claim.WaitingGenerations);
+                int live = Volatile.Read(ref claim.LiveGens);
+                int backendWait = Volatile.Read(ref claim.WaitingBackends);
+                if (waiting <= 0 && live <= 0 && backendWait <= 0)
+                {
+                    continue;
+                }
+                bool mine = ownerSession.User.UserID == session.User.UserID;
+                tasks.Add(new JObject()
+                {
+                    ["id"] = mine ? claim.ID : null,
+                    ["mine"] = mine,
+                    ["state"] = claim.ShouldCancel ? "stopping" : live > 0 ? "running" : backendWait > 0 ? "waiting_backend" : "queued",
+                    ["count"] = Math.Max(1, waiting),
+                    ["elapsed_seconds"] = Math.Max(0, (Environment.TickCount64 - claim.StartTime) / 1000),
+                    ["request_id"] = mine && claim.UserRequestId > 0 ? claim.UserRequestId : null
+                });
+            }
+        }
+        return new JObject() { ["backends"] = backends, ["native_tasks"] = nativeTasks, ["tasks"] = tasks };
+    }
+
+    [API.APIDescription("Cancel one active generation claim belonging to the authenticated user.", "success: true")]
+    public static Task<JObject> EcomCraftStudioCancelTask(Session session, long task_id)
+    {
+        if (!CanView(session) || !session.User.HasPermission(Permissions.BasicImageGeneration))
+        {
+            return Task.FromResult(Error("此账号没有结束任务的权限。", "bad_permissions"));
+        }
+        foreach (Session ownerSession in session.User.CurrentSessions.Values)
+        {
+            if (ownerSession.Claims.TryGetValue(task_id, out Session.GenClaim claim)
+                && (Volatile.Read(ref claim.WaitingGenerations) > 0 || Volatile.Read(ref claim.LiveGens) > 0))
+            {
+                try
+                {
+                    claim.LocalClaimInterrupt.Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                    return Task.FromResult(Error("任务已结束，请刷新队列。", "task_not_found"));
+                }
+                return Task.FromResult(new JObject() { ["success"] = true });
+            }
+        }
+        return Task.FromResult(Error("任务不存在或不属于当前账号。", "task_not_found"));
+    }
+
+    private static JObject LocalBackendStatus() => new()
+    {
+        ["local_backends_observed"] = Program.Backends.EnumerateT2IBackends.Count(IsLocalAvailable),
+        ["local_backends_starting"] = Program.Backends.EnumerateT2IBackends.Count(data => data.Backend is ComfyUISelfStartBackend
+            && data.Backend.IsReal && data.Backend.IsEnabled && data.Backend.Status is BackendStatus.WAITING or BackendStatus.LOADING),
+        ["local_backends_errored"] = Program.Backends.EnumerateT2IBackends.Count(data => data.Backend is ComfyUISelfStartBackend
+            && data.Backend.IsReal && data.Backend.IsEnabled && data.Backend.Status == BackendStatus.ERRORED)
+    };
+
+    [API.APIDescription("Read the current availability of local self-starting ComfyUI backends.", "local_backends_observed: 0, local_backends_starting: 0, local_backends_errored: 0")]
+    public static Task<JObject> EcomCraftStudioBackendStatus(Session session)
+    {
+        return Task.FromResult(CanView(session) ? LocalBackendStatus() : Error("无权访问创作工作台。", "bad_permissions"));
+    }
+
     [API.APIDescription("Read authorized local model metadata and observed local backend availability. No probes or cloud calls; capabilities still require live validation.", "models: [], local_backends_observed: 0, can_generate: false, cloud_configured: false")]
     public static Task<JObject> EcomCraftStudioCatalog(Session session)
     {
@@ -104,17 +384,13 @@ public static class StudioApi
         {
             return Task.FromResult(Error("无权访问创作工作台或模型列表。", "bad_permissions"));
         }
+        ImportNativeComfyWorkflows();
         JObject result = new()
         {
             ["user_name"] = session.User.UserID,
             ["can_generate"] = session.User.HasPermission(Permissions.BasicImageGeneration),
             ["can_generate_video"] = session.User.HasPermission(Permissions.BasicImageGeneration) && session.User.HasPermission(Permissions.ParamVideo),
             ["can_manage_settings"] = session.User.HasPermission(Permissions.EditServerSettings),
-            ["local_backends_observed"] = Program.Backends.EnumerateT2IBackends.Count(IsLocalAvailable),
-            ["local_backends_starting"] = Program.Backends.EnumerateT2IBackends.Count(data => data.Backend is ComfyUISelfStartBackend
-                && data.Backend.IsReal && data.Backend.IsEnabled && data.Backend.Status is BackendStatus.WAITING or BackendStatus.LOADING),
-            ["local_backends_errored"] = Program.Backends.EnumerateT2IBackends.Count(data => data.Backend is ComfyUISelfStartBackend
-                && data.Backend.IsReal && data.Backend.IsEnabled && data.Backend.Status == BackendStatus.ERRORED),
             ["cloud_configured"] = false,
             ["models"] = new JArray(LocalModels(session).Where(m => Kind(m) is not null).OrderBy(m => m.Name).Select(m => new JObject()
             {
@@ -131,7 +407,277 @@ public static class StudioApi
             ["schedulers"] = OptionPairs(ComfyUIBackendExtension.Schedulers),
             ["workflows"] = PublishedWorkflowCatalog(session)
         };
+        foreach (KeyValuePair<string, JToken> entry in LocalBackendStatus())
+        {
+            result[entry.Key] = entry.Value;
+        }
         return Task.FromResult(result);
+    }
+
+    /// <summary>Imports native ComfyUI canvas workflows from configured, administrator-controlled directories.</summary>
+    private static void ImportNativeComfyWorkflows()
+    {
+        lock (NativeWorkflowLock)
+        {
+            ImportNativeComfyWorkflowsLocked();
+        }
+    }
+
+    /// <summary>Refreshes native workflows while the catalog lock is held.</summary>
+    private static void ImportNativeComfyWorkflowsLocked()
+    {
+        HashSet<string> paths = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> discoveredNames = new(StringComparer.OrdinalIgnoreCase);
+        foreach (string configured in Program.ServerSettings.EcomCraft.ComfyWorkflowSearchPaths ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(configured))
+            {
+                try
+                {
+                    paths.Add(Path.GetFullPath(configured.Trim()));
+                }
+                catch (Exception ex)
+                {
+                    Logs.Warning($"EcomCraft invalid ComfyUI workflow directory: {ex.Message}");
+                }
+            }
+        }
+        if (paths.Count == 0)
+        {
+            foreach (ComfyUISelfStartBackend backend in Program.Backends.EnumerateT2IBackends
+                .Select(data => data.Backend as ComfyUISelfStartBackend).Where(value => value is not null))
+            {
+                string userDirectory = Path.Combine(backend.ComfyPathBase, "user");
+                Match overrideMatch = Regex.Match(backend.Settings.ExtraArgs ?? "", @"(?:^|\s)--user-directory(?:=|\s+)(?:""([^""]+)""|'([^']+)'|([^\s]+))");
+                if (overrideMatch.Success)
+                {
+                    try
+                    {
+                        string overridePath = overrideMatch.Groups[1].Success ? overrideMatch.Groups[1].Value
+                            : overrideMatch.Groups[2].Success ? overrideMatch.Groups[2].Value : overrideMatch.Groups[3].Value;
+                        userDirectory = Path.GetFullPath(Path.IsPathRooted(overridePath)
+                            ? overridePath : Path.Combine(backend.ComfyPathBase, overridePath));
+                    }
+                    catch (Exception ex)
+                    {
+                        Logs.Warning($"EcomCraft invalid ComfyUI --user-directory: {ex.Message}");
+                        continue;
+                    }
+                }
+                paths.Add(Path.Combine(userDirectory, "default", "workflows"));
+            }
+        }
+        foreach (string directory in paths)
+        {
+            if (!Directory.Exists(directory))
+            {
+                continue;
+            }
+            string[] files;
+            try
+            {
+                files = Directory.GetFiles(directory, "*.json", SearchOption.AllDirectories);
+            }
+            catch (Exception ex)
+            {
+                Logs.Warning($"EcomCraft could not scan ComfyUI workflow directory '{directory}': {ex.Message}");
+                continue;
+            }
+            foreach (string file in files)
+            {
+                try
+                {
+                    if (new FileInfo(file).Length > 2 * 1024 * 1024)
+                    {
+                        continue;
+                    }
+                    string relativeName = Path.GetRelativePath(directory, file).Replace('\\', '/').BeforeLast('.');
+                    string name = $"ComfyUI - {relativeName.Replace('/', '-')}";
+                    if (discoveredNames.Contains(name)
+                        || (!NativeWorkflowIds.Contains(name) && ComfyUIBackendExtension.CustomWorkflows.ContainsKey(name)))
+                    {
+                        Logs.Warning($"EcomCraft skipped duplicate native workflow name '{name}' from '{file}'.");
+                        continue;
+                    }
+                    ComfyUIBackendExtension.ComfyCustomWorkflow imported = ConvertNativeWorkflow(name, File.ReadAllText(file));
+                    if (imported is not null)
+                    {
+                        ComfyUIBackendExtension.CustomWorkflows[name] = imported;
+                        discoveredNames.Add(name);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logs.Warning($"EcomCraft could not import native ComfyUI workflow '{file}': {ex.Message}");
+                }
+            }
+        }
+        foreach (string name in NativeWorkflowIds)
+        {
+            if (!discoveredNames.Contains(name))
+            {
+                ComfyUIBackendExtension.CustomWorkflows.TryRemove(name, out _);
+            }
+        }
+        NativeWorkflowIds.Clear();
+        NativeWorkflowIds.UnionWith(discoveredNames);
+    }
+
+    /// <summary>Converts a native ComfyUI canvas file into the API prompt format used by SwarmUI.</summary>
+    private static ComfyUIBackendExtension.ComfyCustomWorkflow ConvertNativeWorkflow(string name, string json)
+    {
+        JObject canvas = ParseWorkflowObject(json);
+        if (canvas?["nodes"] is not JArray canvasNodes || canvasNodes.Count == 0 || canvas["links"] is not JArray links)
+        {
+            return null;
+        }
+        HashSet<string> positiveTextNodes = [];
+        HashSet<string> negativeTextNodes = [];
+        bool hasSampler = false;
+        bool hasOutput = false;
+        foreach (JObject node in canvasNodes.OfType<JObject>())
+        {
+            string nodeType = node["type"]?.ToString();
+            hasOutput |= nodeType is "SaveImage" or "PreviewImage";
+            if (!string.Equals(node["type"]?.ToString(), "KSampler", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(node["type"]?.ToString(), "KSamplerAdvanced", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            hasSampler = true;
+            foreach (JObject input in (node["inputs"] as JArray)?.OfType<JObject>() ?? [])
+            {
+                if (input["name"]?.ToString() is not ("positive" or "negative") || input["link"] is null)
+                {
+                    continue;
+                }
+                JArray source = null;
+                foreach (JToken linkToken in links)
+                {
+                    if (linkToken is JArray link && link.Count >= 5 && link[0].ToString() == input["link"]?.ToString())
+                    {
+                        source = new JArray(link[1].ToString(), link[2].DeepClone());
+                        break;
+                    }
+                }
+                if (source is not null)
+                {
+                    (input["name"]?.ToString() == "positive" ? positiveTextNodes : negativeTextNodes).Add(source[0].ToString());
+                }
+            }
+        }
+        if (!hasSampler || !hasOutput || positiveTextNodes.Count == 0 || negativeTextNodes.Count == 0)
+        {
+            return null;
+        }
+        JObject prompt = new();
+        bool mappedPositive = false;
+        bool mappedNegative = false;
+        foreach (JObject node in canvasNodes.OfType<JObject>())
+        {
+            string id = node["id"]?.ToString();
+            string type = node["type"]?.ToString();
+            if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(type))
+            {
+                continue;
+            }
+            JObject inputs = new();
+            JObject namedValues = node["widgets_values_named"] as JObject;
+            int widgetIndex = 0;
+            foreach (JObject input in (node["inputs"] as JArray)?.OfType<JObject>() ?? [])
+            {
+                string inputName = input["name"]?.ToString();
+                if (string.IsNullOrWhiteSpace(inputName))
+                {
+                    continue;
+                }
+                JToken link = input["link"];
+                JToken value = null;
+                if (link is not null && link.Type != JTokenType.Null)
+                {
+                    foreach (JToken linkToken in links)
+                    {
+                        if (linkToken is JArray linkData && linkData.Count >= 5 && linkData[0].ToString() == link.ToString())
+                        {
+                            value = new JArray(linkData[1].ToString(), linkData[2].DeepClone());
+                            break;
+                        }
+                    }
+                    if (value is null)
+                    {
+                        return null;
+                    }
+                }
+                else if (input["widget"] is not null)
+                {
+                    value = namedValues?[inputName]?.DeepClone();
+                    if (value is null && node["widgets_values"] is JArray values && widgetIndex < values.Count)
+                    {
+                        value = values[widgetIndex++].DeepClone();
+                        if (inputName == "seed" && widgetIndex < values.Count
+                            && values[widgetIndex]?.Type == JTokenType.String
+                            && values[widgetIndex].ToString() is "randomize" or "fixed" or "increment" or "decrement")
+                        {
+                            widgetIndex++;
+                        }
+                    }
+                }
+                if (value is not null)
+                {
+                    inputs[inputName] = value;
+                }
+            }
+            if (type == "CLIPTextEncode" && inputs.ContainsKey("text"))
+            {
+                if (positiveTextNodes.Contains(id))
+                {
+                    inputs["text"] = "${prompt}";
+                    mappedPositive = true;
+                }
+                else if (negativeTextNodes.Contains(id))
+                {
+                    inputs["text"] = "${negative_prompt}";
+                    mappedNegative = true;
+                }
+            }
+            if (type is "KSampler" or "KSamplerAdvanced")
+            {
+                ReplaceIfPresent(inputs, "seed", "%%_COMFYFIXME_${seed:-1}_ENDFIXME_%%");
+                ReplaceIfPresent(inputs, "steps", "%%_COMFYFIXME_${steps:20}_ENDFIXME_%%");
+                ReplaceIfPresent(inputs, "cfg", "%%_COMFYFIXME_${cfg_scale:7}_ENDFIXME_%%");
+                ReplaceIfPresent(inputs, "sampler_name", "${sampler:euler}");
+                ReplaceIfPresent(inputs, "scheduler", "${scheduler:normal}");
+            }
+            if (type == "EmptyLatentImage")
+            {
+                ReplaceIfPresent(inputs, "width", "%%_COMFYFIXME_${width:512}_ENDFIXME_%%");
+                ReplaceIfPresent(inputs, "height", "%%_COMFYFIXME_${height:512}_ENDFIXME_%%");
+                if (inputs.ContainsKey("batch_size"))
+                {
+                    inputs["batch_size"] = 1;
+                }
+            }
+            if (type is "CheckpointLoaderSimple" or "CheckpointLoader")
+            {
+                ReplaceIfPresent(inputs, "ckpt_name", "${model}");
+            }
+            prompt[id] = new JObject() { ["class_type"] = type, ["inputs"] = inputs };
+        }
+        if (prompt.Count == 0 || !mappedPositive || !mappedNegative)
+        {
+            return null;
+        }
+        return new(name, json, prompt.ToString(Newtonsoft.Json.Formatting.None), "{}", "{}", null,
+            "从 ComfyUI 工作流目录自动发现。", true);
+    }
+
+    /// <summary>Replaces a native node input only when that input exists in the source workflow.</summary>
+    private static void ReplaceIfPresent(JObject inputs, string id, string value)
+    {
+        if (inputs.ContainsKey(id))
+        {
+            inputs[id] = value;
+        }
     }
 
     [API.APIDescription("Generate using a validated allowlist on local self-starting ComfyUI only. No cloud fallback, automatic retries or durable task guarantees. rawInput is the root request JSON.", "images: [\"View/user/result.png\"]")]
@@ -317,7 +863,7 @@ public static class StudioApi
             JObject result = await T2IAPI.GenerateText2Image(session, images, input);
             if (result.ContainsKey("error"))
             {
-                return Error("引擎未完整返回结果。请在原生引擎检查模型依赖、参数和个人历史；可能已有部分输出，请勿直接重复提交。", "generation_failed");
+                return GenerationError(result, false);
             }
             return result;
         }
@@ -541,6 +1087,8 @@ public static class StudioApi
         {
             return Error("此账号没有使用已发布工作流的权限。", "bad_permissions");
         }
+        // ComfyUI backend refreshes clear the in-memory workflow registry, so restore native entries before lookup.
+        ImportNativeComfyWorkflows();
         if (!TryGetPublishedWorkflow(workflowId, out ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
             out JObject metadata, out JObject savedValues))
         {
@@ -701,7 +1249,7 @@ public static class StudioApi
             JObject result = await T2IAPI.GenerateText2Image(session, images, input);
             if (result.ContainsKey("error"))
             {
-                return Error("引擎未完整返回结果。请在原生引擎检查工作流依赖、参数和个人历史；可能已有部分输出，请勿直接重复提交。", "generation_failed");
+                return GenerationError(result, true);
             }
             return result;
         }
@@ -919,6 +1467,39 @@ public static class StudioApi
         }
         byte[] buffer = new byte[(data.Length - comma) * 3 / 4];
         return Convert.TryFromBase64String(data[(comma + 1)..], buffer, out int count) && count > 0 && count <= MaxReferenceBytes;
+    }
+
+    private static JObject GenerationError(JObject result, bool workflow)
+    {
+        string detail = result["error"]?.ToString() ?? "";
+        string requestId = result["request_id"]?.ToString();
+        Logs.Warning($"EcomCraft {(workflow ? "workflow" : "standard")} generation failed{(string.IsNullOrWhiteSpace(requestId) ? "" : $" (request {requestId})")}: {detail}");
+        string message = detail switch
+        {
+            "Timeout! All backends are occupied with other tasks." => "本机 ComfyUI 节点等待超时，请检查后端状态和队列。",
+            "Generation session interrupted." => "生成任务已被中断，请在原生引擎核对队列和个人历史。",
+            "No images were generated (all refused, or failed - check server logs for details)." => "引擎没有生成可保存的结果，请检查工作流输出节点、模型依赖和服务器日志。",
+            "Server failed to save an image." => "引擎生成了结果，但服务器保存文件失败，请检查输出目录和磁盘空间。",
+            _ => $"引擎未完整返回结果。请在原生引擎检查{(workflow ? "工作流" : "模型")}依赖、参数和个人历史；可能已有部分输出，请勿直接重复提交。"
+        };
+        Match failedNode = Regex.Match(detail, @"^ComfyUI execution error \(Node ([0-9]+): ([A-Za-z0-9_]+)\):");
+        if (failedNode.Success)
+        {
+            message = $"ComfyUI 节点 {failedNode.Groups[1].Value}（{failedNode.Groups[2].Value}）执行失败。请在原生工作流中检查该节点及其模型依赖，并核对个人历史。";
+        }
+        if (detail.Contains("out of memory", StringComparison.OrdinalIgnoreCase))
+        {
+            message = "生成时显存不足。请在原生引擎核对任务结果，并尝试减小尺寸或使用更轻量的模型。";
+        }
+        if (detail.Contains("miopenStatusInternalError", StringComparison.OrdinalIgnoreCase))
+        {
+            message = "本机 ROCm/MIOpen 运行失败。请检查 ComfyUI 进程对 MIOpen 缓存目录的访问权限，并查看服务器日志中的原始错误。";
+        }
+        if (!string.IsNullOrWhiteSpace(requestId))
+        {
+            message += $" 请求编号：{requestId}。";
+        }
+        return Error(message, "generation_failed");
     }
 
     private static JObject Error(string text, string id) => new() { ["error"] = text, ["error_id"] = id };

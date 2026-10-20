@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <title>EcomCraft Studio · 创作工作台</title>
-    <link rel="stylesheet" href="/ExtensionFile/EcomCraft/Studio/studio.css?v=0.3.0">
-    <script src="/ExtensionFile/EcomCraft/Studio/studio.js?v=0.3.1-workflow-mode-hint" defer></script>
+    <link rel="stylesheet" href="/ExtensionFile/EcomCraft/Studio/studio.css?v=0.3.4-queue-progress">
+    <script src="/ExtensionFile/EcomCraft/Studio/studio.js?v=0.3.5-backend-status" defer></script>
 </head>
 <body>
     <a class="skip-link" href="#studio-main">跳到创作区</a>
@@ -21,6 +21,7 @@
         <nav class="rail-nav">
             <a class="rail-item" data-view="create" href="#create"><span class="ri" aria-hidden="true">◫</span><span class="rt">创作工作台</span></a>
             <a class="rail-item" data-view="gallery" href="#gallery"><span class="ri" aria-hidden="true">▦</span><span class="rt">作品画廊</span><span class="rail-count" id="gallery-count">0</span></a>
+            <a class="rail-item" data-view="queue" href="#queue"><span class="ri" aria-hidden="true">☷</span><span class="rt">任务队列</span><span class="rail-count" id="queue-count">0</span></a>
         </nav>
 
         <div class="rail-bottom">
@@ -310,6 +311,18 @@
                     <p>去创作工作台生成第一张商品图吧。</p>
                     <button class="btn-primary" id="gallery-gocreate">开始创作</button>
                 </div>
+            </section>
+
+            <section class="view" id="view-queue" aria-label="任务队列" hidden>
+                <header class="page-head">
+                    <div class="page-head-text"><h1>任务队列</h1><p id="queue-updated">正在读取队列…</p></div>
+                    <button class="icon-btn" id="queue-refresh" title="刷新队列" aria-label="刷新队列">⟳</button>
+                </header>
+                <div class="banner" id="queue-message" role="status" hidden></div>
+                <div class="queue-backends" id="queue-backends"></div>
+                <div class="queue-list-head"><h2>当前任务</h2><span id="queue-task-count">0 项</span></div>
+                <div class="queue-list" id="queue-list"></div>
+                <p class="queue-empty" id="queue-empty" hidden>当前没有已登记的生成任务。</p>
             </section>
 
             <footer class="page-footer">

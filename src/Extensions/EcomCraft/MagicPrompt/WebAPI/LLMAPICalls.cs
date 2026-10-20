@@ -16,7 +16,7 @@ public class LLMAPICalls : MagicPromptAPI
 {
     protected static readonly HttpClient HttpClient = CreateHttpClient();
 
-    /// <summary>Backends that run locally and benefit from a fast reachability check before API calls.</summary>
+    /// <summary>Backends that may run locally and benefit from a fast reachability check before API calls.</summary>
     private static readonly HashSet<string> LocalBackends = new(StringComparer.OrdinalIgnoreCase) { "ollama", "openaiapi" };
 
     private static readonly object _reachabilityLock = new();
@@ -33,8 +33,8 @@ public class LLMAPICalls : MagicPromptAPI
         return client;
     }
 
-    /// <summary>Checks whether a local backend server is reachable with a fast probe.
-    /// Returns true for cloud backends (they fail fast on their own via DNS/TLS).
+    /// <summary>Checks whether a loopback backend server is reachable with a fast probe.
+    /// Remote OpenAI-compatible endpoints must be called directly: their root URL may not serve GET requests.
     /// Results are cached: 10s on success, 30s on failure to avoid repeated probes to a dead server.</summary>
     public static async Task<bool> IsServerReachable(string backend, JObject settings)
     {
@@ -50,6 +50,10 @@ public class LLMAPICalls : MagicPromptAPI
             return false;
         }
         baseUrl = baseUrl.TrimEnd('/');
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri serverUri) || !serverUri.IsLoopback)
+        {
+            return true;
+        }
         // Check the cache first — failures are cached longer to avoid repeated probes
         lock (_reachabilityLock)
         {

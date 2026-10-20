@@ -283,6 +283,8 @@ public static class T2IAPI
         try
         {
             user_input = RequestToParams(session, rawInput);
+            claim.UserRequestId = user_input.UserRequestId;
+            user_input.InterruptToken = claim.InterruptToken;
             continueAfterErrors = user_input.Get(T2IParamTypes.ContinueAfterErrors, false);
         }
         catch (SwarmReadableErrorException ex)
@@ -863,6 +865,18 @@ public static class T2IAPI
                     list.Reverse();
                 }
             }
+            OutputMetadataTracker.OutputMetadataEntry getMetadataOrSkip(string file)
+            {
+                try
+                {
+                    return OutputMetadataTracker.GetMetadataFor(file, root, starNoFolders);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    Logs.Warning($"Skipping image '{file}' because its metadata could not be read: {ex.ReadableString()}");
+                    return null;
+                }
+            }
             Parallel.ForEach(dirs.Append(""), new ParallelOptions() { MaxDegreeOfParallelism = 5, CancellationToken = Program.GlobalProgramCancel }, folder =>
             {
                 int localId = Interlocked.Increment(ref id);
@@ -880,7 +894,7 @@ public static class T2IAPI
                 }
                 List<string> subFiles = [.. Directory.EnumerateFiles(actualPath).Take(localLimit)];
                 IEnumerable<string> newFileNames = subFiles.Select(f => f.Replace('\\', '/')).Where(isAllowed).Where(f => !f.AfterLast('/').StartsWithFast('.') && extensions.Contains(f.AfterLast('.')) && !f.EndsWith(".swarmpreview.jpg") && !f.EndsWith(".swarmpreview.webp"));
-                List<ImageHistoryHelper> localFiles = [.. newFileNames.Select(f => new ImageHistoryHelper(prefix + f.AfterLast('/'), OutputMetadataTracker.GetMetadataFor(f, root, starNoFolders))).Where(f => f.Metadata is not null)];
+                List<ImageHistoryHelper> localFiles = [.. newFileNames.Select(f => new ImageHistoryHelper(prefix + f.AfterLast('/'), getMetadataOrSkip(f))).Where(f => f.Metadata is not null)];
                 int leftOver = Interlocked.Add(ref remaining, -localFiles.Count);
                 if (hasFilter)
                 {

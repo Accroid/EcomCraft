@@ -30,6 +30,9 @@ public abstract class ComfyUIAPIAbstractBackend : AbstractT2IBackend
     /// <summary>Internal HTTP handler.</summary>
     public static HttpClient HttpClient = NetworkBackendUtils.MakeHttpClient();
 
+    /// <summary>Reports ComfyUI progress for the prompt owned by this backend connection.</summary>
+    public static event Action<int, string, int, JObject> QueueProgressObserved;
+
     public JObject RawObjectInfo;
 
     public HashSet<string> NodeTypes = [];
@@ -414,6 +417,14 @@ public abstract class ComfyUIAPIAbstractBackend : AbstractT2IBackend
                             {
                                 continue;
                             }
+                        }
+                        try
+                        {
+                            QueueProgressObserved?.Invoke(BackendData.ID, promptId, expectedNodes, json);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logs.Warning($"ComfyUI queue progress observer failed: {ex.Message}");
                         }
                         switch (type)
                         {

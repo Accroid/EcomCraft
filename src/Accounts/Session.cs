@@ -107,6 +107,15 @@ public class Session : IEquatable<Session>
         /// <summary>Token source to interrupt just this claim's set.</summary>
         public CancellationTokenSource LocalClaimInterrupt = new();
 
+        /// <summary>Combined session and individual task cancellation source.</summary>
+        public CancellationTokenSource CombinedInterrupt;
+
+        /// <summary>Time this claim was created, for queue monitoring.</summary>
+        public long StartTime = Environment.TickCount64;
+
+        /// <summary>User-visible generation request ID, populated after parameter parsing.</summary>
+        public long UserRequestId;
+
         /// <summary>Unique claim ID from an incremental number.</summary>
         public long ID = Interlocked.Increment(ref ClaimID);
 
@@ -116,7 +125,8 @@ public class Session : IEquatable<Session>
         public GenClaim(Session session, int gens, int modelLoads, int backendWaits, int liveGens)
         {
             Sess = session;
-            InterruptToken = session.SessInterrupt.Token;
+            CombinedInterrupt = CancellationTokenSource.CreateLinkedTokenSource(session.SessInterrupt.Token, LocalClaimInterrupt.Token);
+            InterruptToken = CombinedInterrupt.Token;
             Extend(gens, modelLoads, backendWaits, liveGens);
             session.Claims[ID] = this;
         }
@@ -145,6 +155,7 @@ public class Session : IEquatable<Session>
         {
             Complete(WaitingGenerations, LoadingModels, WaitingBackends, LiveGens);
             Sess.Claims.TryRemove(ID, out _);
+            CombinedInterrupt.Dispose();
             LocalClaimInterrupt.Dispose();
             GC.SuppressFinalize(this);
         }

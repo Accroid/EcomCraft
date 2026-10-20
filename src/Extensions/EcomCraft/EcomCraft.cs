@@ -3,6 +3,7 @@ using EcomCraftStudio.Studio;
 using SwarmUI.Text2Image;
 using SwarmUI.Accounts;
 using SwarmUI.Core;
+using SwarmUI.Builtin_ComfyUIBackend;
 using SwarmUI.WebAPI;
 
 namespace EcomCraftStudio;
@@ -43,8 +44,12 @@ public class EcomCraft : Extension
         OtherAssets.Add("Studio/studio.css");
         OtherAssets.Add("Studio/studio.js");
         API.RegisterAPICall(StudioApi.EcomCraftStudioCatalog, false, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(StudioApi.EcomCraftStudioBackendStatus, false, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(StudioApi.EcomCraftStudioQueue, false, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(StudioApi.EcomCraftStudioCancelTask, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(StudioApi.EcomCraftStudioGenerate, true, Permissions.BasicImageGeneration);
         T2IEngine.AltBackendValidators.Add(StudioApi.ValidateLocalBackend);
+        ComfyUIAPIAbstractBackend.QueueProgressObserved += StudioApi.ObserveComfyProgress;
     }
 
     /// <inheritdoc/>
@@ -59,5 +64,6 @@ public class EcomCraft : Extension
         T2IParamTypes.ParameterPermissionOverrideValidators.Remove(StudioApi.PublishedWorkflowPermissionOverride);
         T2IParamTypes.FakeTypeProviders.Remove(StudioApi.PublishedWorkflowDynamicParamProvider);
         T2IEngine.AltBackendValidators.Remove(StudioApi.ValidateLocalBackend);
+        ComfyUIAPIAbstractBackend.QueueProgressObserved -= StudioApi.ObserveComfyProgress;
     }
 }

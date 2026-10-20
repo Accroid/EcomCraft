@@ -67,9 +67,20 @@ public class Settings : AutoConfiguration
     [ConfigComment("Settings related to server performance.")]
     public PerformanceData Performance = new();
 
+    [ConfigComment("Settings related to EcomCraft workflow discovery.")]
+    public EcomCraftData EcomCraft = new();
+
     [ConfigComment("List of disabled extension folder names.\nDisabled extensions remain installed on disk, but are not loaded at server startup.")]
     [SettingHidden]
     public List<string> DisabledExtensions = [];
+
+    /// <summary>Settings related to EcomCraft workflow discovery.</summary>
+    public class EcomCraftData : AutoConfiguration
+    {
+        /// <summary>Optional directories to scan for native ComfyUI canvas workflow files.</summary>
+        [ConfigComment("Optional directories containing native ComfyUI workflow JSON files. If empty, EcomCraft discovers the workflow folder from each local ComfyUI backend and its --user-directory argument.")]
+        public List<string> ComfyWorkflowSearchPaths = [];
+    }
 
     /// <summary>Settings related to Swarm server maintenance..</summary>
     public class ServerMaintenanceData : AutoConfiguration

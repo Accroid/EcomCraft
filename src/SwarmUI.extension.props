@@ -11,6 +11,8 @@
             <HintPath>../../bin/live_release/SwarmUI.dll</HintPath>
             <Private>false</Private>
         </Reference>
+        <!-- ExtensionManager places shared intermediate files under src/obj. -->
+        <Compile Remove="**/obj/**/*.cs" />
         <None Remove="**" />
         <Content Remove="**" />
         <Compile Include="../../GlobalSuppressions.cs" />

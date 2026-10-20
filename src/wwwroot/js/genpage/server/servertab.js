@@ -138,7 +138,7 @@ class UserAdminManager {
         let html = '';
         for (let user of this.userNames) {
             if (!this.filterBox.value || user.includes(this.filterBox.value)) {
-                html += `<div class="admin-user-manage-name" onclick="userAdminManager.clickUser(unescapeHtml('${escapeHtml(user)}'))" title="Click to manage user '${escapeHtml(user)}'">${escapeHtml(user)}</div>`;
+                html += `<div class="admin-user-manage-name" onclick="userAdminManager.clickUser(unescapeHtml('${escapeHtml(user)}'))" title="${escapeHtml(translate('Click to manage user'))}: ${escapeHtml(user)}">${escapeHtml(user)}</div>`;
             }
         }
         this.leftBoxUserList.innerHTML = html;
