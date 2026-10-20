@@ -576,9 +576,15 @@ public class Installation
     /// <summary>Main install function entry point.</summary>
     public static async Task Install(WebSocket socket, string theme, string installed_for, string backend, string models, bool install_amd, string language, bool make_shortcut, Session session)
     {
+        if (!LanguagesHelper.Languages.ContainsKey(language))
+        {
+            throw new SwarmUserErrorException("Invalid language input!");
+        }
         InstallSocket = socket;
         InstallLanguage = language;
         Program.ServerSettings.DefaultUser.Language = language;
+        session.User.Settings.TrySetFieldValue(nameof(Settings.User.Language), language);
+        session.User.Save();
         if (Directory.Exists("dlbackend/comfy"))
         {
             if (IsCompleteBackendPresent())
