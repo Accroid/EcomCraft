@@ -36,6 +36,8 @@ The first launch builds the server and restores .NET dependencies, which may tak
 2. On the initial setup page, choose who can access the server, install a **ComfyUI Self-Starting** backend, and download models, or skip backend and model installation and configure them later. The default “just yourself” mode treats local visitors as administrators; configure separate user accounts after installation if needed.
 3. When the local ComfyUI backend is running, open `http://127.0.0.1:7801/EcomCraft`. Access to the workspace requires the relevant generation-page and model permissions.
 
+If an existing ComfyUI installation was not detected, click **Scan ComfyUI** at the top of **Server → Backends** in the native engine. Choose the desired `main.py` if multiple installations are found, select an existing or new **ComfyUI Self-Starting** backend, then click Save on its card. Scanning only discovers paths; it does not change the backend automatically.
+
 Workspace generation uses only local self-starting ComfyUI; it does not switch to a remote or cloud backend when the local backend is unavailable. For prompt enhancement, see the [Prompt Enhancement Guide](docs/EcomCraft%20Prompt%20Enhancement.md). If NuGet connection errors occur during the build, check your network, proxy, and access to `https://api.nuget.org/v3/index.json`.
 
 After opening the workspace, switch to the task queue to see running local ComfyUI jobs, queue positions, and node progress. Users with generation permission can stop their own active tasks. Queue state is runtime information and is not retained after a server restart.

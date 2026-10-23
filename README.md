@@ -2,7 +2,7 @@
 
 > **语言：** 简体中文 · [English](README.en.md)
 
-EcomCraft Studio 是基于 [SwarmUI](https://github.com/mcmonkeyprojects/SwarmUI) 的电商创作工作台。本仓库包含 SwarmUI 服务器源码及 EcomCraft 扩展，**无需另行安装上游 SwarmUI**。项目仍在开发中，尚未完成生产环境验收。
+EcomCraft Studio 是基于 [SwarmUI](https://github.com/mcmonkeyprojects/SwarmUI) 的电商创作工作台。本仓库包含 SwarmUI 服务器源码及 EcomCraft 扩展，**无需另行安装上游 SwarmUI**。项目仍在开发中，尚未完成生产环境验收。如果你在使用过程中出现bug，请通过Issues提交给我。
 
 ## 快速开始
 
@@ -35,6 +35,8 @@ cd EcomCraft
 1. 在本机浏览器打开 `http://127.0.0.1:7801`。如果已修改服务器端口或监听地址，以实际配置为准。
 2. 按首次设置页面选择使用范围、安装 **ComfyUI Self-Starting** 后端并下载模型，或跳过后端和模型安装后再配置。默认的“仅自己使用”模式会将本机访问者视为管理员；多人账号需要安装后另行配置。
 3. 确认本机 ComfyUI 后端运行后，打开 `http://127.0.0.1:7801/EcomCraft` 进入工作台。工作台需要相应的生成页面和模型访问权限。
+
+安装后若未识别已有 ComfyUI，可在原生引擎的 **Server → Backends** 页面顶部点击 **Scan ComfyUI**；找到多个安装位置时选择要使用的 `main.py`，再选择现有或新建的 **ComfyUI Self-Starting** 后端，最后点击后端卡片上的 Save。扫描只查找路径，不会自动修改后端。
 
 工作台的生成请求只允许本机自启动 ComfyUI，不会在本机不可用时自动改用远程或云端后端。配置提示词优化可阅读[提示词优化指南](docs/EcomCraft%20Prompt%20Enhancement.md)。若构建时出现 NuGet 连接错误，检查网络、代理和 `https://api.nuget.org/v3/index.json` 的访问情况。
 

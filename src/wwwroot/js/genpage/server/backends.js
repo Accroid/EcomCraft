@@ -7,6 +7,111 @@ let backendsRevisedCallbacks = [];
 
 let hasLoadedBackends = false;
 
+/** Scans for ComfyUI installations and places a selected path in a backend editor. */
+class ComfyDiscovery {
+    constructor() {
+        this.scanButton = document.getElementById('comfy-discovery-scan');
+        this.pathSelect = document.getElementById('comfy-discovery-path');
+        this.targetSelect = document.getElementById('comfy-discovery-target');
+        this.useButton = document.getElementById('comfy-discovery-use');
+        this.status = document.getElementById('comfy-discovery-status');
+        this.scanButton.addEventListener('click', () => this.scan());
+        this.pathSelect.addEventListener('change', () => this.updateUseButton());
+        this.targetSelect.addEventListener('change', () => this.updateUseButton());
+        this.useButton.addEventListener('click', () => this.useSelectedPath());
+    }
+
+    updateUseButton() {
+        this.useButton.disabled = !this.pathSelect.value || !this.targetSelect.value;
+    }
+
+    scan() {
+        this.scanButton.disabled = true;
+        this.pathSelect.hidden = true;
+        this.targetSelect.hidden = true;
+        this.useButton.hidden = true;
+        this.status.textContent = 'Scanning local installations…';
+        genericRequest('ScanComfyInstallations', {}, data => {
+            let paths = Array.isArray(data.paths) ? data.paths : [];
+            this.pathSelect.replaceChildren();
+            if (paths.length == 0) {
+                this.status.textContent = 'No ComfyUI installation found. Check its location or enter the main.py path manually.';
+                this.scanButton.disabled = false;
+                return;
+            }
+            this.pathSelect.add(new Option('Select a ComfyUI installation', ''));
+            for (let path of paths) {
+                this.pathSelect.add(new Option(path, path));
+            }
+            if (paths.length == 1) {
+                this.pathSelect.value = paths[0];
+            }
+            this.targetSelect.replaceChildren();
+            for (let backend of Object.values(backends_loaded)) {
+                if (backend.type == 'comfyui_selfstart') {
+                    this.targetSelect.add(new Option(`ComfyUI backend ${backend.id}`, String(backend.id)));
+                }
+            }
+            if (permissions.hasPermission('add_remove_backends')) {
+                this.targetSelect.add(new Option('Add new ComfyUI backend', 'new'));
+            }
+            this.pathSelect.hidden = false;
+            this.targetSelect.hidden = this.targetSelect.options.length == 0;
+            this.useButton.hidden = this.targetSelect.hidden;
+            this.updateUseButton();
+            this.status.textContent = this.targetSelect.hidden
+                ? 'A backend administrator must add a ComfyUI backend before this path can be used.'
+                : `Found ${paths.length} installation${paths.length == 1 ? '' : 's'}. Choose a path and backend.`;
+            this.scanButton.disabled = false;
+        }, 0, error => {
+            this.status.textContent = `Scan failed: ${error}`;
+            this.scanButton.disabled = false;
+        });
+    }
+
+    fillBackend(id, path) {
+        let card = document.getElementById(`backend-card-${id}`);
+        if (!card) {
+            this.status.textContent = 'Backend list changed. Refresh the page and try again.';
+            return;
+        }
+        let editButton = card.querySelector('.backend-edit-button');
+        if (!editButton.disabled) {
+            editButton.click();
+        }
+        let pathInput = card.querySelector('[data-name="StartScript"]');
+        pathInput.value = path;
+        pathInput.focus();
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        this.status.textContent = 'Path filled in. Click Save on the backend card to apply it.';
+    }
+
+    useSelectedPath() {
+        let path = this.pathSelect.value;
+        let target = this.targetSelect.value;
+        if (!path || !target) {
+            return;
+        }
+        if (target != 'new') {
+            this.fillBackend(target, path);
+            return;
+        }
+        this.useButton.disabled = true;
+        this.status.textContent = 'Adding ComfyUI backend…';
+        genericRequest('AddNewBackend', { type_id: 'comfyui_selfstart' }, data => {
+            backends_loaded[data.id] = data;
+            addBackendToHtml(data, false);
+            this.fillBackend(data.id, path);
+            this.useButton.disabled = false;
+        }, 0, error => {
+            this.status.textContent = `Could not add backend: ${error}`;
+            this.useButton.disabled = false;
+        });
+    }
+}
+
+let comfyDiscovery = new ComfyDiscovery();
+
 function addNewBackend(type_id) {
     if (confirm(`Are you sure you want to add a new backend of type ${backend_types[type_id].name}?`)) {
         if (backend_types[type_id].is_standard || confirm('This backend type is labeled as Advanced users only. This is likely not a backend you want to use. Are you sure you want to continue?')) {
@@ -113,6 +218,58 @@ function addBackendToHtml(backend, disable, spot = null) {
         else {
             console.log(`Cannot create input slot of type ${setting.type}`);
         }
+        if (backend.type == 'comfyui_selfstart' && setting.name == 'StartScript') {
+            let pathInput = input.querySelector('[data-name="StartScript"]');
+            let scanRow = document.createElement('div');
+            scanRow.className = 'comfy-scan-row';
+            let scanButton = document.createElement('button');
+            scanButton.type = 'button';
+            scanButton.className = 'basic-button';
+            scanButton.textContent = 'Scan ComfyUI';
+            scanButton.disabled = disable;
+            let pathSelect = document.createElement('select');
+            pathSelect.className = 'comfy-scan-select';
+            pathSelect.setAttribute('aria-label', 'Select ComfyUI installation');
+            pathSelect.hidden = true;
+            let scanStatus = document.createElement('span');
+            scanStatus.className = 'comfy-scan-status';
+            scanStatus.setAttribute('role', 'status');
+            scanButton.addEventListener('click', () => {
+                scanButton.disabled = true;
+                scanStatus.textContent = 'Scanning local installations…';
+                pathSelect.hidden = true;
+                genericRequest('ScanComfyInstallations', {}, data => {
+                    let paths = Array.isArray(data.paths) ? data.paths : [];
+                    pathSelect.replaceChildren();
+                    if (paths.length == 0) {
+                        scanStatus.textContent = 'No ComfyUI installation found. Check its location or enter the main.py path manually.';
+                    }
+                    else if (paths.length == 1) {
+                        pathInput.value = paths[0];
+                        scanStatus.textContent = 'Path filled in. Click Save to apply it.';
+                    }
+                    else {
+                        pathSelect.add(new Option('Select a ComfyUI installation', ''));
+                        for (let path of paths) {
+                            pathSelect.add(new Option(path, path));
+                        }
+                        pathSelect.hidden = false;
+                        scanStatus.textContent = `Found ${paths.length} installations. Select one, then click Save.`;
+                    }
+                    scanButton.disabled = false;
+                }, 0, error => {
+                    scanStatus.textContent = `Scan failed: ${error}`;
+                    scanButton.disabled = false;
+                });
+            });
+            pathSelect.addEventListener('change', () => {
+                if (pathSelect.value) {
+                    pathInput.value = pathSelect.value;
+                }
+            });
+            scanRow.append(scanButton, pathSelect, scanStatus);
+            input.appendChild(scanRow);
+        }
         cardBody.appendChild(input);
     }
     cardBase.appendChild(cardHeader);
@@ -145,6 +302,9 @@ function addBackendToHtml(backend, disable, spot = null) {
         cardTitleCenterID.contentEditable = true;
         cardTitleCenterID.classList.add('backend-title-editable');
         for (let entry of cardBody.querySelectorAll('[data-name]')) {
+            entry.disabled = false;
+        }
+        for (let entry of cardBody.querySelectorAll('.comfy-scan-row button')) {
             entry.disabled = false;
         }
     });

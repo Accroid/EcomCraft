@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using EcomCraftStudio.MagicPrompt.WebAPI;
 using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
@@ -15,7 +16,7 @@ using SwarmUI.WebAPI;
 namespace EcomCraftStudio.Studio;
 
 /// <summary>Small, local-only adapter. This is not a durable task service or a platform-wide egress policy.</summary>
-[API.APIClass("EcomCraft image and text-to-video workspace. Cloud providers are not configured.")]
+[API.APIClass("EcomCraft image and text-to-video workspace with local ComfyUI generation and optional cloud prompt enhancement.")]
 public static class StudioApi
 {
     public const string LocalScopeKey = "ecomcraft_execution_scope";
@@ -214,6 +215,35 @@ public static class StudioApi
         && data.Backend.CanLoadModels && data.Backend.MaxUsages > 0 && data.Usages < data.Backend.MaxUsages
         && data.Backend.Reservations == 0 && data.Backend.Status == BackendStatus.RUNNING;
 
+    /// <summary>Returns whether the selected MagicPrompt backend has a configured cloud credential.</summary>
+    private static bool IsCloudModelConfigured(Session session)
+    {
+        try
+        {
+            JObject settingsResponse = SessionSettings.GetMagicPromptSettings().GetAwaiter().GetResult();
+            string backend = settingsResponse["settings"]?["backend"]?.ToString()?.ToLowerFast();
+            string keyType = backend switch
+            {
+                "openai" => "openai_api",
+                "anthropic" => "anthropic_api",
+                "openrouter" => "openrouter_api",
+                "grok" => "grok_api",
+                _ => null
+            };
+            if (keyType is null)
+            {
+                return false;
+            }
+            string key = session.User.GetGenericData(keyType, "key")
+                ?? Program.Sessions.GenericSharedUser.GetGenericData(keyType, "key");
+            return !string.IsNullOrWhiteSpace(key);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     private static IEnumerable<T2IModel> LocalModels(Session session) =>
         Program.T2IModelSets.TryGetValue("Stable-Diffusion", out T2IModelHandler handler)
             ? handler.Models.Values.Where(m => m.IsSupportedModelType && session.User.IsAllowedModel(m.Name)) : [];
@@ -391,7 +421,7 @@ public static class StudioApi
             ["can_generate"] = session.User.HasPermission(Permissions.BasicImageGeneration),
             ["can_generate_video"] = session.User.HasPermission(Permissions.BasicImageGeneration) && session.User.HasPermission(Permissions.ParamVideo),
             ["can_manage_settings"] = session.User.HasPermission(Permissions.EditServerSettings),
-            ["cloud_configured"] = false,
+            ["cloud_configured"] = IsCloudModelConfigured(session),
             ["models"] = new JArray(LocalModels(session).Where(m => Kind(m) is not null).OrderBy(m => m.Name).Select(m => new JObject()
             {
                 ["id"] = m.Name,
