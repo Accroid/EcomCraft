@@ -19,6 +19,7 @@ public class BackendAPI
         API.RegisterAPICall(ToggleBackend, true, Permissions.ToggleBackends);
         API.RegisterAPICall(EditBackend, true, Permissions.EditBackends);
         API.RegisterAPICall(AddNewBackend, true, Permissions.AddRemoveBackends);
+        API.RegisterAPICall(ScanComfyInstallations, false, Permissions.EditBackends);
         API.RegisterAPICall(RestartBackends, true, Permissions.RestartBackends);
         API.RegisterAPICall(FreeBackendMemory, true, Permissions.ControlMemClean);
     }
@@ -47,6 +48,13 @@ public class BackendAPI
     public static async Task<JObject> ListBackendTypes(Session session)
     {
         return new() { ["list"] = JToken.FromObject(Program.Backends.BackendTypes.Values.Select(b => b.NetDescription).ToList()) };
+    }
+
+    [API.APIDescription("Scan common local installation directories for ComfyUI main.py files. Requires backend edit permission.", "paths: []")]
+    public static async Task<JObject> ScanComfyInstallations(Session session)
+    {
+        List<string> paths = await Task.Run(Installation.FindComfyScripts);
+        return new JObject() { ["paths"] = new JArray(paths) };
     }
 
     /// <summary>Create a network object to represent a backend cleanly.</summary>

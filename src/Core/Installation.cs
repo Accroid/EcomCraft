@@ -534,6 +534,95 @@ public class Installation
         return null;
     }
 
+    /// <summary>Finds local ComfyUI entry points for an administrator to choose in backend settings.</summary>
+    public static List<string> FindComfyScripts()
+    {
+        HashSet<string> found = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> roots = new(StringComparer.OrdinalIgnoreCase);
+        void AddRoot(string path)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
+                {
+                    roots.Add(Path.GetFullPath(path));
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        AddRoot(Path.GetFullPath("dlbackend"));
+        AddRoot(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+        AddRoot(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+        if (OperatingSystem.IsWindows())
+        {
+            foreach (DriveInfo drive in DriveInfo.GetDrives().Where(drive => drive.IsReady && drive.DriveType == DriveType.Fixed))
+            {
+                try
+                {
+                    foreach (string directory in Directory.EnumerateDirectories(drive.RootDirectory.FullName))
+                    {
+                        string name = Path.GetFileName(directory);
+                        if (name.Contains("comfy", StringComparison.OrdinalIgnoreCase)
+                            || name.Equals("SwarmUI", StringComparison.OrdinalIgnoreCase)
+                            || name.Equals("EcomCraft", StringComparison.OrdinalIgnoreCase))
+                        {
+                            AddRoot(directory);
+                        }
+                    }
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
+        Queue<(string Path, int Depth)> pending = new(roots.Select(root => (root, 0)));
+        long deadline = Environment.TickCount64 + 8000;
+        while (pending.Count > 0 && visited.Count < 5000 && Environment.TickCount64 < deadline)
+        {
+            (string directory, int depth) = pending.Dequeue();
+            if (!visited.Add(directory))
+            {
+                continue;
+            }
+            string main = Path.Combine(directory, "main.py");
+            try
+            {
+                if (Path.GetFileName(directory).Equals("ComfyUI", StringComparison.OrdinalIgnoreCase)
+                    && File.Exists(main) && File.Exists(Path.Combine(directory, "folder_paths.py")))
+                {
+                    found.Add(Path.GetFullPath(main));
+                }
+                if (depth >= 5)
+                {
+                    continue;
+                }
+                foreach (string child in Directory.EnumerateDirectories(directory))
+                {
+                    string name = Path.GetFileName(child);
+                    if (name.StartsWith('.') || name.Equals("node_modules", StringComparison.OrdinalIgnoreCase)
+                        || name.Equals("site-packages", StringComparison.OrdinalIgnoreCase)
+                        || name.Equals("Models", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                    if (depth == 0 && (directory.Equals(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), StringComparison.OrdinalIgnoreCase)
+                        || directory.Equals(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), StringComparison.OrdinalIgnoreCase))
+                        && !name.Contains("comfy", StringComparison.OrdinalIgnoreCase)
+                        && !name.Contains("swarm", StringComparison.OrdinalIgnoreCase)
+                        && !name.Contains("ecomcraft", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                    pending.Enqueue((child, depth + 1));
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        return [.. found.OrderBy(path => path, StringComparer.OrdinalIgnoreCase)];
+    }
+
     /// <summary>
     /// Upgrade path: a complete backend already exists on disk. Reuse the existing portable environment (including the
     /// expensive PyTorch install), the existing configuration (Data), and the existing models - nothing is re-downloaded.

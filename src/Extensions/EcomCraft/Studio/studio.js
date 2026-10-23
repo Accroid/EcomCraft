@@ -138,6 +138,44 @@
         setView(['gallery', 'queue'].includes(hash) ? hash : 'create');
     }
 
+    /** Opens the setup guide and records that the first-visit prompt was dismissed. */
+    function openSetupGuide() {
+        let modal = $('setup-guide-modal');
+        if (!state.catalog) {
+            $('setup-status').textContent = '正在读取配置状态…';
+        }
+        else {
+            updateSetupGuideStatus();
+        }
+        modal.hidden = false;
+        localStorage.setItem('ecomcraft-setup-guide-seen', '1');
+    }
+
+    function closeSetupGuide() {
+        $('setup-guide-modal').hidden = true;
+    }
+
+    function updateSetupGuideStatus() {
+        let catalog = state.catalog;
+        if (!catalog) { return; }
+        let comfyReady = Number(catalog.local_backends_observed || 0) > 0;
+        let cloudReady = !!catalog.cloud_configured;
+        $('setup-status').textContent = comfyReady && cloudReady
+            ? '本机 ComfyUI 和云端模型均已配置。'
+            : comfyReady ? '本机 ComfyUI 已就绪，云端提示词模型尚未配置。'
+            : cloudReady ? '云端提示词模型已配置，本机 ComfyUI 尚未就绪。'
+            : '尚未检测到可用配置，请按下面步骤完成设置。';
+        $('setup-status').classList.toggle('is-ready', comfyReady && cloudReady);
+        $('setup-comfy-step').classList.toggle('is-ready', comfyReady);
+        $('setup-cloud-step').classList.toggle('is-ready', cloudReady);
+        $('setup-cloud-settings').hidden = !catalog.can_manage_settings;
+    }
+
+    function maybeOpenSetupGuide() {
+        if (!state.catalog || localStorage.getItem('ecomcraft-setup-guide-seen') === '1') { return; }
+        if (!state.catalog.local_backends_observed || !state.catalog.cloud_configured) { openSetupGuide(); }
+    }
+
     /* ============================================================
        Catalog / models
        ============================================================ */
@@ -362,10 +400,10 @@
     async function refreshCatalog() {
         if (state.catalogLoading || state.busy) { return; }
         state.catalogLoading = true;
-        const msg = $('connection-message');
+        const msg = $('connection-message-text');
         const previousModel = $('model').value;
         msg.textContent = '正在读取账号、模型与部署机节点信息…';
-        msg.classList.remove('error');
+        $('connection-message').classList.remove('error');
         updateControls();
         try {
             if (!state.session) {
@@ -393,6 +431,8 @@
             populateSamplers();
             if ($('model').value !== previousModel) { applyModelSize(); }
             updateHealth();
+            updateSetupGuideStatus();
+            maybeOpenSetupGuide();
         } catch (error) {
             state.catalog = null;
             state.workflowId = '';
@@ -400,7 +440,7 @@
             populateWorkflows();
             populateModels();
             msg.textContent = error.message;
-            msg.classList.add('error');
+            $('connection-message').classList.add('error');
             msg.append(Object.assign(document.createElement('a'), { href: '/Login', textContent: '打开登录页' }));
             updateHealth();
         } finally {
@@ -437,14 +477,14 @@
                 const backendState = status.local_backends_observed > 0 ? `${status.local_backends_observed} 个可用`
                     : status.local_backends_starting > 0 ? '正在启动'
                     : status.local_backends_errored > 0 ? '启动失败，请检查服务器日志' : '未配置可用节点';
-                $('connection-message').textContent = `本机 ComfyUI：${backendState} · ${state.catalog.models.length} 个可用模型`;
+                $('connection-message-text').textContent = `本机 ComfyUI：${backendState} · ${state.catalog.models.length} 个可用模型`;
             }
             if (previous === 0 && status.local_backends_observed > 0 && !currentModel()) { await refreshCatalog(); }
         } catch (error) {
             if (state.catalog) { state.catalog.local_backends_observed = 0; }
             updateHealth();
             updateControls();
-            $('connection-message').textContent = error.message;
+            $('connection-message-text').textContent = error.message;
             $('connection-message').classList.add('error');
         } finally {
             state.backendStatusLoading = false;
@@ -464,6 +504,7 @@
                 : state.catalog.local_backends_errored > 0 ? '节点启动失败' : '无可用节点';
         }
         else { h.classList.add('err'); text.textContent = '未连接'; }
+        updateSetupGuideStatus();
     }
 
     /* ============================================================
@@ -1067,6 +1108,7 @@
                 showEnhCfgMessage('已保存配置。请确保本地 Ollama 服务已运行，并已拉取所选模型。', false);
             }
             $('enh-cfg-key').value = '';
+            await refreshCatalog();
         } catch (err) {
             showEnhCfgMessage(err.message, true);
         } finally {
@@ -1250,9 +1292,9 @@
             setStatus(error.message || '无法确认执行结果，请在原生引擎核对。', true);
             if (error.code === 'invalid_session_id') {
                 state.catalog = null;
-                const m = $('connection-message');
+                const m = $('connection-message-text');
                 m.textContent = '会话已失效。请刷新重新连接；不会自动重试任务。';
-                m.classList.add('error');
+                $('connection-message').classList.add('error');
             }
         } finally {
             clearInterval(state.timer);
@@ -1603,6 +1645,15 @@
         $('enhance-retry').addEventListener('click', () => enhancePrompt());
         $('enhance-dismiss').addEventListener('click', resetEnhanceCard);
         $('enhancer-settings').addEventListener('click', openEnhancerSettings);
+        $('open-setup-guide').addEventListener('click', openSetupGuide);
+        $('setup-guide-close').addEventListener('click', closeSetupGuide);
+        $('setup-guide-backdrop').addEventListener('click', closeSetupGuide);
+        $('setup-guide-done').addEventListener('click', closeSetupGuide);
+        $('setup-cloud-settings').addEventListener('click', () => {
+            if (!state.catalog?.can_manage_settings) { return; }
+            closeSetupGuide();
+            openEnhancerSettings();
+        });
         $('enhancer-modal-close').addEventListener('click', closeEnhancerSettings);
         $('enhancer-modal-backdrop').addEventListener('click', closeEnhancerSettings);
         $('enh-cfg-cancel').addEventListener('click', closeEnhancerSettings);
@@ -1660,6 +1711,7 @@
             if (!$('lightbox').hidden) {
                 if (e.key === 'Escape') { closeLightbox(); }
             }
+            if (!$('setup-guide-modal').hidden && e.key === 'Escape') { closeSetupGuide(); }
         });
 
         // Mobile rail toggle

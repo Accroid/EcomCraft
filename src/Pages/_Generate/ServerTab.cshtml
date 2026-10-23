@@ -161,6 +161,13 @@
         </div>
     </div>
     <div class="tab-pane scroll-within-tab" id="Settings-Backends" role="tabpanel">
+        <div class="comfy-discovery" data-requiredpermission="edit_backends">
+            <button type="button" class="basic-button" id="comfy-discovery-scan">Scan ComfyUI</button>
+            <select id="comfy-discovery-path" aria-label="Select ComfyUI installation" hidden></select>
+            <select id="comfy-discovery-target" aria-label="Select ComfyUI backend" hidden></select>
+            <button type="button" class="basic-button" id="comfy-discovery-use" hidden>Use selected path</button>
+            <span id="comfy-discovery-status" role="status"></span>
+        </div>
         <div class="backend_add_button_container">
             <span class="translate">Add new backend of type:</span>
             <span class="form-check form-switch display-inline-block">
