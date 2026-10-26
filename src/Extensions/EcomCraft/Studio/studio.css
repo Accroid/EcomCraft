@@ -111,7 +111,8 @@ code { font-size: .92em; padding: 0 3px; border-radius: 3px; background: var(--k
 .btn-block { width: 100%; min-height: 44px; font-size: var(--fs-14); }
 .link-btn {
     color: var(--key); font-size: var(--fs-13); font-weight: 500;
-    padding: 2px 0; border-radius: 2px; text-underline-offset: 3px;
+    /* 上下各加 6px 点击区，再用负外边距抵消，排版高度不变 */
+    padding: 8px 0; margin: -6px 0; border-radius: 2px; text-underline-offset: 3px;
 }
 .link-btn:hover:not(:disabled) { text-decoration: underline; }
 .link-btn:disabled { color: var(--ink-2); }
@@ -401,7 +402,15 @@ main:focus:not(:focus-visible) { outline: none; }
 
 /* ---------- 画廊：印样 ---------- */
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
-.search-wrap { flex: 1; min-width: 200px; max-width: 320px; }
+.search-wrap { position: relative; flex: 1; min-width: 200px; max-width: 320px; }
+.search-wrap input { padding-right: 36px; }
+.search-wrap input::-webkit-search-cancel-button { display: none; }
+.search-clear {
+    position: absolute; top: 50%; right: 2px; transform: translateY(-50%);
+    display: grid; place-items: center; width: 32px; height: 32px; border-radius: 4px;
+    color: var(--ink-2); font-size: 13px; transition: background-color .15s, color .15s;
+}
+.search-clear:hover { background: var(--key-soft); color: var(--ink); }
 .sort-wrap select { width: 120px; }
 .selection-bar {
     display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; padding: 8px 12px;
@@ -422,7 +431,7 @@ main:focus:not(:focus-visible) { outline: none; }
 .sheet-name { flex: 1; min-width: 0; font-size: var(--fs-12); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sheet-kind { flex-shrink: 0; font-size: var(--fs-12); color: var(--ink-2); }
 .sheet-star, .sheet-delete {
-    flex-shrink: 0; display: inline-grid; place-items: center; width: 28px; height: 28px;
+    flex-shrink: 0; display: inline-grid; place-items: center; width: 32px; height: 32px;
     border-radius: 4px; color: var(--ink-2); font-size: 15px; transition: background-color .15s, color .15s;
 }
 .sheet-star:hover, .sheet-delete:hover { background: var(--key-soft); color: var(--ink); }
