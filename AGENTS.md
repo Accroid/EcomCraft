@@ -82,7 +82,7 @@ NUnit 单元测试位于 `SwarmUITests` 项目中。在 Windows 上使用 `launc
 
 始终尽量用最小改动完成目标。SwarmUI 结构复杂，每项修改都可能产生多种副作用，因此应将修改范围控制在尽可能小的区域内。
 
-涉及 EcomCraft 工作流时，客户端只能提交工作流 ID 和服务端发布的参数白名单；不得把任意 ComfyUI JSON、未校验的节点图、后端选择器或管理员默认图片直接暴露给普通客户机。生成请求必须继续限制在本机自启动 ComfyUI，不得隐式回退到远程或云端。
+涉及 EcomCraft 工作流时，客户端只能提交工作流 ID 和服务端发布的参数白名单；不得把任意 ComfyUI JSON、未校验的节点图、后端选择器或管理员默认图片直接暴露给普通客户机。生成请求必须限制在已登记的 ComfyUI 执行服务器（见下方 EcomCraft 规则），不得隐式回退到未登记地址、远程 SwarmUI 或云端。
 
 修改桌面入口时，同时检查 `Desktop/`、`src/Core/Installation.cs`、启动脚本和 `src/wwwroot/ecomcraft.ico` 的名称与路径是否一致，避免重新生成 SwarmUI 旧桌面程序或快捷方式。
 
@@ -93,12 +93,13 @@ NUnit 单元测试位于 `SwarmUITests` 项目中。在 Windows 上使用 `launc
 ## EcomCraft 规则
 
 - EcomCraft 工作台只能接受工作流 ID、服务端发布的参数白名单和经过服务端校验的普通生成参数。客户端不得提交或展示任意 ComfyUI JSON、未校验的节点图、后端选择器、管理员默认图片或内部会话标识。
-- `EcomCraftStudioGenerate` 必须继续限制在本机自启动 ComfyUI；本机后端不可用时不得隐式切换到远程或云端服务。新增后端匹配逻辑时，应同步检查 `StudioApi.ValidateLocalBackend` 和生成 API 的权限校验。
-- `EcomCraftStudioCatalog`、`EcomCraftStudioQueue` 和 `EcomCraftStudioCancelTask` 返回的数据应遵守最小披露原则：队列接口可以返回本机后端状态、排队位置和节点进度，但不得返回提示词、原始工作流、其他用户的任务 ID、会话 ID 或密钥。取消任务前必须验证当前账号拥有该任务。
-- 原生 ComfyUI 工作流发现只能读取已配置本机后端、`Installation.FindComfyScripts` 验证的本机安装中的标准 `workflows` / `blueprints` 目录，或 `Settings.EcomCraft.ComfyWorkflowSearchPaths` 指定的目录；不得全盘扫描任意 JSON。导入前必须验证工作流结构、子图连接和正负提示词输入，导入后仍使用已发布工作流和参数白名单边界；发现其他安装的模板不代表切换执行后端。
+- `EcomCraftStudioGenerate` 只能使用 `ExecutionServers.IsExecutionServer` 认可的执行服务器：本机自启动 ComfyUI，以及地址为回环、私有网段或局域网主机名的 `ComfyUIAPIBackend`。不得连接未登记地址、远程 SwarmUI 或公网地址；云端对接完成并经确认之前，不得向任何云端生成服务发送请求。新增后端匹配逻辑时，应同步检查 `ExecutionServers`、`StudioApi.ValidateExecutionBackend` 和生成 API 的权限校验。
+- `EcomCraftStudioCatalog`、`EcomCraftStudioQueue` 和 `EcomCraftStudioCancelTask` 返回的数据应遵守最小披露原则：队列接口可以返回执行服务器的 ID、显示名称、状态、排队数、排队位置和节点进度，但不得返回服务器地址、提示词、原始工作流、其他用户的任务 ID、会话 ID 或密钥。取消任务前必须验证当前账号拥有该任务。
+- 原生 ComfyUI 工作流发现由 `WorkflowDiscovery` 在后台执行，接口请求只读缓存。本机只读取已配置本机后端、`Installation.FindComfyScripts` 验证的本机安装中的标准 `workflows` / `blueprints` 目录，或 `Settings.EcomCraft.ComfyWorkflowSearchPaths` 指定的目录；局域网执行服务器只通过其 ComfyUI `userdata` 接口读取 `workflows` 目录。不得全盘扫描任意 JSON 或扫描局域网网段。导入前必须验证工作流结构、子图连接和正负提示词输入，导入后仍使用已发布工作流和参数白名单边界；工作流的来源服务器不决定执行服务器。
 - EcomCraft 进度观测不得长期保存提示词、工作流输入或生成结果。进度缓存应在任务结束或超时后清理，并在扩展卸载时解除 `ComfyUIAPIAbstractBackend.QueueProgressObserved` 事件订阅。
 - 修改桌面入口或首页跳转时，应同时检查 `Desktop/`、`src/Core/Installation.cs`、`src/Core/Program.cs`、启动脚本、`src/Pages/Text2Image.cshtml` 和 `src/wwwroot/ecomcraft.ico` 的名称与路径一致性。
 - 修改 EcomCraft 功能后，应同步检查根目录的 `README.md`、`README.en.md`、`docs/README.zh-CN.md` 以及对应功能文档；API 名称、配置键和安全边界必须保持一致。
+- 局域网多服务器平台的开发以 [`docs/EcomCraft 局域网多服务器平台需求.zh-CN.md`](docs/EcomCraft%20局域网多服务器平台需求.zh-CN.md) 为准；需求变更先改该文档再改代码。
 
 ## 项目结构
 

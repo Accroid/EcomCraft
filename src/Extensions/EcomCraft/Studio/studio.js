@@ -165,9 +165,9 @@
         let comfyReady = Number(catalog.local_backends_observed || 0) > 0;
         let cloudReady = !!catalog.cloud_configured;
         $('setup-status').textContent = comfyReady && cloudReady
-            ? '本机 ComfyUI 和云端模型均已配置。'
-            : comfyReady ? '本机 ComfyUI 已就绪，云端提示词模型尚未配置。'
-            : cloudReady ? '云端提示词模型已配置，本机 ComfyUI 尚未就绪。'
+            ? 'ComfyUI 执行服务器和云端模型均已配置。'
+            : comfyReady ? 'ComfyUI 执行服务器已就绪，云端提示词模型尚未配置。'
+            : cloudReady ? '云端提示词模型已配置，ComfyUI 执行服务器尚未就绪。'
             : '尚未检测到可用配置，请按下面步骤完成设置。';
         $('setup-status').classList.toggle('is-ready', comfyReady && cloudReady);
         $('setup-comfy-step').classList.toggle('is-ready', comfyReady);
@@ -319,8 +319,8 @@
         $('workflow-description').textContent = selected
             ? `${workflow.description || '使用管理员登记的工作流模板与参数。'} 创作方式由工作流节点决定。使用标准图生图、局部重绘等模式请切回标准工作台；工作流处理初始图或蒙版需要发布包含对应输入和节点的工作流。`
             : ((state.catalog?.workflows || []).length
-                ? '已合并相同的原生工作流，并过滤当前本机缺少模型或节点的项。列表每 30 秒更新，也可点击上方“刷新”。'
-                : '暂无通过本机可用性检查的工作流。请等待本机后端就绪，确认工作流已保存、所需模型和节点已安装，再点击“刷新”。');
+                ? '列表按“来源服务器 / 工作流”显示，已合并相同的原生工作流，并过滤所有在线执行服务器都缺少模型或节点的项。生成时由平台分配执行服务器。列表每 30 秒更新，也可点击上方“刷新”。'
+                : '暂无通过可用性检查的工作流。请等待执行服务器就绪，确认工作流已保存、所需模型和节点已安装，再点击“刷新”。');
         $('workflow-params').hidden = !selected || !(workflow.inputs || []).length;
         const meta = modeMeta[state.mode] || modeMeta.text2img;
         $('reference-fld').hidden = selected || !meta.needsRef;
@@ -477,7 +477,7 @@
         state.catalogLoading = true;
         const msg = $('connection-message-text');
         const previousModel = $('model').value;
-        msg.textContent = '正在读取账号、工作流、模型与部署机节点信息…';
+        msg.textContent = '正在读取账号、工作流、模型与执行服务器信息…';
         $('connection-message').classList.remove('error');
         updateControls();
         try {
@@ -497,11 +497,11 @@
             $('avatar').textContent = String(catalog.user_name || 'E').slice(0, 1).toUpperCase();
             $('enhancer-settings').hidden = !catalog.can_manage_settings;
             const backendState = catalog.local_backends_observed > 0
-                ? `${catalog.local_backends_observed} 个可用`
+                ? `${catalog.local_backends_observed} 台在线`
                 : catalog.local_backends_starting > 0 ? '正在启动'
                 : catalog.local_backends_errored > 0 ? '启动失败，请检查服务器日志'
                 : '未配置可用节点';
-            msg.textContent = `本机 ComfyUI 后端：${backendState} · 标准工作台模型：${catalog.models.length} 个 · 工作流使用自身模型配置`;
+            msg.textContent = `ComfyUI 执行服务器：${backendState} · 标准工作台模型：${catalog.models.length} 个 · 工作流使用自身模型配置`;
             populateModels();
             populateSamplers();
             if ($('model').value !== previousModel) { applyModelSize(); }
@@ -549,10 +549,10 @@
             updateControls();
             $('connection-message').classList.remove('error');
             if (previous !== status.local_backends_observed || !status.local_backends_observed) {
-                const backendState = status.local_backends_observed > 0 ? `${status.local_backends_observed} 个可用`
+                const backendState = status.local_backends_observed > 0 ? `${status.local_backends_observed} 台在线`
                     : status.local_backends_starting > 0 ? '正在启动'
                     : status.local_backends_errored > 0 ? '启动失败，请检查服务器日志' : '未配置可用节点';
-                $('connection-message-text').textContent = `本机 ComfyUI 后端：${backendState} · 标准工作台模型：${state.catalog.models.length} 个 · 工作流使用自身模型配置`;
+                $('connection-message-text').textContent = `ComfyUI 执行服务器：${backendState} · 标准工作台模型：${state.catalog.models.length} 个 · 工作流使用自身模型配置`;
             }
             if (previous == 0 && status.local_backends_observed > 0) {
                 await refreshCatalog();
@@ -607,11 +607,11 @@
         const text = $('health-text');
         h.classList.remove('ok', 'warn', 'err');
         const count = state.catalog?.local_backends_observed || 0;
-        if (state.catalog && count > 0) { h.classList.add('ok'); text.textContent = `${count} 个节点可用`; }
+        if (state.catalog && count > 0) { h.classList.add('ok'); text.textContent = `${count} 台服务器在线`; }
         else if (state.catalog) {
             h.classList.add('warn');
-            text.textContent = state.catalog.local_backends_starting > 0 ? '节点正在启动'
-                : state.catalog.local_backends_errored > 0 ? '节点启动失败' : '无可用节点';
+            text.textContent = state.catalog.local_backends_starting > 0 ? '服务器正在启动'
+                : state.catalog.local_backends_errored > 0 ? '服务器启动失败' : '无在线服务器';
         }
         else { h.classList.add('err'); text.textContent = '未连接'; }
         updateSetupGuideStatus();
@@ -1335,14 +1335,14 @@
         else if (!state.session || !state.catalog) { hint = '尚未连接服务，请刷新或先登录。'; }
         else if (!state.catalog.can_generate) { hint = '此账号没有生成权限，请联系管理员。'; }
         else if (state.type === 'video' && !state.catalog.can_generate_video) { hint = '此账号没有视频参数权限，请联系管理员。'; }
-        else if (!state.catalog.local_backends_observed) { hint = '未观测到可用的部署机 ComfyUI 节点。'; }
+        else if (!state.catalog.local_backends_observed) { hint = '暂无在线的 ComfyUI 执行服务器。'; }
         else if (!currentWorkflow()?.native && !currentModel()) { hint = '请先在原生引擎配置此类型的模型。'; }
         else if (!state.workflowId && state.referenceLoading) { hint = '正在读取初始图，请稍候。'; }
         else if (!state.workflowId && state.mode === 'inpaint' && state.reference && !MaskEditor.hasMask()) {
             hint = '请先在图上涂抹要修改的区域。';
         }
         else if (!state.workflowId && state.mode === 'outpaint' && state.reference && !outpaintDirs.size) { hint = '请先选择至少一个扩图方向。'; }
-        $('submit-hint').textContent = hint || '将提交到部署机的 ComfyUI；实际耗时与显存取决于模型。';
+        $('submit-hint').textContent = hint || '将由平台分配到具备所需模型和节点的 ComfyUI 执行服务器；实际耗时与显存取决于模型。';
         $('generate').disabled = Boolean(hint);
         const isVideo = state.type === 'video';
         $('generate-label').textContent = state.busy ? '引擎处理中…' : (isVideo ? '生成视频' : '生成图片');
@@ -1533,22 +1533,42 @@
         }
     }
 
+    /** Returns the user-facing state of one execution server; busy means more than two queued tasks. */
+    function queueStateLabel(backend) {
+        if (backend.status == 'running') {
+            return backend.busy ? '繁忙' : '空闲';
+        }
+        if (backend.status == 'unresponsive') {
+            return '无响应';
+        }
+        if (backend.status == 'waiting' || backend.status == 'loading') {
+            return '启动中';
+        }
+        if (backend.status == 'errored') {
+            return '启动失败';
+        }
+        return '离线';
+    }
+
+    /** Returns the badge style for one execution server state. */
+    function queueStateClass(backend) {
+        return backend.status == 'running' && !backend.busy ? 'is-running' : 'is-waiting';
+    }
+
     /** Renders native ComfyUI entries and SwarmUI claims without exposing workflow inputs. */
     function renderQueue(result) {
         let backendList = $('queue-backends');
         backendList.replaceChildren();
         for (let backend of result.backends || []) {
             let row = el('div', 'queue-backend');
-            let name = el('strong', '', `本机 ComfyUI #${backend.id}`);
+            let name = el('strong', '', backend.name || `服务器 #${backend.id}`);
             let counts = el('span', '', backend.running == null
-                ? '节点无响应'
+                ? '暂无队列数据'
                 : `执行中 ${backend.running} · 等待中 ${backend.pending}`);
-            let status = el('span', `queue-state ${backend.status === 'running' ? 'is-running' : 'is-waiting'}`,
-                backend.status === 'running' ? '运行中' : backend.status === 'unresponsive' ? '无响应' : '启动中');
-            row.append(name, counts, status);
+            row.append(name, counts, el('span', `queue-state ${queueStateClass(backend)}`, queueStateLabel(backend)));
             backendList.append(row);
         }
-        if (!backendList.children.length) { backendList.append(el('p', 'queue-empty', '没有本机 ComfyUI 节点。')); }
+        if (!backendList.children.length) { backendList.append(el('p', 'queue-empty', '没有已登记的 ComfyUI 执行服务器。')); }
 
         let tasks = result.tasks || [];
         let nativeTasks = result.native_tasks || [];
@@ -1561,7 +1581,7 @@
         for (let task of nativeTasks) {
             let row = el('div', 'queue-task queue-native-task');
             let main = el('div', 'queue-task-main');
-            main.append(el('strong', '', `ComfyUI #${task.backend_id} · ${task.state === 'running' ? '执行中' : `等待中（第 ${task.position} 位）`}`));
+            main.append(el('strong', '', `${task.backend_name || `服务器 #${task.backend_id}`} · ${task.state === 'running' ? '执行中' : `等待中（第 ${task.position} 位）`}`));
             let node = task.current_node
                 ? `节点 ${task.current_node}${task.node_type ? ` · ${task.node_type}` : ''}`
                 : task.state === 'running' ? '当前节点暂无数据' : `${task.total_nodes} 个节点`;

@@ -25,7 +25,7 @@ public class EcomCraft : Extension
     {
         Version = ExtensionVersion;
         ExtensionAuthor = "EcomCraft Studio";
-        Description = "EcomCraft image/video workspace with local-only generation and published workflows.";
+        Description = "EcomCraft image/video workspace with generation on registered ComfyUI execution servers and published workflows.";
         License = "MIT";
         Tags = ["ui", "workflows"];
     }
@@ -48,7 +48,7 @@ public class EcomCraft : Extension
         API.RegisterAPICall(StudioApi.EcomCraftStudioQueue, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(StudioApi.EcomCraftStudioCancelTask, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(StudioApi.EcomCraftStudioGenerate, true, Permissions.BasicImageGeneration);
-        T2IEngine.AltBackendValidators.Add(StudioApi.ValidateLocalBackend);
+        T2IEngine.AltBackendValidators.Add(StudioApi.ValidateExecutionBackend);
         T2IEngine.PreGenerateEvent += StudioApi.PrepareNativeWorkflowSeeds;
         ComfyUIAPIAbstractBackend.QueueProgressObserved += StudioApi.ObserveComfyProgress;
     }
@@ -64,8 +64,9 @@ public class EcomCraft : Extension
     {
         T2IParamTypes.ParameterPermissionOverrideValidators.Remove(StudioApi.PublishedWorkflowPermissionOverride);
         T2IParamTypes.FakeTypeProviders.Remove(StudioApi.PublishedWorkflowDynamicParamProvider);
-        T2IEngine.AltBackendValidators.Remove(StudioApi.ValidateLocalBackend);
+        T2IEngine.AltBackendValidators.Remove(StudioApi.ValidateExecutionBackend);
         T2IEngine.PreGenerateEvent -= StudioApi.PrepareNativeWorkflowSeeds;
         ComfyUIAPIAbstractBackend.QueueProgressObserved -= StudioApi.ObserveComfyProgress;
+        WorkflowDiscovery.Shutdown();
     }
 }
