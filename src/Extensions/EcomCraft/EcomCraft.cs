@@ -49,6 +49,7 @@ public class EcomCraft : Extension
         API.RegisterAPICall(StudioApi.EcomCraftStudioCancelTask, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(StudioApi.EcomCraftStudioGenerate, true, Permissions.BasicImageGeneration);
         T2IEngine.AltBackendValidators.Add(StudioApi.ValidateLocalBackend);
+        T2IEngine.PreGenerateEvent += StudioApi.PrepareNativeWorkflowSeeds;
         ComfyUIAPIAbstractBackend.QueueProgressObserved += StudioApi.ObserveComfyProgress;
     }
 
@@ -64,6 +65,7 @@ public class EcomCraft : Extension
         T2IParamTypes.ParameterPermissionOverrideValidators.Remove(StudioApi.PublishedWorkflowPermissionOverride);
         T2IParamTypes.FakeTypeProviders.Remove(StudioApi.PublishedWorkflowDynamicParamProvider);
         T2IEngine.AltBackendValidators.Remove(StudioApi.ValidateLocalBackend);
+        T2IEngine.PreGenerateEvent -= StudioApi.PrepareNativeWorkflowSeeds;
         ComfyUIAPIAbstractBackend.QueueProgressObserved -= StudioApi.ObserveComfyProgress;
     }
 }

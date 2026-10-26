@@ -1,5 +1,9 @@
 import os, folder_paths, traceback
 
+from .SwarmDesktopModelPaths import register_shared_models
+
+register_shared_models(folder_paths)
+
 from . import SwarmBlending, SwarmImages, SwarmInternalUtil, SwarmKSampler, SwarmLoadImageB64, SwarmLoraLoader, SwarmMasks, SwarmSaveImageWS, SwarmTiling, SwarmExtractLora, SwarmUnsampler, SwarmLatents, SwarmInputNodes, SwarmTextHandling, SwarmText, SwarmReference, SwarmMath, SwarmSam2, SwarmAudio, SwarmVideo, SwarmModels
 
 WEB_DIRECTORY = "./web"

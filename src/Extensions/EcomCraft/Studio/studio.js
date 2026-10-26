@@ -70,17 +70,21 @@
         return '提示词优化服务返回错误。请检查服务地址、模型 ID 和服务端日志。';
     }
 
-    async function request(route, body = {}) {
+    async function request(route, body = {}, signal = undefined) {
         let response, data;
         const isMagicPromptRoute = /MagicPrompt/.test(route) || route === 'SetAPIKey' || route === 'GetAPIKeyStatus';
         try {
             response = await fetch(`/API/${route}`, {
                 method: 'POST', credentials: 'same-origin', cache: 'no-store',
+                signal,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...body, ...(state.session ? { session_id: state.session } : {}) })
             });
             data = await response.json();
-        } catch {
+        } catch (error) {
+            if (signal?.aborted) {
+                throw error;
+            }
             const message = isMagicPromptRoute
                 ? '无法连接提示词优化服务，请检查网络和服务状态。'
                 : '与服务的连接中断，无法确认执行结果。请先核对原生队列和个人历史。';
@@ -206,8 +210,77 @@
         $('scheduler').replaceChildren(new Option('默认（由模型决定）', ''));
         for (const s of samplers) { $('sampler').append(new Option(s.name, s.id)); }
         for (const s of schedulers) { $('scheduler').append(new Option(s.name, s.id)); }
+        if (currentWorkflow()?.native) {
+            NativeWorkflowForm.setValue($('sampler'), previousSampler);
+            NativeWorkflowForm.setValue($('scheduler'), previousScheduler);
+        }
         if (samplers.some(s => s.id === previousSampler)) { $('sampler').value = previousSampler; }
         if (schedulers.some(s => s.id === previousScheduler)) { $('scheduler').value = previousScheduler; }
+    }
+
+    /** Keeps native workflow defaults separate from edits and from standard-mode form values. */
+    class NativeWorkflowForm {
+        static selection = '';
+        static previous = null;
+        static promptsInitialized = false;
+        static controls = { prompt: 'prompt', negativeprompt: 'negative', width: 'width', height: 'height',
+            images: 'images', steps: 'steps', cfgscale: 'cfg', seed: 'seed', sampler: 'sampler', scheduler: 'scheduler' };
+
+        /** Initializes empty prompts once; later selections and catalog polling preserve the current text. */
+        static sync(workflow) {
+            let native = Boolean(workflow?.native);
+            let selection = native ? workflow.id : '';
+            if (selection != this.selection) {
+                if (native) {
+                    if (!this.previous) {
+                        this.previous = {};
+                        for (let key of Object.keys(this.controls)) {
+                            this.previous[key] = $(this.controls[key]).value;
+                        }
+                    }
+                    for (let key of Object.keys(this.controls)) {
+                        let control = $(this.controls[key]);
+                        if (['prompt', 'negativeprompt'].includes(key) && (this.promptsInitialized || control.value != '')) {
+                            continue;
+                        }
+                        let value = workflow.defaults?.[key] ?? (key == 'images' ? 1 : ['width', 'height'].includes(key) ? 512 : '');
+                        this.setValue(control, value);
+                    }
+                    this.promptsInitialized = true;
+                }
+                else if (this.previous) {
+                    for (let key of Object.keys(this.controls)) {
+                        if (['prompt', 'negativeprompt'].includes(key)) {
+                            continue;
+                        }
+                        this.setValue($(this.controls[key]), this.previous[key]);
+                    }
+                    this.previous = null;
+                }
+                this.selection = selection;
+            }
+            $('model-fld').hidden = native;
+            $('model').required = !native;
+            $('seed').max = native ? '9007199254740991' : '4294967295';
+            for (let key of ['steps', 'cfgscale', 'seed', 'sampler', 'scheduler']) {
+                let control = $(this.controls[key]);
+                control.closest('.num-fld').hidden = native && workflow.defaults?.[key] == null;
+            }
+            if (native) {
+                for (let key of ['width', 'height']) {
+                    $(key).step = 8;
+                }
+                $('resolution-hint').textContent = '来自工作流 · 修改后传入 ComfyUI';
+            }
+        }
+
+        /** Retains saved sampler/scheduler names even when the currently running backend lacks them. */
+        static setValue(control, value) {
+            if (control.tagName == 'SELECT' && value != '' && !Array.from(control.options).some(option => option.value == String(value))) {
+                control.append(new Option(String(value), String(value)));
+            }
+            control.value = value;
+        }
     }
 
     function currentWorkflow() {
@@ -241,12 +314,13 @@
     function updateWorkflowUi() {
         const workflow = currentWorkflow();
         const selected = Boolean(workflow);
+        NativeWorkflowForm.sync(workflow);
         $('image-mode-tabs').style.display = selected || state.type === 'video' ? 'none' : '';
         $('workflow-description').textContent = selected
             ? `${workflow.description || '使用管理员登记的工作流模板与参数。'} 创作方式由工作流节点决定。使用标准图生图、局部重绘等模式请切回标准工作台；工作流处理初始图或蒙版需要发布包含对应输入和节点的工作流。`
             : ((state.catalog?.workflows || []).length
-                ? '可选择管理员发布到简单工作台的 ComfyUI 工作流。'
-                : '暂未发布可供员工使用的工作流；请管理员在 SwarmUI 工作流编辑器中启用“简单工作台”。');
+                ? '已合并相同的原生工作流，并过滤当前本机缺少模型或节点的项。列表每 30 秒更新，也可点击上方“刷新”。'
+                : '暂无通过本机可用性检查的工作流。请等待本机后端就绪，确认工作流已保存、所需模型和节点已安装，再点击“刷新”。');
         $('workflow-params').hidden = !selected || !(workflow.inputs || []).length;
         const meta = modeMeta[state.mode] || modeMeta.text2img;
         $('reference-fld').hidden = selected || !meta.needsRef;
@@ -286,7 +360,7 @@
         container.hidden = !fields.length;
         let index = 0;
         for (const field of fields) {
-            if (!field || !field.id) { continue; }
+            if (!field || !field.id || (workflow.native && field.form)) { continue; }
             const wrapper = el('div', 'fld');
             const labelId = `workflow-field-${index++}`;
             const label = el('label', null, field.name || field.id);
@@ -374,7 +448,7 @@
 
     function updateModelMeta() {
         const model = currentModel();
-        const step = model?.resolution_step || 16;
+        const step = currentWorkflow()?.native ? 8 : model?.resolution_step || 16;
         for (const field of ['width', 'height']) {
             $(field).step = step;
             $(field).min = Math.ceil(256 / step) * step;
@@ -387,7 +461,7 @@
 
     function applyModelSize() {
         const model = currentModel();
-        if (!model) { return; }
+        if (!model || currentWorkflow()?.native) { return; }
         const step = model.resolution_step || 16;
         for (const field of ['width', 'height']) {
             const fallback = state.type === 'image' ? 1024 : (field === 'width' ? 768 : 512);
@@ -397,12 +471,13 @@
         }
     }
 
+    /** Reloads authorized models and workflows while preserving the current selections when available. */
     async function refreshCatalog() {
         if (state.catalogLoading || state.busy) { return; }
         state.catalogLoading = true;
         const msg = $('connection-message-text');
         const previousModel = $('model').value;
-        msg.textContent = '正在读取账号、模型与部署机节点信息…';
+        msg.textContent = '正在读取账号、工作流、模型与部署机节点信息…';
         $('connection-message').classList.remove('error');
         updateControls();
         try {
@@ -426,7 +501,7 @@
                 : catalog.local_backends_starting > 0 ? '正在启动'
                 : catalog.local_backends_errored > 0 ? '启动失败，请检查服务器日志'
                 : '未配置可用节点';
-            msg.textContent = `本机 ComfyUI：${backendState} · ${catalog.models.length} 个可用模型`;
+            msg.textContent = `本机 ComfyUI 后端：${backendState} · 标准工作台模型：${catalog.models.length} 个 · 工作流使用自身模型配置`;
             populateModels();
             populateSamplers();
             if ($('model').value !== previousModel) { applyModelSize(); }
@@ -477,9 +552,11 @@
                 const backendState = status.local_backends_observed > 0 ? `${status.local_backends_observed} 个可用`
                     : status.local_backends_starting > 0 ? '正在启动'
                     : status.local_backends_errored > 0 ? '启动失败，请检查服务器日志' : '未配置可用节点';
-                $('connection-message-text').textContent = `本机 ComfyUI：${backendState} · ${state.catalog.models.length} 个可用模型`;
+                $('connection-message-text').textContent = `本机 ComfyUI 后端：${backendState} · 标准工作台模型：${state.catalog.models.length} 个 · 工作流使用自身模型配置`;
             }
-            if (previous === 0 && status.local_backends_observed > 0 && !currentModel()) { await refreshCatalog(); }
+            if (previous == 0 && status.local_backends_observed > 0) {
+                await refreshCatalog();
+            }
         } catch (error) {
             if (state.catalog) { state.catalog.local_backends_observed = 0; }
             updateHealth();
@@ -488,6 +565,39 @@
             $('connection-message').classList.add('error');
         } finally {
             state.backendStatusLoading = false;
+        }
+    }
+
+    /** Refreshes discovered workflows without rebuilding other form controls or discarding edits. */
+    class WorkflowCatalogRefresh {
+        static loading = false;
+
+        /** Polls only while visible and idle; unchanged catalogs leave current parameter fields intact. */
+        static async refresh() {
+            if (document.hidden || this.loading || state.catalogLoading || state.busy || !state.catalog || !state.session) {
+                return;
+            }
+            this.loading = true;
+            let catalogBefore = state.catalog;
+            try {
+                let catalog = await request('EcomCraftStudioCatalog');
+                if (state.busy || state.catalogLoading || state.catalog != catalogBefore || !Array.isArray(catalog.workflows)) {
+                    return;
+                }
+                if (JSON.stringify(catalog.workflows) != JSON.stringify(state.catalog.workflows)) {
+                    state.catalog.workflows = catalog.workflows;
+                    populateWorkflows();
+                    updateControls();
+                }
+            }
+            catch (error) {
+                if (!state.busy && state.catalog == catalogBefore) {
+                    $('workflow-description').textContent = '工作流自动刷新失败，可点击“刷新”重试。';
+                }
+            }
+            finally {
+                this.loading = false;
+            }
         }
     }
 
@@ -891,6 +1001,34 @@
     let enhancedText = '';
     let mpSettings = null;
 
+    /** Tracks modal requests so canceled or superseded results cannot replace the current form. */
+    class PromptSettingsRequests {
+        static revision = 0;
+        static controller = null;
+        static loading = false;
+        static saving = false;
+
+        /** Invalidates model results when credentials, destination, backend, or modal visibility changes. */
+        static invalidate() {
+            this.revision++;
+            this.controller?.abort();
+            this.controller = null;
+            $('enh-cfg-model-options').replaceChildren();
+            $('enh-cfg-message').hidden = true;
+            this.updateControls();
+        }
+
+        /** Prevents overlapping saves and edits while loading or persisting the form. */
+        static updateControls() {
+            let busy = this.loading || this.saving;
+            for (let id of ['enh-cfg-backend', 'enh-cfg-endpoint', 'enh-cfg-model', 'enh-cfg-key', 'enh-cfg-save']) {
+                $(id).disabled = busy;
+            }
+            $('enh-cfg-fetch-models').disabled = busy || !!this.controller;
+            $('enh-cfg-fetch-models').textContent = this.controller ? '拉取中…' : '拉取';
+        }
+    }
+
     function showEnhanceCard(mode) {
         const card = $('enhance-card');
         const loading = $('enhance-loading');
@@ -969,35 +1107,54 @@
         $('enh-cfg-key-fld').hidden = meta.keyType === null;
     }
 
-    // On backend switch: refresh the Base-URL (saved value or default) and the API-key status.
+    /** Loads the selected backend's saved fields and ignores obsolete credential status responses. */
     async function onBackendChange() {
+        PromptSettingsRequests.invalidate();
+        let revision = PromptSettingsRequests.revision;
         applyBackendFields();
-        $('enh-cfg-model-options').hidden = true;
         const backend = $('enh-cfg-backend').value;
         const meta = MP_BACKENDS[backend];
         $('enh-cfg-endpoint').value = mpSettings?.backends?.[backend]?.baseurl || meta.url;
+        $('enh-cfg-model').value = mpSettings?.backend == backend ? mpSettings.model || '' : '';
         $('enh-cfg-key').value = '';
+        $('enh-cfg-key-status').textContent = '';
         if (meta.keyType) {
             try {
                 const st = await request('GetAPIKeyStatus', { keyType: meta.keyType });
-                $('enh-cfg-key-status').textContent = st.status === 'not set' ? '尚未设置 Key' : `Key ${st.status}`;
+                if (revision == PromptSettingsRequests.revision) {
+                    $('enh-cfg-key-status').textContent = st.status == 'not set' ? '尚未设置 Key' : `Key ${st.status}`;
+                }
             } catch (err) {
-                $('enh-cfg-key-status').textContent = '';
+                if (revision == PromptSettingsRequests.revision) {
+                    $('enh-cfg-key-status').textContent = '无法读取已保存密钥的状态，可填写新密钥后拉取。';
+                }
             }
         } else {
             $('enh-cfg-key-status').textContent = '';
         }
     }
 
+    /** Loads persisted settings before allowing edits and discards responses for a closed modal. */
     async function openEnhancerSettings() {
+        if (PromptSettingsRequests.saving) {
+            return;
+        }
+        PromptSettingsRequests.loading = true;
+        PromptSettingsRequests.invalidate();
+        let revision = PromptSettingsRequests.revision;
         $('enhancer-modal').hidden = false;
         $('enh-cfg-message').hidden = true;
         $('enh-cfg-key').value = '';
-        $('enh-cfg-model-options').hidden = true;
         try {
             const cfg = await request('GetMagicPromptSettings');
+            if (revision != PromptSettingsRequests.revision) {
+                return;
+            }
             mpSettings = cfg.settings;
             const backend = mpSettings.backend || 'ollama';
+            if (!MP_BACKENDS[backend]) {
+                throw new ApiError('已保存的模型后端不受支持，请重新选择。', 'api_error');
+            }
             $('enh-cfg-backend').value = backend;
             $('enh-cfg-endpoint').value = mpSettings.backends?.[backend]?.baseurl || MP_BACKENDS[backend].url;
             $('enh-cfg-model').value = mpSettings.model || '';
@@ -1005,12 +1162,21 @@
             const meta = MP_BACKENDS[backend];
             if (meta.keyType) {
                 const st = await request('GetAPIKeyStatus', { keyType: meta.keyType });
-                $('enh-cfg-key-status').textContent = st.status === 'not set' ? '尚未设置 Key' : `Key ${st.status}`;
+                if (revision == PromptSettingsRequests.revision) {
+                    $('enh-cfg-key-status').textContent = st.status == 'not set' ? '尚未设置 Key' : `Key ${st.status}`;
+                }
             } else {
                 $('enh-cfg-key-status').textContent = '';
             }
         } catch (err) {
-            showEnhCfgMessage(err.message, true);
+            if (revision == PromptSettingsRequests.revision) {
+                showEnhCfgMessage(err.message, true);
+            }
+        } finally {
+            if (revision == PromptSettingsRequests.revision) {
+                PromptSettingsRequests.loading = false;
+                PromptSettingsRequests.updateControls();
+            }
         }
     }
 
@@ -1020,20 +1186,30 @@
         const meta = MP_BACKENDS[backend];
         const settings = {
             backend: backend,
-            visionbackend: backend,
-            model: partial.model,
-            visionmodel: partial.model
+            model: partial.model
         };
         if (meta.editableUrl && partial.baseurl) {
             settings.baseurl = partial.baseurl;
         }
-        return await request('SaveMagicPromptSettings', { settings });
+        let result = await request('SaveMagicPromptSettings', { settings });
+        if (!result.success) {
+            throw new ApiError('配置保存失败，请稍后重试。', 'api_error');
+        }
+        mpSettings = result.settings;
+        return result;
     }
 
+    /** Previews models with the unsaved form; neither configuration nor credentials are persisted. */
     async function fetchMpModels() {
-        const btn = $('enh-cfg-fetch-models');
-        btn.disabled = true;
-        btn.textContent = '拉取中…';
+        if (PromptSettingsRequests.loading || PromptSettingsRequests.saving || PromptSettingsRequests.controller) {
+            return;
+        }
+        PromptSettingsRequests.invalidate();
+        let revision = PromptSettingsRequests.revision;
+        let controller = new AbortController();
+        PromptSettingsRequests.controller = controller;
+        PromptSettingsRequests.updateControls();
+        let timeout = setTimeout(() => controller.abort(), 25000);
         try {
             const backend = $('enh-cfg-backend').value;
             const meta = MP_BACKENDS[backend];
@@ -1042,35 +1218,55 @@
                 showEnhCfgMessage('请先填写服务地址。', true);
                 return;
             }
-            // Model listing reads the shared backend URL. Keep the selected model unchanged until Save.
-            await saveMpCore({ backend, baseurl });
-            const res = await request('GetMagicPromptModels');
-            const list = $('enh-cfg-model-options');
-            list.replaceChildren(new Option('从已拉取的模型中选择…', ''));
-            for (const m of res.models || []) {
-                list.add(new Option(m.name && m.name !== m.model ? `${m.name} — ${m.model}` : m.model, m.model));
+            let res = await request('PreviewMagicPromptModels', {
+                backend,
+                baseurl: baseurl || '',
+                api_key: meta.keyType ? $('enh-cfg-key').value.trim() : ''
+            }, controller.signal);
+            if (revision != PromptSettingsRequests.revision) {
+                return;
             }
-            list.hidden = !res.models?.length;
+            let list = $('enh-cfg-model-options');
+            list.replaceChildren();
+            for (let model of res.models || []) {
+                list.append(new Option(model.name || model.model, model.model));
+            }
             if (!res.models || res.models.length === 0) {
                 showEnhCfgMessage('未拉取到模型，请确认服务已启动、地址与 Key 正确。', true);
             } else {
-                showEnhCfgMessage(`已拉取 ${res.models.length} 个模型，可在模型框中选择。`, false);
+                showEnhCfgMessage(`已拉取 ${res.models.length} 个模型。请在上方“提示词模型”框中选择或输入，点击“保存”才会应用配置。`, false);
             }
         } catch (err) {
-            showEnhCfgMessage(err.message, true);
+            if (revision == PromptSettingsRequests.revision) {
+                showEnhCfgMessage(controller.signal.aborted ? '拉取模型超时，请检查服务后重试。' : err.message, true);
+            }
         } finally {
-            btn.disabled = false;
-            btn.textContent = '拉取';
+            clearTimeout(timeout);
+            if (PromptSettingsRequests.controller == controller) {
+                PromptSettingsRequests.controller = null;
+                PromptSettingsRequests.updateControls();
+            }
         }
     }
 
+    /** Cancels preview requests and clears the unsaved credential when closing the form. */
     function closeEnhancerSettings() {
+        if (PromptSettingsRequests.saving) {
+            return;
+        }
+        PromptSettingsRequests.loading = false;
+        PromptSettingsRequests.invalidate();
+        $('enh-cfg-key').value = '';
         $('enhancer-modal').hidden = true;
     }
 
+    /** Persists the selected backend and credential only on explicit Save. */
     async function saveEnhancerSettings() {
-        const saveBtn = $('enh-cfg-save');
-        saveBtn.disabled = true;
+        if (PromptSettingsRequests.saving || PromptSettingsRequests.loading) {
+            return;
+        }
+        PromptSettingsRequests.saving = true;
+        PromptSettingsRequests.invalidate();
         try {
             const backend = $('enh-cfg-backend').value;
             const meta = MP_BACKENDS[backend];
@@ -1085,7 +1281,7 @@
                 return;
             }
             // 1) Save the key if provided.
-            const key = $('enh-cfg-key').value;
+            const key = $('enh-cfg-key').value.trim();
             if (meta.keyType && key) {
                 const kr = await request('SetAPIKey', { keyType: meta.keyType, key: key });
                 if (!kr.success) { throw new ApiError('Key 保存失败。', 'magicprompt_key'); }
@@ -1101,7 +1297,7 @@
                 } else {
                     showEnhCfgMessage(st.status === 'not set'
                         ? '已保存设置，但当前后端未设置 Key，优化暂不可用。'
-                        : '已保存，提示词优化可用。', st.status === 'not set');
+                        : '已保存配置，可尝试优化提示词。', st.status === 'not set');
                 }
             } else {
                 $('enh-cfg-key-status').textContent = '';
@@ -1112,7 +1308,8 @@
         } catch (err) {
             showEnhCfgMessage(err.message, true);
         } finally {
-            saveBtn.disabled = false;
+            PromptSettingsRequests.saving = false;
+            PromptSettingsRequests.updateControls();
         }
     }
 
@@ -1126,18 +1323,20 @@
     function updateControls() {
         $('creation-fields').disabled = state.busy;
         $('refresh-models').disabled = state.catalogLoading || state.busy;
-        $('model').disabled = state.busy;
+        $('refresh-workflows').disabled = state.catalogLoading || state.busy;
+        $('refresh-workflows').textContent = state.catalogLoading ? '刷新中…' : '刷新';
+        $('model').disabled = state.busy || Boolean(currentWorkflow()?.native);
         $('mode-image').disabled = state.busy || state.uncertain;
         $('mode-video').disabled = state.busy || state.uncertain || !state.catalog?.can_generate_video;
         let hint = '';
         if (state.busy) { hint = '任务已发送到原生引擎，请勿刷新或重复提交。'; }
         else if (state.uncertain) { hint = '执行结果待核对，请先在右侧确认后再提交。'; }
-        else if (state.catalogLoading) { hint = '正在刷新模型和节点信息…'; }
+        else if (state.catalogLoading) { hint = '正在刷新工作流、模型和节点信息…'; }
         else if (!state.session || !state.catalog) { hint = '尚未连接服务，请刷新或先登录。'; }
         else if (!state.catalog.can_generate) { hint = '此账号没有生成权限，请联系管理员。'; }
         else if (state.type === 'video' && !state.catalog.can_generate_video) { hint = '此账号没有视频参数权限，请联系管理员。'; }
         else if (!state.catalog.local_backends_observed) { hint = '未观测到可用的部署机 ComfyUI 节点。'; }
-        else if (!currentModel()) { hint = '请先在原生引擎配置此类型的模型。'; }
+        else if (!currentWorkflow()?.native && !currentModel()) { hint = '请先在原生引擎配置此类型的模型。'; }
         else if (!state.workflowId && state.referenceLoading) { hint = '正在读取初始图，请稍候。'; }
         else if (!state.workflowId && state.mode === 'inpaint' && state.reference && !MaskEditor.hasMask()) {
             hint = '请先在图上涂抹要修改的区域。';
@@ -1217,6 +1416,9 @@
         if (state.workflowId) {
             payload.workflow_id = state.workflowId;
             payload.workflow_params = { ...state.workflowValues };
+            if (currentWorkflow()?.native) {
+                delete payload.model;
+            }
             if (isVideo) {
                 payload.text2videoframes = Number($('frames').value);
                 if ($('fps').value !== '') { payload.videofps = Number($('fps').value); }
@@ -1579,6 +1781,7 @@
             t.addEventListener('click', () => setMode(t.dataset.mode)));
 
         $('refresh-models').addEventListener('click', refreshCatalog);
+        $('refresh-workflows').addEventListener('click', refreshCatalog);
         $('model').addEventListener('change', () => { updateModelMeta(); applyModelSize(); });
         $('workflow-select').addEventListener('change', selectWorkflow);
 
@@ -1659,10 +1862,9 @@
         $('enh-cfg-cancel').addEventListener('click', closeEnhancerSettings);
         $('enh-cfg-save').addEventListener('click', saveEnhancerSettings);
         $('enh-cfg-backend').addEventListener('change', onBackendChange);
+        $('enh-cfg-endpoint').addEventListener('input', () => PromptSettingsRequests.invalidate());
+        $('enh-cfg-key').addEventListener('input', () => PromptSettingsRequests.invalidate());
         $('enh-cfg-fetch-models').addEventListener('click', fetchMpModels);
-        $('enh-cfg-model-options').addEventListener('change', event => {
-            if (event.target.value) { $('enh-cfg-model').value = event.target.value; }
-        });
 
         $('creation-form').addEventListener('submit', generate);
 
@@ -1691,6 +1893,7 @@
         $('gallery-gocreate').addEventListener('click', () => { location.hash = 'create'; });
         $('queue-refresh').addEventListener('click', loadQueue);
         setInterval(pollBackendStatus, 5000);
+        setInterval(() => WorkflowCatalogRefresh.refresh(), 30000);
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) { pollBackendStatus(); }
         });

@@ -78,7 +78,7 @@ public class Settings : AutoConfiguration
     public class EcomCraftData : AutoConfiguration
     {
         /// <summary>Optional directories to scan for native ComfyUI canvas workflow files.</summary>
-        [ConfigComment("Optional directories containing native ComfyUI workflow JSON files. If empty, EcomCraft discovers the workflow folder from each local ComfyUI backend and its --user-directory argument.")]
+        [ConfigComment("Additional directories containing native ComfyUI workflow JSON files. EcomCraft also discovers workflows and blueprints in configured local backends and verified local ComfyUI installations, respecting configured --user-directory arguments.")]
         public List<string> ComfyWorkflowSearchPaths = [];
     }
 

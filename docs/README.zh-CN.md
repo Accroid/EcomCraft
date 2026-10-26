@@ -26,8 +26,8 @@
 - [HTTP 与 WebSocket API（中文）](API.zh-CN.md) · [English](API.md)
 - [扩展开发指南（中文）](Making%20Extensions.zh-CN.md) · [English](Making%20Extensions.md)
 - [图像元数据格式（中文）](Image%20Metadata%20Format.zh-CN.md) · [English](Image%20Metadata%20Format.md)
-- [EcomCraft 提示词优化与部署指南（中文）](EcomCraft%20Prompt%20Enhancement.md)
-- [EcomCraft ComfyUI 工作流调用（中文）](EcomCraft%20ComfyUI%20工作流.zh-CN.md)
+- [EcomCraft 提示词优化与部署指南（中文）](EcomCraft%20Prompt%20Enhancement.md)：后端配置、输入 Key 后直接拉取模型、保存流程及生成超时设置。
+- [EcomCraft ComfyUI 工作流调用（中文）](EcomCraft%20ComfyUI%20工作流.zh-CN.md)：本机安装自动发现、工作流与子图蓝图导入、重复项合并与本机依赖过滤、批量出图种子递增、Windows AMD 连续生成排查、共享模型目录接入、模型和参数默认值读取、修改回传及客户端调用。
 - [SwarmUI 设计动机（中文）](Motivations.zh-CN.md) · [English](Motivations.md)
 
 ## 模型与功能专题

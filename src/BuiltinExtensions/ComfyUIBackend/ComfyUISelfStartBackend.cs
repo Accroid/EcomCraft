@@ -366,6 +366,12 @@ public class ComfyUISelfStartBackend : ComfyUIAPIAbstractBackend
                 // ComfyUI's DynamicVRAM (comfy-aimdo/VBAR) is not validated for RDNA1/gfx1010 and produces NaN (black) outputs on ROCm.
                 addedArgs += " --disable-dynamic-vram";
                 AddLoadStatus("AMD GPU detected: disabling ComfyUI dynamic VRAM to avoid NaN/black outputs on ROCm targets.");
+                if (OperatingSystem.IsWindows())
+                {
+                    // ROCm can reject copies from pinned quantized weights after an unload/reload cycle.
+                    addedArgs += " --disable-pinned-memory";
+                    AddLoadStatus("Windows AMD GPU detected: disabling pinned memory for quantized model reload compatibility.");
+                }
             }
             if (Settings.EnablePreviews == "true")
             {
@@ -523,6 +529,19 @@ public class ComfyUISelfStartBackend : ComfyUIAPIAbstractBackend
             }
             async Task update(string name, string pip)
             {
+                if (name == "diffusers")
+                {
+                    // pip otherwise ignores installed consumers and may upgrade huggingface-hub
+                    // beyond the upper bound required by the existing transformers/tokenizers pair.
+                    foreach (string consumer in new[] { "transformers", "tokenizers" })
+                    {
+                        string installedVersion = getRawVersion(consumer);
+                        if (installedVersion is not null)
+                        {
+                            pip += $" \"{consumer}=={installedVersion}\"";
+                        }
+                    }
+                }
                 await pipCall($"Updating '{name}'", $"install {pip}");
                 libs.Add(name);
             }

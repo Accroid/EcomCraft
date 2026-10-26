@@ -7,7 +7,7 @@
     <meta name="color-scheme" content="light dark">
     <title>EcomCraft Studio · 创作工作台</title>
     <link rel="stylesheet" href="/ExtensionFile/EcomCraft/Studio/studio.css?v=0.3.4-queue-progress">
-    <script src="/ExtensionFile/EcomCraft/Studio/studio.js?v=0.3.5-backend-status" defer></script>
+    <script src="/ExtensionFile/EcomCraft/Studio/studio.js?v=0.3.12-prompt-model-combobox" defer></script>
 </head>
 
 <body>
@@ -105,7 +105,8 @@
 
                                 <!-- 已发布的 ComfyUI 工作流 -->
                                 <div class="fld" id="workflow-select-fld">
-                                    <div class="fld-head"><label for="workflow-select">创作工作流</label></div>
+                                    <div class="fld-head"><label for="workflow-select">创作工作流</label><button type="button"
+                                            class="link-btn" id="refresh-workflows" aria-label="刷新创作工作流">刷新</button></div>
                                     <select id="workflow-select">
                                         <option value="">标准工作台（当前模式）</option>
                                     </select>
@@ -239,7 +240,7 @@
                                 </div>
 
                                 <!-- 模型 -->
-                                <div class="fld">
+                                <div class="fld" id="model-fld">
                                     <div class="fld-head"><label for="model">生成模型</label><button type="button"
                                             class="link-btn" id="refresh-models">刷新</button></div>
                                     <select id="model" required></select>
@@ -454,7 +455,7 @@
                     <label for="enh-cfg-backend">模型后端</label>
                     <select id="enh-cfg-backend">
                         <option value="ollama">Ollama（本地，免费）</option>
-                        <option value="openaiapi">OpenAI 兼容本地服务（LM Studio / 自建等）</option>
+                        <option value="openaiapi">OpenAI 兼容服务（本地 / 远程）</option>
                         <option value="openrouter">OpenRouter（含免费模型）</option>
                         <option value="openai">OpenAI（ChatGPT）</option>
                         <option value="anthropic">Anthropic（Claude）</option>
@@ -468,14 +469,15 @@
                 <div class="fld">
                     <label for="enh-cfg-model">提示词模型</label>
                     <div class="input-row">
-                        <input id="enh-cfg-model" type="text" spellcheck="false" placeholder="点“拉取”选择，或手动填写">
+                        <input id="enh-cfg-model" type="text" list="enh-cfg-model-options" autocomplete="off" spellcheck="false" placeholder="拉取后在此选择，或手动填写">
                         <button class="btn-ghost btn-sm" type="button" id="enh-cfg-fetch-models">拉取</button>
                     </div>
-                    <select id="enh-cfg-model-options" aria-label="从已拉取的模型中选择" hidden></select>
+                    <datalist id="enh-cfg-model-options"></datalist>
                 </div>
                 <div class="fld" id="enh-cfg-key-fld">
                     <label for="enh-cfg-key">API Key</label>
-                    <input id="enh-cfg-key" type="password" autocomplete="off" placeholder="填写后随保存生效；本地 Ollama 无需 Key">
+                    <input id="enh-cfg-key" type="password" autocomplete="off" placeholder="填写后可直接拉取模型；点击保存才会保存 Key">
+                    <p class="field-note">拉取优先使用当前填写的 Key；留空时使用此地址已保存的 Key。修改服务地址后，请重新填写所需的 Key。</p>
                     <p class="field-note" id="enh-cfg-key-status" role="status"></p>
                 </div>
                 <p class="banner-msg" id="enh-cfg-message" hidden role="status"></p>

@@ -1,4 +1,5 @@
 using Newtonsoft.Json.Linq;
+using Microsoft.AspNetCore.Http;
 using System.Text.Json;
 using SwarmUI.Utils;
 using SwarmUI.WebAPI;
@@ -273,6 +274,11 @@ public class LLMAPICalls : MagicPromptAPI
         // Ensure the base URL doesn't end with a slash and the endpoint starts with one
         baseUrl = baseUrl.TrimEnd('/');
         endpoint = endpoint.StartsWith($"/") ? endpoint : "/" + endpoint;
+        if (backend == "openaiapi" && baseUrl.EndsWith("/v1", StringComparison.OrdinalIgnoreCase)
+            && endpoint.StartsWith("/v1/", StringComparison.OrdinalIgnoreCase))
+        {
+            endpoint = endpoint[3..];
+        }
         string fullUrl = $"{baseUrl}{endpoint}";
         return fullUrl;
     }
@@ -284,7 +290,7 @@ public class LLMAPICalls : MagicPromptAPI
     /// <param name="session">The current user session.</param>
     /// <param name="error">Output parameter for any error message.</param>
     /// <returns>True if configuration was successful, false otherwise.</returns>
-    public static bool ConfigureRequest(HttpRequestMessage request, string backend, JObject settings, Session session, out string error)
+    public static bool ConfigureRequest(HttpRequestMessage request, string backend, JObject settings, Session session, out string error, string apiKeyOverride = null)
     {
         // Initialize error message as empty
         error = string.Empty;
@@ -312,7 +318,7 @@ public class LLMAPICalls : MagicPromptAPI
         switch (backend)
         {
             case "openai":
-                string apiKey = session.User.GetGenericData("openai_api", "key") ?? Program.Sessions.GenericSharedUser.GetGenericData("openai_api", "key");
+                string apiKey = apiKeyOverride ?? session.User.GetGenericData("openai_api", "key") ?? Program.Sessions.GenericSharedUser.GetGenericData("openai_api", "key");
                 if (string.IsNullOrEmpty(apiKey))
                 {
                     error = ErrorHandler.FormatErrorMessage(ErrorType.Authentication, "OpenAI API Key not found", "openai");
@@ -321,7 +327,7 @@ public class LLMAPICalls : MagicPromptAPI
                 request.Headers.Add("Authorization", $"Bearer {apiKey}");
                 break;
             case "grok":
-                string grokKey = session?.User?.GetGenericData("grok_api", "key") ?? Program.Sessions.GenericSharedUser.GetGenericData("grok_api", "key");
+                string grokKey = apiKeyOverride ?? session?.User?.GetGenericData("grok_api", "key") ?? Program.Sessions.GenericSharedUser.GetGenericData("grok_api", "key");
                 if (string.IsNullOrEmpty(grokKey))
                 {
                     error = ErrorHandler.FormatErrorMessage(ErrorType.Authentication, "Grok API Key not found", "grok");
@@ -330,7 +336,7 @@ public class LLMAPICalls : MagicPromptAPI
                 request.Headers.Add("Authorization", $"Bearer {grokKey}");
                 break;
             case "openrouter":
-                string openRouterKey = session?.User?.GetGenericData("openrouter_api", "key") ?? Program.Sessions.GenericSharedUser.GetGenericData("openrouter_api", "key");
+                string openRouterKey = apiKeyOverride ?? session?.User?.GetGenericData("openrouter_api", "key") ?? Program.Sessions.GenericSharedUser.GetGenericData("openrouter_api", "key");
                 if (string.IsNullOrEmpty(openRouterKey))
                 {
                     error = ErrorHandler.FormatErrorMessage(ErrorType.Authentication, "OpenRouter API Key not found", "openrouter");
@@ -341,7 +347,7 @@ public class LLMAPICalls : MagicPromptAPI
                 request.Headers.Add("X-Title", "EcomCraft");
                 break;
             case "anthropic":
-                string anthropicKey = session?.User?.GetGenericData("anthropic_api", "key") ?? Program.Sessions.GenericSharedUser.GetGenericData("anthropic_api", "key");
+                string anthropicKey = apiKeyOverride ?? session?.User?.GetGenericData("anthropic_api", "key") ?? Program.Sessions.GenericSharedUser.GetGenericData("anthropic_api", "key");
                 if (string.IsNullOrEmpty(anthropicKey))
                 {
                     error = ErrorHandler.FormatErrorMessage(ErrorType.Authentication, "Anthropic API Key not found", "anthropic");
@@ -351,14 +357,14 @@ public class LLMAPICalls : MagicPromptAPI
                 request.Headers.Add("anthropic-version", "2023-06-01");
                 break;
             case "openaiapi":
-                string openaiApiKey = session?.User?.GetGenericData("openaiapi_local", "key") ?? Program.Sessions.GenericSharedUser.GetGenericData("openaiapi_local", "key");
+                string openaiApiKey = apiKeyOverride ?? session?.User?.GetGenericData("openaiapi_local", "key") ?? Program.Sessions.GenericSharedUser.GetGenericData("openaiapi_local", "key");
                 if (!string.IsNullOrEmpty(openaiApiKey))
                 {
                     request.Headers.Add("Authorization", $"Bearer {openaiApiKey}");
                 }
                 break;
             case "ollama":
-                string ollamaKey = session?.User?.GetGenericData("ollama_api", "key") ?? Program.Sessions.GenericSharedUser.GetGenericData("ollama_api", "key");
+                string ollamaKey = apiKeyOverride ?? session?.User?.GetGenericData("ollama_api", "key") ?? Program.Sessions.GenericSharedUser.GetGenericData("ollama_api", "key");
                 if (!string.IsNullOrEmpty(ollamaKey))
                 {
                     request.Headers.Add("Authorization", $"Bearer {ollamaKey}");
@@ -377,22 +383,14 @@ public class LLMAPICalls : MagicPromptAPI
     {
         try
         {
-            var sessionSettings = SessionSettings.GetMagicPromptSettings().GetAwaiter().GetResult();
-            if (sessionSettings?["success"]?.Value<bool>() != true)
-            {
-                return 20_000;
-            }
-
-            var settings = sessionSettings["settings"] as JObject;
-            var backend = settings?["backend"]?.ToString()?.ToLower();
-            int timeoutSec = GetBackendTimeout(settings, backend, defaultTimeout: 20);
-
-            // Add 30 second buffer for cache waiting (to exceed the actual LLM timeout)
-            return (timeoutSec + 30) * 1000;
+            JObject sessionSettings = SessionSettings.GetMagicPromptSettings().GetAwaiter().GetResult();
+            JObject settings = sessionSettings?["settings"] as JObject;
+            string backend = settings?["backend"]?.ToString();
+            return (GenerationTimeout.Seconds(settings, backend) + 30) * 1000;
         }
         catch
         {
-            return 20_000; // 20 second fallback
+            return (GenerationTimeout.DefaultSeconds + 30) * 1000;
         }
     }
 
@@ -431,16 +429,15 @@ public class LLMAPICalls : MagicPromptAPI
             "error": string
         }
         """)]
-    public static async Task<JObject> MagicPromptPhoneHome(JObject requestData, Session session = null)
+    public static async Task<JObject> MagicPromptPhoneHome(JObject requestData, Session session = null, HttpContext context = null)
     {
         try
         {
-            long seed = requestData["seed"]?.Value<long>() ?? -1;
-
             if (requestData == null)
             {
                 return CreateErrorResponse("Request data is null");
             }
+            long seed = requestData["seed"]?.Value<long>() ?? -1;
             // Safely parse message content
             JToken messageContentToken = requestData["messageContent"];
             if (messageContentToken == null)
@@ -557,16 +554,21 @@ public class LLMAPICalls : MagicPromptAPI
             }
             string jsonContent = JsonSerializer.Serialize(requestBody);
             request.Content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+            int timeoutSec = GenerationTimeout.Seconds(settings, backend);
+            using CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                context?.RequestAborted ?? CancellationToken.None, session?.SessInterrupt.Token ?? CancellationToken.None,
+                Program.GlobalProgramCancel);
+            using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
+            deadline.CancelAfter(TimeSpan.FromSeconds(timeoutSec));
+            System.Diagnostics.Stopwatch elapsed = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 // Send request and handle response
                 // Detailed diagnostics to help trace hanging requests
                 Logs.Debug($"[MagicPrompt] Sending request | backend={backend} | type={(messageType == MessageType.Vision ? "vision" : "chat")} | endpoint={endpoint} | model={modelId}");
-                int timeoutSec = GetBackendTimeout(settings, backend, defaultTimeout: 20);
-                Logs.Debug($"[MagicPrompt] Using timeout of {timeoutSec} seconds for {backend}");
-                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec));
-                HttpResponseMessage response = await HttpClient.SendAsync(request, cts.Token);
-                string responseContent = await response.Content.ReadAsStringAsync();
+                Logs.Debug($"[MagicPrompt] Using generation timeout of {timeoutSec} seconds for {backend}");
+                using HttpResponseMessage response = await HttpClient.SendAsync(request, deadline.Token);
+                string responseContent = await response.Content.ReadAsStringAsync(deadline.Token);
                 // Handle API errors indicated by status code
                 if (!response.IsSuccessStatusCode)
                 {
@@ -599,15 +601,14 @@ public class LLMAPICalls : MagicPromptAPI
                     backend)
                 );
             }
-            catch (System.Threading.Tasks.TaskCanceledException)
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
-                Logs.Error($"EcomCraft.MagicPrompt: Request timed out for backend {backend} ({endpoint})");
-                return CreateErrorResponse(ErrorHandler.FormatErrorMessage(ErrorType.RequestTimeout, $"Request exceeded timeout at {endpoint}", backend));
+                return CreateErrorResponse("提示词优化请求已取消。未自动重试。");
             }
             catch (OperationCanceledException)
             {
-                Logs.Error($"EcomCraft.MagicPrompt: Request canceled (timeout) for backend {backend} ({endpoint})");
-                return CreateErrorResponse(ErrorHandler.FormatErrorMessage(ErrorType.RequestTimeout, $"Request canceled due to timeout at {endpoint}", backend));
+                Logs.Warning($"EcomCraft.MagicPrompt: Generation timed out | backend={backend} | elapsed_seconds={elapsed.Elapsed.TotalSeconds:F1} | limit_seconds={timeoutSec}");
+                return CreateErrorResponse($"提示词优化已等待 {timeoutSec} 秒，模型服务仍未返回完整结果。请检查服务状态或选择响应更快的模型。本次请求未自动重试。");
             }
             catch (HttpRequestException ex)
             {
