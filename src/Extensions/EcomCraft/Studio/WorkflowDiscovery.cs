@@ -207,10 +207,17 @@ public static class WorkflowDiscovery
         }
     }
 
-    /// <summary>Picks "Server / relative path"; avoids stored SwarmUI workflows and other sources with a short path hash.</summary>
+    /// <summary>Picks "Server/relative path"; avoids stored SwarmUI workflows and other sources with a short path hash.
+    /// Names are passed through <see cref="Utilities.StrictFilenameClean"/> here because SwarmUI cleans the custom-workflow
+    /// name again when it reads the workflow for generation; a name that changes under cleaning would resolve to nothing.</summary>
     private static string UniqueName(Found item, Dictionary<string, Entry> taken)
     {
-        string baseName = $"{item.Prefix} / {item.RelativeName}";
+        // The first '/' separates the server from the path, so a '/' inside the server name must not survive.
+        string baseName = Utilities.StrictFilenameClean($"{item.Prefix.Replace('/', '-').Replace('\\', '-')}/{item.RelativeName}");
+        if (string.IsNullOrWhiteSpace(baseName))
+        {
+            return null;
+        }
         bool isFree(string candidate) => !taken.ContainsKey(candidate)
             && (!ComfyUIBackendExtension.CustomWorkflows.TryGetValue(candidate, out ComfyUIBackendExtension.ComfyCustomWorkflow existing) || IsOwnedImport(candidate, existing));
         if (isFree(baseName))
@@ -218,7 +225,7 @@ public static class WorkflowDiscovery
             return baseName;
         }
         string suffix = System.Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(item.SourceKey)))[..8];
-        string hashed = $"{baseName} ({suffix})";
+        string hashed = Utilities.StrictFilenameClean($"{baseName} ({suffix})");
         return isFree(hashed) ? hashed : null;
     }
 

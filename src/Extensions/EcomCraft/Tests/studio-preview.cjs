@@ -1,14 +1,15 @@
 // Local design preview for the EcomCraft Studio page.
 // Serves the real index.html / studio.css / studio.js with a mock API and generated placeholder images,
 // so the UI can be reviewed without SwarmUI, ComfyUI or a GPU. Listens on 127.0.0.1 only.
-// Usage: node src/Extensions/EcomCraft/Tests/studio-preview.cjs [port]   then open http://127.0.0.1:<port>/EcomCraft
+// Usage: node src/Extensions/EcomCraft/Tests/studio-preview.cjs [port] [studioDir]   then open http://127.0.0.1:<port>/EcomCraft
+// studioDir defaults to ../Studio; pass another folder to reproduce mixed old/new page files.
 
 let http = require('node:http');
 let fs = require('node:fs');
 let path = require('node:path');
 
 let port = Number(process.argv[2] || 7899);
-let studio = path.join(__dirname, '../Studio');
+let studio = process.argv[3] ? path.resolve(process.argv[3]) : path.join(__dirname, '../Studio');
 
 /** In-memory gallery; starring moves files into Starred/ as the real API does. */
 let files = [];
@@ -47,9 +48,9 @@ function catalog() {
         samplers: [{ id: 'euler', name: 'Euler' }, { id: 'dpmpp_2m', name: 'DPM++ 2M' }],
         schedulers: [{ id: 'normal', name: 'Normal' }, { id: 'karras', name: 'Karras' }],
         workflows: [
-            { id: 'A / 白底主图', name: 'A / 白底主图', kind: 'image', native: true, description: '从执行服务器“A”的 ComfyUI 自动发现。',
+            { id: 'A/白底主图', name: 'A/白底主图', kind: 'image', native: true, description: '从执行服务器“A”的 ComfyUI 自动发现。',
                 inputs: [], defaults: { prompt: '', negativeprompt: '', width: 1024, height: 1024, images: 1, steps: 20, cfgscale: 3.5, seed: 1234, sampler: 'euler', scheduler: 'normal' } },
-            { id: 'B / 场景图', name: 'B / 场景图', kind: 'image', native: true, description: '从执行服务器“B”的 ComfyUI 自动发现。',
+            { id: 'B/场景图', name: 'B/场景图', kind: 'image', native: true, description: '从执行服务器“B”的 ComfyUI 自动发现。',
                 inputs: [{ id: 'ecnativebgx', name: '背景风格', type: 'dropdown', values: ['石台', '木纹', '大理石'], default: '石台', description: '' }],
                 defaults: { prompt: '', negativeprompt: '', width: 1024, height: 1024, images: 2, steps: 28, cfgscale: 4, seed: 5678, sampler: 'dpmpp_2m', scheduler: 'karras' } },
             { id: 'Examples/商品换背景', name: 'Examples/商品换背景', kind: 'image', native: false, description: '管理员发布的模板。', inputs: [], defaults: null }
@@ -143,12 +144,110 @@ http.createServer((req, res) => {
     let pathname = decodeURIComponent(url.pathname);
     if (pathname == '/' || pathname == '/EcomCraft') {
         let html = fs.readFileSync(path.join(studio, 'index.html'), 'utf8');
-        if (url.searchParams.has('shot')) {
+        if (url.searchParams.has('selftest')) {
+            html = html.replace('</body>', '<script src="/preview-selftest.js" defer></script></body>');
+        }
+        else if (url.searchParams.has('shot')) {
             // Screenshot helper only: drives the page into a named state. Never part of the shipped page.
             html = html.replace('</body>', `<script src="/preview-shot.js?shot=${encodeURIComponent(url.searchParams.get('shot'))}" defer></script></body>`);
         }
-        res.writeHead(200, { 'Content-Type': types['.html'], 'Cache-Control': 'no-store' });
+        // Same headers as StudioRoutes.cs, so CSP problems show up here before they reach a real server.
+        res.writeHead(200, {
+            'Content-Type': types['.html'], 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin',
+            'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'"
+        });
         res.end(html);
+        return;
+    }
+    if (pathname == '/preview-selftest.js') {
+        // Clicks through the page in a real browser and logs one "SELFTEST PASS|FAIL <step>" line per check.
+        res.writeHead(200, { 'Content-Type': types['.js'], 'Cache-Control': 'no-store' });
+        res.end(`(async () => {
+    let $ = id => document.getElementById(id);
+    let wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    let key = (k, target = document.activeElement || document.body) => target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+    let results = [];
+    let check = (name, ok) => { results.push(ok); console.log('SELFTEST ' + (ok ? 'PASS ' : 'FAIL ') + name); };
+    try { localStorage.setItem('ecomcraft-setup-guide-seen', '1'); } catch (e) {}
+    await wait(1500);
+    check('脚本启动后隐藏启动检查提示', $('boot-check').hidden);
+    check('连接状态已加载', $('health-text').textContent.includes('在线'));
+    check('账号名已加载', $('user-name').textContent == 'designer');
+    $('open-setup-guide').click();
+    check('查看配置指引：打开弹窗', !$('setup-guide-modal').hidden);
+    check('配置指引：焦点进入弹窗', $('setup-guide-modal').contains(document.activeElement));
+    key('Escape');
+    check('配置指引：Esc 关闭', $('setup-guide-modal').hidden);
+    $('enhancer-settings').click();
+    await wait(600);
+    check('提示词设置：打开弹窗并读取配置', !$('enhancer-modal').hidden && $('enh-cfg-model').value == 'qwen2.5:7b');
+    key('Escape');
+    check('提示词设置：Esc 关闭', $('enhancer-modal').hidden);
+    document.querySelector('[data-mode="img2img"]').click();
+    check('切换图生图：显示初始图上传', !$('reference-fld').hidden && $('workflow-tag').textContent == '图生图');
+    document.querySelector('[data-mode="outpaint"]').click();
+    let cell = document.querySelector('[data-dir="r"]');
+    cell.click();
+    check('扩图方向：按下状态', cell.getAttribute('aria-pressed') == 'true');
+    document.querySelector('[data-mode="text2img"]').click();
+    $('mode-video').click();
+    check('切换视频：显示视频参数', !$('video-fields').hidden && $('page-title').textContent == '生成商品视频');
+    $('mode-image').click();
+    $('add-lora').click();
+    let statusBefore = $('result-status').textContent;
+    document.querySelector('.lora-row button').click();
+    await wait(300);
+    check('移除 LoRA：不会触发生成', !document.querySelector('.lora-row') && $('result-status').textContent == statusBefore);
+    check('工作流按服务器分组', document.querySelectorAll('#workflow-select optgroup').length >= 2);
+    $('workflow-select').value = 'A/白底主图';
+    $('workflow-select').dispatchEvent(new Event('change'));
+    check('选择原生工作流：隐藏模型选择', $('model-fld').hidden);
+    $('workflow-select').value = '';
+    $('workflow-select').dispatchEvent(new Event('change'));
+    $('prompt').value = '一瓶精华液，浅灰石台';
+    $('prompt').dispatchEvent(new Event('input'));
+    $('images').value = '2';
+    // Headless browsers fast-forward virtual time, so record whether the pending state ever appeared instead of sampling once.
+    let pendingSeen = false;
+    let observer = new MutationObserver(() => { pendingSeen = pendingSeen || (!$('pending-state').hidden && $('generate-label').textContent == '生成中…'); });
+    observer.observe($('pending-state'), { attributes: true });
+    $('creation-form').requestSubmit();
+    await wait(300);
+    pendingSeen = pendingSeen || !$('pending-state').hidden;
+    observer.disconnect();
+    check('生成中：显示指示灯状态并禁止重复提交', pendingSeen);
+    await wait(3200);
+    check('生成完成：显示 2 张结果', document.querySelectorAll('.result-card').length == 2 && $('result-status').textContent.includes('已生成 2 张'));
+    document.querySelector('.result-open').click();
+    check('点击结果：打开大图', !$('lightbox').hidden);
+    key('ArrowRight');
+    check('大图：方向键切到下一张', $('lightbox-name').textContent.includes('2 / 2'));
+    key('Escape');
+    check('大图：Esc 关闭', $('lightbox').hidden);
+    Array.from(document.querySelectorAll('.result-actions button')).find(b => b.textContent == '在画廊查看').click();
+    await wait(1200);
+    check('在画廊查看：跳到画廊并打开该作品', location.hash == '#gallery' && !$('lightbox').hidden);
+    key('Escape');
+    check('画廊计数已显示', !$('gallery-count').hidden && Number($('gallery-count').textContent) > 0);
+    $('gallery-search').value = '精华液';
+    $('gallery-search').dispatchEvent(new Event('input'));
+    check('搜索：显示清除按钮', !$('gallery-search-clear').hidden);
+    $('gallery-search-clear').click();
+    check('搜索：清除后按钮隐藏', $('gallery-search-clear').hidden && $('gallery-search').value == '');
+    await wait(800);
+    $('gallery-select').click();
+    document.querySelector('.sheet-open').click();
+    check('批量选择：选中后可删除', !$('gallery-delete-selected').disabled);
+    $('gallery-select-cancel').click();
+    check('批量选择：取消后退出', $('gallery-selection').hidden);
+    $('theme-toggle').click();
+    check('主题：切换到深色', document.documentElement.getAttribute('data-theme') == 'dark');
+    $('theme-toggle').click();
+    location.hash = 'queue';
+    await wait(1000);
+    check('队列：显示服务器表格', $('queue-backends').querySelectorAll('tr').length == 3 && !$('queue-count').hidden);
+    console.log('SELFTEST DONE ' + results.filter(Boolean).length + '/' + results.length);
+})().catch(error => console.log('SELFTEST FAIL 自测脚本异常 ' + error.message));`);
         return;
     }
     if (pathname == '/preview-shot.js') {
@@ -180,7 +279,7 @@ http.createServer((req, res) => {
 })();`);
         return;
     }
-    if (pathname.startsWith('/ExtensionFile/EcomCraft/Studio/')) {
+    if (pathname == '/EcomCraft/studio.js' || pathname == '/EcomCraft/studio.css') {
         let file = path.join(studio, path.basename(pathname));
         if (fs.existsSync(file)) {
             res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' });

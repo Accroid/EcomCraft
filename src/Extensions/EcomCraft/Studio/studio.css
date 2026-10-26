@@ -532,6 +532,14 @@ main:focus:not(:focus-visible) { outline: none; }
 .setup-step.is-ready .step-done { display: inline; }
 .setup-step ul { list-style: disc; padding-left: 18px; margin-bottom: 10px; font-size: var(--fs-13); color: var(--ink-2); line-height: 1.7; }
 
+/* 脚本启动检查：默认不可见，4 秒后显示；studio.js 启动完成时把它设为 hidden。
+   这不是装饰动画，所以用更高优先级的 !important 避开“减少动态效果”的全局规则。 */
+.boot-check {
+    visibility: hidden; margin: 16px 24px 0; padding: 12px 14px;
+    border-left: 3px solid var(--tally); background: var(--tally-soft); color: var(--ink); font-size: var(--fs-13);
+    animation: boot-check-show 0s linear 4s forwards !important;
+}
+@keyframes boot-check-show { to { visibility: visible; } }
 .noscript { position: fixed; bottom: 0; left: 0; right: 0; padding: 14px; background: var(--tally); color: var(--on-tally); text-align: center; }
 
 /* ---------- 窄屏：只保证不错位 ---------- */

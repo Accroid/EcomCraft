@@ -28,7 +28,9 @@ function setup(globals = {}) {
     let elements = {};
     let source = fs.readFileSync(path.join(__dirname, '../Studio/studio.js'), 'utf8');
     source = source.slice(0, source.lastIndexOf('    initTheme();')) + `
-        globalThis.ui = { state, Lightbox, renderQueue, renderReference, setGallerySearch, maybeOpenSetupGuide };
+        renderWorkflowFields = () => {};
+        updateWorkflowUi = () => {};
+        globalThis.ui = { state, Lightbox, renderQueue, renderReference, setGallerySearch, maybeOpenSetupGuide, populateWorkflows };
     })();`;
     let context = vm.createContext({
         document: {
@@ -40,7 +42,8 @@ function setup(globals = {}) {
             documentElement: makeElement('html'),
             activeElement: null
         },
-        window: {}
+        window: {},
+        Option: function(text, value) { this.text = text; this.value = value; }
     });
     for (let [name, descriptor] of Object.entries(globals)) {
         Object.defineProperty(context, name, descriptor);
@@ -118,6 +121,22 @@ test('the remove button names the chosen initial image', () => {
     ui.state.reference = null;
     ui.renderReference();
     assert.equal(element('remove-reference').getAttribute('aria-label'), '移除初始图');
+});
+
+test('native workflows group by the server before the first slash; the option value stays the full ID', () => {
+    let { ui, element } = setup();
+    ui.state.type = 'image';
+    ui.state.catalog = { workflows: [
+        { id: 'ComfyUI Self-Starting/qwen_text_to_image', name: 'ComfyUI Self-Starting/qwen_text_to_image', kind: 'image', native: true },
+        { id: 'B/sub/scene', name: 'B/sub/scene', kind: 'image', native: true },
+        { id: 'Examples/stored', name: 'Examples/stored', kind: 'image', native: false }
+    ] };
+    ui.populateWorkflows();
+    let groups = element('workflow-select').children.slice(1);
+    assert.deepEqual(groups.map(group => group.label), ['ComfyUI Self-Starting', 'B', '管理员发布']);
+    assert.equal(groups[0].children[0].text, 'qwen_text_to_image');
+    assert.equal(groups[0].children[0].value, 'ComfyUI Self-Starting/qwen_text_to_image');
+    assert.equal(groups[1].children[0].text, 'sub/scene');
 });
 
 test('the search clear button follows the search text', () => {

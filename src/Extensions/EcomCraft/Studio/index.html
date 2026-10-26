@@ -7,8 +7,8 @@
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
-    <link rel="stylesheet" href="/ExtensionFile/EcomCraft/Studio/studio.css?v=0.5.1-studio-fixes">
-    <script src="/ExtensionFile/EcomCraft/Studio/studio.js?v=0.5.1-studio-fixes" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.5.2">
+    <script src="/EcomCraft/studio.js?v=0.5.2" defer></script>
 </head>
 
 <body>
@@ -45,6 +45,10 @@
     </header>
 
     <main id="studio-main" tabindex="-1">
+        <!-- Shown after a few seconds unless studio.js finishes starting (it hides this). Lives in the HTML so a script that fails to load or run still leaves guidance. -->
+        <div class="boot-check" id="boot-check" role="alert">
+            工作台脚本没有正常启动，按钮暂时不能使用。请重启 SwarmUI 后按 Ctrl+F5 刷新页面；仍然出现时，请把浏览器开发者工具（F12）控制台中的红色报错发给管理员。
+        </div>
 
         <!-- 创作视图 -->
         <section class="view" id="view-create" aria-labelledby="page-title">
