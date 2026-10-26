@@ -50,6 +50,8 @@ cd EcomCraft
 - 管理员发布 ComfyUI 工作流供工作台选用；服务端校验工作流 ID 和已发布参数白名单，提供 `EcomCraftStudioCatalog`、`EcomCraftStudioGenerate`、`EcomCraftStudioQueue` 和 `EcomCraftStudioCancelTask` API。原生工作流批量出图时逐张递增实际采样种子，填写 `-1` 可随机确定本批起始值。
 - 自动发现本机 ComfyUI 安装中的 `workflows` 和 `blueprints`，以及局域网执行服务器 ComfyUI 中保存的工作流，支持内嵌子图蓝图；发现在后台进行，约每 30 秒更新。列表按“来源服务器 / 工作流”命名。无需逐个填写路径；`EcomCraft.ComfyWorkflowSearchPaths` 仅用于补充目录。发现的工作流仍须通过结构及正负提示词校验，并由具备所需模型和节点的执行服务器执行。可选列表按执行内容合并重复原生工作流，并隐藏所有在线执行服务器都缺少默认模型或节点的项。页面读取工作流内保存的模型和参数，修改值传入对应节点，提交前再次检查依赖。Windows AMD 本机后端默认禁用固定内存（pinned memory），改善量化编码器重新加载时的 ROCm 兼容性。Comfy Desktop 安装的后端会自动追加同一根目录下的 `ComfyUI-Shared/models` 共享模型路径。
 - 实时任务队列按执行服务器展示运行任务、排队任务、繁忙状态、当前节点和节点进度，并支持结束当前账号自己的活动生成任务。
+- 生成结果可直接下载、作为初始图继续创作，或跳到画廊查看；大图预览支持上一张 / 下一张和方向键切换。
+- 作品画廊支持收藏、搜索，以及单个或批量删除当前账号的作品。删除需要 `user_delete_image` 权限，删除前需确认；服务器启用回收站（`Paths.RecycleDeletedImages`）时文件移入回收站，否则永久删除。
 - MagicPrompt 提示词优化，可配置本地或云端语言模型服务；输入 API Key 后可直接拉取模型，点击保存才会应用配置。提示词生成默认等待 120 秒，模型列表拉取限时 20 秒。
 - Windows 首次安装时可创建 EcomCraft Studio 桌面快捷方式。
 

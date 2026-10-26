@@ -28,6 +28,7 @@
 - [图像元数据格式（中文）](Image%20Metadata%20Format.zh-CN.md) · [English](Image%20Metadata%20Format.md)
 - [EcomCraft 提示词优化与部署指南（中文）](EcomCraft%20Prompt%20Enhancement.md)：后端配置、输入 Key 后直接拉取模型、保存流程及生成超时设置。
 - [EcomCraft ComfyUI 工作流调用（中文）](EcomCraft%20ComfyUI%20工作流.zh-CN.md)：本机安装与局域网执行服务器的工作流自动发现、局域网 ComfyUI 接入、工作流与子图蓝图导入、重复项合并与依赖过滤、批量出图种子递增、Windows AMD 连续生成排查、共享模型目录接入、模型和参数默认值读取、修改回传及客户端调用。
+- [EcomCraft 工作台界面设计（中文）](EcomCraft%20工作台界面设计.zh-CN.md)：开发设计文档，涵盖配色与字体、各页面和按钮的功能清单、本机预览方法。
 - [EcomCraft 局域网多服务器平台需求（中文）](EcomCraft%20局域网多服务器平台需求.zh-CN.md)：开发需求文档，涵盖多服务器接入、工作流审核与快照、负载调度、多人使用、画廊共享及云端规划。
 - [SwarmUI 设计动机（中文）](Motivations.zh-CN.md) · [English](Motivations.md)
 

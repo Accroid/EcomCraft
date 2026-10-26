@@ -12,7 +12,7 @@ namespace EcomCraftStudio;
 public class EcomCraft : Extension
 {
     /// <summary>Extension version, not a claim of MVP completion or production readiness.</summary>
-    public const string ExtensionVersion = "0.3.0";
+    public const string ExtensionVersion = "0.5.0";
 
     /// <summary>Allows employees to use only Comfy workflows explicitly published to the simple workspace.</summary>
     public static readonly PermInfo PermUsePublishedWorkflows = Permissions.Register(new(

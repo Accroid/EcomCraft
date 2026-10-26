@@ -6,6 +6,21 @@
        ============================================================ */
     const $ = id => document.getElementById(id);
     const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+    /** Builds a decorative stroke icon from SVG path data, so icons do not depend on emoji fonts. */
+    function svgIcon(...paths) {
+        let ns = 'http://www.w3.org/2000/svg';
+        let svg = document.createElementNS(ns, 'svg');
+        for (let [name, value] of [['viewBox', '0 0 24 24'], ['width', '16'], ['height', '16'], ['fill', 'none'], ['stroke', 'currentColor'],
+            ['stroke-width', '1.8'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'], ['aria-hidden', 'true']]) {
+            svg.setAttribute(name, value);
+        }
+        for (let data of paths) {
+            let path = document.createElementNS(ns, 'path');
+            path.setAttribute('d', data);
+            svg.append(path);
+        }
+        return svg;
+    }
     const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
     class ApiError extends Error { constructor(message, code) { super(message); this.code = code; } }
@@ -110,32 +125,69 @@
     /* ============================================================
        Theme
        ============================================================ */
-    function initTheme() {
-        const saved = localStorage.getItem('ecomcraft-theme');
-        const theme = saved === 'dark' || saved === 'light' ? saved
-            : (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    /** Applies a theme and keeps the toggle label and browser chrome color in step with it. */
+    function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
+        let label = theme == 'dark' ? '切换到浅色主题' : '切换到深色主题';
+        $('theme-toggle').setAttribute('aria-label', label);
+        $('theme-toggle').title = label;
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme == 'dark' ? '#1E1F20' : '#E8E8E6');
     }
+
+    /** Restores the saved theme, falling back to the system preference. */
+    function initTheme() {
+        let saved = null;
+        try {
+            saved = localStorage.getItem('ecomcraft-theme');
+        }
+        catch (error) {
+            saved = null;
+        }
+        let theme = saved == 'dark' || saved == 'light' ? saved
+            : (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        applyTheme(theme);
+    }
+
+    /** Switches between light and dark themes and remembers the choice in this browser. */
     function toggleTheme() {
-        const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-        document.documentElement.setAttribute('data-theme', next);
-        localStorage.setItem('ecomcraft-theme', next);
+        let next = document.documentElement.getAttribute('data-theme') == 'dark' ? 'light' : 'dark';
+        applyTheme(next);
+        try {
+            localStorage.setItem('ecomcraft-theme', next);
+        }
+        catch (error) {
+            // Private browsing may block storage; the theme still applies for this page.
+        }
     }
 
     /* ============================================================
        View routing
        ============================================================ */
+    /** Shows one view, marks its navigation entry as current and loads its data. */
     function setView(view) {
-        if (!['create', 'gallery', 'queue'].includes(view)) { view = 'create'; }
+        if (!['create', 'gallery', 'queue'].includes(view)) {
+            view = 'create';
+        }
         state.view = view;
-        $('view-create').hidden = view !== 'create';
-        $('view-gallery').hidden = view !== 'gallery';
-        $('view-queue').hidden = view !== 'queue';
-        $('crumb-title').textContent = view === 'create' ? '创作工作台' : view === 'gallery' ? '作品画廊' : '任务队列';
-        document.querySelectorAll('.rail-item[data-view]').forEach(i =>
-            i.classList.toggle('active', i.dataset.view === view));
-        if (view === 'gallery') { loadGallery(); }
-        if (view === 'queue') { loadQueue(); }
+        $('view-create').hidden = view != 'create';
+        $('view-gallery').hidden = view != 'gallery';
+        $('view-queue').hidden = view != 'queue';
+        let titles = { create: '创作', gallery: '作品画廊', queue: '任务队列' };
+        document.title = `${titles[view]} - EcomCraft 创作工作台`;
+        for (let item of document.querySelectorAll('.nav-item[data-view]')) {
+            if (item.dataset.view == view) {
+                item.setAttribute('aria-current', 'page');
+            }
+            else {
+                item.removeAttribute('aria-current');
+            }
+        }
+        if (view == 'gallery') {
+            loadGallery();
+        }
+        if (view == 'queue') {
+            loadQueue();
+        }
     }
     function route() {
         const hash = (location.hash || '').replace('#', '');
@@ -151,12 +203,26 @@
         else {
             updateSetupGuideStatus();
         }
+        let wasHidden = modal.hidden;
         modal.hidden = false;
-        localStorage.setItem('ecomcraft-setup-guide-seen', '1');
+        if (wasHidden) {
+            DialogFocus.enter(modal, document.activeElement, $('setup-guide-done'));
+        }
+        try {
+            localStorage.setItem('ecomcraft-setup-guide-seen', '1');
+        }
+        catch (error) {
+            // Without storage the guide may open again on the next visit, which is harmless.
+        }
     }
 
+    /** Closes the setup guide and returns focus to whatever opened it. */
     function closeSetupGuide() {
+        if ($('setup-guide-modal').hidden) {
+            return;
+        }
         $('setup-guide-modal').hidden = true;
+        DialogFocus.leave($('setup-guide-modal'));
     }
 
     function updateSetupGuideStatus() {
@@ -270,7 +336,7 @@
                 for (let key of ['width', 'height']) {
                     $(key).step = 8;
                 }
-                $('resolution-hint').textContent = '来自工作流 · 修改后传入 ComfyUI';
+                $('resolution-hint').textContent = '读取自工作流，可修改';
             }
         }
 
@@ -287,13 +353,27 @@
         return (state.catalog?.workflows || []).find(workflow => workflow.id === state.workflowId && (!workflow.kind || workflow.kind === state.type)) || null;
     }
 
+    /** Lists workflows for the current type, grouped by the source server prefix of native names ("B / 工作流1"). */
     function populateWorkflows() {
-        const select = $('workflow-select');
-        const previous = state.workflowId;
-        const workflows = (state.catalog?.workflows || []).filter(workflow => !workflow.kind || workflow.kind === state.type);
+        let select = $('workflow-select');
+        let previous = state.workflowId;
+        let workflows = (state.catalog?.workflows || []).filter(workflow => !workflow.kind || workflow.kind == state.type);
         select.replaceChildren(new Option('标准工作台（当前模式）', ''));
-        for (const workflow of workflows) {
-            select.append(new Option(workflow.name || workflow.id, workflow.id));
+        let groups = new Map();
+        for (let workflow of workflows) {
+            let name = workflow.name || workflow.id;
+            let split = name.indexOf(' / ');
+            let groupName = workflow.native && split > 0 ? name.slice(0, split) : '管理员发布';
+            let label = workflow.native && split > 0 ? name.slice(split + 3) : name;
+            if (!groups.has(groupName)) {
+                let group = document.createElement('optgroup');
+                group.label = groupName;
+                groups.set(groupName, group);
+            }
+            groups.get(groupName).append(new Option(label, workflow.id));
+        }
+        for (let group of groups.values()) {
+            select.append(group);
         }
         state.workflowId = workflows.some(workflow => workflow.id === previous) ? previous : '';
         select.value = state.workflowId;
@@ -317,10 +397,10 @@
         NativeWorkflowForm.sync(workflow);
         $('image-mode-tabs').style.display = selected || state.type === 'video' ? 'none' : '';
         $('workflow-description').textContent = selected
-            ? `${workflow.description || '使用管理员登记的工作流模板与参数。'} 创作方式由工作流节点决定。使用标准图生图、局部重绘等模式请切回标准工作台；工作流处理初始图或蒙版需要发布包含对应输入和节点的工作流。`
+            ? `${workflow.description || '管理员发布的工作流模板。'} 创作方式由工作流决定；要用图生图、局部重绘，请切回标准工作台。`
             : ((state.catalog?.workflows || []).length
-                ? '列表按“来源服务器 / 工作流”显示，已合并相同的原生工作流，并过滤所有在线执行服务器都缺少模型或节点的项。生成时由平台分配执行服务器。列表每 30 秒更新，也可点击上方“刷新”。'
-                : '暂无通过可用性检查的工作流。请等待执行服务器就绪，确认工作流已保存、所需模型和节点已安装，再点击“刷新”。');
+                ? '按来源服务器分组。生成时平台会自动选择能运行它的服务器。'
+                : '暂时没有可用的工作流。确认执行服务器在线、工作流已保存且模型和节点齐全后，点击“刷新列表”。');
         $('workflow-params').hidden = !selected || !(workflow.inputs || []).length;
         const meta = modeMeta[state.mode] || modeMeta.text2img;
         $('reference-fld').hidden = selected || !meta.needsRef;
@@ -453,9 +533,9 @@
             $(field).step = step;
             $(field).min = Math.ceil(256 / step) * step;
         }
-        $('resolution-hint').textContent = `256–2048 px · ${step} 的倍数`;
-        $('model-help').textContent = model ? `${model.class_name} · 类型来自模型元数据，兼容性待实测。`
-            : '请在原生引擎配置模型，或由管理员检查模型类型与账号权限。';
+        $('resolution-hint').textContent = `256–2048 像素，${step} 的倍数`;
+        $('model-help').textContent = model ? `模型类型：${model.class_name}`
+            : '没有可用的模型。请在原生引擎添加模型，或请管理员检查账号的模型权限。';
         updateControls();
     }
 
@@ -469,6 +549,20 @@
             $(field).value = Math.max(Math.ceil(256 / step) * step,
                 Math.min(Math.floor(2048 / step) * step, Math.round(suggested / step) * step));
         }
+    }
+
+    /** One plain sentence about execution servers and available models for the status line above the form. */
+    function connectionText(status, modelCount) {
+        if (status.local_backends_observed > 0) {
+            return `${status.local_backends_observed} 台执行服务器在线，标准工作台有 ${modelCount} 个模型可用。`;
+        }
+        if (status.local_backends_starting > 0) {
+            return '执行服务器正在启动，启动完成后即可生成。';
+        }
+        if (status.local_backends_errored > 0) {
+            return '执行服务器启动失败。请管理员查看服务器日志。';
+        }
+        return '还没有在线的执行服务器。';
     }
 
     /** Reloads authorized models and workflows while preserving the current selections when available. */
@@ -496,18 +590,19 @@
             $('user-name').textContent = catalog.user_name;
             $('avatar').textContent = String(catalog.user_name || 'E').slice(0, 1).toUpperCase();
             $('enhancer-settings').hidden = !catalog.can_manage_settings;
-            const backendState = catalog.local_backends_observed > 0
-                ? `${catalog.local_backends_observed} 台在线`
-                : catalog.local_backends_starting > 0 ? '正在启动'
-                : catalog.local_backends_errored > 0 ? '启动失败，请检查服务器日志'
-                : '未配置可用节点';
-            msg.textContent = `ComfyUI 执行服务器：${backendState} · 标准工作台模型：${catalog.models.length} 个 · 工作流使用自身模型配置`;
+            if (catalog.version) {
+                $('app-version').textContent = `EcomCraft Studio ${catalog.version}`;
+            }
+            msg.textContent = connectionText(catalog, catalog.models.length);
             populateModels();
             populateSamplers();
             if ($('model').value !== previousModel) { applyModelSize(); }
             updateHealth();
             updateSetupGuideStatus();
             maybeOpenSetupGuide();
+            if (state.view == 'gallery') {
+                renderGallery();
+            }
         } catch (error) {
             state.catalog = null;
             state.workflowId = '';
@@ -549,10 +644,7 @@
             updateControls();
             $('connection-message').classList.remove('error');
             if (previous !== status.local_backends_observed || !status.local_backends_observed) {
-                const backendState = status.local_backends_observed > 0 ? `${status.local_backends_observed} 台在线`
-                    : status.local_backends_starting > 0 ? '正在启动'
-                    : status.local_backends_errored > 0 ? '启动失败，请检查服务器日志' : '未配置可用节点';
-                $('connection-message-text').textContent = `ComfyUI 执行服务器：${backendState} · 标准工作台模型：${state.catalog.models.length} 个 · 工作流使用自身模型配置`;
+                $('connection-message-text').textContent = connectionText(status, state.catalog.models.length);
             }
             if (previous == 0 && status.local_backends_observed > 0) {
                 await refreshCatalog();
@@ -592,7 +684,7 @@
             }
             catch (error) {
                 if (!state.busy && state.catalog == catalogBefore) {
-                    $('workflow-description').textContent = '工作流自动刷新失败，可点击“刷新”重试。';
+                    $('workflow-description').textContent = '工作流列表自动刷新失败，可点击“刷新列表”重试。';
                 }
             }
             finally {
@@ -633,11 +725,12 @@
         $('image-mode-tabs').style.display = type === 'video' ? 'none' : '';
         if (type === 'video') { setMode('text2img'); }
         else if (state.mode === 'video') { setMode('text2img'); }
-        $('empty-title').textContent = type === 'video' ? '让商品故事，动起来。' : '下一张商品图，从这里开始。';
-        $('empty-desc').textContent = type === 'video' ? '描述镜头与运动，生成一段商品视频。' : '填写描述、选择模型，结果会出现在这里。';
-        $('prompt').placeholder = type === 'video'
-            ? '例如：镜头缓慢环绕一双白色运动鞋，鞋底细节逐渐进入画面，柔和棚拍灯光，背景保持简洁。'
-            : '例如：一瓶透明玻璃精华液，置于浅灰色石台，柔和侧光，突出瓶身质感，画面右侧留白用于排版。';
+        $('page-title').textContent = type == 'video' ? '生成商品视频' : '生成商品图片';
+        $('empty-title').textContent = type == 'video' ? '下一段商品视频，从这里开始' : '下一张商品图，从这里开始';
+        $('empty-desc').textContent = type == 'video' ? '描述镜头和运动后点击“生成视频”，结果会出现在这里。' : '填写描述后点击“生成图片”，结果会出现在这里。';
+        $('prompt').placeholder = type == 'video'
+            ? '例如：镜头缓慢环绕一双白色运动鞋，鞋底细节逐渐进入画面，柔和棚拍灯光，背景保持简洁…'
+            : '例如：一瓶透明玻璃精华液，置于浅灰色石台，柔和侧光，突出瓶身质感，画面右侧留白用于排版…';
         populateModels();
         applyModelSize();
         populateWorkflows();
@@ -657,8 +750,10 @@
         if (!modeMeta[mode] || state.busy || state.uncertain) { return; }
         state.mode = mode;
         const meta = modeMeta[mode];
-        document.querySelectorAll('.mode-tab').forEach(t =>
-            t.classList.toggle('active', t.dataset.mode === mode));
+        for (let tab of document.querySelectorAll('.mode-tab')) {
+            tab.classList.toggle('selected', tab.dataset.mode == mode);
+            tab.setAttribute('aria-pressed', String(tab.dataset.mode == mode));
+        }
         $('workflow-tag').textContent = meta.tag;
         // Reference block
         $('reference-fld').hidden = !meta.needsRef;
@@ -860,9 +955,14 @@
        ============================================================ */
     const outpaintDirs = new Set();
     function toggleOutpaintDir(btn) {
-        const dir = btn.dataset.dir;
-        if (outpaintDirs.has(dir)) { outpaintDirs.delete(dir); btn.classList.remove('on'); }
-        else { outpaintDirs.add(dir); btn.classList.add('on'); }
+        let dir = btn.dataset.dir;
+        if (outpaintDirs.has(dir)) {
+            outpaintDirs.delete(dir);
+        }
+        else {
+            outpaintDirs.add(dir);
+        }
+        btn.setAttribute('aria-pressed', String(outpaintDirs.has(dir)));
         updateControls();
     }
     function outpaintTarget() {
@@ -935,7 +1035,7 @@
         const holder = $('lora-list');
         holder.replaceChildren();
         if (!state.loras.length) {
-            holder.append(el('p', 'hint', 'LoRA 可定制商品风格、人物等，最多 5 个。'));
+            holder.append(el('p', 'hint', 'LoRA 可以固定商品风格、人物形象等。'));
             return;
         }
         for (const item of state.loras) { holder.append(item.row); }
@@ -949,9 +1049,14 @@
         for (const name of (state.catalog?.loras || [])) { select.append(new Option(name, name)); }
         select.value = id;
         const w = el('input'); w.type = 'number'; w.min = '-10'; w.max = '10'; w.step = '0.1'; w.value = weight;
-        const remove = el('button', 'icon-btn sm');
+        let position = state.loras.length + 1;
+        select.setAttribute('aria-label', `第 ${position} 个 LoRA`);
+        w.setAttribute('aria-label', `第 ${position} 个 LoRA 的权重`);
+        w.inputMode = 'decimal';
+        let remove = el('button', 'icon-btn icon-btn-sm');
+        remove.type = 'button';
         remove.textContent = '✕';
-        remove.setAttribute('aria-label', '移除 LoRA');
+        remove.setAttribute('aria-label', `移除第 ${position} 个 LoRA`);
         row.append(select, w, remove);
         const item = { select, w, row };
         state.loras.push(item);
@@ -1026,6 +1131,7 @@
             }
             $('enh-cfg-fetch-models').disabled = busy || !!this.controller;
             $('enh-cfg-fetch-models').textContent = this.controller ? '拉取中…' : '拉取';
+            $('enh-cfg-save').textContent = this.saving ? '保存中…' : '保存设置';
         }
     }
 
@@ -1059,7 +1165,7 @@
             return;
         }
         if (enhanceBusy) { return; }
-        enhanceBusy = true;
+        setEnhanceBusy(true);
         showEnhanceCard('loading');
         $('enhance-loading').children[1].textContent = '正在调用提示词优化服务…';
         try {
@@ -1085,8 +1191,16 @@
             $('enhance-loading').children[1].textContent = err.message;
             showEnhanceCard('error');
         } finally {
-            enhanceBusy = false;
+            setEnhanceBusy(false);
         }
+    }
+
+    /** Disables the enhancement buttons while a request runs so it cannot be sent twice. */
+    function setEnhanceBusy(busy) {
+        enhanceBusy = busy;
+        $('enhance-prompt').disabled = busy;
+        $('enhance-prompt').textContent = busy ? '优化中…' : '优化提示词';
+        $('enhance-retry').disabled = busy;
     }
 
     function applyEnhanced() {
@@ -1142,7 +1256,12 @@
         PromptSettingsRequests.loading = true;
         PromptSettingsRequests.invalidate();
         let revision = PromptSettingsRequests.revision;
+        let wasHidden = $('enhancer-modal').hidden;
         $('enhancer-modal').hidden = false;
+        if (wasHidden) {
+            // Form fields are disabled while settings load, so start on the close button.
+            DialogFocus.enter($('enhancer-modal'), document.activeElement, $('enhancer-modal-close'));
+        }
         $('enh-cfg-message').hidden = true;
         $('enh-cfg-key').value = '';
         try {
@@ -1257,7 +1376,11 @@
         PromptSettingsRequests.loading = false;
         PromptSettingsRequests.invalidate();
         $('enh-cfg-key').value = '';
+        let wasOpen = !$('enhancer-modal').hidden;
         $('enhancer-modal').hidden = true;
+        if (wasOpen) {
+            DialogFocus.leave($('enhancer-modal'));
+        }
     }
 
     /** Persists the selected backend and credential only on explicit Save. */
@@ -1320,14 +1443,33 @@
         msg.classList.toggle('is-error', !!isError);
     }
 
+    /** Counts advanced parameters the user filled in for the standard workspace; native workflows prefill them, so they show no count. */
+    function advancedSummary() {
+        if (currentWorkflow()?.native) {
+            return '读取自工作流';
+        }
+        let changed = 0;
+        for (let id of ['negative', 'steps', 'cfg', 'seed', 'sampler', 'scheduler']) {
+            if (String($(id).value ?? '').trim() != '') {
+                changed++;
+            }
+        }
+        return changed ? `已填写 ${changed} 项` : '按模型需要填写';
+    }
+
+    /** Syncs every form control, the submit button and its explanation with the current state. */
     function updateControls() {
         $('creation-fields').disabled = state.busy;
-        $('refresh-models').disabled = state.catalogLoading || state.busy;
         $('refresh-workflows').disabled = state.catalogLoading || state.busy;
-        $('refresh-workflows').textContent = state.catalogLoading ? '刷新中…' : '刷新';
+        $('refresh-workflows').textContent = state.catalogLoading ? '刷新中…' : '刷新列表';
         $('model').disabled = state.busy || Boolean(currentWorkflow()?.native);
         $('mode-image').disabled = state.busy || state.uncertain;
         $('mode-video').disabled = state.busy || state.uncertain || !state.catalog?.can_generate_video;
+        $('mode-video').title = state.catalog && !state.catalog.can_generate_video ? '此账号没有视频生成权限' : '';
+        $('add-lora').disabled = state.loras.length >= 5;
+        $('add-lora').textContent = state.loras.length >= 5 ? '已达 5 个上限' : '添加 LoRA';
+        $('adv-summary-count').textContent = advancedSummary();
+        $('mask-undo').disabled = !MaskEditor.history.length;
         let hint = '';
         if (state.busy) { hint = '任务已发送到原生引擎，请勿刷新或重复提交。'; }
         else if (state.uncertain) { hint = '执行结果待核对，请先在右侧确认后再提交。'; }
@@ -1345,9 +1487,10 @@
         $('submit-hint').textContent = hint || '将由平台分配到具备所需模型和节点的 ComfyUI 执行服务器；实际耗时与显存取决于模型。';
         $('generate').disabled = Boolean(hint);
         const isVideo = state.type === 'video';
-        $('generate-label').textContent = state.busy ? '引擎处理中…' : (isVideo ? '生成视频' : '生成图片');
-        $('preview-tag').textContent = isVideo ? 'VIDEO' : 'IMAGE';
-        $('prompt-count').textContent = `${$('prompt').value.length} / 12000`;
+        $('generate-label').textContent = state.busy ? '生成中…' : (isVideo ? '生成视频' : '生成图片');
+        let promptLength = $('prompt').value.length;
+        $('prompt-count').textContent = `${promptLength} / 12000`;
+        $('prompt-count').classList.toggle('near-limit', promptLength > 11000);
         $('recover').hidden = !state.uncertain;
     }
 
@@ -1363,32 +1506,82 @@
             const path = url.pathname.toLowerCase();
             const video = /\.(mp4|webm)$/.test(path);
             if (!video && !/\.(png|jpe?g|webp|gif|avif)$/.test(path)) { return null; }
-            return { url: url.href, video };
+            let segments = url.pathname.split('/').slice(1).map(segment => decodeURIComponent(segment));
+            // /View/<user>/<path> and /Output/<path> map back to the gallery path relative to the user's output root.
+            let relative = segments[0] == 'View' ? segments.slice(2) : segments.slice(1);
+            return { url: url.href, video, src: relative.join('/'), name: relative[relative.length - 1] || '生成结果' };
         } catch { return null; }
     }
 
+    /** Renders the latest results on the backdrop with download, continue and gallery actions. */
     function renderResults() {
-        const results = state.results;
-        $('results').replaceChildren();
-        $('results').hidden = !results.length;
-        $('results').classList.toggle('multiple', results.length > 1);
+        let results = state.results;
+        let holder = $('results');
+        holder.replaceChildren();
+        holder.hidden = !results.length;
+        holder.className = `results count-${Math.min(results.length, 4)}`;
         $('empty-state').hidden = Boolean(results.length) || state.busy;
         $('pending-state').hidden = !state.busy;
         for (let i = 0; i < results.length; i++) {
-            const media = results[i];
-            const card = el('figure', 'result-card');
-            const node = el(media.video ? 'video' : 'img');
-            if (media.video) { node.controls = true; node.preload = 'metadata'; node.playsInline = true; }
-            else { node.alt = `本次创作结果 ${i + 1}`; node.loading = 'lazy'; }
+            let media = results[i];
+            let card = el('figure', 'result-card');
+            let node = el(media.video ? 'video' : 'img');
             node.src = media.url;
-            node.addEventListener('error', () => setStatus('引擎返回了地址，但当前无法预览。请在原生引擎核对。', true));
-            const caption = el('figcaption');
-            const label = el('span', null, `${media.video ? '视频' : '画面'} ${String(i + 1).padStart(2, '0')} · 本次结果`);
-            const download = el('a'); download.href = media.url; download.download = '';
-            download.textContent = '下载原文件 ↓';
-            caption.append(label, download);
-            card.append(node, caption);
-            $('results').append(card);
+            node.addEventListener('error', () => setStatus('服务器返回了结果地址，但当前无法预览。请到原生引擎核对。', true));
+            if (media.video) {
+                node.controls = true;
+                node.preload = 'metadata';
+                node.playsInline = true;
+                let frame = el('div', 'result-open');
+                frame.append(node);
+                card.append(frame);
+            }
+            else {
+                node.alt = `第 ${i + 1} 张生成结果`;
+                let open = el('button', 'result-open');
+                open.type = 'button';
+                open.setAttribute('aria-label', `放大查看第 ${i + 1} 张结果`);
+                open.append(node);
+                open.addEventListener('click', () => Lightbox.open(results, i, 'result', open));
+                card.append(open);
+            }
+            let actions = el('figcaption', 'result-actions');
+            if (results.length > 1) {
+                actions.append(el('span', 'result-label', `第 ${i + 1} ${media.video ? '条' : '张'}`));
+            }
+            let download = el('a', 'btn btn-sm', '下载');
+            download.href = media.url;
+            download.download = media.name;
+            actions.append(download);
+            if (!media.video) {
+                let again = el('button', 'btn btn-sm', '以此图继续创作');
+                again.type = 'button';
+                again.addEventListener('click', () => editFromGallery(media));
+                actions.append(again);
+            }
+            if (media.src) {
+                let reveal = el('button', 'btn btn-sm', '在画廊查看');
+                reveal.type = 'button';
+                reveal.addEventListener('click', () => revealInGallery(media.src));
+                actions.append(reveal);
+            }
+            card.append(actions);
+            holder.append(card);
+        }
+    }
+
+    /** Switches to the gallery and opens the given file once the list has loaded. */
+    function revealInGallery(src) {
+        state.gallery.revealSrc = src;
+        state.gallery.filter = 'all';
+        state.gallery.search = '';
+        $('gallery-search').value = '';
+        setGalleryFilter('all');
+        if (state.view == 'gallery') {
+            loadGallery();
+        }
+        else {
+            location.hash = 'gallery';
         }
     }
 
@@ -1477,7 +1670,7 @@
         const started = Date.now();
         $('elapsed').textContent = '已等待 0 秒';
         state.timer = setInterval(() => { $('elapsed').textContent = `已等待 ${Math.floor((Date.now() - started) / 1000)} 秒`; }, 1000);
-        setStatus('请求已发送，等待引擎返回。当前接口不提供百分比进度。');
+        setStatus('已提交，正在等待执行服务器返回结果。节点进度可在“队列”中查看。');
         updateControls();
         renderResults();
         try {
@@ -1488,7 +1681,7 @@
                 throw new ApiError('没有完整收到可安全预览的输出地址，请在原生引擎核对个人历史。', 'generation_uncertain');
             }
             state.results = media;
-            setStatus(`引擎已返回 ${media.length} 个结果。请核对画面并下载。`);
+            setStatus(`已生成 ${media.length} ${state.type == 'video' ? '条视频' : '张图片'}，已保存到作品画廊。`);
         } catch (error) {
             state.uncertain = uncertainErrors.has(error.code) || !(error instanceof ApiError);
             setStatus(error.message || '无法确认执行结果，请在原生引擎核对。', true);
@@ -1522,7 +1715,7 @@
             let result = await request('EcomCraftStudioQueue');
             renderQueue(result);
             $('queue-message').hidden = true;
-            $('queue-updated').textContent = `更新于 ${new Date().toLocaleTimeString('zh-CN')}`;
+            $('queue-updated').textContent = `更新于 ${new Intl.DateTimeFormat('zh-CN', { timeStyle: 'medium' }).format(new Date())}，每 5 秒自动刷新`;
         }
         catch (error) {
             $('queue-message').textContent = error.message || '队列读取失败。';
@@ -1550,70 +1743,81 @@
         return '离线';
     }
 
-    /** Returns the badge style for one execution server state. */
+    /** Returns the indicator style for one execution server state; color is always paired with the text label. */
     function queueStateClass(backend) {
-        return backend.status == 'running' && !backend.busy ? 'is-running' : 'is-waiting';
+        if (backend.status == 'running') {
+            return backend.busy ? 'is-busy' : 'is-idle';
+        }
+        return backend.status == 'waiting' || backend.status == 'loading' ? 'is-starting' : 'is-down';
     }
 
-    /** Renders native ComfyUI entries and SwarmUI claims without exposing workflow inputs. */
+    /** Renders the server table, native ComfyUI entries and SwarmUI claims without exposing workflow inputs. */
     function renderQueue(result) {
         let backendList = $('queue-backends');
         backendList.replaceChildren();
         for (let backend of result.backends || []) {
-            let row = el('div', 'queue-backend');
-            let name = el('strong', '', backend.name || `服务器 #${backend.id}`);
-            let counts = el('span', '', backend.running == null
-                ? '暂无队列数据'
-                : `执行中 ${backend.running} · 等待中 ${backend.pending}`);
-            row.append(name, counts, el('span', `queue-state ${queueStateClass(backend)}`, queueStateLabel(backend)));
+            let row = el('tr');
+            let name = el('td');
+            name.append(el('strong', '', backend.name || `服务器 #${backend.id}`));
+            let status = el('td');
+            status.append(el('span', `server-state ${queueStateClass(backend)}`, queueStateLabel(backend)));
+            let running = el('td', 'num', backend.running == null ? '—' : String(backend.running));
+            let pending = el('td', 'num', backend.pending == null ? '—' : String(backend.pending));
+            row.append(name, status, running, pending);
             backendList.append(row);
         }
-        if (!backendList.children.length) { backendList.append(el('p', 'queue-empty', '没有已登记的 ComfyUI 执行服务器。')); }
+        if (!backendList.children.length) {
+            let row = el('tr');
+            let cell = el('td', 'empty-cell', '还没有登记 ComfyUI 执行服务器。请在原生引擎的 Server / Backends 中添加。');
+            cell.colSpan = 4;
+            row.append(cell);
+            backendList.append(row);
+        }
 
         let tasks = result.tasks || [];
         let nativeTasks = result.native_tasks || [];
         $('queue-count').textContent = nativeTasks.length || tasks.length;
-        $('queue-task-count').textContent = `${nativeTasks.length} 项原生任务 · ${tasks.length} 项已登记请求`;
+        $('queue-task-count').textContent = `服务器上 ${nativeTasks.length} 项，平台请求 ${tasks.length} 项`;
         let list = $('queue-list');
         list.replaceChildren();
         $('queue-empty').hidden = nativeTasks.length > 0 || tasks.length > 0;
-        $('queue-empty').textContent = '当前没有已登记的生成任务。';
         for (let task of nativeTasks) {
-            let row = el('div', 'queue-task queue-native-task');
+            let row = el('li', 'queue-task');
             let main = el('div', 'queue-task-main');
-            main.append(el('strong', '', `${task.backend_name || `服务器 #${task.backend_id}`} · ${task.state === 'running' ? '执行中' : `等待中（第 ${task.position} 位）`}`));
+            main.append(el('strong', '', `${task.backend_name || `服务器 #${task.backend_id}`}：${task.state == 'running' ? '执行中' : `等待中，第 ${task.position} 位`}`));
             let node = task.current_node
-                ? `节点 ${task.current_node}${task.node_type ? ` · ${task.node_type}` : ''}`
-                : task.state === 'running' ? '当前节点暂无数据' : `${task.total_nodes} 个节点`;
+                ? `节点 ${task.current_node}${task.node_type ? `（${task.node_type}）` : ''}`
+                : task.state == 'running' ? '当前节点暂无数据' : `共 ${task.total_nodes} 个节点`;
             main.append(el('span', '', node));
-            if (task.state === 'running') {
+            if (task.state == 'running') {
                 let overall = Number.isFinite(task.overall_percent) ? Math.round(task.overall_percent) : null;
                 let current = Number.isFinite(task.node_percent) ? Math.round(task.node_percent) : null;
-                main.append(el('span', '', `节点进度 ${current == null ? '暂无数据' : `${current}%`} · 总体进度 ${overall == null ? '暂无数据' : `约 ${overall}%`}`));
+                main.append(el('span', '', `当前节点 ${current == null ? '暂无数据' : `${current}%`}，总体约 ${overall == null ? '暂无数据' : `${overall}%`}`));
                 if (overall != null) {
                     let bar = el('progress', 'queue-progress');
                     bar.max = 100;
                     bar.value = overall;
-                    bar.setAttribute('aria-label', '工作流总体进度');
+                    bar.setAttribute('aria-label', `总体进度 ${overall}%`);
                     main.append(bar);
                 }
             }
-            row.append(main, el('span', 'queue-task-age', '原生队列'));
+            row.append(main);
             list.append(row);
         }
-        let labels = { running: '执行中', waiting_backend: '等待节点', queued: '排队中', stopping: '正在结束' };
+        let labels = { running: '执行中', waiting_backend: '等待服务器', queued: '排队中', stopping: '正在结束' };
         for (let task of tasks) {
-            let row = el('div', 'queue-task');
+            let row = el('li', 'queue-task');
             let main = el('div', 'queue-task-main');
             main.append(el('strong', '', task.mine ? `我的请求 #${task.request_id || task.id}` : '其他用户的请求'));
-            main.append(el('span', '', `${labels[task.state] || '处理中'} · ${task.count} 张`));
-            let age = el('span', 'queue-task-age', `${Math.floor(task.elapsed_seconds / 60)} 分 ${task.elapsed_seconds % 60} 秒`);
+            main.append(el('span', '', `${labels[task.state] || '处理中'}，${task.count} 张`));
+            let age = el('span', 'queue-task-age', `已用 ${Math.floor(task.elapsed_seconds / 60)} 分 ${task.elapsed_seconds % 60} 秒`);
             row.append(main, age);
-            if (task.mine && task.state !== 'stopping') {
-                let button = el('button', 'btn-ghost btn-sm queue-cancel', '结束任务');
+            if (task.mine && task.state != 'stopping') {
+                let stopping = state.queue.stopping.has(task.id);
+                let button = el('button', 'btn btn-sm btn-danger', stopping ? '正在结束…' : '结束任务');
                 button.type = 'button';
-                button.disabled = state.queue.stopping.has(task.id);
-                button.addEventListener('click', () => cancelQueueTask(task.id));
+                button.disabled = stopping;
+                button.addEventListener('click', () => cancelQueueTask(task.id, button));
                 row.append(button);
             }
             list.append(row);
@@ -1621,9 +1825,13 @@
     }
 
     /** Cancels one task after the server verifies its authenticated owner. */
-    async function cancelQueueTask(id) {
-        if (state.queue.stopping.has(id) || !window.confirm('结束这个任务？已经生成的结果可能仍会保留。')) { return; }
+    async function cancelQueueTask(id, button = null) {
+        if (state.queue.stopping.has(id) || !window.confirm('结束这个任务？已经生成的结果会保留在画廊。')) { return; }
         state.queue.stopping.add(id);
+        if (button) {
+            button.disabled = true;
+            button.textContent = '正在结束…';
+        }
         try {
             await request('EcomCraftStudioCancelTask', { task_id: id });
             await loadQueue();
@@ -1644,6 +1852,8 @@
         if (state.gallery.loading) { return; }
         const g = state.gallery;
         g.loading = true;
+        $('gallery-refresh').disabled = true;
+        $('gallery-refresh').textContent = '刷新中…';
         const message = $('gallery-message');
         message.hidden = true;
         try {
@@ -1667,6 +1877,19 @@
                 return { src, name, url: viewUrl(src), starred, video: /\.(mp4|webm)$/i.test(name) };
             });
             renderGallery();
+            if (g.revealSrc) {
+                let items = visibleGalleryItems();
+                let index = items.findIndex(item => item.src == g.revealSrc);
+                g.revealSrc = null;
+                if (index >= 0) {
+                    Lightbox.open(items, index, 'gallery', null);
+                }
+                else {
+                    message.textContent = '列表中还没有这个作品，可能仍在保存。请稍后点击“刷新”。';
+                    message.classList.remove('error');
+                    message.hidden = false;
+                }
+            }
         } catch (error) {
             message.textContent = error.message;
             message.classList.add('error');
@@ -1675,95 +1898,465 @@
             renderGallery();
         } finally {
             g.loading = false;
+            $('gallery-refresh').disabled = false;
+            $('gallery-refresh').textContent = '刷新';
         }
     }
 
+    /** Applies the starred / all filter and its pressed state. */
+    function setGalleryFilter(filter) {
+        state.gallery.filter = filter;
+        $('gal-all').classList.toggle('selected', filter == 'all');
+        $('gal-all').setAttribute('aria-pressed', String(filter == 'all'));
+        $('gal-star').classList.toggle('selected', filter == 'star');
+        $('gal-star').setAttribute('aria-pressed', String(filter == 'star'));
+    }
+
+    /** Returns the gallery items that pass the current star filter. */
+    function visibleGalleryItems() {
+        let g = state.gallery;
+        if (g.filter == 'star') {
+            return g.items.filter(item => item.starred);
+        }
+        return g.items;
+    }
+
+    /** Renders the contact sheet. Every action is a real button, so cards, stars and deletion work from the keyboard. */
     function renderGallery() {
-        const g = state.gallery;
-        let items = g.items;
-        if (g.filter === 'star') { items = items.filter(i => i.starred); }
-        const grid = $('gallery-grid');
+        let g = state.gallery;
+        let items = visibleGalleryItems();
+        let grid = $('gallery-grid');
+        let focused = document.activeElement?.closest?.('.sheet-item [data-role]');
+        let refocus = focused ? { src: focused.dataset.src, role: focused.dataset.role } : null;
         grid.replaceChildren();
-        const empty = $('gallery-empty');
+        grid.classList.toggle('selecting', GallerySelection.active);
+        let empty = $('gallery-empty');
         $('gallery-count').textContent = g.items.length;
+        $('gallery-total').textContent = g.items.length;
+        GallerySelection.updateControls();
         if (!items.length) {
+            let filtered = g.items.length > 0 || Boolean(g.search) || g.filter == 'star';
             empty.hidden = false;
-            empty.querySelector('h3').textContent = g.items.length ? '没有符合条件的作品' : '还没有作品';
-            empty.querySelector('p').textContent = g.items.length
-                ? '试试切换筛选或清空搜索。'
-                : '去创作工作台生成第一张商品图吧。';
-            empty.querySelector('button').style.display = g.items.length ? 'none' : '';
+            empty.querySelector('h2').textContent = filtered ? '没有符合条件的作品' : '还没有作品';
+            empty.querySelector('p').textContent = filtered
+                ? '换一个关键词，或清空搜索查看全部作品。'
+                : '去创作工作台生成第一张商品图。';
+            $('gallery-gocreate').hidden = filtered;
+            $('gallery-clear-filter').hidden = !filtered;
             return;
         }
         empty.hidden = true;
-        for (const item of items) {
-            const card = el('div', `gallery-item${item.starred ? ' starred' : ''}`);
-            const img = el('img');
-            img.src = item.url; img.alt = item.name; img.loading = 'lazy';
-            const star = el('span', 'g-star');
-            star.textContent = item.starred ? '★' : '☆';
-            const name = el('span', 'g-name', item.name);
-            card.append(img, star, name);
-            card.addEventListener('click', e => {
-                if (e.target === star) { e.stopPropagation(); toggleStar(item); return; }
-                openLightbox(item);
+        for (let item of items) {
+            let selected = GallerySelection.isSelected(item);
+            let card = el('li', `sheet-item${selected ? ' selected' : ''}`);
+            let open = el('button', 'sheet-open');
+            open.type = 'button';
+            open.dataset.src = item.src;
+            open.dataset.role = 'open';
+            open.title = item.name;
+            if (GallerySelection.active) {
+                open.setAttribute('aria-pressed', String(selected));
+                open.setAttribute('aria-label', `选择 ${item.name}`);
+            }
+            else {
+                open.setAttribute('aria-label', `查看 ${item.name}`);
+            }
+            let media;
+            if (item.video) {
+                media = el('video');
+                media.muted = true;
+                media.preload = 'metadata';
+                media.playsInline = true;
+                media.src = `${item.url}#t=0.1`;
+            }
+            else {
+                media = el('img');
+                media.src = item.url;
+                media.alt = '';
+                media.loading = 'lazy';
+                media.decoding = 'async';
+                media.width = 180;
+                media.height = 180;
+            }
+            media.setAttribute('aria-hidden', 'true');
+            open.append(media);
+            open.addEventListener('click', () => {
+                if (GallerySelection.active) {
+                    GallerySelection.toggle(item);
+                    return;
+                }
+                Lightbox.open(visibleGalleryItems(), visibleGalleryItems().indexOf(item), 'gallery', open);
             });
-            star.addEventListener('click', e => { e.stopPropagation(); toggleStar(item); });
+            let meta = el('div', 'sheet-meta');
+            meta.append(el('span', 'sheet-name', item.name));
+            if (item.video) {
+                meta.append(el('span', 'sheet-kind', '视频'));
+            }
+            let star = el('button', 'sheet-star', item.starred ? '★' : '☆');
+            star.type = 'button';
+            star.dataset.src = item.src;
+            star.dataset.role = 'star';
+            star.setAttribute('aria-pressed', String(item.starred));
+            star.setAttribute('aria-label', item.starred ? `取消收藏 ${item.name}` : `收藏 ${item.name}`);
+            star.disabled = GallerySelection.active;
+            star.addEventListener('click', () => toggleStar(item));
+            meta.append(star);
+            if (GallerySelection.canDelete()) {
+                let remove = el('button', 'sheet-delete');
+                remove.append(svgIcon('M4 7h16', 'M10 11v6M14 11v6', 'M6 7l1 13h10l1-13', 'M9 7V4h6v3'));
+                remove.type = 'button';
+                remove.dataset.src = item.src;
+                remove.dataset.role = 'delete';
+                remove.setAttribute('aria-label', `删除 ${item.name}`);
+                remove.title = '删除';
+                remove.addEventListener('click', () => GallerySelection.deleteOne(item));
+                meta.append(remove);
+                card.append(el('span', 'sheet-check', '✓'));
+            }
+            card.prepend(open);
+            card.append(meta);
             grid.append(card);
         }
-    }
-
-    async function toggleStar(item) {
-        try {
-            const res = await request('ToggleImageStarred', { path: item.src });
-            if (res.error) { throw new Error(res.error); }
-            // refresh to reflect Starred/ path changes
-            await loadGallery();
-        } catch (error) {
-            const m = $('gallery-message');
-            m.textContent = '收藏失败：' + (error.message || '请重试');
-            m.classList.add('error'); m.hidden = false;
+        if (refocus) {
+            let target = Array.from(grid.querySelectorAll(`[data-role="${refocus.role}"]`)).find(node => node.dataset.src == refocus.src);
+            target?.focus();
         }
     }
 
-    async function deleteItem(item) {
-        try {
-            const res = await request('DeleteImage', { path: item.src });
-            if (res.error) { throw new Error(res.error); }
+    /** Single and batch deletion of the current user's gallery files through the native DeleteImage API. */
+    class GallerySelection {
+        static active = false;
+        static selected = new Set();
+        static deleting = false;
+
+        /** Delete controls follow the account's user_delete_image permission reported by the catalog. */
+        static canDelete() {
+            return Boolean(state.catalog?.can_delete_images);
+        }
+
+        /** Whether the item is part of the current batch selection. */
+        static isSelected(item) {
+            return this.active && this.selected.has(item.src);
+        }
+
+        /** Enters or leaves batch selection; leaving clears the selection. */
+        static setActive(active) {
+            if (this.deleting) {
+                return;
+            }
+            this.active = active && this.canDelete();
+            this.selected.clear();
+            renderGallery();
+        }
+
+        /** Adds or removes one item from the batch selection. */
+        static toggle(item) {
+            if (this.deleting) {
+                return;
+            }
+            if (this.selected.has(item.src)) {
+                this.selected.delete(item.src);
+            }
+            else {
+                this.selected.add(item.src);
+            }
+            renderGallery();
+        }
+
+        /** Selects every item in the current filtered list. */
+        static selectAllVisible() {
+            if (this.deleting) {
+                return;
+            }
+            for (let item of visibleGalleryItems()) {
+                this.selected.add(item.src);
+            }
+            renderGallery();
+        }
+
+        /** Drops selections whose files are no longer listed, and syncs toolbar state. */
+        static updateControls() {
+            let listed = new Set(state.gallery.items.map(item => item.src));
+            for (let src of Array.from(this.selected)) {
+                if (!listed.has(src)) {
+                    this.selected.delete(src);
+                }
+            }
+            let allowed = this.canDelete();
+            if (!allowed) {
+                this.active = false;
+            }
+            $('gallery-select').hidden = !allowed || this.active || !state.gallery.items.length;
+            $('gallery-select').setAttribute('aria-pressed', String(this.active));
+            $('gallery-selection').hidden = !this.active;
+            $('gallery-selected-count').textContent = `已选 ${this.selected.size} 项`;
+            $('gallery-delete-selected').disabled = this.deleting || !this.selected.size;
+            $('gallery-delete-selected').textContent = this.deleting ? '正在删除…' : '删除所选';
+            $('gallery-select-all').disabled = this.deleting;
+            $('gallery-select-cancel').disabled = this.deleting;
+        }
+
+        /** Deletes one item after confirmation, for the card button and the lightbox. */
+        static async deleteOne(item) {
+            if (this.deleting || !window.confirm(`确定删除「${item.name}」？${this.recycleNote()}`)) {
+                return;
+            }
             closeLightbox();
+            await this.deleteItems([item]);
+        }
+
+        /** Deletes the current batch selection after confirmation. */
+        static async deleteSelected() {
+            let items = state.gallery.items.filter(item => this.selected.has(item.src));
+            if (this.deleting || !items.length || !window.confirm(`确定删除选中的 ${items.length} 个作品？${this.recycleNote()}`)) {
+                return;
+            }
+            await this.deleteItems(items);
+            this.active = false;
+            this.selected.clear();
+            renderGallery();
+        }
+
+        /** Shared confirmation hint; whether files go to the recycle bin depends on the server setting. */
+        static recycleNote() {
+            return '若服务器启用了回收站，可在回收站找回；否则将永久删除。';
+        }
+
+        /** Deletes files one at a time so a failure never hides which items were removed, then refreshes the list. */
+        static async deleteItems(items) {
+            this.deleting = true;
+            this.updateControls();
+            let deleted = 0;
+            let failures = [];
+            try {
+                for (let item of items) {
+                    try {
+                        await request('DeleteImage', { path: item.src });
+                        deleted++;
+                        state.gallery.items = state.gallery.items.filter(other => other.src != item.src);
+                        this.selected.delete(item.src);
+                    }
+                    catch (error) {
+                        failures.push(item.name);
+                        if (error.code == 'invalid_session_id' || error.code == 'bad_permissions' || error.code == 'transport_error') {
+                            break;
+                        }
+                    }
+                }
+            }
+            finally {
+                this.deleting = false;
+            }
+            renderGallery();
             await loadGallery();
-        } catch (error) {
-            closeLightbox();
-            const m = $('gallery-message');
-            m.textContent = '删除失败：' + (error.message || '请重试');
-            m.classList.add('error'); m.hidden = false;
+            let message = $('gallery-message');
+            let skipped = items.length - deleted - failures.length;
+            if (!failures.length) {
+                message.textContent = `已删除 ${deleted} 个作品。`;
+                message.classList.remove('error');
+            }
+            else {
+                message.textContent = `已删除 ${deleted} 个作品，${failures.length} 个删除失败${skipped > 0 ? `，${skipped} 个未处理` : ''}：`
+                    + `${failures.slice(0, 3).join('、')}${failures.length > 3 ? ' 等' : ''}。请刷新后重试，或检查账号的删除权限。`;
+                message.classList.add('error');
+            }
+            message.hidden = false;
+        }
+    }
+
+    /** Stars or unstars one file, reloads the list (paths move into or out of Starred/), and optionally announces the result. */
+    async function toggleStar(item, announce = false) {
+        try {
+            let res = await request('ToggleImageStarred', { path: item.src });
+            await loadGallery();
+            if (announce) {
+                let message = $('gallery-message');
+                message.textContent = res.new_state ? `已收藏「${item.name}」。` : `已取消收藏「${item.name}」。`;
+                message.classList.remove('error');
+                message.hidden = false;
+            }
+        }
+        catch (error) {
+            let message = $('gallery-message');
+            message.textContent = `收藏没有成功：${error.message || '请刷新后重试'}`;
+            message.classList.add('error');
+            message.hidden = false;
+        }
+    }
+
+    /* ---------- Dialog focus ---------- */
+    /** Moves focus into an open dialog, keeps Tab inside it and returns focus to the opener when it closes. */
+    class DialogFocus {
+        static openers = new Map();
+
+        /** Focusable descendants that are currently visible. */
+        static focusable(dialog) {
+            if (typeof dialog?.querySelectorAll != 'function') {
+                return [];
+            }
+            return Array.from(dialog.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), video[controls]'))
+                .filter(node => !node.closest('[hidden]'));
+        }
+
+        /** Remembers the opener and focuses the first control, or a given one. */
+        static enter(dialog, opener, initial = null) {
+            this.openers.set(dialog, opener || document.activeElement);
+            let target = initial || this.focusable(dialog)[0];
+            if (typeof target?.focus == 'function') {
+                target.focus();
+            }
+        }
+
+        /** Restores focus to the element that opened the dialog, when it is still on the page. */
+        static leave(dialog) {
+            let opener = this.openers.get(dialog);
+            this.openers.delete(dialog);
+            if (opener?.isConnected && typeof opener.focus == 'function') {
+                opener.focus();
+            }
+        }
+
+        /** Wraps Tab and Shift+Tab at the dialog edges. */
+        static trap(dialog, event) {
+            if (event.key != 'Tab') {
+                return;
+            }
+            let nodes = this.focusable(dialog);
+            if (!nodes.length) {
+                return;
+            }
+            let first = nodes[0];
+            let last = nodes[nodes.length - 1];
+            if (event.shiftKey && document.activeElement == first) {
+                event.preventDefault();
+                last.focus();
+            }
+            else if (!event.shiftKey && document.activeElement == last) {
+                event.preventDefault();
+                first.focus();
+            }
         }
     }
 
     /* ---------- Lightbox ---------- */
-    function openLightbox(item) {
-        state.gallery.current = item;
-        const media = $('lightbox-media');
-        media.replaceChildren();
-        const node = el(item.video ? 'video' : 'img');
-        node.src = item.url;
-        if (item.video) { node.controls = true; node.playsInline = true; }
-        media.append(node);
-        $('lightbox-name').textContent = item.name;
-        $('lb-star').textContent = item.starred ? '★' : '☆';
-        $('lb-download').href = item.url;
-        $('lb-download').setAttribute('download', item.name);
-        $('lightbox').hidden = false;
+    /** Full-size preview for gallery items and fresh results, with previous / next navigation. */
+    class Lightbox {
+        static items = [];
+        static index = 0;
+        static source = 'gallery';
+
+        /** Opens the item at index within a list; source 'result' hides gallery-only actions. */
+        static open(items, index, source, opener) {
+            if (!items.length || index < 0) {
+                return;
+            }
+            let wasHidden = $('lightbox').hidden;
+            this.items = items;
+            this.source = source;
+            this.show(index);
+            $('lightbox').hidden = false;
+            if (wasHidden) {
+                DialogFocus.enter($('lightbox'), opener, $('lb-close'));
+            }
+        }
+
+        /** Renders one item and syncs every action with it. */
+        static show(index) {
+            this.index = Math.max(0, Math.min(index, this.items.length - 1));
+            let item = this.items[this.index];
+            let gallery = this.source == 'gallery';
+            state.gallery.current = gallery ? item : null;
+            let media = $('lightbox-media');
+            media.replaceChildren();
+            let node = el(item.video ? 'video' : 'img');
+            node.src = item.url;
+            if (item.video) {
+                node.controls = true;
+                node.playsInline = true;
+            }
+            else {
+                node.alt = item.name;
+            }
+            media.append(node);
+            let position = this.items.length > 1 ? `（${this.index + 1} / ${this.items.length}）` : '';
+            $('lightbox-name').textContent = `${item.name}${position}`;
+            $('lb-download').href = item.url;
+            $('lb-download').setAttribute('download', item.name);
+            $('lb-star').hidden = !gallery;
+            $('lb-star').textContent = item.starred ? '取消收藏' : '收藏';
+            $('lb-star').setAttribute('aria-pressed', String(Boolean(item.starred)));
+            $('lb-delete').hidden = !gallery || !GallerySelection.canDelete();
+            $('lb-gallery').hidden = gallery || !item.src;
+            $('lb-edit').hidden = Boolean(item.video);
+            $('lb-prev').disabled = this.index == 0;
+            $('lb-next').disabled = this.index >= this.items.length - 1;
+            $('lb-prev').hidden = this.items.length < 2;
+            $('lb-next').hidden = this.items.length < 2;
+        }
+
+        /** Moves by one item; stays put at either end. */
+        static step(offset) {
+            let next = this.index + offset;
+            if (next >= 0 && next < this.items.length) {
+                this.show(next);
+            }
+        }
+
+        /** The item currently shown, or null when closed. */
+        static current() {
+            return $('lightbox').hidden ? null : this.items[this.index];
+        }
+
+        /** Closes the preview and stops any playing video. */
+        static close() {
+            if ($('lightbox').hidden) {
+                return;
+            }
+            $('lightbox').hidden = true;
+            $('lightbox-media').replaceChildren();
+            state.gallery.current = null;
+            DialogFocus.leave($('lightbox'));
+        }
+
+        /** Keyboard: arrows move between items, Escape closes, Tab stays inside. */
+        static keydown(event) {
+            if ($('lightbox').hidden) {
+                return false;
+            }
+            if (event.key == 'Escape') {
+                this.close();
+            }
+            else if (event.key == 'ArrowLeft') {
+                this.step(-1);
+            }
+            else if (event.key == 'ArrowRight') {
+                this.step(1);
+            }
+            else {
+                DialogFocus.trap($('lightbox'), event);
+                return true;
+            }
+            event.preventDefault();
+            return true;
+        }
     }
+
+    /** Kept for existing callers (deletion, continue-from-image). */
     function closeLightbox() {
-        $('lightbox').hidden = true;
-        state.gallery.current = null;
+        Lightbox.close();
     }
 
     // Load a gallery image into the image-to-image composer.
     async function editFromGallery(item) {
+        if (state.busy || state.uncertain) {
+            setStatus('当前任务还没有结束，结束后才能载入新的初始图。', true);
+            return;
+        }
         try {
             const response = await fetch(item.url, { cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error(`服务器返回 ${response.status}，文件可能已被删除`);
+            }
             const blob = await response.blob();
             const data = await new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -1778,13 +2371,24 @@
             state.reference = { data, url: objectUrl, name: item.name, width: image.width, height: image.height };
             closeLightbox();
             setType('image');
+            // Workflow templates hide the image modes, so continuing from an image returns to the standard workspace.
+            if ($('workflow-select').value != '') {
+                $('workflow-select').value = '';
+                selectWorkflow();
+            }
             setMode('img2img');
             renderReference();
-            setView('create');
-            location.hash = 'create';
-            setStatus('已载入该图，可直接图生图，或切换到局部重绘/放大。');
+            if (state.view != 'create') {
+                location.hash = 'create';
+            }
+            setStatus('已载入为初始图，可以直接图生图，或切换到局部重绘、扩图、放大。');
+            $('prompt').focus();
         } catch (error) {
-            alert('无法将该图载入创作：' + (error.message || '请重试'));
+            closeLightbox();
+            if (state.view != 'create') {
+                location.hash = 'create';
+            }
+            setStatus(`无法载入这张图：${error.message || '请刷新后重试'}。`, true);
         }
     }
 
@@ -1800,8 +2404,10 @@
         document.querySelectorAll('.mode-tab').forEach(t =>
             t.addEventListener('click', () => setMode(t.dataset.mode)));
 
-        $('refresh-models').addEventListener('click', refreshCatalog);
         $('refresh-workflows').addEventListener('click', refreshCatalog);
+        for (let id of ['negative', 'steps', 'cfg', 'seed', 'sampler', 'scheduler']) {
+            $(id).addEventListener('change', updateControls);
+        }
         $('model').addEventListener('change', () => { updateModelMeta(); applyModelSize(); });
         $('workflow-select').addEventListener('change', selectWorkflow);
 
@@ -1890,16 +2496,18 @@
 
         // Gallery
         $('gal-all').addEventListener('click', () => {
-            state.gallery.filter = 'all';
-            $('gal-all').classList.add('selected'); $('gal-all').setAttribute('aria-pressed', 'true');
-            $('gal-star').classList.remove('selected'); $('gal-star').setAttribute('aria-pressed', 'false');
+            setGalleryFilter('all');
             renderGallery();
         });
         $('gal-star').addEventListener('click', () => {
-            state.gallery.filter = 'star';
-            $('gal-star').classList.add('selected'); $('gal-star').setAttribute('aria-pressed', 'true');
-            $('gal-all').classList.remove('selected'); $('gal-all').setAttribute('aria-pressed', 'false');
+            setGalleryFilter('star');
             renderGallery();
+        });
+        $('gallery-clear-filter').addEventListener('click', () => {
+            $('gallery-search').value = '';
+            state.gallery.search = '';
+            setGalleryFilter('all');
+            loadGallery();
         });
         $('gallery-search').addEventListener('input', debounce(() => {
             state.gallery.search = $('gallery-search').value.trim();
@@ -1910,6 +2518,10 @@
             loadGallery();
         });
         $('gallery-refresh').addEventListener('click', loadGallery);
+        $('gallery-select').addEventListener('click', () => GallerySelection.setActive(true));
+        $('gallery-select-cancel').addEventListener('click', () => GallerySelection.setActive(false));
+        $('gallery-select-all').addEventListener('click', () => GallerySelection.selectAllVisible());
+        $('gallery-delete-selected').addEventListener('click', () => GallerySelection.deleteSelected());
         $('gallery-gocreate').addEventListener('click', () => { location.hash = 'create'; });
         $('queue-refresh').addEventListener('click', loadQueue);
         setInterval(pollBackendStatus, 5000);
@@ -1924,21 +2536,57 @@
         // Lightbox
         $('lightbox-backdrop').addEventListener('click', closeLightbox);
         $('lb-close').addEventListener('click', closeLightbox);
-        $('lb-star').addEventListener('click', () => state.gallery.current && toggleStar(state.gallery.current));
-        $('lb-delete').addEventListener('click', () => {
-            const item = state.gallery.current;
-            if (item && window.confirm(`确定删除「${item.name}」？可在回收站找回（若已启用）。`)) { deleteItem(item); }
-        });
-        $('lb-edit').addEventListener('click', () => state.gallery.current && editFromGallery(state.gallery.current));
-        window.addEventListener('keydown', e => {
-            if (!$('lightbox').hidden) {
-                if (e.key === 'Escape') { closeLightbox(); }
+        $('lb-prev').addEventListener('click', () => Lightbox.step(-1));
+        $('lb-next').addEventListener('click', () => Lightbox.step(1));
+        $('lb-star').addEventListener('click', async () => {
+            let item = Lightbox.current();
+            if (item && Lightbox.source == 'gallery') {
+                // Starring moves the file between folders, so the open item's path is no longer valid afterwards.
+                closeLightbox();
+                await toggleStar(item, true);
             }
-            if (!$('setup-guide-modal').hidden && e.key === 'Escape') { closeSetupGuide(); }
         });
-
-        // Mobile rail toggle
-        $('rail-toggle').addEventListener('click', () => $('.rail').classList.toggle('open'));
+        $('lb-delete').addEventListener('click', () => {
+            let item = Lightbox.current();
+            if (item && Lightbox.source == 'gallery') {
+                GallerySelection.deleteOne(item);
+            }
+        });
+        $('lb-edit').addEventListener('click', () => {
+            let item = Lightbox.current();
+            if (item) {
+                editFromGallery(item);
+            }
+        });
+        $('lb-gallery').addEventListener('click', () => {
+            let item = Lightbox.current();
+            if (item?.src) {
+                closeLightbox();
+                revealInGallery(item.src);
+            }
+        });
+        window.addEventListener('keydown', e => {
+            if (Lightbox.keydown(e)) {
+                return;
+            }
+            if (!$('enhancer-modal').hidden) {
+                if (e.key == 'Escape') {
+                    closeEnhancerSettings();
+                }
+                else {
+                    DialogFocus.trap($('enhancer-modal'), e);
+                }
+                return;
+            }
+            if (!$('setup-guide-modal').hidden) {
+                if (e.key == 'Escape') {
+                    closeSetupGuide();
+                }
+                else {
+                    DialogFocus.trap($('setup-guide-modal'), e);
+                }
+            }
+        });
 
         window.addEventListener('beforeunload', e => {
             if (state.busy || state.uncertain) { e.preventDefault(); e.returnValue = ''; }
