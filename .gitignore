@@ -36,6 +36,9 @@ venv/
 # Local-only agent skills, plans, tests, and development documents
 skills/
 SKILL.md
+# Repository skills defined by AGENTS.md (.agents/skills/<name>/SKILL.md) are committed
+!/.agents/skills/
+!/.agents/skills/**/SKILL.md
 superpowers/
 .superpowers/
 plans/

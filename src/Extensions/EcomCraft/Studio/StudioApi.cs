@@ -492,9 +492,11 @@ public static class StudioApi
         JObject result = new()
         {
             ["user_name"] = session.User.UserID,
+            ["version"] = EcomCraft.ExtensionVersion,
             ["can_generate"] = session.User.HasPermission(Permissions.BasicImageGeneration),
             ["can_generate_video"] = session.User.HasPermission(Permissions.BasicImageGeneration) && session.User.HasPermission(Permissions.ParamVideo),
             ["can_manage_settings"] = session.User.HasPermission(Permissions.EditServerSettings),
+            ["can_delete_images"] = session.User.HasPermission(Permissions.UserDeleteImage),
             ["cloud_configured"] = IsCloudModelConfigured(session),
             ["models"] = new JArray(LocalModels(session).Where(m => Kind(m) is not null).OrderBy(m => m.Name).Select(m => new JObject()
             {
