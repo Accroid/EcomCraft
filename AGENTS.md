@@ -66,6 +66,8 @@ description: 简要说明技能的用途及适用场景。
 
 常规构建应使用仓库现有的 .NET 项目和启动脚本，不要手工复制发布文件。启动后至少检查 HTTP 状态码、进程是否持续运行和日志中的致命错误。若使用了旧的 `src/bin/live_release`，必须确认其已由当前源码重新生成。
 
+Release 模式下，C# 扩展程序集按 Git 提交短哈希缓存。修改 `src/Extensions/EcomCraft/` 中的 C# 源码但未改变提交时，必须按 `ExtensionsManager.BuildExtension` 的输出目录与 `TargetName` 重新构建扩展；只构建主项目或重启会继续加载旧程序集。Windows 服务若因沙箱权限出现 DPAPI、WMI 或文件访问拒绝，应经执行权限审批后在正常用户环境启动，并确保同一数据目录只有一个服务实例。
+
 构建和启动不得修改 `Data/`、`Output/`、`Models/` 中的用户数据；不要提交 `src/bin`、`src/obj` 或其他构建产物。
 
 ## 测试
@@ -93,7 +95,7 @@ NUnit 单元测试位于 `SwarmUITests` 项目中。在 Windows 上使用 `launc
 - EcomCraft 工作台只能接受工作流 ID、服务端发布的参数白名单和经过服务端校验的普通生成参数。客户端不得提交或展示任意 ComfyUI JSON、未校验的节点图、后端选择器、管理员默认图片或内部会话标识。
 - `EcomCraftStudioGenerate` 必须继续限制在本机自启动 ComfyUI；本机后端不可用时不得隐式切换到远程或云端服务。新增后端匹配逻辑时，应同步检查 `StudioApi.ValidateLocalBackend` 和生成 API 的权限校验。
 - `EcomCraftStudioCatalog`、`EcomCraftStudioQueue` 和 `EcomCraftStudioCancelTask` 返回的数据应遵守最小披露原则：队列接口可以返回本机后端状态、排队位置和节点进度，但不得返回提示词、原始工作流、其他用户的任务 ID、会话 ID 或密钥。取消任务前必须验证当前账号拥有该任务。
-- 原生 ComfyUI 工作流发现只能从本机后端的工作流目录或 `Settings.EcomCraft.ComfyWorkflowSearchPaths` 读取；导入前必须验证工作流结构和正负提示词输入，导入后仍使用已发布工作流和参数白名单边界。
+- 原生 ComfyUI 工作流发现只能读取已配置本机后端、`Installation.FindComfyScripts` 验证的本机安装中的标准 `workflows` / `blueprints` 目录，或 `Settings.EcomCraft.ComfyWorkflowSearchPaths` 指定的目录；不得全盘扫描任意 JSON。导入前必须验证工作流结构、子图连接和正负提示词输入，导入后仍使用已发布工作流和参数白名单边界；发现其他安装的模板不代表切换执行后端。
 - EcomCraft 进度观测不得长期保存提示词、工作流输入或生成结果。进度缓存应在任务结束或超时后清理，并在扩展卸载时解除 `ComfyUIAPIAbstractBackend.QueueProgressObserved` 事件订阅。
 - 修改桌面入口或首页跳转时，应同时检查 `Desktop/`、`src/Core/Installation.cs`、`src/Core/Program.cs`、启动脚本、`src/Pages/Text2Image.cshtml` 和 `src/wwwroot/ecomcraft.ico` 的名称与路径一致性。
 - 修改 EcomCraft 功能后，应同步检查根目录的 `README.md`、`README.en.md`、`docs/README.zh-CN.md` 以及对应功能文档；API 名称、配置键和安全边界必须保持一致。

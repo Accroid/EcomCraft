@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="GenerationTimeoutTests.cs" />
+    <Compile Include="../MagicPrompt/WebAPI/GenerationTimeout.cs" />
+    <Reference Include="Newtonsoft.Json"><HintPath>../../../bin/live_release/Newtonsoft.Json.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

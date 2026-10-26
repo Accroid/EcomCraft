@@ -190,6 +190,19 @@ public static class StudioApi
         "text", "integer", "decimal", "boolean", "dropdown", "image", "model", "list"
     };
 
+    /// <summary>Synchronizes native sampler seeds after the engine clones and increments each image request.</summary>
+    public static void PrepareNativeWorkflowSeeds(T2IEngine.PreGenerationEventParams generation)
+    {
+        T2IParamInput input = generation.UserInput;
+        if (input.ExtraMeta.TryGetValue(LocalScopeKey, out object scope) && scope?.ToString() == "local_self_start"
+            && input.ExtraMeta.TryGetValue(PublishedWorkflowScopeKey, out object workflowId)
+            && IsNativeWorkflow(workflowId?.ToString())
+            && TryGetPublishedWorkflow(workflowId?.ToString(), out _, out JObject metadata, out _))
+        {
+            NativeWorkflowParameters.SynchronizeSeeds(input, metadata);
+        }
+    }
+
     /// <summary>Additional restriction, never an override of native backend matching or user permissions.</summary>
     public static bool ValidateLocalBackend(T2IParamInput input, BackendHandler.T2IBackendData backend)
     {
@@ -202,7 +215,36 @@ public static class StudioApi
         {
             input.RefusalReasons.Add("EcomCraft workspace requests only permit local self-starting ComfyUI backends.");
         }
+        if (allowed && input.ExtraMeta.TryGetValue(PublishedWorkflowScopeKey, out object workflowId)
+            && IsNativeWorkflow(workflowId?.ToString())
+            && TryGetPublishedWorkflow(workflowId?.ToString(), out ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
+                out JObject metadata, out JObject savedValues))
+        {
+            JObject values = (JObject)savedValues.DeepClone();
+            foreach (JProperty property in metadata.Properties())
+            {
+                if (input.TryGetRaw(T2IParamType.FromNet((JObject)property.Value), out object value))
+                {
+                    values[property.Name] = JToken.FromObject(value);
+                }
+            }
+            allowed = NativeWorkflowParameters.Supports(ParseWorkflowObject(workflow.Prompt), metadata, values,
+                ((ComfyUISelfStartBackend)backend.Backend).RawObjectInfo, out _);
+            if (!allowed)
+            {
+                input.RefusalReasons.Add("The local ComfyUI backend lacks a required workflow node or model.");
+            }
+        }
         return allowed;
+    }
+
+    /// <summary>Checks ownership under the same lock used by native catalog refreshes.</summary>
+    private static bool IsNativeWorkflow(string name)
+    {
+        lock (NativeWorkflowLock)
+        {
+            return name is not null && NativeWorkflowIds.Contains(name);
+        }
     }
 
     private static bool CanView(Session session) => session?.User is not null
@@ -210,10 +252,13 @@ public static class StudioApi
         && session.User.HasPermission(Permissions.FundamentalModelAccess)
         && session.User.HasPermission(Permissions.ModelParams);
 
-    private static bool IsLocalAvailable(BackendHandler.T2IBackendData data) => data.Backend is ComfyUISelfStartBackend
+    /// <summary>Catalog availability describes loaded capabilities, even while another user occupies the backend.</summary>
+    private static bool IsLocalReady(BackendHandler.T2IBackendData data) => data.Backend is ComfyUISelfStartBackend
         && data.Backend.IsReal && data.Backend.IsEnabled && !data.Backend.ShutDownReserve
-        && data.Backend.CanLoadModels && data.Backend.MaxUsages > 0 && data.Usages < data.Backend.MaxUsages
-        && data.Backend.Reservations == 0 && data.Backend.Status == BackendStatus.RUNNING;
+        && data.Backend.CanLoadModels && data.Backend.MaxUsages > 0 && data.Backend.Status == BackendStatus.RUNNING;
+
+    private static bool IsLocalAvailable(BackendHandler.T2IBackendData data) => IsLocalReady(data)
+        && data.Usages < data.Backend.MaxUsages && data.Backend.Reservations == 0;
 
     /// <summary>Returns whether the selected MagicPrompt backend has a configured cloud credential.</summary>
     private static bool IsCloudModelConfigured(Session session)
@@ -456,49 +501,22 @@ public static class StudioApi
     /// <summary>Refreshes native workflows while the catalog lock is held.</summary>
     private static void ImportNativeComfyWorkflowsLocked()
     {
-        HashSet<string> paths = new(StringComparer.OrdinalIgnoreCase);
         HashSet<string> discoveredNames = new(StringComparer.OrdinalIgnoreCase);
-        foreach (string configured in Program.ServerSettings.EcomCraft.ComfyWorkflowSearchPaths ?? [])
-        {
-            if (!string.IsNullOrWhiteSpace(configured))
-            {
-                try
-                {
-                    paths.Add(Path.GetFullPath(configured.Trim()));
-                }
-                catch (Exception ex)
-                {
-                    Logs.Warning($"EcomCraft invalid ComfyUI workflow directory: {ex.Message}");
-                }
-            }
-        }
-        if (paths.Count == 0)
-        {
-            foreach (ComfyUISelfStartBackend backend in Program.Backends.EnumerateT2IBackends
-                .Select(data => data.Backend as ComfyUISelfStartBackend).Where(value => value is not null))
-            {
-                string userDirectory = Path.Combine(backend.ComfyPathBase, "user");
-                Match overrideMatch = Regex.Match(backend.Settings.ExtraArgs ?? "", @"(?:^|\s)--user-directory(?:=|\s+)(?:""([^""]+)""|'([^']+)'|([^\s]+))");
-                if (overrideMatch.Success)
-                {
-                    try
-                    {
-                        string overridePath = overrideMatch.Groups[1].Success ? overrideMatch.Groups[1].Value
-                            : overrideMatch.Groups[2].Success ? overrideMatch.Groups[2].Value : overrideMatch.Groups[3].Value;
-                        userDirectory = Path.GetFullPath(Path.IsPathRooted(overridePath)
-                            ? overridePath : Path.Combine(backend.ComfyPathBase, overridePath));
-                    }
-                    catch (Exception ex)
-                    {
-                        Logs.Warning($"EcomCraft invalid ComfyUI --user-directory: {ex.Message}");
-                        continue;
-                    }
-                }
-                paths.Add(Path.Combine(userDirectory, "default", "workflows"));
-            }
-        }
+        List<(string Root, string Args)> backends = Program.Backends.EnumerateT2IBackends
+            .Select(data => data.Backend).OfType<ComfyUISelfStartBackend>()
+            .Select(backend => (backend.ComfyPathBase, backend.Settings.ExtraArgs)).ToList();
+        List<string> paths = NativeWorkflowDiscovery.Directories(backends,
+            Program.ServerSettings.EcomCraft.ComfyWorkflowSearchPaths ?? []);
+        HashSet<string> visitedFiles = new(StringComparer.OrdinalIgnoreCase);
+        long deadline = Environment.TickCount64 + 5000;
+        bool complete = true;
         foreach (string directory in paths)
         {
+            if (Environment.TickCount64 >= deadline)
+            {
+                complete = false;
+                break;
+            }
             if (!Directory.Exists(directory))
             {
                 continue;
@@ -506,7 +524,11 @@ public static class StudioApi
             string[] files;
             try
             {
-                files = Directory.GetFiles(directory, "*.json", SearchOption.AllDirectories);
+                files = Directory.EnumerateFiles(directory, "*.json", new EnumerationOptions
+                {
+                    RecurseSubdirectories = true, MaxRecursionDepth = 8, IgnoreInaccessible = true,
+                    AttributesToSkip = FileAttributes.ReparsePoint
+                }).TakeWhile(_ => Environment.TickCount64 < deadline).Take(1000).ToArray();
             }
             catch (Exception ex)
             {
@@ -515,6 +537,11 @@ public static class StudioApi
             }
             foreach (string file in files)
             {
+                if (Environment.TickCount64 >= deadline)
+                {
+                    complete = false;
+                    break;
+                }
                 try
                 {
                     if (new FileInfo(file).Length > 2 * 1024 * 1024)
@@ -523,10 +550,23 @@ public static class StudioApi
                     }
                     string relativeName = Path.GetRelativePath(directory, file).Replace('\\', '/').BeforeLast('.');
                     string name = $"ComfyUI - {relativeName.Replace('/', '-')}";
+                    if (!visitedFiles.Add(Path.GetFullPath(file)))
+                    {
+                        continue;
+                    }
                     if (discoveredNames.Contains(name)
                         || (!NativeWorkflowIds.Contains(name) && ComfyUIBackendExtension.CustomWorkflows.ContainsKey(name)))
                     {
-                        Logs.Warning($"EcomCraft skipped duplicate native workflow name '{name}' from '{file}'.");
+                        name += $" ({NativeWorkflowDiscovery.SourceLabel(directory)})";
+                    }
+                    if (discoveredNames.Contains(name)
+                        || (!NativeWorkflowIds.Contains(name) && ComfyUIBackendExtension.CustomWorkflows.ContainsKey(name)))
+                    {
+                        string suffix = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Path.GetFullPath(file))))[..8];
+                        name += $" ({suffix})";
+                    }
+                    if (!NativeWorkflowIds.Contains(name) && ComfyUIBackendExtension.CustomWorkflows.ContainsKey(name))
+                    {
                         continue;
                     }
                     ComfyUIBackendExtension.ComfyCustomWorkflow imported = ConvertNativeWorkflow(name, File.ReadAllText(file));
@@ -542,172 +582,30 @@ public static class StudioApi
                 }
             }
         }
-        foreach (string name in NativeWorkflowIds)
+        foreach (string name in NativeWorkflowIds.ToArray())
         {
-            if (!discoveredNames.Contains(name))
+            if (complete && !discoveredNames.Contains(name))
             {
                 ComfyUIBackendExtension.CustomWorkflows.TryRemove(name, out _);
+                NativeWorkflowIds.Remove(name);
             }
         }
-        NativeWorkflowIds.Clear();
         NativeWorkflowIds.UnionWith(discoveredNames);
     }
 
     /// <summary>Converts a native ComfyUI canvas file into the API prompt format used by SwarmUI.</summary>
     private static ComfyUIBackendExtension.ComfyCustomWorkflow ConvertNativeWorkflow(string name, string json)
     {
-        JObject canvas = ParseWorkflowObject(json);
-        if (canvas?["nodes"] is not JArray canvasNodes || canvasNodes.Count == 0 || canvas["links"] is not JArray links)
+        JObject prompt = NativeWorkflowConverter.Convert(ParseWorkflowObject(json), out JObject metadata, out JObject values);
+        if (prompt is null)
         {
             return null;
         }
-        HashSet<string> positiveTextNodes = [];
-        HashSet<string> negativeTextNodes = [];
-        bool hasSampler = false;
-        bool hasOutput = false;
-        foreach (JObject node in canvasNodes.OfType<JObject>())
-        {
-            string nodeType = node["type"]?.ToString();
-            hasOutput |= nodeType is "SaveImage" or "PreviewImage";
-            if (!string.Equals(node["type"]?.ToString(), "KSampler", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(node["type"]?.ToString(), "KSamplerAdvanced", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-            hasSampler = true;
-            foreach (JObject input in (node["inputs"] as JArray)?.OfType<JObject>() ?? [])
-            {
-                if (input["name"]?.ToString() is not ("positive" or "negative") || input["link"] is null)
-                {
-                    continue;
-                }
-                JArray source = null;
-                foreach (JToken linkToken in links)
-                {
-                    if (linkToken is JArray link && link.Count >= 5 && link[0].ToString() == input["link"]?.ToString())
-                    {
-                        source = new JArray(link[1].ToString(), link[2].DeepClone());
-                        break;
-                    }
-                }
-                if (source is not null)
-                {
-                    (input["name"]?.ToString() == "positive" ? positiveTextNodes : negativeTextNodes).Add(source[0].ToString());
-                }
-            }
-        }
-        if (!hasSampler || !hasOutput || positiveTextNodes.Count == 0 || negativeTextNodes.Count == 0)
-        {
-            return null;
-        }
-        JObject prompt = new();
-        bool mappedPositive = false;
-        bool mappedNegative = false;
-        foreach (JObject node in canvasNodes.OfType<JObject>())
-        {
-            string id = node["id"]?.ToString();
-            string type = node["type"]?.ToString();
-            if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(type))
-            {
-                continue;
-            }
-            JObject inputs = new();
-            JObject namedValues = node["widgets_values_named"] as JObject;
-            int widgetIndex = 0;
-            foreach (JObject input in (node["inputs"] as JArray)?.OfType<JObject>() ?? [])
-            {
-                string inputName = input["name"]?.ToString();
-                if (string.IsNullOrWhiteSpace(inputName))
-                {
-                    continue;
-                }
-                JToken link = input["link"];
-                JToken value = null;
-                if (link is not null && link.Type != JTokenType.Null)
-                {
-                    foreach (JToken linkToken in links)
-                    {
-                        if (linkToken is JArray linkData && linkData.Count >= 5 && linkData[0].ToString() == link.ToString())
-                        {
-                            value = new JArray(linkData[1].ToString(), linkData[2].DeepClone());
-                            break;
-                        }
-                    }
-                    if (value is null)
-                    {
-                        return null;
-                    }
-                }
-                else if (input["widget"] is not null)
-                {
-                    value = namedValues?[inputName]?.DeepClone();
-                    if (value is null && node["widgets_values"] is JArray values && widgetIndex < values.Count)
-                    {
-                        value = values[widgetIndex++].DeepClone();
-                        if (inputName == "seed" && widgetIndex < values.Count
-                            && values[widgetIndex]?.Type == JTokenType.String
-                            && values[widgetIndex].ToString() is "randomize" or "fixed" or "increment" or "decrement")
-                        {
-                            widgetIndex++;
-                        }
-                    }
-                }
-                if (value is not null)
-                {
-                    inputs[inputName] = value;
-                }
-            }
-            if (type == "CLIPTextEncode" && inputs.ContainsKey("text"))
-            {
-                if (positiveTextNodes.Contains(id))
-                {
-                    inputs["text"] = "${prompt}";
-                    mappedPositive = true;
-                }
-                else if (negativeTextNodes.Contains(id))
-                {
-                    inputs["text"] = "${negative_prompt}";
-                    mappedNegative = true;
-                }
-            }
-            if (type is "KSampler" or "KSamplerAdvanced")
-            {
-                ReplaceIfPresent(inputs, "seed", "%%_COMFYFIXME_${seed:-1}_ENDFIXME_%%");
-                ReplaceIfPresent(inputs, "steps", "%%_COMFYFIXME_${steps:20}_ENDFIXME_%%");
-                ReplaceIfPresent(inputs, "cfg", "%%_COMFYFIXME_${cfg_scale:7}_ENDFIXME_%%");
-                ReplaceIfPresent(inputs, "sampler_name", "${sampler:euler}");
-                ReplaceIfPresent(inputs, "scheduler", "${scheduler:normal}");
-            }
-            if (type == "EmptyLatentImage")
-            {
-                ReplaceIfPresent(inputs, "width", "%%_COMFYFIXME_${width:512}_ENDFIXME_%%");
-                ReplaceIfPresent(inputs, "height", "%%_COMFYFIXME_${height:512}_ENDFIXME_%%");
-                if (inputs.ContainsKey("batch_size"))
-                {
-                    inputs["batch_size"] = 1;
-                }
-            }
-            if (type is "CheckpointLoaderSimple" or "CheckpointLoader")
-            {
-                ReplaceIfPresent(inputs, "ckpt_name", "${model}");
-            }
-            prompt[id] = new JObject() { ["class_type"] = type, ["inputs"] = inputs };
-        }
-        if (prompt.Count == 0 || !mappedPositive || !mappedNegative)
-        {
-            return null;
-        }
-        return new(name, json, prompt.ToString(Newtonsoft.Json.Formatting.None), "{}", "{}", null,
-            "从 ComfyUI 工作流目录自动发现。", true);
-    }
-
-    /// <summary>Replaces a native node input only when that input exists in the source workflow.</summary>
-    private static void ReplaceIfPresent(JObject inputs, string id, string value)
-    {
-        if (inputs.ContainsKey(id))
-        {
-            inputs[id] = value;
-        }
+        NativeWorkflowParameters.AddChoices(metadata, Program.Backends.EnumerateT2IBackends
+            .Where(data => data.Backend is ComfyUISelfStartBackend && data.Backend.IsReal)
+            .Select(data => ((ComfyUISelfStartBackend)data.Backend).RawObjectInfo));
+        return new(name, json, prompt.ToString(Newtonsoft.Json.Formatting.None), metadata.ToString(Newtonsoft.Json.Formatting.None), values.ToString(Newtonsoft.Json.Formatting.None), null,
+            "从本机 ComfyUI 工作流或蓝图目录自动发现。执行仍使用当前本机后端，请确认所需模型和节点已安装。", true);
     }
 
     [API.APIDescription("Generate using a validated allowlist on local self-starting ComfyUI only. No cloud fallback, automatic retries or durable task guarantees. rawInput is the root request JSON.", "images: [\"View/user/result.png\"]")]
@@ -951,6 +849,7 @@ public static class StudioApi
         return null;
     }
 
+    /// <summary>Lists usable local templates and collapses identical native graphs without removing stored workflows.</summary>
     private static JArray PublishedWorkflowCatalog(Session session)
     {
         JArray published = new();
@@ -958,6 +857,14 @@ public static class StudioApi
         {
             return published;
         }
+        List<ComfyUISelfStartBackend> backends = Program.Backends.EnumerateT2IBackends.Where(IsLocalReady)
+            .Select(data => (ComfyUISelfStartBackend)data.Backend).ToList();
+        if (backends.Count == 0)
+        {
+            return published;
+        }
+        WorkflowCatalogFilter filter = new(backends.Select(backend => backend.RawObjectInfo));
+        HashSet<string> modelKinds = new(LocalModels(session).Select(Kind).Where(kind => kind is not null));
         foreach (string name in ComfyUIBackendExtension.CustomWorkflows.Keys.OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
         {
             if (!TryGetPublishedWorkflow(name, out ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
@@ -970,13 +877,32 @@ public static class StudioApi
             {
                 continue;
             }
+            bool native = IsNativeWorkflow(workflow.Name);
+            string kind = InferWorkflowKind(workflow);
+            if (kind == "video" && !session.User.HasPermission(Permissions.ParamVideo))
+            {
+                continue;
+            }
+            if (native)
+            {
+                if (!filter.Include(ParseWorkflowObject(workflow.Prompt), metadata, savedValues))
+                {
+                    continue;
+                }
+            }
+            else if (!modelKinds.Contains(kind))
+            {
+                continue;
+            }
             published.Add(new JObject()
             {
                 ["id"] = workflow.Name,
                 ["name"] = workflow.Name,
-                ["kind"] = InferWorkflowKind(workflow),
+                ["kind"] = kind,
                 ["description"] = workflow.Description ?? "",
-                ["inputs"] = fields
+                ["inputs"] = fields,
+                ["native"] = native,
+                ["defaults"] = native ? NativeWorkflowParameters.FormDefaults(metadata, savedValues) : null
             });
         }
         return published;
@@ -1026,6 +952,7 @@ public static class StudioApi
                 ["min"] = definition["min"]?.DeepClone() ?? new JValue(0),
                 ["max"] = definition["max"]?.DeepClone() ?? new JValue(0),
                 ["step"] = definition["step"]?.DeepClone() ?? new JValue(1),
+                ["form"] = definition["form"]?.DeepClone(),
                 ["subtype"] = definition["subtype"]?.DeepClone()
             };
             if (type == "model")
@@ -1033,7 +960,7 @@ public static class StudioApi
                 string subtype = definition["subtype"]?.ToString() ?? "Stable-Diffusion";
                 if (Program.T2IModelSets.TryGetValue(subtype, out T2IModelHandler handler))
                 {
-                    List<string> allowedModels = handler.ListModelNamesFor(session);
+                    List<string> allowedModels = handler.ListModelNamesFor(session).Where(model => model != "(None)").ToList();
                     if (allowedModels.Count == 0)
                     {
                         supported = false;
@@ -1049,7 +976,14 @@ public static class StudioApi
             }
             else if (definition["values"] is not null)
             {
-                field["values"] = definition["values"].DeepClone();
+                field["values"] = definition.Value<bool?>("native_model") == true
+                    ? new JArray(((JArray)definition["values"]).Where(value => session.User.IsAllowedModel(value.ToString())))
+                    : definition["values"].DeepClone();
+                if (definition.Value<bool?>("native_model") == true && !session.User.IsAllowedModel(defaultValue?.ToString() ?? ""))
+                {
+                    supported = false;
+                    return new JArray();
+                }
             }
             fields.Add(field);
         }
@@ -1137,9 +1071,21 @@ public static class StudioApi
         {
             return Error("所选工作流与当前创作类型不匹配，请切换图片/视频类型或选择其他工作流。", "invalid_mode");
         }
+        bool native = IsNativeWorkflow(workflow.Name);
+        rawInput = (JObject)rawInput.DeepClone();
+        if (native)
+        {
+            JObject defaults = NativeWorkflowParameters.FormDefaults(metadata, savedValues);
+            foreach (JProperty property in defaults.Properties())
+            {
+                JProperty binding = metadata.Properties().FirstOrDefault(parameter => parameter.Value["form"]?.ToString() == property.Name);
+                rawInput[property.Name] ??= (binding is null ? null : (rawInput["workflow_params"] as JObject)?[binding.Name])?.DeepClone()
+                    ?? property.Value.DeepClone();
+            }
+        }
         string modelId = (string)rawInput["model"];
-        T2IModel model = LocalModels(session).FirstOrDefault(m => m.Name == modelId && Kind(m) == kind);
-        if (model is null)
+        T2IModel model = native ? null : LocalModels(session).FirstOrDefault(m => m.Name == modelId && Kind(m) == kind);
+        if (!native && model is null)
         {
             return Error("模型不可用、账号无权访问，或模型类型与当前创作类型不匹配。", "invalid_model");
         }
@@ -1157,7 +1103,7 @@ public static class StudioApi
         {
             return Error("本版工作台只接受普通描述，不支持原生 <…> 指令、预设或 __通配符__。", "unsupported_prompt_syntax");
         }
-        int step = Math.Max(8, model.ModelClass.CompatClass.ResolutionPrecision);
+        int step = Math.Max(8, model?.ModelClass.CompatClass.ResolutionPrecision ?? 8);
         int imageLimit = kind == "video" ? 1 : 4;
         if (!Integer(rawInput, "width", 256, 2048, out int width) || width % step != 0
             || !Integer(rawInput, "height", 256, 2048, out int height) || height % step != 0
@@ -1171,6 +1117,17 @@ public static class StudioApi
             return Error("工作流参数格式无效。", "invalid_workflow_parameters");
         }
         JObject requestedParams = rawWorkflowParams as JObject ?? new JObject();
+        if (native)
+        {
+            foreach (JProperty property in metadata.Properties())
+            {
+                string form = property.Value["form"]?.ToString();
+                if (!string.IsNullOrEmpty(form) && rawInput[form] is JToken formValue)
+                {
+                    requestedParams[property.Name] = formValue.DeepClone();
+                }
+            }
+        }
         if (requestedParams.Count > 60)
         {
             return Error("工作流参数数量超过限制。", "invalid_workflow_parameters");
@@ -1185,7 +1142,8 @@ public static class StudioApi
         JObject input = new()
         {
             // This must precede dynamic input IDs so SwarmUI recognizes them as parameters of this stored workflow.
-            ["comfyuicustomworkflow"] = workflow.Name
+            ["comfyuicustomworkflow"] = workflow.Name,
+            ["comfyworkflowparammetadata"] = workflow.CustomParams
         };
         foreach (JProperty property in savedValues.Properties())
         {
@@ -1210,7 +1168,6 @@ public static class StudioApi
             }
             input[property.Name] = value.DeepClone();
         }
-        input["comfyworkflowparammetadata"] = workflow.CustomParams;
         foreach (JProperty property in requestedParams.Properties())
         {
             if (!allowedWorkflowInputIds.Contains(property.Name)
@@ -1234,7 +1191,39 @@ public static class StudioApi
             }
         }
         // Build the root request from a strict allowlist; never forward arbitrary client-supplied routes, metadata or workflow JSON.
-        input["model"] = model.Name;
+        if (!native)
+        {
+            input["model"] = model.Name;
+        }
+        else
+        {
+            foreach (JProperty property in metadata.Properties())
+            {
+                JObject definition = (JObject)property.Value;
+                if (input[property.Name] is null || input[property.Name].Type == JTokenType.Null
+                    || !ValidatePublishedWorkflowInput(session, property.Name, input[property.Name], definition, out _))
+                {
+                    return Error("工作流参数缺失或无效，请刷新列表后重新选择工作流。", "invalid_workflow_parameters");
+                }
+                if (definition.Value<bool?>("native_seed") == true && input[property.Name].ToString() == "-1")
+                {
+                    input[property.Name] = Random.Shared.NextInt64(0, 9007199254740991);
+                    if (definition["form"]?.ToString() == "seed")
+                    {
+                        rawInput["seed"] = input[property.Name].DeepClone();
+                    }
+                }
+            }
+            List<string> problems = new();
+            bool compatible = Program.Backends.EnumerateT2IBackends.Where(IsLocalAvailable).Any(data =>
+                NativeWorkflowParameters.Supports(ParseWorkflowObject(workflow.Prompt), metadata, input,
+                    ((ComfyUISelfStartBackend)data.Backend).RawObjectInfo, out problems));
+            if (!compatible)
+            {
+                return Error("当前本机 ComfyUI 无法运行此工作流：" + string.Join("；", problems.Take(5))
+                    + "。请在当前后端安装所需模型/节点，或选择可用模型。", "workflow_dependencies_missing");
+            }
+        }
         input["prompt"] = prompt;
         input["negativeprompt"] = negative;
         input["width"] = width;
@@ -1242,7 +1231,7 @@ public static class StudioApi
         input["images"] = images;
         input["webhooks"] = "None";
         input["donotsave"] = false;
-        if (!CopyOptionalNumber(rawInput, input, "seed", -1, uint.MaxValue, true)
+        if (!CopyOptionalNumber(rawInput, input, "seed", -1, native ? 9007199254740991 : uint.MaxValue, true)
             || !CopyOptionalNumber(rawInput, input, "steps", 1, 100, true)
             || !CopyOptionalNumber(rawInput, input, "cfgscale", 0, 30, false))
         {
@@ -1312,7 +1301,9 @@ public static class StudioApi
                 return true;
             case "integer":
                 if (!long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out long integerValue)
-                    || (hasBounds && (integerValue < min || integerValue > max)))
+                    || (hasBounds && (integerValue < min || integerValue > max))
+                    || (definition["native_node"] is not null && ReadWorkflowBound(definition["step"]) > 1
+                        && integerValue % ReadWorkflowBound(definition["step"]) != 0))
                 {
                     error = $"工作流参数“{id}”的整数值无效或超出允许范围。";
                     return false;
@@ -1334,6 +1325,11 @@ public static class StudioApi
                 }
                 return true;
             case "dropdown":
+                if (definition.Value<bool?>("native_model") == true && !session.User.IsAllowedModel(raw))
+                {
+                    error = "此账号无权访问工作流选择的模型。";
+                    return false;
+                }
                 if (value.Type != JTokenType.String || definition["values"] is not JArray choices || choices.Count == 0
                     || !choices.Any(choice => choice.ToString() == raw || choice.ToString().Before("///") == raw))
                 {
@@ -1524,6 +1520,10 @@ public static class StudioApi
         if (detail.Contains("miopenStatusInternalError", StringComparison.OrdinalIgnoreCase))
         {
             message = "本机 ROCm/MIOpen 运行失败。请检查 ComfyUI 进程对 MIOpen 缓存目录的访问权限，并查看服务器日志中的原始错误。";
+        }
+        if (detail.Contains("hipErrorInvalidValue", StringComparison.OrdinalIgnoreCase))
+        {
+            message = "本机 AMD/ROCm 显存操作失败。请在任务结束后重启本机后端，并检查是否已禁用固定内存（--disable-pinned-memory）；已完成的图片请在个人历史中查看。";
         }
         if (!string.IsNullOrWhiteSpace(requestId))
         {

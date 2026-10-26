@@ -34,6 +34,7 @@ public class MagicPromptAPI
         API.RegisterAPICall(SessionSettings.SaveMagicPromptSettings, false, MagicPromptPermissions.PermSaveConfig);
         API.RegisterAPICall(SessionSettings.ResetMagicPromptSettings, false, MagicPromptPermissions.PermResetConfig);
         API.RegisterAPICall(LLMAPICalls.GetMagicPromptModels, true, MagicPromptPermissions.PermGetModels);
+        API.RegisterAPICall(ModelPreviewAPI.PreviewMagicPromptModels, true, MagicPromptPermissions.PermSaveConfig);
         // All key types must be added to the accepted list first
         string[] keyTypes = ["openai_api", "anthropic_api", "openrouter_api", "openaiapi_local", "grok_api"];
         foreach (string keyType in keyTypes)

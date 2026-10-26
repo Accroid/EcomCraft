@@ -47,10 +47,10 @@ cd EcomCraft
 当前已实现：
 
 - 图片与视频创作工作台，复用 SwarmUI 的生成能力；可用模式取决于已安装的模型、节点和账号权限。
-- 管理员发布 ComfyUI 工作流供工作台选用；服务端校验工作流 ID 和已发布参数白名单，提供 `EcomCraftStudioCatalog`、`EcomCraftStudioGenerate`、`EcomCraftStudioQueue` 和 `EcomCraftStudioCancelTask` API。
-- 自动发现本机 ComfyUI 工作流目录中的原生工作流，并转换为工作台可选的安全工作流。也可以在 `Settings` 的 `EcomCraft.ComfyWorkflowSearchPaths` 中配置额外目录；发现的工作流仍须包含可识别的正向和负向提示词输入。
+- 管理员发布 ComfyUI 工作流供工作台选用；服务端校验工作流 ID 和已发布参数白名单，提供 `EcomCraftStudioCatalog`、`EcomCraftStudioGenerate`、`EcomCraftStudioQueue` 和 `EcomCraftStudioCancelTask` API。原生工作流批量出图时逐张递增实际采样种子，填写 `-1` 可随机确定本批起始值。
+- 自动发现本机 ComfyUI 安装中的 `workflows` 和 `blueprints`，支持内嵌子图蓝图，工作台空闲时每 30 秒更新列表。无需逐个填写路径；`EcomCraft.ComfyWorkflowSearchPaths` 仅用于补充目录。发现的工作流仍须通过结构及正负提示词校验，并由当前本机后端执行。可选列表按执行内容合并重复原生工作流，并隐藏当前可用本机后端缺少默认模型或节点的项。页面读取工作流内保存的模型和参数，修改值传入对应节点，提交前再次检查依赖。Windows AMD 本机后端默认禁用固定内存（pinned memory），改善量化编码器重新加载时的 ROCm 兼容性。Comfy Desktop 安装的后端会自动追加同一根目录下的 `ComfyUI-Shared/models` 共享模型路径。
 - 实时任务队列展示本机 ComfyUI 的运行任务、排队任务、当前节点和节点进度，并支持结束当前账号自己的活动生成任务。
-- MagicPrompt 提示词优化，可配置本地或云端语言模型服务。
+- MagicPrompt 提示词优化，可配置本地或云端语言模型服务；输入 API Key 后可直接拉取模型，点击保存才会应用配置。提示词生成默认等待 120 秒，模型列表拉取限时 20 秒。
 - Windows 首次安装时可创建 EcomCraft Studio 桌面快捷方式。
 
 规划中：团队节点管理、持久化任务历史、公共素材库，以及按任务授权的云端生成。上述规划功能当前不可作为可用功能使用。

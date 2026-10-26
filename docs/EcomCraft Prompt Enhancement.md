@@ -9,7 +9,7 @@ EcomCraft 创作工作台的「✦ 优化提示词」按钮，会把你输入的
 | 后端 | 类型 | 是否需要 API Key | 说明 |
 |---|---|---|---|
 | **Ollama** | 本地 | 否 | 最简单的本地免费方案，一条命令装好模型 |
-| **OpenAI 兼容本地服务** | 本地 | 一般不需要 | LM Studio、text-generation-webui、LocalAI、vLLM、自建服务等 |
+| **OpenAI 兼容服务（本地 / 远程）** | 本地或远程 | 取决于服务 | LM Studio、LocalAI、vLLM、自建服务及远程兼容接口 |
 | **OpenRouter** | 云端 | 是 | 一个 Key 接入数百种模型，**含免费模型** |
 | **OpenAI** | 云端 | 是 | ChatGPT（GPT-4o / GPT-4.1 等） |
 | **Anthropic** | 云端 | 是 | Claude（Sonnet / Opus 等） |
@@ -89,15 +89,15 @@ ollama pull llama3.2
 
 ## 方案四：其他本地 OpenAI 兼容服务（LM Studio / vLLM 等）
 
-「OpenAI 兼容本地服务」后端可对接任何实现了 OpenAI `/v1/chat/completions` 与 `/v1/models` 接口的本地程序：
+「OpenAI 兼容服务（本地 / 远程）」后端可对接实现了 OpenAI `/v1/chat/completions` 与 `/v1/models` 接口的服务，包括以下本地程序：
 
 - **LM Studio**：图形界面，加载模型后开启「Local Server」，默认地址 `http://localhost:1234/v1`。
 - **vLLM**：`vllm serve <模型> --port 8000`，地址 `http://localhost:8000/v1`。
 - **text-generation-webui / LocalAI / 自建 FastAPI**：同理。
 
 配置时：
-- **模型后端**：`OpenAI 兼容本地服务`
-- **服务地址**：填该服务的 Base URL（含 `/v1`，以实际为准）
+- **模型后端**：`OpenAI 兼容服务（本地 / 远程）`
+- **服务地址**：填该服务的 Base URL（根地址或包含 `/v1` 均可，以实际为准）
 - **API Key**：本地服务一般无需 Key，留空即可；若服务设置了 Key 则填写。
 - **提示词模型**：点「拉取」选择。
 
@@ -105,7 +105,7 @@ ollama pull llama3.2
 
 ## 方案五：自托管专用提示词模型 BeautifulPrompt（pai-bloom）
 
-EcomCraft 还随附了一个脚本，可部署阿里 PAI 开源的**提示词专用模型** BeautifulPrompt（`pai-bloom-1b1-text2prompt-sd`），并把它包装成 OpenAI 兼容接口，然后用「OpenAI 兼容本地服务」后端接入。
+EcomCraft 还随附了一个脚本，可部署阿里 PAI 开源的**提示词专用模型** BeautifulPrompt（`pai-bloom-1b1-text2prompt-sd`），并把它包装成 OpenAI 兼容接口，然后用「OpenAI 兼容服务（本地 / 远程）」后端接入。
 
 ### 硬件要求
 
@@ -133,7 +133,7 @@ curl http://localhost:8000/v1/models
 ```
 
 然后在 EcomCraft 设置中：
-- **模型后端**：`OpenAI 兼容本地服务`
+- **模型后端**：`OpenAI 兼容服务（本地 / 远程）`
 - **服务地址**：`http://localhost:8000`（脚本根路径即兼容入口；按实际拼接到 `/v1`）
 - **提示词模型**：`alibaba-pai/pai-bloom-1b1-text2prompt-sd`
 - 无需 Key。
@@ -147,11 +147,31 @@ curl http://localhost:8000/v1/models
 | 字段 | 说明 |
 |---|---|
 | 模型后端 | 选择上面 6 类后端之一 |
-| 服务地址（Base URL） | 仅本地后端（Ollama / OpenAI 兼容）可编辑；云后端地址固定，无需填写 |
+| 服务地址（Base URL） | Ollama / OpenAI 兼容后端可编辑，支持本地或远程地址；其他后端地址固定 |
 | 提示词模型 | 点「拉取」自动列出该后端的可用模型，也可手动填写模型 ID |
 | API Key | 云后端必填；Ollama 无需；本地兼容服务一般无需。Key 安全存储在 SwarmUI 用户数据中，不会写入配置文件 |
 
 切换后端时，服务地址和 Key 状态会自动更新为该后端的已保存值或默认值。
+
+### 生成等待时间
+
+拉取模型列表仍限时 20 秒。提示词优化需要等待完整回答，独立默认超时为 120 秒；已有配置中的旧默认 `timeout: 20` 自动按此生成时限处理，不改写用户配置。其他自定义旧时限继续生效。管理员可通过现有设置 API 的 `backends.<后端>.generation_timeout` 显式设置 1–600 秒的生成时限，该值优先于旧 `timeout`。配置无效时使用 120 秒。
+
+请求取消、会话中断或服务关闭会取消上游等待；超时提示包含实际等待上限，不自动重试。拉取成功不代表模型能在时限内生成；第三方服务自身的网关超时也不受本地等待上限控制。
+
+### 输入 Key 后直接拉取模型
+
+拉取到的提示词模型直接作为原“提示词模型”输入框的下拉候选，不再额外显示第二个选择框；可输入模型名称筛选或手动填写。拉取不覆盖当前输入，选定后点击“保存”才应用。
+
+1. 选择模型后端，填写服务地址（可编辑的后端）和 API Key。
+2. 直接点击“拉取”，无需先保存。拉取使用当前表单中的后端、地址和新 Key；不会更改全局配置或保存 Key。Key 留空时，仅在请求地址与此后端已保存的地址一致时沿用已保存的 Key，修改地址后需重新填写所需的 Key。
+3. 选择模型后点击“保存”，才会保存 Key 和提示词后端配置；不会改动独立的视觉模型配置。拉取成功仅表示模型列表可读取，实际优化仍取决于模型权限和服务支持。
+
+关闭或取消设置会丢弃未保存的 Key；切换后端、修改地址或 Key 会取消进行中的拉取并清除旧列表。拉取失败或超时后可修改表单重试。OpenAI 兼容地址可填写服务根地址或带 `/v1` 的地址，系统不会重复拼接 `/v1`。
+
+工作台通过 `PreviewMagicPromptModels` 临时拉取所选后端的文本模型，需要配置保存和模型列表权限。此接口不调用配置或 Key 保存逻辑，不返回上游错误正文或凭据。
+
+开发回归检查：运行 `node --test src/Extensions/EcomCraft/Tests/prompt-settings.test.cjs`。服务启动后，可设置环境变量 `ECOMCRAFT_TEST_URL=http://127.0.0.1:7801`，再运行 `node --test src/Extensions/EcomCraft/Tests/model-preview.integration.cjs`；接口测试只使用本地模拟服务和测试密钥，不保存用户配置。
 
 ---
 
