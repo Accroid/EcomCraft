@@ -134,15 +134,29 @@
         document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme == 'dark' ? '#1E1F20' : '#E8E8E6');
     }
 
-    /** Restores the saved theme, falling back to the system preference. */
-    function initTheme() {
-        let saved = null;
+    /** Reads a per-browser preference; private browsing or blocked storage yields null instead of an error. */
+    function readStorage(key) {
         try {
-            saved = localStorage.getItem('ecomcraft-theme');
+            return globalThis.localStorage?.getItem(key) ?? null;
         }
         catch (error) {
-            saved = null;
+            return null;
         }
+    }
+
+    /** Saves a per-browser preference when storage is available; the page keeps working without it. */
+    function writeStorage(key, value) {
+        try {
+            globalThis.localStorage?.setItem(key, value);
+        }
+        catch (error) {
+            // Blocked storage only means the preference is not remembered.
+        }
+    }
+
+    /** Restores the saved theme, falling back to the system preference. */
+    function initTheme() {
+        let saved = readStorage('ecomcraft-theme');
         let theme = saved == 'dark' || saved == 'light' ? saved
             : (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         applyTheme(theme);
@@ -152,12 +166,7 @@
     function toggleTheme() {
         let next = document.documentElement.getAttribute('data-theme') == 'dark' ? 'light' : 'dark';
         applyTheme(next);
-        try {
-            localStorage.setItem('ecomcraft-theme', next);
-        }
-        catch (error) {
-            // Private browsing may block storage; the theme still applies for this page.
-        }
+        writeStorage('ecomcraft-theme', next);
     }
 
     /* ============================================================
@@ -208,12 +217,7 @@
         if (wasHidden) {
             DialogFocus.enter(modal, document.activeElement, $('setup-guide-done'));
         }
-        try {
-            localStorage.setItem('ecomcraft-setup-guide-seen', '1');
-        }
-        catch (error) {
-            // Without storage the guide may open again on the next visit, which is harmless.
-        }
+        writeStorage('ecomcraft-setup-guide-seen', '1');
     }
 
     /** Closes the setup guide and returns focus to whatever opened it. */
@@ -241,9 +245,14 @@
         $('setup-cloud-settings').hidden = !catalog.can_manage_settings;
     }
 
+    /** Opens the setup guide once per browser while the servers or the cloud prompt model are not ready. */
     function maybeOpenSetupGuide() {
-        if (!state.catalog || localStorage.getItem('ecomcraft-setup-guide-seen') === '1') { return; }
-        if (!state.catalog.local_backends_observed || !state.catalog.cloud_configured) { openSetupGuide(); }
+        if (!state.catalog || readStorage('ecomcraft-setup-guide-seen') == '1') {
+            return;
+        }
+        if (!state.catalog.local_backends_observed || !state.catalog.cloud_configured) {
+            openSetupGuide();
+        }
     }
 
     /* ============================================================
@@ -776,15 +785,19 @@
     /* ============================================================
        Reference image
        ============================================================ */
+    /** Shows either the upload area or the chosen initial image; the remove button names the file for screen readers. */
     function renderReference() {
         $('dropzone').style.display = state.reference ? 'none' : '';
         $('reference-preview').hidden = !state.reference;
         if (state.reference) {
             $('reference-image').src = state.reference.url;
             $('reference-name').textContent = state.reference.name;
-        } else {
+            $('remove-reference').setAttribute('aria-label', `移除初始图 ${state.reference.name}`);
+        }
+        else {
             $('reference-image').removeAttribute('src');
             $('reference-file').value = '';
+            $('remove-reference').setAttribute('aria-label', '移除初始图');
         }
     }
 
@@ -1573,9 +1586,7 @@
     /** Switches to the gallery and opens the given file once the list has loaded. */
     function revealInGallery(src) {
         state.gallery.revealSrc = src;
-        state.gallery.filter = 'all';
-        state.gallery.search = '';
-        $('gallery-search').value = '';
+        setGallerySearch('');
         setGalleryFilter('all');
         if (state.view == 'gallery') {
             loadGallery();
@@ -1777,6 +1788,7 @@
         let tasks = result.tasks || [];
         let nativeTasks = result.native_tasks || [];
         $('queue-count').textContent = nativeTasks.length || tasks.length;
+        $('queue-count').hidden = false;
         $('queue-task-count').textContent = `服务器上 ${nativeTasks.length} 项，平台请求 ${tasks.length} 项`;
         let list = $('queue-list');
         list.replaceChildren();
@@ -1903,6 +1915,13 @@
         }
     }
 
+    /** Sets the gallery search text everywhere it lives: the field, the state and the clear button. Does not reload. */
+    function setGallerySearch(value) {
+        $('gallery-search').value = value;
+        state.gallery.search = value.trim();
+        $('gallery-search-clear').hidden = value == '';
+    }
+
     /** Applies the starred / all filter and its pressed state. */
     function setGalleryFilter(filter) {
         state.gallery.filter = filter;
@@ -1932,6 +1951,7 @@
         grid.classList.toggle('selecting', GallerySelection.active);
         let empty = $('gallery-empty');
         $('gallery-count').textContent = g.items.length;
+        $('gallery-count').hidden = false;
         $('gallery-total').textContent = g.items.length;
         GallerySelection.updateControls();
         if (!items.length) {
@@ -2318,10 +2338,14 @@
             DialogFocus.leave($('lightbox'));
         }
 
-        /** Keyboard: arrows move between items, Escape closes, Tab stays inside. */
+        /** Keyboard: arrows move between items, Escape closes, Tab stays inside. Arrows inside a video or form control stay with that control (seeking, cursor movement). */
         static keydown(event) {
             if ($('lightbox').hidden) {
                 return false;
+            }
+            let arrow = event.key == 'ArrowLeft' || event.key == 'ArrowRight';
+            if (arrow && ['VIDEO', 'INPUT', 'SELECT', 'TEXTAREA'].includes(event.target?.tagName)) {
+                return true;
             }
             if (event.key == 'Escape') {
                 this.close();
@@ -2504,15 +2528,20 @@
             renderGallery();
         });
         $('gallery-clear-filter').addEventListener('click', () => {
-            $('gallery-search').value = '';
-            state.gallery.search = '';
+            setGallerySearch('');
             setGalleryFilter('all');
             loadGallery();
         });
-        $('gallery-search').addEventListener('input', debounce(() => {
-            state.gallery.search = $('gallery-search').value.trim();
+        let searchReload = debounce(() => loadGallery(), 350);
+        $('gallery-search').addEventListener('input', () => {
+            setGallerySearch($('gallery-search').value);
+            searchReload();
+        });
+        $('gallery-search-clear').addEventListener('click', () => {
+            setGallerySearch('');
+            $('gallery-search').focus();
             loadGallery();
-        }, 350));
+        });
         $('gallery-sort').addEventListener('change', () => {
             state.gallery.sort = $('gallery-sort').value;
             loadGallery();

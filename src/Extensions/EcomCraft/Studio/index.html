@@ -7,8 +7,8 @@
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
-    <link rel="stylesheet" href="/ExtensionFile/EcomCraft/Studio/studio.css?v=0.5.0-studio-redesign">
-    <script src="/ExtensionFile/EcomCraft/Studio/studio.js?v=0.5.0-studio-redesign" defer></script>
+    <link rel="stylesheet" href="/ExtensionFile/EcomCraft/Studio/studio.css?v=0.5.1-studio-fixes">
+    <script src="/ExtensionFile/EcomCraft/Studio/studio.js?v=0.5.1-studio-fixes" defer></script>
 </head>
 
 <body>
@@ -18,8 +18,8 @@
         <a class="brand" href="#create" translate="no">EcomCraft</a>
         <nav class="views" aria-label="工作台视图">
             <a class="nav-item" data-view="create" href="#create">创作</a>
-            <a class="nav-item" data-view="gallery" href="#gallery">画廊<span class="nav-count" id="gallery-count">0</span></a>
-            <a class="nav-item" data-view="queue" href="#queue">队列<span class="nav-count" id="queue-count">0</span></a>
+            <a class="nav-item" data-view="gallery" href="#gallery">画廊<span class="nav-count" id="gallery-count" hidden></span></a>
+            <a class="nav-item" data-view="queue" href="#queue">队列<span class="nav-count" id="queue-count" hidden></span></a>
         </nav>
         <div class="topbar-actions">
             <a class="health" id="health" href="#queue" title="查看执行服务器和任务队列">
@@ -310,6 +310,7 @@
                 <label class="search-wrap">
                     <span class="visually-hidden">按文件名搜索</span>
                     <input type="search" id="gallery-search" name="gallery-search" placeholder="按文件名搜索…" spellcheck="false">
+                    <button type="button" class="search-clear" id="gallery-search-clear" aria-label="清空搜索" title="清空搜索" hidden>✕</button>
                 </label>
                 <label class="sort-wrap">
                     <span class="visually-hidden">排序方式</span>
