@@ -41,8 +41,7 @@ public class EcomCraft : Extension
         // Built-in MagicPrompt: registers multi-backend LLM prompt-enhancement APIs and API-key slots.
         MagicPromptAPI.Register();
         ScriptFiles.Add("Assets/studio-entry.js");
-        OtherAssets.Add("Studio/studio.css");
-        OtherAssets.Add("Studio/studio.js");
+        // studio.js / studio.css are served by StudioRoutes from disk, so they always match the page after an update.
         API.RegisterAPICall(StudioApi.EcomCraftStudioCatalog, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(StudioApi.EcomCraftStudioBackendStatus, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(StudioApi.EcomCraftStudioQueue, false, Permissions.FundamentalGenerateTabAccess);

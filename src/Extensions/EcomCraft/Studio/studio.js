@@ -362,7 +362,7 @@
         return (state.catalog?.workflows || []).find(workflow => workflow.id === state.workflowId && (!workflow.kind || workflow.kind === state.type)) || null;
     }
 
-    /** Lists workflows for the current type, grouped by the source server prefix of native names ("B / 工作流1"). */
+    /** Lists workflows for the current type, grouped by the source server prefix of native names ("B/工作流1": everything before the first '/'). */
     function populateWorkflows() {
         let select = $('workflow-select');
         let previous = state.workflowId;
@@ -371,9 +371,9 @@
         let groups = new Map();
         for (let workflow of workflows) {
             let name = workflow.name || workflow.id;
-            let split = name.indexOf(' / ');
+            let split = name.indexOf('/');
             let groupName = workflow.native && split > 0 ? name.slice(0, split) : '管理员发布';
-            let label = workflow.native && split > 0 ? name.slice(split + 3) : name;
+            let label = workflow.native && split > 0 ? name.slice(split + 1) : name;
             if (!groups.has(groupName)) {
                 let group = document.createElement('optgroup');
                 group.label = groupName;
@@ -2631,5 +2631,7 @@
     setType('image');
     setMode('text2img');
     route();
+    // Reaching this line means every button is bound; the HTML fallback notice is no longer needed.
+    $('boot-check').hidden = true;
     refreshCatalog();
 })();

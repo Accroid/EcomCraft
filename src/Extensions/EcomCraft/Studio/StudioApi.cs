@@ -1428,6 +1428,14 @@ public static class StudioApi
             "Server failed to save an image." => "引擎生成了结果，但服务器保存文件失败，请检查输出目录和磁盘空间。",
             _ => $"引擎未完整返回结果。请在原生引擎检查{(workflow ? "工作流" : "模型")}依赖、参数和个人历史；可能已有部分输出，请勿直接重复提交。"
         };
+        if (detail.StartsWith("ComfyUI errored:", StringComparison.Ordinal))
+        {
+            message = "ComfyUI 拒绝了这个工作流：节点或参数校验没有通过，任务没有开始执行。请在原生引擎打开该工作流检查节点和参数，或请管理员查看服务器日志。";
+        }
+        else if (detail.StartsWith("No backends match the settings of the request given!", StringComparison.Ordinal))
+        {
+            message = "没有执行服务器能运行这个任务：所需的节点或模型不全，或服务器不在线。请在“队列”查看服务器状态，或请管理员检查服务器上的模型和节点。";
+        }
         Match failedNode = Regex.Match(detail, @"^ComfyUI execution error \(Node ([0-9]+): ([A-Za-z0-9_]+)\):");
         if (failedNode.Success)
         {
