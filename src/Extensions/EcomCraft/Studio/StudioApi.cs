@@ -201,7 +201,7 @@ public static class StudioApi
         T2IParamInput input = generation.UserInput;
         if (input.ExtraMeta.TryGetValue(ExecutionScopeKey, out object scope) && scope?.ToString() == ExecutionScopeValue
             && input.ExtraMeta.TryGetValue(PublishedWorkflowScopeKey, out object workflowId)
-            && WorkflowDiscovery.IsNative(workflowId?.ToString())
+            && WorkflowReview.IsPublished(workflowId?.ToString())
             && TryGetPublishedWorkflow(workflowId?.ToString(), out _, out JObject metadata, out _))
         {
             NativeWorkflowParameters.SynchronizeSeeds(input, metadata);
@@ -228,7 +228,7 @@ public static class StudioApi
             input.RefusalReasons.Add("Standard workspace generation requires the SwarmUI ComfyUI nodes on the execution server.");
         }
         if (allowed && input.ExtraMeta.TryGetValue(PublishedWorkflowScopeKey, out object workflowId)
-            && WorkflowDiscovery.IsNative(workflowId?.ToString())
+            && WorkflowReview.IsPublished(workflowId?.ToString())
             && TryGetPublishedWorkflow(workflowId?.ToString(), out ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
                 out JObject metadata, out JObject savedValues))
         {
@@ -262,7 +262,7 @@ public static class StudioApi
         return allowed;
     }
 
-    private static bool CanView(Session session) => session?.User is not null
+    internal static bool CanView(Session session) => session?.User is not null
         && session.User.HasPermission(Permissions.FundamentalGenerateTabAccess)
         && session.User.HasPermission(Permissions.FundamentalModelAccess)
         && session.User.HasPermission(Permissions.ModelParams);
@@ -497,6 +497,8 @@ public static class StudioApi
             ["can_generate_video"] = session.User.HasPermission(Permissions.BasicImageGeneration) && session.User.HasPermission(Permissions.ParamVideo),
             ["can_manage_settings"] = session.User.HasPermission(Permissions.EditServerSettings),
             ["can_delete_images"] = session.User.HasPermission(Permissions.UserDeleteImage),
+            ["can_review_workflows"] = session.User.HasPermission(EcomCraft.PermReviewWorkflows),
+            ["can_submit_workflows"] = session.User.HasPermission(EcomCraft.PermSubmitWorkflows),
             ["cloud_configured"] = IsCloudModelConfigured(session),
             ["models"] = new JArray(LocalModels(session).Where(m => Kind(m) is not null).OrderBy(m => m.Name).Select(m => new JObject()
             {
@@ -788,7 +790,7 @@ public static class StudioApi
             {
                 continue;
             }
-            bool native = WorkflowDiscovery.IsNative(workflow.Name);
+            bool native = WorkflowReview.IsPublished(workflow.Name);
             string kind = InferWorkflowKind(workflow);
             if (kind == "video" && !session.User.HasPermission(Permissions.ParamVideo))
             {
@@ -832,6 +834,13 @@ public static class StudioApi
             }
             if (definition["visible"] is not null && bool.TryParse(definition["visible"].ToString(), out bool visible) && !visible)
             {
+                // A hidden model stays fixed, so an account that may not use it cannot run the workflow at all.
+                if (definition.Value<bool?>("native_model") == true
+                    && !session.User.IsAllowedModel((savedValues[property.Name] ?? definition["default"])?.ToString() ?? ""))
+                {
+                    supported = false;
+                    return new JArray();
+                }
                 continue;
             }
             string type = definition["type"]?.ToString()?.ToLowerInvariant() ?? "";
@@ -901,9 +910,12 @@ public static class StudioApi
         return fields;
     }
 
-    private static string InferWorkflowKind(ComfyUIBackendExtension.ComfyCustomWorkflow workflow)
+    private static string InferWorkflowKind(ComfyUIBackendExtension.ComfyCustomWorkflow workflow) => InferWorkflowKind(workflow?.Prompt);
+
+    /// <summary>"video" when the executable graph contains a video node, otherwise "image".</summary>
+    internal static string InferWorkflowKind(string prompt)
     {
-        JObject graph = ParseWorkflowObject(workflow?.Prompt);
+        JObject graph = ParseWorkflowObject(prompt);
         bool containsVideoNode = graph?.Properties().Any(property =>
         {
             string classType = property.Value is JObject node ? node["class_type"]?.ToString() ?? "" : "";
@@ -963,8 +975,8 @@ public static class StudioApi
         {
             return Error("此账号没有使用已发布工作流的权限。", "bad_permissions");
         }
-        // ComfyUI backend refreshes clear the in-memory workflow registry, so restore cached discoveries before lookup.
-        WorkflowDiscovery.Restore();
+        // ComfyUI backend refreshes clear the in-memory workflow registry, so restore published snapshots before lookup.
+        WorkflowReview.Restore();
         if (!TryGetPublishedWorkflow(workflowId, out ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
             out JObject metadata, out JObject savedValues))
         {
@@ -983,7 +995,7 @@ public static class StudioApi
         {
             return Error("所选工作流与当前创作类型不匹配，请切换图片/视频类型或选择其他工作流。", "invalid_mode");
         }
-        bool native = WorkflowDiscovery.IsNative(workflow.Name);
+        bool native = WorkflowReview.IsPublished(workflow.Name);
         rawInput = (JObject)rawInput.DeepClone();
         if (native)
         {
@@ -1034,7 +1046,8 @@ public static class StudioApi
             foreach (JProperty property in metadata.Properties())
             {
                 string form = property.Value["form"]?.ToString();
-                if (!string.IsNullOrEmpty(form) && rawInput[form] is JToken formValue)
+                // Parameters a reviewer hid keep their snapshot value even when the page sends the matching field.
+                if (!string.IsNullOrEmpty(form) && property.Value.Value<bool?>("visible") != false && rawInput[form] is JToken formValue)
                 {
                     requestedParams[property.Name] = formValue.DeepClone();
                 }
@@ -1117,10 +1130,15 @@ public static class StudioApi
                 {
                     return Error("工作流参数缺失或无效，请刷新列表后重新选择工作流。", "invalid_workflow_parameters");
                 }
-                if (definition.Value<bool?>("native_seed") == true && input[property.Name].ToString() == "-1")
+                if (definition.Value<bool?>("native_seed") == true)
                 {
-                    input[property.Name] = Random.Shared.NextInt64(0, 9007199254740991);
-                    if (definition["form"]?.ToString() == "seed")
+                    bool random = input[property.Name].ToString() == "-1";
+                    if (random)
+                    {
+                        input[property.Name] = Random.Shared.NextInt64(0, 9007199254740991);
+                    }
+                    // The engine's per-image seed drives every native seed; a hidden seed sets it so the reviewer's fixed value holds.
+                    if (definition["form"]?.ToString() == "seed" && (random || definition.Value<bool?>("visible") == false))
                     {
                         rawInput["seed"] = input[property.Name].DeepClone();
                     }
@@ -1198,7 +1216,7 @@ public static class StudioApi
         }
     }
 
-    private static bool ValidatePublishedWorkflowInput(Session session, string id, JToken value, JObject definition, out string error)
+    internal static bool ValidatePublishedWorkflowInput(Session session, string id, JToken value, JObject definition, out string error)
     {
         error = null;
         string type = definition["type"]?.ToString()?.ToLowerInvariant() ?? "";
@@ -1460,5 +1478,5 @@ public static class StudioApi
         return Error(message, "generation_failed");
     }
 
-    private static JObject Error(string text, string id) => new() { ["error"] = text, ["error_id"] = id };
+    internal static JObject Error(string text, string id) => new() { ["error"] = text, ["error_id"] = id };
 }

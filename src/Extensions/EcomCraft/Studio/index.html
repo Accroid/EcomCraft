@@ -8,8 +8,8 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.5.4">
-    <script src="/EcomCraft/studio.js?v=0.5.4" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.6.0">
+    <script src="/EcomCraft/studio.js?v=0.6.0" defer></script>
 </head>
 
 <body>
@@ -21,6 +21,7 @@
             <a class="nav-item" data-view="create" href="#create">创作</a>
             <a class="nav-item" data-view="gallery" href="#gallery">画廊<span class="nav-count" id="gallery-count" hidden></span></a>
             <a class="nav-item" data-view="queue" href="#queue">队列<span class="nav-count" id="queue-count" hidden></span></a>
+            <a class="nav-item" data-view="workflows" href="#workflows" id="nav-workflows" hidden>工作流<span class="nav-count" id="workflows-count" hidden></span></a>
         </nav>
         <div class="topbar-actions">
             <a class="health" id="health" href="#queue" title="查看执行服务器和任务队列">
@@ -371,6 +372,28 @@
             <p class="empty-line" id="queue-empty" hidden>提交生成后，会在这里显示排队位置和进度。</p>
         </section>
 
+        <!-- 工作流审核视图（有提交或审核权限时显示） -->
+        <section class="view" id="view-workflows" aria-labelledby="workflows-title" hidden>
+            <header class="page-head">
+                <h1 class="page-title" id="workflows-title">工作流审核</h1>
+                <p class="page-meta" id="workflows-updated">正在读取工作流…</p>
+                <button type="button" class="btn page-head-action" id="workflows-refresh">刷新</button>
+            </header>
+            <p class="hint workflows-intro" id="workflows-intro"></p>
+            <div class="banner" id="workflows-message" role="status" aria-live="polite" hidden></div>
+            <div class="toolbar">
+                <div class="seg seg-wrap" role="group" aria-label="按状态筛选" id="workflows-filter">
+                    <button type="button" class="seg-btn selected" data-filter="todo" aria-pressed="true">待处理</button>
+                    <button type="button" class="seg-btn" data-filter="published" aria-pressed="false">已发布</button>
+                    <button type="button" class="seg-btn" data-filter="closed" aria-pressed="false">已驳回 / 已下架</button>
+                    <button type="button" class="seg-btn" data-filter="invalid" aria-pressed="false">无法导入</button>
+                    <button type="button" class="seg-btn" data-filter="all" aria-pressed="false">全部</button>
+                </div>
+            </div>
+            <ul class="review-list" id="workflows-list" aria-label="工作流"></ul>
+            <p class="empty-line" id="workflows-empty" hidden>没有符合筛选条件的工作流。</p>
+        </section>
+
         <footer class="page-footer">
             <span id="app-version">EcomCraft Studio</span>
             <a href="/Text2Image" target="_blank" rel="noopener">打开原生引擎</a>
@@ -447,6 +470,75 @@
             <div class="modal-foot">
                 <button class="btn" id="enh-cfg-cancel" type="button">取消</button>
                 <button class="btn btn-primary" id="enh-cfg-save" type="button">保存设置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 工作流审核 -->
+    <div class="modal" id="review-modal" hidden>
+        <div class="modal-backdrop" id="review-backdrop"></div>
+        <div class="modal-dialog modal-wide" role="dialog" aria-modal="true" aria-labelledby="review-title">
+            <div class="modal-head">
+                <div>
+                    <h3 id="review-title">审核工作流</h3>
+                    <p class="hint" id="review-meta"></p>
+                </div>
+                <button type="button" class="icon-btn" id="review-close" aria-label="关闭审核">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="notice" id="review-loading" role="status">正在读取工作流参数…</p>
+                <div id="review-content" hidden>
+                    <p class="notice" id="review-submission" hidden></p>
+                    <div class="fld">
+                        <span class="fld-label">可运行服务器</span>
+                        <ul class="review-servers" id="review-servers"></ul>
+                    </div>
+                    <div class="fld">
+                        <label for="review-description">说明（显示给用户）</label>
+                        <textarea id="review-description" rows="2" maxlength="500"></textarea>
+                    </div>
+                    <div class="fld">
+                        <span class="fld-label">用户可见参数</span>
+                        <p class="hint">取消勾选“显示”的参数不在表单中出现，固定使用下面的默认值。创作描述、排除内容和尺寸始终显示。</p>
+                        <ul class="review-params" id="review-params"></ul>
+                    </div>
+                    <div class="fld">
+                        <label for="review-reason">驳回原因（驳回时必填）</label>
+                        <textarea id="review-reason" rows="2" maxlength="500" placeholder="例如：缺少说明，或模型不适合电商场景…"></textarea>
+                    </div>
+                </div>
+                <p class="notice" id="review-message" role="status" hidden></p>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-danger review-foot-left" id="review-unpublish" hidden>下架</button>
+                <button type="button" class="btn" id="review-cancel">取消</button>
+                <button type="button" class="btn btn-danger" id="review-reject">驳回</button>
+                <button type="button" class="btn btn-primary" id="review-approve">通过并发布</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提交审核 -->
+    <div class="modal" id="submit-modal" hidden>
+        <div class="modal-backdrop" id="submit-backdrop"></div>
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="submit-title">
+            <div class="modal-head">
+                <div>
+                    <h3 id="submit-title">提交审核</h3>
+                    <p class="hint" id="submit-meta"></p>
+                </div>
+                <button type="button" class="icon-btn" id="submit-close" aria-label="关闭">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="fld">
+                    <label for="submit-note">给审核人的说明（可选）</label>
+                    <textarea id="submit-note" rows="3" maxlength="500" placeholder="例如：用途、需要显示给同事调整的参数…"></textarea>
+                </div>
+                <p class="notice" id="submit-message" role="status" hidden></p>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn" id="submit-cancel">取消</button>
+                <button type="button" class="btn btn-primary" id="submit-confirm">提交审核</button>
             </div>
         </div>
     </div>
