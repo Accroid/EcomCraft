@@ -2075,11 +2075,6 @@
             if (item.video) {
                 meta.append(el('span', 'sheet-kind', '视频'));
             }
-            let time = el('span', 'sheet-time', galleryClock(item.time));
-            if (item.time > 0) {
-                time.title = new Date(item.time * 1000).toLocaleString();
-            }
-            meta.append(time);
             let star = el('button', 'sheet-star', item.starred ? '★' : '☆');
             star.type = 'button';
             star.dataset.src = item.src;
@@ -2103,6 +2098,11 @@
             }
             card.prepend(open);
             card.append(meta);
+            let time = el('span', 'sheet-time', galleryClock(item.time));
+            if (item.time > 0) {
+                time.title = new Date(item.time * 1000).toLocaleString();
+            }
+            card.append(time);
             grid.append(card);
         }
         if (refocus) {
@@ -2186,7 +2186,7 @@
 
         /** Deletes one item after confirmation, for the card button and the lightbox. */
         static async deleteOne(item) {
-            if (this.deleting || !window.confirm(`确定删除「${item.name}」？${this.recycleNote()}`)) {
+            if (this.deleting || !window.confirm(`确定删除「${item.name}」？${item.starred ? '已收藏的作品会同时删除收藏副本和原始文件。' : ''}${this.recycleNote()}`)) {
                 return;
             }
             closeLightbox();
@@ -2196,7 +2196,8 @@
         /** Deletes the current batch selection after confirmation. */
         static async deleteSelected() {
             let items = state.gallery.items.filter(item => this.selected.has(item.src));
-            if (this.deleting || !items.length || !window.confirm(`确定删除选中的 ${items.length} 个作品？${this.recycleNote()}`)) {
+            let hasStarred = items.some(item => item.starred);
+            if (this.deleting || !items.length || !window.confirm(`确定删除选中的 ${items.length} 个作品？${hasStarred ? '已收藏的作品会同时删除收藏副本和原始文件。' : ''}${this.recycleNote()}`)) {
                 return;
             }
             await this.deleteItems(items);
@@ -2220,8 +2221,18 @@
                 for (let item of items) {
                     try {
                         await request('DeleteImage', { path: item.src });
+                        // 已收藏的作品在画廊里是 Starred/ 下的副本；把原始文件一并删除，否则它会继续留在“全部”里。
+                        let rawSrc = item.starred ? item.src.slice('Starred/'.length) : null;
+                        if (rawSrc) {
+                            try {
+                                await request('DeleteImage', { path: rawSrc });
+                            }
+                            catch (rawError) {
+                                if (!/does not exist/i.test(rawError.message || '')) { throw rawError; }
+                            }
+                        }
                         deleted++;
-                        state.gallery.items = state.gallery.items.filter(other => other.src != item.src);
+                        state.gallery.items = state.gallery.items.filter(other => other.src != item.src && other.src != rawSrc);
                         this.selected.delete(item.src);
                     }
                     catch (error) {
