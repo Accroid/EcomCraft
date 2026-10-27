@@ -56,10 +56,30 @@ public static class WorkflowDiscovery
     /// <summary>Stops background refreshes when the extension shuts down.</summary>
     private static readonly CancellationTokenSource StopSource = new();
 
-    /// <summary>Starts a background refresh when the cache is stale, waits briefly only before the first result exists, then restores published snapshots to the workflow registry.</summary>
-    public static void EnsureFresh()
+    /// <summary>Starts the periodic background refresh, so new and changed workflows are found while nobody has a page open. Stops with <see cref="Shutdown"/>.
+    /// The first tick waits one interval: backends are not loaded yet during extension init, and the first page request does its own waiting refresh.</summary>
+    public static void Start()
     {
-        Task task;
+        _ = Task.Run(async () =>
+        {
+            while (!StopSource.IsCancellationRequested && !Program.GlobalProgramCancel.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(RefreshIntervalMs, StopSource.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                ScheduleRefresh();
+            }
+        });
+    }
+
+    /// <summary>Starts a refresh when none is running and the cache is stale. Returns the running or most recent refresh.</summary>
+    private static Task ScheduleRefresh()
+    {
         lock (RefreshLock)
         {
             bool idle = RefreshTask is null || RefreshTask.IsCompleted;
@@ -69,8 +89,14 @@ public static class WorkflowDiscovery
                 LastRefreshStart = Environment.TickCount64;
                 RefreshTask = Task.Run(RefreshAsync);
             }
-            task = RefreshTask;
+            return RefreshTask;
         }
+    }
+
+    /// <summary>Starts a background refresh when the cache is stale, waits briefly only before the first result exists, then restores published snapshots to the workflow registry.</summary>
+    public static void EnsureFresh()
+    {
+        Task task = ScheduleRefresh();
         if (!HasCompleted && task is not null)
         {
             try

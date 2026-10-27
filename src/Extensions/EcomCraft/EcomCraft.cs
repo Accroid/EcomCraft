@@ -67,6 +67,7 @@ public class EcomCraft : Extension
         T2IEngine.AltBackendValidators.Add(StudioApi.ValidateExecutionBackend);
         T2IEngine.PreGenerateEvent += StudioApi.PrepareNativeWorkflowSeeds;
         ComfyUIAPIAbstractBackend.QueueProgressObserved += StudioApi.ObserveComfyProgress;
+        WorkflowDiscovery.Start();
     }
 
     /// <inheritdoc/>
