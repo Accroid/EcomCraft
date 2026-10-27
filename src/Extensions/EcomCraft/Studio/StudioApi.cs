@@ -731,7 +731,7 @@ public static class StudioApi
                 JObject result = await T2IAPI.GenerateText2Image(session, images, input);
                 if (result.ContainsKey("error"))
                 {
-                    Logs.Warning($"EcomCraft background task did not complete: {result["error_id"]}");
+                    Logs.Warning($"EcomCraft background task did not complete: {result["error"]}");
                 }
             }
             catch (Exception ex)
