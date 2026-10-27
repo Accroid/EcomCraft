@@ -316,7 +316,10 @@ public class ComfyUser
         {
             return;
         }
-        ComfyUIRedirectHelper.Users.TryRemove(MasterSID, out _);
+        if (MasterSID is not null)
+        {
+            ComfyUIRedirectHelper.Users.TryRemove(MasterSID, out _);
+        }
         ClientIsClosed.Cancel();
         Unreserve();
         Socket.Dispose();
