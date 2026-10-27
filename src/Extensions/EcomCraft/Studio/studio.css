@@ -489,9 +489,16 @@ main:focus:not(:focus-visible) { outline: none; }
 .lb-btn:hover { background: rgba(255, 255, 255, .12); color: #FFFFFF; }
 .lb-btn[aria-pressed="true"] { color: #5ACE9C; }
 .lb-danger:hover { background: #D93A26; color: #FFFFFF; }
+.lb-zoom { display: flex; align-items: center; gap: 2px; }
+.lb-zoom-step { min-width: 34px; font-size: 16px; line-height: 1; padding: 6px 8px; }
+.lb-zoom-level { min-width: 56px; font-variant-numeric: tabular-nums; }
 .lightbox-body { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 0; }
 .lightbox-media { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; }
-.lightbox-media img, .lightbox-media video { max-width: 100%; max-height: 78vh; object-fit: contain; }
+.lightbox-media img, .lightbox-media video { max-width: 100%; max-height: 78vh; object-fit: contain; cursor: zoom-in; }
+/* Images never scroll the page; videos keep native control gestures until zoomed. */
+.lightbox-media img { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
+.lightbox-media.zoomed img, .lightbox-media.zoomed video { cursor: grab; touch-action: none; }
+.lightbox-media.dragging img, .lightbox-media.dragging video { cursor: grabbing; }
 .lb-nav {
     flex-shrink: 0; display: grid; place-items: center; width: 44px; height: 64px; border-radius: var(--radius);
     color: #E6E6E4; font-size: 32px; line-height: 1; background: rgba(40, 41, 42, .6); transition: background-color .15s;

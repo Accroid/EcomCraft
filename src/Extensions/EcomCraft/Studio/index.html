@@ -7,8 +7,8 @@
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.5.2">
-    <script src="/EcomCraft/studio.js?v=0.5.2" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.5.4">
+    <script src="/EcomCraft/studio.js?v=0.5.4" defer></script>
 </head>
 
 <body>
@@ -227,7 +227,7 @@
                                 </div>
                                 <div class="inline-row" id="image-count-row">
                                     <label for="images">生成数量</label>
-                                    <span class="inline-input"><input id="images" name="images" type="number" inputmode="numeric" min="1" max="4" step="1" value="1" required><span class="unit">张，1–4</span></span>
+                                    <span class="inline-input"><input id="images" name="images" type="number" inputmode="numeric" min="1" max="4" step="1" value="1" required><span class="unit">张</span></span>
                                 </div>
                                 <div class="video-fields" id="video-fields" hidden>
                                     <div class="inline-row">
@@ -381,6 +381,11 @@
         <div class="lightbox-backdrop" id="lightbox-backdrop"></div>
         <div class="lightbox-dialog">
             <div class="lightbox-actions">
+                <div class="lb-zoom" role="group" aria-label="缩放预览">
+                    <button type="button" class="lb-btn lb-zoom-step" id="lb-zoom-out" aria-label="缩小" title="缩小">−</button>
+                    <button type="button" class="lb-btn lb-zoom-level" id="lb-zoom-reset" aria-label="重置缩放" title="重置缩放">100%</button>
+                    <button type="button" class="lb-btn lb-zoom-step" id="lb-zoom-in" aria-label="放大" title="放大">+</button>
+                </div>
                 <button type="button" class="lb-btn" id="lb-star" aria-pressed="false">收藏</button>
                 <a class="lb-btn" id="lb-download" href="#" download>下载</a>
                 <button type="button" class="lb-btn" id="lb-edit">以此图创作</button>

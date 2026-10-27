@@ -2264,6 +2264,15 @@
         static items = [];
         static index = 0;
         static source = 'gallery';
+        /** Zoom limits: 1 = fitted size, maxScale caps how far a preview can be blown up. */
+        static minScale = 1;
+        static maxScale = 8;
+        /** Zoom state of the shown media: scale plus pixel offsets from the fitted center. */
+        static zoom = { scale: 1, x: 0, y: 0 };
+        /** Live pointers for drag / pinch gestures; drag and pinch hold the active gesture, if any. */
+        static pointers = new Map();
+        static drag = null;
+        static pinch = null;
 
         /** Opens the item at index within a list; source 'result' hides gallery-only actions. */
         static open(items, index, source, opener) {
@@ -2296,8 +2305,11 @@
             }
             else {
                 node.alt = item.name;
+                // Native image drag ghosting cancels pointer events and breaks pan-to-drag.
+                node.draggable = false;
             }
             media.append(node);
+            this.resetZoom();
             let position = this.items.length > 1 ? `（${this.index + 1} / ${this.items.length}）` : '';
             $('lightbox-name').textContent = `${item.name}${position}`;
             $('lb-download').href = item.url;
@@ -2322,6 +2334,188 @@
             }
         }
 
+        /** The img or video element currently on display, if any. */
+        static mediaNode() {
+            return $('lightbox-media').firstElementChild;
+        }
+
+        /** Applies the current zoom to the shown media and refreshes the zoom controls. */
+        static applyZoom() {
+            let box = $('lightbox-media');
+            let node = box.firstElementChild;
+            let scale = this.zoom.scale;
+            if (node) {
+                node.style.transform = scale > 1 ? `translate(${this.zoom.x}px, ${this.zoom.y}px) scale(${scale})` : '';
+            }
+            box.classList.toggle('zoomed', scale > 1);
+            $('lb-zoom-reset').textContent = `${Math.round(scale * 100)}%`;
+            $('lb-zoom-in').disabled = scale >= this.maxScale;
+            $('lb-zoom-out').disabled = scale <= this.minScale;
+            $('lb-zoom-reset').disabled = scale <= this.minScale;
+        }
+
+        /** Keeps a zoomed media inside the area it occupied at 100%, so panning cannot push it out of view. */
+        static clampPan() {
+            let node = this.mediaNode();
+            if (!node) {
+                return;
+            }
+            let maxX = node.offsetWidth * (this.zoom.scale - 1) / 2;
+            let maxY = node.offsetHeight * (this.zoom.scale - 1) / 2;
+            this.zoom.x = Math.max(-maxX, Math.min(maxX, this.zoom.x));
+            this.zoom.y = Math.max(-maxY, Math.min(maxY, this.zoom.y));
+        }
+
+        /** Zooms to an exact scale while keeping the point at (originX, originY) — offset from the media center — visually anchored. */
+        static zoomTo(scale, originX = 0, originY = 0) {
+            let old = this.zoom.scale;
+            let next = Math.max(this.minScale, Math.min(this.maxScale, scale));
+            if (old > 1) {
+                let cx = (originX - this.zoom.x) / old;
+                let cy = (originY - this.zoom.y) / old;
+                this.zoom.x = originX - cx * next;
+                this.zoom.y = originY - cy * next;
+            }
+            else {
+                this.zoom.x = originX * (1 - next);
+                this.zoom.y = originY * (1 - next);
+            }
+            this.zoom.scale = next;
+            if (next <= 1) {
+                this.zoom.x = 0;
+                this.zoom.y = 0;
+            }
+            this.clampPan();
+            this.applyZoom();
+        }
+
+        /** Zooms in or out by a factor; used by the buttons, keyboard and mouse wheel. */
+        static zoomBy(factor, originX = 0, originY = 0) {
+            this.zoomTo(this.zoom.scale * factor, originX, originY);
+        }
+
+        /** Returns the media to its fitted size and centered position. */
+        static resetZoom() {
+            this.zoom.scale = 1;
+            this.zoom.x = 0;
+            this.zoom.y = 0;
+            this.applyZoom();
+        }
+
+        /** Shifts a zoomed media by (dx, dy) pixels within the reachable range. */
+        static panBy(dx, dy) {
+            if (this.zoom.scale <= 1) {
+                return;
+            }
+            this.zoom.x += dx;
+            this.zoom.y += dy;
+            this.clampPan();
+            this.applyZoom();
+        }
+
+        /** Mouse wheel zooms toward the cursor; the page never scrolls behind the open preview. */
+        static wheel(event) {
+            if ($('lightbox').hidden) {
+                return;
+            }
+            event.preventDefault();
+            let box = $('lightbox-media').getBoundingClientRect();
+            let factor = Math.exp(-event.deltaY * (event.deltaMode == 1 ? 0.05 : 0.0015));
+            this.zoomBy(factor, event.clientX - box.left - box.width / 2, event.clientY - box.top - box.height / 2);
+        }
+
+        /** Double click or double tap toggles between fitted size and a closer look at the click point. */
+        static doubleClick(event) {
+            if ($('lightbox').hidden) {
+                return;
+            }
+            event.preventDefault();
+            let box = $('lightbox-media').getBoundingClientRect();
+            let x = event.clientX - box.left - box.width / 2;
+            let y = event.clientY - box.top - box.height / 2;
+            if (this.zoom.scale > 1) {
+                this.resetZoom();
+            }
+            else {
+                this.zoomTo(2.5, x, y);
+            }
+        }
+
+        /** Tracks a press on the media for later dragging; presses on native video controls pass through untouched. */
+        static pointerDown(event) {
+            if ($('lightbox').hidden || event.composedPath()[0] !== this.mediaNode()) {
+                return;
+            }
+            this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+            if (this.pointers.size == 2 && event.pointerType != 'mouse') {
+                let pts = [...this.pointers.values()];
+                this.pinch = {
+                    distance: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+                    scale: this.zoom.scale
+                };
+                this.drag = null;
+            }
+            else if (this.pointers.size == 1 && this.zoom.scale > 1) {
+                this.drag = { x: event.clientX, y: event.clientY, baseX: this.zoom.x, baseY: this.zoom.y, moved: false };
+            }
+        }
+
+        /** Updates pinch zoom or drag panning while a tracked press is moving. */
+        static pointerMove(event) {
+            if (!this.pointers.has(event.pointerId)) {
+                return;
+            }
+            this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+            if (this.pinch && this.pointers.size >= 2) {
+                let pts = [...this.pointers.values()];
+                let dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+                let box = $('lightbox-media').getBoundingClientRect();
+                let midX = (pts[0].x + pts[1].x) / 2 - box.left - box.width / 2;
+                let midY = (pts[0].y + pts[1].y) / 2 - box.top - box.height / 2;
+                if (this.pinch.distance > 0) {
+                    this.zoomTo(this.pinch.scale * dist / this.pinch.distance, midX, midY);
+                }
+                return;
+            }
+            if (this.drag) {
+                let dx = event.clientX - this.drag.x;
+                let dy = event.clientY - this.drag.y;
+                if (!this.drag.moved && Math.hypot(dx, dy) > 3) {
+                    // Only grab the pointer once this is clearly a drag, so clicks and video controls keep working.
+                    this.drag.moved = true;
+                    $('lightbox-media').classList.add('dragging');
+                    try {
+                        this.mediaNode().setPointerCapture(event.pointerId);
+                    }
+                    catch (error) {
+                        // Losing capture only means the drag ends early; the view stays consistent.
+                    }
+                }
+                if (this.drag.moved) {
+                    this.zoom.x = this.drag.baseX + dx;
+                    this.zoom.y = this.drag.baseY + dy;
+                    this.clampPan();
+                    this.applyZoom();
+                }
+            }
+        }
+
+        /** Ends drag or pinch tracking for one pointer; a pinch leftover can keep dragging on its own. */
+        static pointerEnd(event) {
+            if (!this.pointers.delete(event.pointerId)) {
+                return;
+            }
+            this.drag = null;
+            $('lightbox-media').classList.remove('dragging');
+            if (this.pointers.size < 2) {
+                this.pinch = null;
+            }
+            if (this.pointers.size == 1 && this.zoom.scale > 1) {
+                let only = [...this.pointers.values()][0];
+                this.drag = { x: only.x, y: only.y, baseX: this.zoom.x, baseY: this.zoom.y, moved: false };
+            }
+        }
+
         /** The item currently shown, or null when closed. */
         static current() {
             return $('lightbox').hidden ? null : this.items[this.index];
@@ -2334,21 +2528,49 @@
             }
             $('lightbox').hidden = true;
             $('lightbox-media').replaceChildren();
+            this.pointers.clear();
+            this.drag = null;
+            this.pinch = null;
+            this.resetZoom();
             state.gallery.current = null;
             DialogFocus.leave($('lightbox'));
         }
 
-        /** Keyboard: arrows move between items, Escape closes, Tab stays inside. Arrows inside a video or form control stay with that control (seeking, cursor movement). */
+        /** Keyboard: arrows move between items (or pan while zoomed), + / − zoom, 0 resets, Escape un-zooms then closes, Tab stays inside. Arrows inside a video or form control stay with that control (seeking, cursor movement). */
         static keydown(event) {
             if ($('lightbox').hidden) {
                 return false;
             }
-            let arrow = event.key == 'ArrowLeft' || event.key == 'ArrowRight';
-            if (arrow && ['VIDEO', 'INPUT', 'SELECT', 'TEXTAREA'].includes(event.target?.tagName)) {
+            let arrows = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key);
+            let tag = event.target?.tagName;
+            if (arrows && ['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)) {
                 return true;
             }
             if (event.key == 'Escape') {
-                this.close();
+                if (this.zoom.scale > 1) {
+                    this.resetZoom();
+                }
+                else {
+                    this.close();
+                }
+            }
+            else if (event.key == '+' || event.key == '=') {
+                this.zoomBy(1.25);
+            }
+            else if (event.key == '-' || event.key == '_') {
+                this.zoomBy(0.8);
+            }
+            else if (event.key == '0') {
+                this.resetZoom();
+            }
+            else if (arrows && this.zoom.scale > 1 && tag != 'VIDEO') {
+                // While zoomed the arrows pan the media instead of switching items.
+                let dx = event.key == 'ArrowLeft' ? -48 : event.key == 'ArrowRight' ? 48 : 0;
+                let dy = event.key == 'ArrowUp' ? -48 : event.key == 'ArrowDown' ? 48 : 0;
+                this.panBy(dx, dy);
+            }
+            else if (arrows && tag == 'VIDEO') {
+                return true;
             }
             else if (event.key == 'ArrowLeft') {
                 this.step(-1);
@@ -2567,6 +2789,18 @@
         $('lb-close').addEventListener('click', closeLightbox);
         $('lb-prev').addEventListener('click', () => Lightbox.step(-1));
         $('lb-next').addEventListener('click', () => Lightbox.step(1));
+        $('lb-zoom-in').addEventListener('click', () => Lightbox.zoomBy(1.25));
+        $('lb-zoom-out').addEventListener('click', () => Lightbox.zoomBy(0.8));
+        $('lb-zoom-reset').addEventListener('click', () => Lightbox.resetZoom());
+        let mediaBox = $('lightbox-media');
+        mediaBox.addEventListener('wheel', event => Lightbox.wheel(event), { passive: false });
+        mediaBox.addEventListener('dblclick', event => Lightbox.doubleClick(event));
+        mediaBox.addEventListener('pointerdown', event => Lightbox.pointerDown(event));
+        mediaBox.addEventListener('pointermove', event => Lightbox.pointerMove(event));
+        mediaBox.addEventListener('pointerup', event => Lightbox.pointerEnd(event));
+        mediaBox.addEventListener('pointercancel', event => Lightbox.pointerEnd(event));
+        // Belt-and-braces: even draggable content must never start a browser drag inside the preview.
+        mediaBox.addEventListener('dragstart', event => event.preventDefault());
         $('lb-star').addEventListener('click', async () => {
             let item = Lightbox.current();
             if (item && Lightbox.source == 'gallery') {
