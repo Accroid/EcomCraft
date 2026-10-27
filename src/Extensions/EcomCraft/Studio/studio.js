@@ -1690,12 +1690,19 @@
         }
         // 提交后立即返回队列，不锁定创作区；可以继续改参数、切模式或再次提交。
         payload.async = true;
+        await submitPayload(payload);
+    }
+
+    /** Submits one generation request and tracks its task. A failure on an execution server offers reassignment with the same request (R6.2). */
+    async function submitPayload(payload) {
         state.submitting = true;
         updateControls();
+        Reassign.hide();
         try {
-            const result = await request('EcomCraftStudioGenerate', payload);
+            let result = await request('EcomCraftStudioGenerate', payload);
             if (result.task_id != null) {
                 state.pending.add(result.task_id);
+                Reassign.remember(result.task_id, payload);
                 startPendingTracker();
             }
             let server = result.execution_server ? `，由“${result.execution_server}”执行` : '';
@@ -1703,18 +1710,69 @@
             setStatus(`已加入队列${result.task_id != null ? `（任务 #${result.task_id}）` : ''}${server}。可以继续编辑、切换图片/视频或再次提交；完成后结果会自动保存到作品画廊。${hint}`);
             ExecutionServerPicker.load(true);
             if (state.view == 'gallery') { loadGallery(); }
-        } catch (error) {
+        }
+        catch (error) {
             state.uncertain = uncertainErrors.has(error.code) || !(error instanceof ApiError);
             setStatus(error.message || '提交失败，请稍后重试。', true);
+            if (Reassign.retryableErrors.has(error.code)) {
+                Reassign.show(error.message || '任务没有完成。', payload);
+            }
             if (error.code === 'invalid_session_id') {
                 state.catalog = null;
-                const m = $('connection-message-text');
+                let m = $('connection-message-text');
                 m.textContent = '会话已失效。请刷新重新连接；不会自动重试任务。';
                 $('connection-message').classList.add('error');
             }
-        } finally {
+        }
+        finally {
             state.submitting = false;
             updateControls();
+        }
+    }
+
+    /** The "reassign to another server" notice (R6.2). Requests are kept in memory only, never in browser storage, so a reload drops them and the notice then shows the reason without the button. */
+    class Reassign {
+        static payloads = new Map();
+        static misses = new Map();
+        static current = null;
+        static retryableErrors = new Set(['generation_failed', 'execution_server_unavailable']);
+
+        /** Keeps the request of a queued task until it ends. */
+        static remember(id, payload) {
+            this.payloads.set(id, payload);
+        }
+
+        /** Takes the kept request of an ended task, or null. */
+        static take(id) {
+            let payload = this.payloads.get(id) || null;
+            this.payloads.delete(id);
+            this.misses.delete(id);
+            return payload;
+        }
+
+        /** Shows the failure reason; the button appears only when the request can be submitted again. */
+        static show(message, payload) {
+            this.current = payload || null;
+            $('reassign-text').textContent = message;
+            $('reassign-btn').hidden = !this.current;
+            $('reassign').hidden = false;
+        }
+
+        /** Hides the notice and forgets the request it offered. */
+        static hide() {
+            this.current = null;
+            $('reassign').hidden = true;
+        }
+
+        /** Submits the failed request again without a server restriction, so the platform chooses a server by Rule 1. */
+        static async retry() {
+            if (!this.current || state.submitting || state.uncertain) {
+                return;
+            }
+            let payload = Object.assign({}, this.current);
+            delete payload.execution_server_id;
+            this.hide();
+            await submitPayload(payload);
         }
     }
 
@@ -1724,17 +1782,40 @@
         state.pendingTimer = setInterval(async () => {
             if (!state.pending.size || document.hidden) { return; }
             let mine;
+            let outcomes;
             try {
-                const res = await request('EcomCraftStudioQueue');
+                let res = await request('EcomCraftStudioQueue');
                 mine = new Set((res.tasks || []).filter(t => t.mine && t.id != null).map(t => t.id));
+                outcomes = new Map((res.finished_tasks || []).map(t => [t.id, t]));
             }
             catch (error) { return; }
             for (let id of Array.from(state.pending)) {
-                if (!mine.has(id)) {
-                    state.pending.delete(id);
-                    setStatus(`任务 #${id} 已结束；成功的结果已自动保存到作品画廊。`);
-                    if (state.view == 'gallery') { loadGallery(); }
+                if (mine.has(id)) {
+                    continue;
                 }
+                let outcome = outcomes.get(id);
+                // The result is recorded just after the task leaves the queue; give it a couple of polls before giving up on it.
+                if (!outcome) {
+                    let misses = (Reassign.misses.get(id) || 0) + 1;
+                    if (misses < 3) {
+                        Reassign.misses.set(id, misses);
+                        continue;
+                    }
+                }
+                state.pending.delete(id);
+                let payload = Reassign.take(id);
+                let server = outcome?.execution_server ? `（${outcome.execution_server}）` : '';
+                if (outcome?.state == 'failed') {
+                    setStatus(`任务 #${id} 失败${server}。`, true);
+                    Reassign.show(`任务 #${id} 失败${server}：${outcome.error || '执行服务器没有返回结果。'}`, outcome.error_id == 'generation_uncertain' ? null : payload);
+                }
+                else if (outcome) {
+                    setStatus(`任务 #${id} 已完成${server}，结果已保存到作品画廊。`);
+                }
+                else {
+                    setStatus(`任务 #${id} 已结束；成功的结果已自动保存到作品画廊。`);
+                }
+                if (state.view == 'gallery') { loadGallery(); }
             }
             if (!state.pending.size) {
                 clearInterval(state.pendingTimer);
@@ -1957,6 +2038,27 @@
     /* ============================================================
        Gallery
        ============================================================ */
+    /** Reads the workflow and execution server from a work's metadata (R7.2); null for works without EcomCraft data or unreadable metadata. */
+    function galleryOrigin(metadata) {
+        if (typeof metadata != 'string' || !metadata) {
+            return null;
+        }
+        let parsed;
+        try {
+            parsed = JSON.parse(metadata);
+        }
+        catch (error) {
+            return null;
+        }
+        let extra = parsed?.sui_extra_data || {};
+        let server = typeof extra.ecomcraft_execution_server_name == 'string' ? extra.ecomcraft_execution_server_name : '';
+        if (!server && !extra.ecomcraft_execution_scope) {
+            return null;
+        }
+        let workflow = typeof extra.ecomcraft_published_workflow == 'string' && extra.ecomcraft_published_workflow ? extra.ecomcraft_published_workflow : '标准工作台';
+        return server ? `${workflow}｜${server}` : workflow;
+    }
+
     async function loadGallery() {
         if (state.gallery.loading) { return; }
         const g = state.gallery;
@@ -1985,7 +2087,7 @@
                 const src = f.src;
                 const name = src.split('/').pop();
                 const starred = src.startsWith('Starred/');
-                return { src, name, url: viewUrl(src), starred, video: /\.(mp4|webm)$/i.test(name), time: typeof f.time == 'number' ? f.time : 0 };
+                return { src, name, url: viewUrl(src), starred, video: /\.(mp4|webm)$/i.test(name), time: typeof f.time == 'number' ? f.time : 0, origin: galleryOrigin(f.metadata) };
             });
             sortGalleryItems();
             renderGallery();
@@ -2196,6 +2298,11 @@
                 time.title = new Date(item.time * 1000).toLocaleString();
             }
             card.append(time);
+            if (item.origin) {
+                let origin = el('span', 'sheet-origin', item.origin);
+                origin.title = item.origin;
+                card.append(origin);
+            }
             grid.append(card);
         }
         if (refocus) {
@@ -3374,6 +3481,8 @@
             t.addEventListener('click', () => setMode(t.dataset.mode)));
 
         $('refresh-workflows').addEventListener('click', refreshCatalog);
+        $('reassign-btn').addEventListener('click', () => Reassign.retry());
+        $('reassign-close').addEventListener('click', () => Reassign.hide());
         $('execution-server').addEventListener('focus', () => ExecutionServerPicker.load());
         for (let id of ['negative', 'steps', 'cfg', 'seed', 'sampler', 'scheduler']) {
             $(id).addEventListener('change', updateControls);

@@ -336,7 +336,7 @@ public static class StudioApi
         JObject response;
         if (background)
         {
-            response = await SubmitBackgroundGeneration(session, images, input, assignment);
+            response = await SubmitBackgroundGeneration(session, images, input, assignment, workflow, decision.ChosenName);
         }
         else
         {
@@ -524,7 +524,20 @@ public static class StudioApi
                 });
             }
         }
-        return new JObject() { ["backends"] = backends, ["native_tasks"] = nativeTasks, ["tasks"] = tasks };
+        // Results of this account's recent background tasks (R6); other accounts' results are never listed.
+        JArray finished = new();
+        foreach (TaskOutcomes.Outcome outcome in TaskOutcomes.ForUser(session.User.UserID))
+        {
+            finished.Add(new JObject()
+            {
+                ["id"] = outcome.TaskId,
+                ["state"] = outcome.Failed ? "failed" : "done",
+                ["error"] = outcome.Error,
+                ["error_id"] = outcome.ErrorId,
+                ["execution_server"] = outcome.Server
+            });
+        }
+        return new JObject() { ["backends"] = backends, ["native_tasks"] = nativeTasks, ["tasks"] = tasks, ["finished_tasks"] = finished };
     }
 
     [API.APIDescription("Cancel one active generation claim belonging to the authenticated user.", "success: true")]
@@ -790,28 +803,92 @@ public static class StudioApi
         return await ScheduleAndSubmit(session, images, input, pinnedServer, false, rawInput.Value<bool?>("async") is true, StandardModeProblems);
     }
 
+    /// <summary>Tracks one background generation: its claim ID once seen, and its sanitized result once finished. The outcome is recorded when both are known.</summary>
+    private sealed class BackgroundTask(string userId, string server)
+    {
+        /// <summary>Protects the fields below.</summary>
+        private readonly object Lock = new();
+
+        /// <summary>The SwarmUI claim ID, or 0 before it has been seen.</summary>
+        private long TaskId;
+
+        /// <summary>Whether the generation has ended.</summary>
+        public bool Finished { get { lock (Lock) { return Done; } } }
+
+        /// <summary>Backing flag for <see cref="Finished"/>.</summary>
+        private bool Done;
+
+        /// <summary>The sanitized error response, or null after success.</summary>
+        public JObject Failure { get { lock (Lock) { return Error; } } }
+
+        /// <summary>Backing value for <see cref="Failure"/>.</summary>
+        private JObject Error;
+
+        /// <summary>Whether the outcome has been recorded.</summary>
+        private bool Recorded;
+
+        /// <summary>Sets the claim ID seen by the submitting request.</summary>
+        public void SetTaskId(long id)
+        {
+            lock (Lock)
+            {
+                TaskId = id;
+                RecordIfReady();
+            }
+        }
+
+        /// <summary>Marks the generation ended with a sanitized error, or null on success.</summary>
+        public void Finish(JObject error)
+        {
+            lock (Lock)
+            {
+                Done = true;
+                Error = error;
+                RecordIfReady();
+            }
+        }
+
+        /// <summary>Records the outcome once the claim ID and the result are both known. Callers hold <see cref="Lock"/>.</summary>
+        private void RecordIfReady()
+        {
+            if (Recorded || !Done || TaskId <= 0)
+            {
+                return;
+            }
+            Recorded = true;
+            TaskOutcomes.Record(new TaskOutcomes.Outcome(userId, TaskId, Error is not null, Error?["error"]?.ToString(), Error?["error_id"]?.ToString(),
+                server, Environment.TickCount64));
+        }
+    }
+
     /// <summary>Runs one studio generation in the background so the submitting browser stays usable; finished images are saved to the user's gallery as usual. The claim is watched for a few seconds so the caller can track the task id.
-    /// The scheduler assignment is released when the generation ends.</summary>
-    private static async Task<JObject> SubmitBackgroundGeneration(Session session, int images, JObject input, IDisposable assignment)
+    /// The scheduler assignment is released when the generation ends. The result, success or a sanitized failure (R6.3), is kept briefly for the queue API;
+    /// a failure that happens before the caller gets the task ID is returned directly.</summary>
+    private static async Task<JObject> SubmitBackgroundGeneration(Session session, int images, JObject input, IDisposable assignment, bool workflow, string server)
     {
         HashSet<long> claimsBefore = [.. session.Claims.Keys];
+        BackgroundTask task = new(session.User.UserID, server);
         _ = Utilities.RunCheckedTask(async () =>
         {
+            JObject failure = null;
             try
             {
                 JObject result = await T2IAPI.GenerateText2Image(session, images, input);
                 if (result.ContainsKey("error"))
                 {
-                    Logs.Warning($"EcomCraft background task did not complete: {result["error"]}");
+                    failure = GenerationError(result, workflow);
                 }
             }
             catch (Exception ex)
             {
                 Logs.Warning($"EcomCraft background task failed: {ex.ReadableString()}");
+                failure = Error(workflow ? "无法确认工作流执行结果。请在原生引擎核对队列和个人历史后再重试。"
+                    : "无法确认引擎执行结果。请在原生引擎核对队列和个人历史后再重试。", "generation_uncertain");
             }
             finally
             {
                 assignment.Dispose();
+                task.Finish(failure);
             }
         }, "ecomcraft background generate");
         for (int i = 0; i < 30; i++)
@@ -819,7 +896,16 @@ public static class StudioApi
             long fresh = session.Claims.Keys.FirstOrDefault(id => !claimsBefore.Contains(id));
             if (fresh != 0)
             {
+                task.SetTaskId(fresh);
+                if (task.Finished && task.Failure is JObject early)
+                {
+                    return (JObject)early.DeepClone();
+                }
                 return new JObject() { ["queued"] = true, ["task_id"] = fresh };
+            }
+            if (task.Finished)
+            {
+                return task.Failure is JObject failed ? (JObject)failed.DeepClone() : new JObject() { ["queued"] = true, ["task_id"] = null };
             }
             await Task.Delay(100);
         }

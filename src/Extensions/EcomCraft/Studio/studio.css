@@ -439,6 +439,7 @@ main:focus:not(:focus-visible) { outline: none; }
 .sheet-name { flex: 1; min-width: 0; font-size: var(--fs-12); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sheet-kind { flex-shrink: 0; font-size: var(--fs-12); color: var(--ink-2); }
 .sheet-time { display: block; margin-top: 2px; font-size: var(--fs-12); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.sheet-origin { display: block; margin-top: 2px; font-size: var(--fs-12); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sheet-star, .sheet-delete {
     flex-shrink: 0; display: inline-grid; place-items: center; width: 32px; height: 32px;
     border-radius: 4px; color: var(--ink-2); font-size: 15px; transition: background-color .15s, color .15s;
