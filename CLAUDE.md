@@ -17,14 +17,13 @@
 
 ## 常用检查命令
 
-仓库目前没有自动化测试项目，以下是可在本机运行的静态与编译检查：
+以下是静态检查、编译和单元测试命令（开发机没有 .NET SDK 时，编译和单元测试需在能运行的电脑上执行）：
 
 - 前端语法：`node --check src/Extensions/EcomCraft/Studio/studio.js`
 - 扩展编译：`dotnet build src/Extensions/EcomCraft/EcomCraft.csproj -c Debug -o <临时目录>`
 - 主程序编译：`dotnet build src/SwarmUI.csproj -c Debug -o <临时目录>`（不要输出到正在使用的 `src/bin/live_release`）
 - 提交前：`git status --short`、`git diff --stat`、`git diff --check`
-
-后续任务新增测试项目（例如 `src/Extensions/EcomCraft/Tests/`）后，把运行命令补充到这里。
+- 单元测试：`dotnet test src/Extensions/EcomCraft/Tests`（只覆盖不依赖 SwarmUI 的逻辑，例如调度规则 `SchedulerRules`；测试项目不参与扩展编译）
 
 ## 修改 C# 扩展后
 

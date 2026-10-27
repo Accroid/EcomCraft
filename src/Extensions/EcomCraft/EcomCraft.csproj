@@ -4,5 +4,9 @@
     <RootNamespace>EcomCraftStudio</RootNamespace>
     <LangVersion>12</LangVersion>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Unit tests build separately with their own test packages; see Tests/EcomCraft.Tests.csproj. -->
+    <Compile Remove="Tests/**" />
+  </ItemGroup>
   <Import Project="../../SwarmUI.extension.props" />
 </Project>

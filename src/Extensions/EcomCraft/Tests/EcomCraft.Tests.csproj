@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unit tests for EcomCraft logic that does not depend on SwarmUI. Run: dotnet test src/Extensions/EcomCraft/Tests -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12</LangVersion>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>EcomCraftStudio.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../../GlobalUsings.cs" Link="GlobalUsings.cs" />
+    <Compile Include="../Studio/Generation/SchedulerRules.cs" Link="SchedulerRules.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+</Project>

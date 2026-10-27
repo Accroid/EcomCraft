@@ -71,6 +71,26 @@ public static class NativeWorkflowParameters
         return defaults;
     }
 
+    /// <summary>Dropdown options any of the given servers currently offers for a bound input (R4.3), or null when the binding has no native input to look up.</summary>
+    public static HashSet<string> OfferedChoices(JObject definition, IEnumerable<JObject> schemas)
+    {
+        string type = definition?["native_class"]?.ToString();
+        string name = definition?["native_input"]?.ToString();
+        if (string.IsNullOrEmpty(type) || string.IsNullOrEmpty(name))
+        {
+            return null;
+        }
+        HashSet<string> offered = new(StringComparer.Ordinal);
+        foreach (JObject schema in schemas)
+        {
+            if (InputSchema(schema, type, name)?[0] is JArray options)
+            {
+                offered.UnionWith(options.Values<string>());
+            }
+        }
+        return offered;
+    }
+
     /// <summary>Finds a required or optional node input definition in a cached object_info response.</summary>
     private static JArray InputSchema(JObject schema, string type, string name) =>
         (schema?[type]?["input"]?["required"]?[name] ?? schema?[type]?["input"]?["optional"]?[name]) as JArray;

@@ -10,9 +10,6 @@ namespace EcomCraftStudio.Studio;
 /// <summary>Administrator-registered ComfyUI servers that EcomCraft requests may use: the self-starting local ComfyUI and LAN ComfyUI addresses registered as ComfyUI API backends.</summary>
 public static class ExecutionServers
 {
-    /// <summary>A server whose ComfyUI queue holds more than this many tasks is shown as busy.</summary>
-    public const int BusyQueueThreshold = 2;
-
     /// <summary>Host suffixes treated as LAN names; public DNS names are rejected so cloud services cannot be registered as execution servers.</summary>
     private static readonly string[] LanHostSuffixes = [".local", ".lan", ".home.arpa", ".internal"];
 

@@ -95,6 +95,7 @@ Release 模式下，C# 扩展程序集按 Git 提交短哈希缓存。修改 `sr
 ## EcomCraft 规则
 
 - EcomCraft 工作台只能接受工作流 ID、服务端发布的参数白名单和经过服务端校验的普通生成参数。客户端不得提交或展示任意 ComfyUI JSON、未校验的节点图、后端选择器、管理员默认图片或内部会话标识。
+- 客户端可以提交 `execution_server_id`，把任务限定在某台已登记的执行服务器上（需求 D7）；服务端须校验该 ID 属于 `ExecutionServers`，且不得接受 SwarmUI 原生的后端选择参数（如 `exactbackendid`）。执行服务器由 `Studio/Generation/ExecutionScheduler` 按规则 1 选定并写入请求的内部元数据，`StudioApi.ValidateExecutionBackend` 只允许该服务器执行。
 - `EcomCraftStudioGenerate` 只能使用 `ExecutionServers.IsExecutionServer` 认可的执行服务器：本机自启动 ComfyUI，以及地址为回环、私有网段或局域网主机名的 `ComfyUIAPIBackend`。不得连接未登记地址、远程 SwarmUI 或公网地址；云端对接完成并经确认之前，不得向任何云端生成服务发送请求。新增后端匹配逻辑时，应同步检查 `ExecutionServers`、`StudioApi.ValidateExecutionBackend` 和生成 API 的权限校验。
 - `EcomCraftStudioCatalog`、`EcomCraftStudioQueue` 和 `EcomCraftStudioCancelTask` 返回的数据应遵守最小披露原则：队列接口可以返回执行服务器的 ID、显示名称、状态、排队数、排队位置和节点进度，但不得返回服务器地址、提示词、原始工作流、其他用户的任务 ID、会话 ID 或密钥。取消任务前必须验证当前账号拥有该任务。
 - 原生 ComfyUI 工作流发现由 `WorkflowDiscovery` 在后台执行，接口请求只读缓存。本机只读取已配置本机后端、`Installation.FindComfyScripts` 验证的本机安装中的标准 `workflows` / `blueprints` 目录，或 `Settings.EcomCraft.ComfyWorkflowSearchPaths` 指定的目录；局域网执行服务器只通过其 ComfyUI `userdata` 接口读取 `workflows` 目录。不得全盘扫描任意 JSON 或扫描局域网网段。导入前必须验证工作流结构、子图连接和正负提示词输入；发现的工作流只是审核候选，不得直接注册给用户调用，只有 `WorkflowReview` 发布的快照进入工作流注册表，并继续使用参数白名单边界；工作流的来源服务器不决定执行服务器。

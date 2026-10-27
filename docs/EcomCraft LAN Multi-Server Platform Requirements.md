@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20局域网多服务器平台需求.zh-CN.md)
 >
-> **Status:** In development (phase 1 steps 1–3 code complete) · **Version:** v1.4 · **Date:** 2026-10-27
+> **Status:** In development (phase 1 steps 1–4 code complete) · **Version:** v1.6 · **Date:** 2026-10-27
 >
 > This document is the reference for further development. When requirements change, update this document first (Chinese and English together), record the change in the change log at the end, and only then change the code. For the e-commerce image layer, the overall architecture and the MVP roadmap, see [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md).
 
@@ -265,8 +265,8 @@ AGENTS.md, the READMEs and the workflow documentation have been updated accordin
 | 1 Server registration and execution limits | Code complete, awaiting build and real tests | Added `Studio/ExecutionServers.cs`; renamed `ValidateLocalBackend` to `ValidateExecutionBackend`; updated AGENTS.md, the READMEs and the workflow documentation |
 | 2 Workflow discovery | Code complete, awaiting build and real tests | Added `Studio/WorkflowDiscovery.cs`; local directories and LAN HTTP reads both run in the background |
 | 3 Review and snapshots | Code complete, awaiting build and real tests | Added `Studio/WorkflowReview.cs` (review records and snapshots), `Studio/WorkflowReviewApi.cs` (review API) and the workspace "Workflows" view |
-| 4 Calling and scheduling | Not started | |
-| 5 Queue, failures, gallery | Partially done | The queue already shows server display names, queue counts and congestion status |
+| 4 Calling and scheduling | Code complete, awaiting build and real tests | Added `Studio/Generation/` (executor abstraction, Rule 1 selection logic, scheduler) and unit tests in `src/Extensions/EcomCraft/Tests/`; the workspace gained an "Execution server" choice |
+| 5 Queue, failures, gallery | Partially done | The queue already shows server display names, queue counts and idle / working / congested status |
 | 6 Multi-user configuration and documentation | Not started | |
 | 7 Work storage | Not started | |
 
@@ -295,6 +295,16 @@ Implementation notes for step 3:
 - Upgrade note: native workflows that were discovered automatically and directly usable before the upgrade must be approved before they reappear in user lists. Workflows enabled with **Enable in Simple** in the SwarmUI workflow editor are unaffected.
 - The content fingerprint is computed from the converted execution graph. A future upgrade of the workflow conversion logic may show every published workflow as "needs re-review"; until re-approved, users keep using the old snapshot and generation is unaffected.
 
+Implementation notes for step 4:
+
+- Scheduling is built on an "executor" abstraction (`ExecutorKind`: local ComfyUI, LAN ComfyUI, cloud ComfyUI, cloud model API); the last two only reserve the type, never produce an executor and never send any request.
+- On submission the ComfyUI queue of every online server is read (3-second timeout each, in parallel; a server that does not answer counts as offline), one server is chosen by Rule 1, and its ID is written into the request's internal metadata; backend matching then only allows that server, and while it is busy the task waits in the SwarmUI queue. All images of one submission go to the same server.
+- Queue = ComfyUI running + pending + tasks the platform assigned to that server that SwarmUI has not yet claimed it for. Claimed tasks are treated as already in the ComfyUI queue; in the few seconds between the claim and posting to ComfyUI they are undercounted, a known estimation error.
+- With a pinned server (`execution_server_id`) the task is never reassigned: if that server is offline or lacks dependencies an error is returned (`execution_server_unavailable`); if it has a queue while another capable server is idle, the response carries `server_hint`. When no server can run the task, `no_execution_server` is returned, distinguishing "all offline" from "the nodes / models each server lacks" (at most 3 per server). The generation API no longer returns the old `local_unavailable` and `workflow_dependencies_missing` codes.
+- R4.3: the model drop-downs of native workflows list only models the account may use and that exist on at least one online server. R4.5: reference images are uploaded to the executing server by SwarmUI's ComfyUI backend; no code change, pending real tests.
+- Result labeling: responses include `execution_server` (display name), and the server ID and name are also written into the work's metadata for the step 5 gallery.
+- The queue API gained `assigned`, `queue` and `load` (`idle` / `working` / `congested`); `busy` now equals `congested` instead of the old "more than 2 queued" threshold.
+
 ## 11. Change Log
 
 | Date | Version | Description |
@@ -304,4 +314,5 @@ Implementation notes for step 3:
 | 2026-10-26 | v1.2 | Fix: workflow IDs changed from "server / path" to "server/path" cleaned with `StrictFilenameClean`. The old format was renamed by SwarmUI at generation time, so the workflow could not be found and generation failed |
 | 2026-10-27 | v1.3 | Completed step 3 code: review permissions, review records and snapshots, parameter configuration, runnable-server check and the workspace "Workflows" view; added implementation and upgrade notes |
 | 2026-10-27 | v1.4 | D9 changed to "visible only to the owner within the platform; storage layer not isolated"; D11 changed to reserve cloud capability without developing it in this phase; added D12 and R11 work storage (local / NAS / shared folder, write locally then sync); R10 details the executor abstraction and three-stage generation flow; added step 7, V4 and A3; added this English version |
+| 2026-10-27 | v1.6 | Completed step 4 code (T34): executor abstraction, Rule 1 scheduling, pinned server with congestion hint, explained reasons when no server can run a task, model options filtered by online servers; added implementation notes |
 | 2026-10-27 | v1.5 | Static review of steps 1–3 (T33): workflow discovery now refreshes on a background timer started by the extension instead of only when a page is opened; added notes on server names and workflow IDs, and on re-review after conversion logic upgrades |

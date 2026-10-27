@@ -318,6 +318,7 @@ main:focus:not(:focus-visible) { outline: none; }
 .inline-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
 .inline-row > label { font-size: var(--fs-13); font-weight: 600; }
 .inline-row > input { width: 120px; }
+.inline-row > select { width: auto; max-width: 60%; }
 .inline-input { display: inline-flex; align-items: center; gap: 8px; }
 .inline-input input { width: 72px; }
 .unit { font-size: var(--fs-12); color: var(--ink-2); white-space: nowrap; }

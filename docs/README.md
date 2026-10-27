@@ -35,4 +35,5 @@
 
 - [EcomCraft Architecture and Roadmap](/docs/EcomCraft%20Architecture.md) for product positioning, deployment topology, layered architecture, MVP scope and later features (development planning, including features not yet implemented).
 - [EcomCraft LAN Multi-Server Platform Requirements](/docs/EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md) for execution servers, workflow review and snapshots, scheduling, multi-user use, work storage and the reserved cloud capability.
+- [Calling ComfyUI Workflows in EcomCraft](/docs/EcomCraft%20ComfyUI%20Workflows.md) for workflow discovery on local installations and LAN execution servers, review and publishing, execution server scheduling, and the client API.
 - [Prompt Enhancement and Deployment](/docs/EcomCraft%20Prompt%20Enhancement.md) (Chinese) for MagicPrompt backend configuration and generation timeouts.

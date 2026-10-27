@@ -20,8 +20,8 @@ description: 修改 EcomCraft 功能、API、配置项或安全边界后同步�
 | 改了什么 | 要检查的文件 |
 |---|---|
 | 用户可见的功能或行为 | `README.md`（中文）和 `README.en.md`（英文）的功能列表，两边同时改 |
-| API 名称、请求或返回字段、错误码 | `docs/EcomCraft ComfyUI 工作流.zh-CN.md` 的客户端调用部分，以及两个 README 中列出的接口名 |
-| 工作流发现、导入、执行服务器、局域网接入、作品存储 | `docs/EcomCraft ComfyUI 工作流.zh-CN.md`；涉及需求范围时先改 `docs/EcomCraft 局域网多服务器平台需求.zh-CN.md` 及其英文版 `docs/EcomCraft LAN Multi-Server Platform Requirements.md` |
+| API 名称、请求或返回字段、错误码 | `docs/EcomCraft ComfyUI 工作流.zh-CN.md` 与英文版 `docs/EcomCraft ComfyUI Workflows.md` 的客户端调用部分，以及两个 README 中列出的接口名 |
+| 工作流发现、导入、执行服务器、调度、局域网接入、作品存储 | `docs/EcomCraft ComfyUI 工作流.zh-CN.md` 与 `docs/EcomCraft ComfyUI Workflows.md`；涉及需求范围时先改 `docs/EcomCraft 局域网多服务器平台需求.zh-CN.md` 及其英文版 `docs/EcomCraft LAN Multi-Server Platform Requirements.md` |
 | 产品定位、架构、MVP 范围、功能或任务的增删 | `docs/EcomCraft Architecture.zh-CN.md` 与 `docs/EcomCraft Architecture.md`，再更新 `docs/EcomCraft 开发总表.xlsx`（F / T 编号保持一致，编号不复用） |
 | 完成开发总表中的某个任务 | 开发总表“开发任务”的状态由用户确认后填写；需求文档的“开发进度”节同步更新（中英文） |
 | 工作台页面、按钮、配色、交互 | `docs/EcomCraft 工作台界面设计.zh-CN.md` 第 3 节控件清单（详见 `ecomcraft-studio-ui` 技能） |
@@ -41,7 +41,7 @@ description: 修改 EcomCraft 功能、API、配置项或安全边界后同步�
 - 根目录 `README.md` 是中文，`README.en.md` 是英文，内容要对应，文首的语言切换链接保持可用。
 - `docs/` 下 SwarmUI 原有文档采用“英文 `X.md` + 中文 `X.zh-CN.md`”成对维护；修改其中一份时检查另一份是否需要同步。中文只是导读、不是完整翻译时，必须标明“导读”并链接英文原文。
 - EcomCraft 同时面向国内外用户：新增或修改 EcomCraft 文档时，中文和英文两个版本必须同时编写或同步。新文档采用“英文 `X.md` + 中文 `X.zh-CN.md`”命名；已有中文文件名的文档（如需求文档）保留原名，英文版另起英文文件名，两份文首互相链接。
-- 尚无英文版的旧 EcomCraft 文档（`EcomCraft ComfyUI 工作流.zh-CN.md`、`EcomCraft 工作台界面设计.zh-CN.md`，以及文件名为英文、内容为中文的 `EcomCraft Prompt Enhancement.md`），在下次修改时补齐英文版，并更新 README 和 docs 索引中的链接。
+- 尚无英文版的旧 EcomCraft 文档（`EcomCraft 工作台界面设计.zh-CN.md`，以及文件名为英文、内容为中文的 `EcomCraft Prompt Enhancement.md`），在下次修改时补齐英文版，并更新 README 和 docs 索引中的链接。`EcomCraft ComfyUI 工作流.zh-CN.md` 已有英文版 `EcomCraft ComfyUI Workflows.md`，两份需同步修改。
 - `.gitignore` 默认忽略 `docs/` 下的新文件，`!/docs/EcomCraft *` 放行了 EcomCraft 文档；新文档不以 `EcomCraft ` 开头时，需要在 `.gitignore` 中另行放行。
 - `docs/EcomCraft 开发总表.xlsx` 是中文规划表，不需要英文版；其中的路线图在架构文档中有中英文描述。
 - 不要编辑 `docs/APIRoutes/`，它由源码自动生成。
