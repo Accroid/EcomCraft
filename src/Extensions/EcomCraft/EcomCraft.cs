@@ -12,13 +12,25 @@ namespace EcomCraftStudio;
 public class EcomCraft : Extension
 {
     /// <summary>Extension version, not a claim of MVP completion or production readiness.</summary>
-    public const string ExtensionVersion = "0.5.0";
+    public const string ExtensionVersion = "0.6.0";
 
     /// <summary>Allows employees to use only Comfy workflows explicitly published to the simple workspace.</summary>
     public static readonly PermInfo PermUsePublishedWorkflows = Permissions.Register(new(
         "ecomcraft_use_published_workflows", "EcomCraft Published Workflow Use",
         "Allows use of administrator-published EcomCraft workflows; does not grant workflow editing or arbitrary workflow submission.",
         PermissionDefault.USER, Permissions.GroupExtensionTabs));
+
+    /// <summary>Allows submitting workflows found on execution servers for review and seeing one's own submission results.</summary>
+    public static readonly PermInfo PermSubmitWorkflows = Permissions.Register(new(
+        "ecomcraft_submit_workflows", "EcomCraft Submit Workflows",
+        "Allows submitting ComfyUI workflows saved on execution servers for review, and viewing the state and rejection reasons of one's own submissions.",
+        PermissionDefault.USER, Permissions.GroupExtensionTabs));
+
+    /// <summary>Allows reviewing, publishing, rejecting and unpublishing workflows and configuring their user-visible parameters.</summary>
+    public static readonly PermInfo PermReviewWorkflows = Permissions.Register(new(
+        "ecomcraft_review_workflows", "EcomCraft Review Workflows",
+        "Allows reviewing discovered EcomCraft workflows: configure user-visible parameters, publish frozen snapshots, reject with a reason, or unpublish.",
+        PermissionDefault.ADMINS, Permissions.GroupExtensionTabs));
 
     /// <inheritdoc/>
     public override void PopulateMetadata()
@@ -47,6 +59,11 @@ public class EcomCraft : Extension
         API.RegisterAPICall(StudioApi.EcomCraftStudioQueue, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(StudioApi.EcomCraftStudioCancelTask, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(StudioApi.EcomCraftStudioGenerate, true, Permissions.BasicImageGeneration);
+        API.RegisterAPICall(WorkflowReviewApi.EcomCraftStudioReviewList, false, PermReviewWorkflows);
+        API.RegisterAPICall(WorkflowReviewApi.EcomCraftStudioReviewDetail, false, PermReviewWorkflows);
+        API.RegisterAPICall(WorkflowReviewApi.EcomCraftStudioReviewDecide, true, PermReviewWorkflows);
+        API.RegisterAPICall(WorkflowReviewApi.EcomCraftStudioWorkflowSubmissions, false, PermSubmitWorkflows);
+        API.RegisterAPICall(WorkflowReviewApi.EcomCraftStudioSubmitWorkflow, true, PermSubmitWorkflows);
         T2IEngine.AltBackendValidators.Add(StudioApi.ValidateExecutionBackend);
         T2IEngine.PreGenerateEvent += StudioApi.PrepareNativeWorkflowSeeds;
         ComfyUIAPIAbstractBackend.QueueProgressObserved += StudioApi.ObserveComfyProgress;

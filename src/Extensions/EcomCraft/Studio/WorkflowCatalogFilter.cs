@@ -28,10 +28,14 @@ public sealed class WorkflowCatalogFilter
         {
             return false;
         }
-        JObject content = new() { ["prompt"] = prompt, ["parameters"] = metadata, ["values"] = values };
+        return Seen.Add(Fingerprint(new JObject() { ["prompt"] = prompt, ["parameters"] = metadata, ["values"] = values }));
+    }
+
+    /// <summary>SHA-256 of the canonical JSON form, stable across property order.</summary>
+    public static string Fingerprint(JObject content)
+    {
         string canonical = Canonicalize(content).ToString(Formatting.None);
-        string fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
-        return Seen.Add(fingerprint);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
 
     /// <summary>Ignores JSON property order while preserving array order, node connections and saved values.</summary>

@@ -1,19 +1,30 @@
 # EcomCraft 中调用 ComfyUI 工作流
 
-EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。推荐由管理员在 SwarmUI 的 ComfyUI 工作流编辑器中打开已有工作流，确认依赖和参数后，启用 **Enable in Simple**（在简单工作台中启用）并保存。
+EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行服务器上保存的 ComfyUI 工作流会被自动发现，经审核通过后才给用户调用（见下文“审核与发布”）。管理员也可以在 SwarmUI 的 ComfyUI 工作流编辑器中打开已有工作流，确认依赖和参数后，启用 **Enable in Simple**（在简单工作台中启用）并保存，这类工作流不经过 EcomCraft 审核。
 
 ## 网页端
 
 1. 确认至少有一台执行服务器（本机 `ComfyUI Self-Starting` 后端，或已登记的局域网 ComfyUI，见下文“局域网执行服务器”）状态为 `RUNNING`。
 2. 进入 EcomCraft Studio。页面可见且未生成时，每 30 秒自动更新工作流列表；也可点击“创作工作流”旁的“刷新”立即更新。执行服务器从不可用变为可用时也会刷新目录。
-3. 在“创作工作流”下拉框中选择管理员发布的工作流。
+3. 在“创作工作流”下拉框中选择已发布的工作流（审核通过的原生工作流，或管理员在 SwarmUI 中启用简单工作台的工作流）。
 4. 填写工作流显示的输入参数和标准提示词，点击生成。
 
-工作流下拉框只显示同时满足以下条件的工作流：当前账号有使用权限、工作流已启用简单工作台、工作流 JSON 和参数定义有效。图片和视频工作流会按类型分别显示。
+工作流下拉框只显示同时满足以下条件的工作流：当前账号有使用权限、工作流已审核发布（或在 SwarmUI 中启用简单工作台）、工作流 JSON 和参数定义有效；被审核人隐藏的模型参数，当前账号也必须有权使用该模型。图片和视频工作流会按类型分别显示。
 
 除管理员发布的工作流外，EcomCraft 会复用本机 ComfyUI 安装发现机制，扫描已配置后端及其他验证过的本机安装中的 `workflows`、`blueprints`、`user/default/workflows` 和 `user/default/blueprints`。已配置后端的 `--user-directory` 覆盖仍然有效。安装扫描结果缓存 60 秒，因此新增安装最多需要等到缓存过期后的下一次目录刷新；已发现安装中新保存的文件在下次刷新即可出现。无需逐个填写文件路径，`Settings.EcomCraft.ComfyWorkflowSearchPaths` 仅补充非标准目录，不会关闭自动发现。已登记的局域网执行服务器通过 ComfyUI HTTP 接口读取其 `user/default/workflows` 中保存的工作流。
 
 工作流发现在后台进行，约每 30 秒刷新一次；目录和接口请求不会在页面请求中同步执行。服务启动后的第一次请求最多等待 5 秒获取首批结果。某个来源暂时读取失败时，保留该来源上一次的结果。
+
+## 审核与发布
+
+自动发现的原生工作流不会直接给用户调用，必须先审核：
+
+1. 发现的工作流进入“待审核”。拥有 `ecomcraft_submit_workflows` 权限（默认普通用户）的账号可以在工作台“工作流”页面选择自己保存的工作流，填写说明后“提交审核”，并查看状态和驳回原因。
+2. 拥有 `ecomcraft_review_workflows` 权限（默认管理员）的账号在“工作流审核”页面打开工作流，查看可运行服务器（例如“仅 A（B：缺少节点 xxx）”），逐个设置参数是否显示、显示名、默认值、取值范围和下拉可选项，然后“通过并发布”，或填写原因“驳回”。已发布的工作流可以“下架”。
+3. 通过时保存快照，用户调用的是快照。之后在 ComfyUI 中修改来源文件，状态变为“待重新审核”，新版本通过前用户继续使用旧快照。来源服务器离线或文件被删除时，已发布的快照不受影响。
+4. 无法通过结构校验的工作流显示“无法导入”及原因，不能提交或发布。
+
+隐藏的参数不出现在用户表单中，固定使用快照里的默认值。创作描述、排除内容、宽度和高度始终显示。审核记录保存在服务器的 `Data/EcomCraft/workflow-reviews.json`。升级前自动发现即可使用的原生工作流，升级后需要审核通过才会重新出现在用户列表中。
 
 支持旧版数组连接和新版对象连接，以及包含正负提示词编码节点的内嵌子图蓝图（例如 Qwen-Image 文生图蓝图及使用 `TextEncodeQwenImage21`、`UnetLoaderGGUF` 的 Qwen 2.1 工作流）。`TextEncodeQwenImage21` 的正负条件输出分别绑定 `prompt` 和 `negative_prompt`，不会把同一编码节点的两个文本框合并。`SaveImageAdvanced` 会改接工作台图片输出，避免复用原作者的输出路径。只有图片输出口而没有保存节点的蓝图会在服务端补充图片输出节点；子图实例分别展开，已连接的步数、CFG 等控制保持原连接。无效连接、循环、无法识别的提示词输入、暂不支持的旁路节点或管理员默认图片输入不会作为可执行工作流发布。自动发现不会把原始节点图或内部文件路径交给客户机。
 
@@ -76,7 +87,7 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。推荐�
 
 可选字段包括 `seed`、`steps`、`cfgscale`、`sampler` 和 `scheduler`。视频工作流使用 `kind: "video"`，并按工作台要求提交 `text2videoframes`，每批只能生成一个视频。
 
-调用前可读取 `POST /API/EcomCraftStudioCatalog`，工作流列表位于返回值的 `workflows` 字段，其中 `inputs` 描述每个可填写参数的 ID、类型、默认值和允许选项。客户机应按这个列表构造 `workflow_params`，不要猜测参数名。可读取 `POST /API/EcomCraftStudioQueue` 获取各执行服务器的队列（`backends[]` 含 `id`、`name`、`status`、`running`、`pending`、`busy`，不含地址）和当前生成任务；结束当前账号的生成任务时调用 `POST /API/EcomCraftStudioCancelTask` 并传入队列返回的任务 `id`。
+调用前可读取 `POST /API/EcomCraftStudioCatalog`，工作流列表位于返回值的 `workflows` 字段，其中 `inputs` 描述每个可填写参数的 ID、类型、默认值和允许选项。客户机应按这个列表构造 `workflow_params`，不要猜测参数名。目录还返回 `can_review_workflows` 和 `can_submit_workflows`，表示当前账号能否审核或提交工作流。审核接口为 `EcomCraftStudioReviewList`、`EcomCraftStudioReviewDetail` 和 `EcomCraftStudioReviewDecide`（`action` 为 `approve`、`reject` 或 `unpublish`），提交接口为 `EcomCraftStudioWorkflowSubmissions` 和 `EcomCraftStudioSubmitWorkflow`；它们只返回参数定义、状态和缺失的节点或模型名称，不返回原始节点图或服务器地址。审核错误码包括 `invalid_review`（配置无效）、`workflow_state`（当前状态不允许该操作或刚被他人修改）和 `review_save_failed`（记录无法保存）。可读取 `POST /API/EcomCraftStudioQueue` 获取各执行服务器的队列（`backends[]` 含 `id`、`name`、`status`、`running`、`pending`、`busy`，不含地址）和当前生成任务；结束当前账号的生成任务时调用 `POST /API/EcomCraftStudioCancelTask` 并传入队列返回的任务 `id`。
 
 原生导入项额外返回 `native: true` 和 `defaults`。`inputs[].form` 标记绑定到标准页面字段的参数（如 `width`、`seed`）；其余输入通过 `workflow_params` 提交。省略标准字段时使用相应已发布参数或保存的默认值，同时提供时以标准字段为准。原生项无需提交根级 `model`，模型修改通过 `inputs` 中模型下拉框的 ID 提交，服务端仅接受公布的选项；参数 ID 是不透明标识，客户端不要自行构造。
 

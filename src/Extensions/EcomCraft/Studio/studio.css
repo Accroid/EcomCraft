@@ -136,6 +136,7 @@ code { font-size: .92em; padding: 0 3px; border-radius: 3px; background: var(--k
 .seg-btn:hover:not(:disabled):not(.selected) { color: var(--ink); }
 .seg-btn.selected { background: var(--key); color: var(--on-key); font-weight: 600; }
 .seg-btn:disabled { opacity: .45; }
+.seg-wrap { flex-wrap: wrap; }
 .seg-wide { display: flex; }
 .seg-wide .seg-btn { flex: 1; padding-inline: 6px; }
 
@@ -484,6 +485,38 @@ main:focus:not(:focus-visible) { outline: none; }
 .queue-task-age { font-size: var(--fs-12); color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .queue-progress { width: min(100%, 420px); height: 6px; margin-top: 6px; accent-color: var(--key); }
 .empty-line { padding: 20px 0; font-size: var(--fs-13); color: var(--ink-2); }
+
+/* ---------- 工作流审核 ---------- */
+.workflows-intro { margin: -8px 0 16px; }
+.review-list { background: var(--panel); border: 1px solid var(--line); }
+.review-list:empty { display: none; }
+.review-item { display: flex; align-items: center; gap: 16px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.review-item:last-child { border-bottom: 0; }
+.review-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.review-item-main strong { font-size: var(--fs-13); font-weight: 600; overflow-wrap: anywhere; }
+.review-item-main span { font-size: var(--fs-12); color: var(--ink-2); overflow-wrap: anywhere; }
+.review-item-actions { display: flex; flex-shrink: 0; gap: 8px; }
+.review-state { font-size: var(--fs-12); font-weight: 600; color: var(--ink); }
+.review-state.is-attention { color: var(--tally); }
+.review-servers { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-13); }
+.review-servers li { overflow-wrap: anywhere; }
+.review-params { display: flex; flex-direction: column; border: 1px solid var(--line); }
+.review-param { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr); gap: 8px 12px; align-items: start; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.review-param:last-child { border-bottom: 0; }
+.review-param-visible { display: flex; align-items: center; gap: 6px; min-height: 32px; font-size: var(--fs-12); }
+.review-param-name { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.review-param-name .hint, .review-param-value .hint { margin: 0; overflow-wrap: anywhere; }
+.review-param-value { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.review-range { display: flex; align-items: center; gap: 6px; font-size: var(--fs-12); color: var(--ink-2); }
+.review-range input { width: 0; flex: 1; }
+.review-options { font-size: var(--fs-12); }
+.review-options summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; color: var(--ink-2); }
+.review-options label { display: flex; align-items: center; gap: 6px; padding: 2px 0; overflow-wrap: anywhere; }
+.review-foot-left { margin-right: auto; }
+@media (max-width: 720px) {
+    .review-item { flex-wrap: wrap; }
+    .review-param { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* ---------- 大图预览 ---------- */
 .lightbox { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; overscroll-behavior: contain; }
