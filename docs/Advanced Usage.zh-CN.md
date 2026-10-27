@@ -27,7 +27,7 @@
 
 可使用 Cloudflared 或 ngrok 建立临时/代理访问入口。
 
-- **Cloudflared：** 按 [cloudflared 安装说明](https://github.com/cloudflare/cloudflared?tab=readme-ov-file#installing-cloudflared) 安装软件。这里只需要安装程序本身，无需照搬文档中的账号或域名配置。启动 SwarmUI 时可传入 `--cloudflared-path [...]`，或在服务器配置的 `CloudflaredPath` 中设置路径，然后重启。Debian Linux 服务器也可参考 [Colab Notebook](/colab/colab-notebook.ipynb) 中的安装方式。
+- **Cloudflared：** 按 [cloudflared 安装说明](https://github.com/cloudflare/cloudflared?tab=readme-ov-file#installing-cloudflared) 安装软件。这里只需要安装程序本身，无需照搬文档中的账号或域名配置。启动 SwarmUI 时可传入 `--cloudflared-path [...]`，或在服务器配置的 `CloudflaredPath` 中设置路径，然后重启。
 - **ngrok：** 按 [ngrok 官方文档](https://ngrok.com/) 安装并登录账号，然后通过启动参数 `--ngrok-path [...]` 指定程序路径。
 
 ## 通过互联网公开托管 SwarmUI
