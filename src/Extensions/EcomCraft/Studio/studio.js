@@ -1737,10 +1737,12 @@
         }
     }
 
-    /** Returns the user-facing state of one execution server; busy means more than two queued tasks. */
+    /** Returns the user-facing state of one execution server: 空闲 / 忙碌（有任务在执行但未排队）/ 繁忙（出现排队）. */
     function queueStateLabel(backend) {
         if (backend.status == 'running') {
-            return backend.busy ? '繁忙' : '空闲';
+            if ((backend.pending || 0) > 0) { return '繁忙'; }
+            if ((backend.running || 0) > 0) { return '忙碌'; }
+            return '空闲';
         }
         if (backend.status == 'unresponsive') {
             return '无响应';
@@ -1757,7 +1759,9 @@
     /** Returns the indicator style for one execution server state; color is always paired with the text label. */
     function queueStateClass(backend) {
         if (backend.status == 'running') {
-            return backend.busy ? 'is-busy' : 'is-idle';
+            if ((backend.pending || 0) > 0) { return 'is-full'; }
+            if ((backend.running || 0) > 0) { return 'is-busy'; }
+            return 'is-idle';
         }
         return backend.status == 'waiting' || backend.status == 'loading' ? 'is-starting' : 'is-down';
     }
@@ -1875,10 +1879,12 @@
                 state.userId = session.user_id;
                 state.outputAppendUser = !!session.output_append_user;
             }
+            // 星标副本存放在 Starred/<原路径>/，比原文件多一层目录；depth:3 会漏掉整个星标目录里的文件。
             const res = await request('ListImages', {
-                path: '', depth: 3,
+                path: '', depth: 4,
                 sortBy: g.sort,
-                sortReverse: g.sort === 'Date',
+                // 服务器 Date 排序本身已是“最新在前”，再传 reverse 会变成最旧在前，与“最新优先”标签相反。
+                sortReverse: false,
                 filter: g.search || null
             });
             if (res.error) { throw new ApiError(res.error, 'api_error'); }
@@ -1886,8 +1892,9 @@
                 const src = f.src;
                 const name = src.split('/').pop();
                 const starred = src.startsWith('Starred/');
-                return { src, name, url: viewUrl(src), starred, video: /\.(mp4|webm)$/i.test(name) };
+                return { src, name, url: viewUrl(src), starred, video: /\.(mp4|webm)$/i.test(name), time: typeof f.time == 'number' ? f.time : 0 };
             });
+            sortGalleryItems();
             renderGallery();
             if (g.revealSrc) {
                 let items = visibleGalleryItems();
@@ -1913,6 +1920,44 @@
             $('gallery-refresh').disabled = false;
             $('gallery-refresh').textContent = '刷新';
         }
+    }
+
+    /** Sorts the gallery items locally so time order and date grouping stay correct regardless of how the server merged folders. */
+    function sortGalleryItems() {
+        let g = state.gallery;
+        if (g.sort == 'Date') {
+            g.items.sort((a, b) => (b.time || 0) - (a.time || 0) || a.name.localeCompare(b.name, 'zh'));
+            return;
+        }
+        g.items.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+    }
+
+    /** Returns the local YYYY-MM-DD key that decides which date group an item belongs to. */
+    function galleryDateKey(time) {
+        if (!time || time <= 0) { return 'unknown'; }
+        let d = new Date(time * 1000);
+        let pad = (v) => String(v).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+
+    /** Formats a generation time as a friendly group heading: 今天 / 昨天 / 2026年10月25日 / 未知时间. */
+    function galleryDateLabel(time) {
+        if (!time || time <= 0) { return '未知时间'; }
+        let d = new Date(time * 1000);
+        let dayOf = (x) => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
+        let now = new Date();
+        if (dayOf(d) == dayOf(now)) { return '今天'; }
+        let yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        if (dayOf(d) == dayOf(yesterday)) { return '昨天'; }
+        return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+    }
+
+    /** Formats a generation time as a local HH:mm:ss clock string, or a dash when unknown. */
+    function galleryClock(time) {
+        if (!time || time <= 0) { return '--:--:--'; }
+        let d = new Date(time * 1000);
+        let pad = (v) => String(v).padStart(2, '0');
+        return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     }
 
     /** Sets the gallery search text everywhere it lives: the field, the state and the clear button. Does not reload. */
@@ -1966,7 +2011,25 @@
             return;
         }
         empty.hidden = true;
+        let groupCounts = new Map();
+        if (g.sort == 'Date') {
+            for (let item of items) {
+                let key = galleryDateKey(item.time);
+                groupCounts.set(key, (groupCounts.get(key) || 0) + 1);
+            }
+        }
+        let currentGroup = null;
         for (let item of items) {
+            if (g.sort == 'Date') {
+                let key = galleryDateKey(item.time);
+                if (key != currentGroup) {
+                    currentGroup = key;
+                    let head = el('li', 'sheet-group');
+                    head.append(el('span', 'sheet-group-date', galleryDateLabel(item.time)));
+                    head.append(el('span', 'sheet-group-count', `${groupCounts.get(key)} 项`));
+                    grid.append(head);
+                }
+            }
             let selected = GallerySelection.isSelected(item);
             let card = el('li', `sheet-item${selected ? ' selected' : ''}`);
             let open = el('button', 'sheet-open');
@@ -2012,6 +2075,11 @@
             if (item.video) {
                 meta.append(el('span', 'sheet-kind', '视频'));
             }
+            let time = el('span', 'sheet-time', galleryClock(item.time));
+            if (item.time > 0) {
+                time.title = new Date(item.time * 1000).toLocaleString();
+            }
+            meta.append(time);
             let star = el('button', 'sheet-star', item.starred ? '★' : '☆');
             star.type = 'button';
             star.dataset.src = item.src;

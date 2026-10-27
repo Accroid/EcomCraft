@@ -927,7 +927,7 @@ public static class T2IAPI
             return new JObject()
             {
                 ["folders"] = JToken.FromObject(dirs.Union(finalDirs.Keys).ToList()),
-                ["files"] = JToken.FromObject(files.Take(maxInHistory).Select(f => new JObject() { ["src"] = f.Name, ["metadata"] = f.Metadata.Metadata }).ToList())
+                ["files"] = JToken.FromObject(files.Take(maxInHistory).Select(f => new JObject() { ["src"] = f.Name, ["metadata"] = f.Metadata.Metadata, ["time"] = f.Metadata.FileTime }).ToList())
             };
         }
         catch (Exception ex)
@@ -1010,7 +1010,8 @@ public static class T2IAPI
             [
                 {
                     "src": "path/to/image.jpg",
-                    "metadata": "some-metadata" // usually a JSON blob encoded as a string. Not guaranteed.
+                    "metadata": "some-metadata", // usually a JSON blob encoded as a string. Not guaranteed.
+                    "time": 1700000000 // unix timestamp (seconds, UTC) of when the file was generated
                 }
             ]
         """)]
