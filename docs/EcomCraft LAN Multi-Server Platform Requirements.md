@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20局域网多服务器平台需求.zh-CN.md)
 >
-> **Status:** In development (phase 1 steps 1–4 code complete) · **Version:** v1.6 · **Date:** 2026-10-27
+> **Status:** In development (phase 1 steps 1–5 code complete) · **Version:** v1.7 · **Date:** 2026-10-27
 >
 > This document is the reference for further development. When requirements change, update this document first (Chinese and English together), record the change in the change log at the end, and only then change the code. For the e-commerce image layer, the overall architecture and the MVP roadmap, see [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md).
 
@@ -255,6 +255,7 @@ AGENTS.md, the READMEs and the workflow documentation have been updated accordin
 | A1 | Assume all execution servers and the platform server are on the same LAN and can reach each other directly | Assumption |
 | A2 | Assume model files are installed on each server manually by the administrator, and the platform never copies models between servers | Assumption |
 | V4 | Whether the platform can write to a NAS through a UNC path when running as a Windows service or background process; whether writing many small files to the NAS is fast enough for gallery syncing | To verify |
+| V5 | After an executing LAN server drops off, how long SwarmUI's ComfyUI backend takes to fail the task (immediately when the connection breaks, or after a timeout) | To verify |
 | A3 | Assume shared storage is authenticated or mounted by the operating system, and the platform reads and writes it as an ordinary directory | Assumption |
 
 ## 10. Development Progress
@@ -266,7 +267,7 @@ AGENTS.md, the READMEs and the workflow documentation have been updated accordin
 | 2 Workflow discovery | Code complete, awaiting build and real tests | Added `Studio/WorkflowDiscovery.cs`; local directories and LAN HTTP reads both run in the background |
 | 3 Review and snapshots | Code complete, awaiting build and real tests | Added `Studio/WorkflowReview.cs` (review records and snapshots), `Studio/WorkflowReviewApi.cs` (review API) and the workspace "Workflows" view |
 | 4 Calling and scheduling | Code complete, awaiting build and real tests | Added `Studio/Generation/` (executor abstraction, Rule 1 selection logic, scheduler) and unit tests in `src/Extensions/EcomCraft/Tests/`; the workspace gained an "Execution server" choice |
-| 5 Queue, failures, gallery | Partially done | The queue already shows server display names, queue counts and idle / working / congested status |
+| 5 Queue, failures, gallery | Code complete, awaiting build and real tests | Added `Studio/Generation/TaskOutcomes.cs` (background task results); the workspace shows failures with "Reassign to another server", and the gallery shows the workflow and execution server |
 | 6 Multi-user configuration and documentation | Not started | |
 | 7 Work storage | Not started | |
 
@@ -305,6 +306,14 @@ Implementation notes for step 4:
 - Result labeling: responses include `execution_server` (display name), and the server ID and name are also written into the work's metadata for the step 5 gallery.
 - The queue API gained `assigned`, `queue` and `load` (`idle` / `working` / `congested`); `busy` now equals `congested` instead of the old "more than 2 queued" threshold.
 
+Implementation notes for step 5:
+
+- After a background task ends, the platform keeps its result in memory for 15 minutes (at most 50 per account): only the task ID, success or failure, the failure reason already translated into a user-facing message, the error code and the execution server name; no prompts, parameters, images or graphs. Failure reasons go through the existing error translation and contain no stack traces, addresses, prompts or graphs (R6.3). A task that fails within seconds of submission returns the error directly to the submitting request.
+- The queue API gained `finished_tasks`, listing only the current account's results (`id`, `state`, `error`, `error_id`, `execution_server`).
+- When a task fails, the workspace shows the reason and a "Reassign to another server" button; clicking it submits the same request again without the server restriction, and Rule 1 chooses again. The platform never retries automatically (R6.1). The request is kept only in page memory: after a reload only the reason is shown and reassignment is no longer offered; uncertain results (`generation_uncertain`) are never offered for reassignment, to avoid duplicate generation.
+- The gallery reads the workflow ID and execution server name from each work's metadata and shows them under the time on the work card; works from the standard workspace show "Standard workspace", and works from before the upgrade show nothing.
+- How long SwarmUI takes to fail a task after the executing server drops off has not been tested yet; see V5.
+
 ## 11. Change Log
 
 | Date | Version | Description |
@@ -315,4 +324,5 @@ Implementation notes for step 4:
 | 2026-10-27 | v1.3 | Completed step 3 code: review permissions, review records and snapshots, parameter configuration, runnable-server check and the workspace "Workflows" view; added implementation and upgrade notes |
 | 2026-10-27 | v1.4 | D9 changed to "visible only to the owner within the platform; storage layer not isolated"; D11 changed to reserve cloud capability without developing it in this phase; added D12 and R11 work storage (local / NAS / shared folder, write locally then sync); R10 details the executor abstraction and three-stage generation flow; added step 7, V4 and A3; added this English version |
 | 2026-10-27 | v1.6 | Completed step 4 code (T34): executor abstraction, Rule 1 scheduling, pinned server with congestion hint, explained reasons when no server can run a task, model options filtered by online servers; added implementation notes |
+| 2026-10-27 | v1.7 | Completed step 5 code (T35): background task results and failure notices, reassignment to another server, gallery shows the workflow and execution server; added V5 |
 | 2026-10-27 | v1.5 | Static review of steps 1–3 (T33): workflow discovery now refreshes on a background timer started by the extension instead of only when a page is opened; added notes on server names and workflow IDs, and on re-review after conversion logic upgrades |

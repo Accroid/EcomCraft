@@ -8,8 +8,8 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.7.0">
-    <script src="/EcomCraft/studio.js?v=0.7.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.8.0">
+    <script src="/EcomCraft/studio.js?v=0.8.0" defer></script>
 </head>
 
 <body>
@@ -296,6 +296,13 @@
                         <div class="results" id="results" hidden></div>
                     </div>
                     <div class="status-line" id="result-status" role="status" aria-live="polite">还没有生成记录。</div>
+                    <div class="recover" id="reassign" role="alert" hidden>
+                        <p id="reassign-text"></p>
+                        <div class="recover-actions">
+                            <button type="button" id="reassign-btn" class="btn">改派到其他服务器</button>
+                            <button type="button" id="reassign-close" class="btn">关闭</button>
+                        </div>
+                    </div>
                     <div class="recover" id="recover" hidden>
                         <p>连接中断不代表任务已经停止。请先在原生引擎核对队列和个人历史，避免重复生成。</p>
                         <div class="recover-actions">

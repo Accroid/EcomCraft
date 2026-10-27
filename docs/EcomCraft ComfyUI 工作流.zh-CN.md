@@ -58,7 +58,8 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行�
 2. 在这些服务器中选择排队数最少的一台；排队数相同时，选最近一次完成任务最早的一台。排队数 = 该服务器 ComfyUI 中运行和等待的任务数（包括其他人直接在该 ComfyUI 上提交的任务）+ 平台已分配给它、但还没有交给 ComfyUI 的任务数。后者是估算值，任务刚开始提交到 ComfyUI 的几秒内可能少算。
 3. 有两台以上执行服务器时，创作区显示“执行服务器”下拉框，默认“自动分配（推荐）”。选择某台服务器后，任务只在这台服务器上排队，不会改派；这台服务器离线或缺少依赖时直接提示，不提交任务。所选服务器有排队而另一台可运行的服务器空闲时，提交后提示“建议取消限定”。
 4. 没有可运行的服务器时不提交任务，并说明原因：所有服务器离线，或在线服务器分别缺少哪些节点、模型（每台最多列出 3 项）。
-5. 提交成功后，状态栏显示实际执行的服务器名称；该名称也写入作品的元数据。
+5. 提交成功后，状态栏显示实际执行的服务器名称；该名称也写入作品的元数据，作品画廊在每个作品的时间下方显示“工作流｜执行服务器”（标准工作台生成的作品显示“标准工作台”）。
+6. 执行中的服务器掉线或任务失败时，平台不会自动重试。工作台显示失败原因和“改派到其他服务器”按钮，点击后用同一请求重新提交，并去掉服务器限定，由上述规则重新选择。请求只保存在页面内存中，刷新页面后只显示失败原因；结果不确定时不提供改派，请先在原生引擎核对，避免重复生成。
 
 调度只在已登记的执行服务器之间进行，不会转到未登记地址、远程 SwarmUI 或云端服务。调度层按“执行方”抽象实现，预留了云端 ComfyUI 和云端模型 API 两种类型，本期不实现，也不会向它们发送任何请求。
 
@@ -103,7 +104,7 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行�
 
 `execution_server_id`（可选，整数）把任务限定在某台执行服务器上，取值为队列接口 `backends[].id`。省略时自动分配。服务端只接受已登记执行服务器的 ID；SwarmUI 原生的后端选择参数（如 `exactbackendid`）仍会被拒绝。传入 `async: true` 时提交后立即返回 `queued` 和 `task_id`。成功的响应都包含 `execution_server`（实际执行服务器的显示名称，不含地址），限定的服务器繁忙而另一台空闲时还包含 `server_hint`。调度相关的错误码：`invalid_execution_server`（ID 不属于已登记的执行服务器）、`execution_server_unavailable`（限定的服务器离线或缺少依赖，未改派）、`no_execution_server`（没有可运行的服务器，`error` 中说明原因）。
 
-调用前可读取 `POST /API/EcomCraftStudioCatalog`，工作流列表位于返回值的 `workflows` 字段，其中 `inputs` 描述每个可填写参数的 ID、类型、默认值和允许选项。客户机应按这个列表构造 `workflow_params`，不要猜测参数名。目录还返回 `can_review_workflows` 和 `can_submit_workflows`，表示当前账号能否审核或提交工作流。审核接口为 `EcomCraftStudioReviewList`、`EcomCraftStudioReviewDetail` 和 `EcomCraftStudioReviewDecide`（`action` 为 `approve`、`reject` 或 `unpublish`），提交接口为 `EcomCraftStudioWorkflowSubmissions` 和 `EcomCraftStudioSubmitWorkflow`；它们只返回参数定义、状态和缺失的节点或模型名称，不返回原始节点图或服务器地址。审核错误码包括 `invalid_review`（配置无效）、`workflow_state`（当前状态不允许该操作或刚被他人修改）和 `review_save_failed`（记录无法保存）。可读取 `POST /API/EcomCraftStudioQueue` 获取各执行服务器的队列（`backends[]` 含 `id`、`name`、`status`、`running`、`pending`、`assigned`（平台已分配但尚未交给 ComfyUI 的任务数）、`queue`（调度使用的排队数）、`load`（`idle` 空闲、`working` 忙碌、`congested` 繁忙，队列无法读取时为 `null`）和 `busy`（等同于 `load` 为 `congested`），不含地址）和当前生成任务；结束当前账号的生成任务时调用 `POST /API/EcomCraftStudioCancelTask` 并传入队列返回的任务 `id`。
+调用前可读取 `POST /API/EcomCraftStudioCatalog`，工作流列表位于返回值的 `workflows` 字段，其中 `inputs` 描述每个可填写参数的 ID、类型、默认值和允许选项。客户机应按这个列表构造 `workflow_params`，不要猜测参数名。目录还返回 `can_review_workflows` 和 `can_submit_workflows`，表示当前账号能否审核或提交工作流。审核接口为 `EcomCraftStudioReviewList`、`EcomCraftStudioReviewDetail` 和 `EcomCraftStudioReviewDecide`（`action` 为 `approve`、`reject` 或 `unpublish`），提交接口为 `EcomCraftStudioWorkflowSubmissions` 和 `EcomCraftStudioSubmitWorkflow`；它们只返回参数定义、状态和缺失的节点或模型名称，不返回原始节点图或服务器地址。审核错误码包括 `invalid_review`（配置无效）、`workflow_state`（当前状态不允许该操作或刚被他人修改）和 `review_save_failed`（记录无法保存）。可读取 `POST /API/EcomCraftStudioQueue` 获取各执行服务器的队列（`backends[]` 含 `id`、`name`、`status`、`running`、`pending`、`assigned`（平台已分配但尚未交给 ComfyUI 的任务数）、`queue`（调度使用的排队数）、`load`（`idle` 空闲、`working` 忙碌、`congested` 繁忙，队列无法读取时为 `null`）和 `busy`（等同于 `load` 为 `congested`），不含地址）和当前生成任务，以及 `finished_tasks`（当前账号最近 15 分钟内结束的后台任务：`id`、`state` 为 `done` 或 `failed`、`error`、`error_id`、`execution_server`，不含其他账号的任务）；结束当前账号的生成任务时调用 `POST /API/EcomCraftStudioCancelTask` 并传入队列返回的任务 `id`。
 
 原生导入项额外返回 `native: true` 和 `defaults`。`inputs[].form` 标记绑定到标准页面字段的参数（如 `width`、`seed`）；其余输入通过 `workflow_params` 提交。省略标准字段时使用相应已发布参数或保存的默认值，同时提供时以标准字段为准。原生项无需提交根级 `model`，模型修改通过 `inputs` 中模型下拉框的 ID 提交，服务端仅接受公布的选项；参数 ID 是不透明标识，客户端不要自行构造。
 
