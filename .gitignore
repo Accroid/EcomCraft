@@ -44,6 +44,7 @@ superpowers/
 plans/
 Tests/
 tests/
+!/src/Extensions/EcomCraft/Tests/
 plan.md
 PLAN.md
 *-plan.md

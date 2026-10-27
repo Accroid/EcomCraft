@@ -8,8 +8,8 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.6.0">
-    <script src="/EcomCraft/studio.js?v=0.6.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.7.0">
+    <script src="/EcomCraft/studio.js?v=0.7.0" defer></script>
 </head>
 
 <body>
@@ -230,6 +230,12 @@
                                 <div class="inline-row" id="image-count-row">
                                     <label for="images">生成数量</label>
                                     <span class="inline-input"><input id="images" name="images" type="number" inputmode="numeric" min="1" max="4" step="1" value="1" required><span class="unit">张</span></span>
+                                </div>
+                                <div class="inline-row" id="execution-server-row" hidden>
+                                    <label for="execution-server">执行服务器</label>
+                                    <select id="execution-server" name="execution-server" title="自动分配会选择排队最少且具备所需模型和节点的服务器；选定某台后任务只在这台排队">
+                                        <option value="">自动分配（推荐）</option>
+                                    </select>
                                 </div>
                                 <div class="video-fields" id="video-fields" hidden>
                                     <div class="inline-row">

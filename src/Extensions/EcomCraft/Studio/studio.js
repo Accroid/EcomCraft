@@ -46,6 +46,7 @@
     const safeErrors = new Set(['bad_permissions','cloud_unavailable','invalid_model','invalid_mode','invalid_workflow','invalid_workflow_parameters',
         'local_unavailable','invalid_prompt','unsupported_prompt_syntax','invalid_parameters','invalid_reference','invalid_mask','invalid_loras','invalid_sampler',
         'invalid_scheduler','generation_failed','generation_uncertain','task_not_found','workflow_dependencies_missing',
+        'no_execution_server','execution_server_unavailable','invalid_execution_server',
         'workflow_state','invalid_review','review_save_failed',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
     const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
@@ -601,6 +602,7 @@
             catalog.workflows = Array.isArray(catalog.workflows) ? catalog.workflows : [];
             state.catalog = catalog;
             populateWorkflows();
+            ExecutionServerPicker.load(true);
             $('user-name').textContent = catalog.user_name;
             $('avatar').textContent = String(catalog.user_name || 'E').slice(0, 1).toUpperCase();
             $('enhancer-settings').hidden = !catalog.can_manage_settings;
@@ -1626,6 +1628,8 @@
         }
         if ($('sampler').value) { payload.sampler = $('sampler').value; }
         if ($('scheduler').value) { payload.scheduler = $('scheduler').value; }
+        let pinnedServer = ExecutionServerPicker.selectedId();
+        if (pinnedServer != null) { payload.execution_server_id = pinnedServer; }
         if (state.workflowId) {
             payload.workflow_id = state.workflowId;
             payload.workflow_params = { ...state.workflowValues };
@@ -1694,7 +1698,10 @@
                 state.pending.add(result.task_id);
                 startPendingTracker();
             }
-            setStatus(`已加入队列${result.task_id != null ? `（任务 #${result.task_id}）` : ''}。可以继续编辑、切换图片/视频或再次提交；完成后结果会自动保存到作品画廊。`);
+            let server = result.execution_server ? `，由“${result.execution_server}”执行` : '';
+            let hint = result.server_hint ? ` ${result.server_hint}` : '';
+            setStatus(`已加入队列${result.task_id != null ? `（任务 #${result.task_id}）` : ''}${server}。可以继续编辑、切换图片/视频或再次提交；完成后结果会自动保存到作品画廊。${hint}`);
+            ExecutionServerPicker.load(true);
             if (state.view == 'gallery') { loadGallery(); }
         } catch (error) {
             state.uncertain = uncertainErrors.has(error.code) || !(error instanceof ApiError);
@@ -1737,6 +1744,63 @@
     }
 
     /* ============================================================
+       Execution server choice
+       ============================================================ */
+    /** The optional "only run on this server" choice (D7). Automatic assignment is the default; the server validates every ID it receives. */
+    class ExecutionServerPicker {
+        static lastLoad = 0;
+        static loading = false;
+
+        /** Returns the chosen server ID, or null for automatic assignment. */
+        static selectedId() {
+            let value = $('execution-server').value;
+            if (value === '') {
+                return null;
+            }
+            let id = Number(value);
+            return Number.isInteger(id) ? id : null;
+        }
+
+        /** Reads the server list from the queue API, at most every few seconds unless forced. Failures keep the current options. */
+        static async load(force = false) {
+            if (this.loading || !state.session || (!force && Date.now() - this.lastLoad < 5000)) {
+                return;
+            }
+            this.loading = true;
+            try {
+                let result = await request('EcomCraftStudioQueue');
+                this.render(result.backends || []);
+            }
+            catch (error) {
+                // The picker is optional; automatic assignment still works without a fresh list.
+            }
+            finally {
+                this.lastLoad = Date.now();
+                this.loading = false;
+            }
+        }
+
+        /** Fills the options with each server's name and state, keeping the current choice while that server is still registered.
+         * The row stays hidden with fewer than two servers, unless a choice is already made. */
+        static render(backends) {
+            let select = $('execution-server');
+            let current = select.value;
+            let auto = el('option', '', '自动分配（推荐）');
+            auto.value = '';
+            let options = [auto];
+            for (let backend of backends) {
+                let queued = backend.queue ? `，排队 ${backend.queue}` : '';
+                let option = el('option', '', `${backend.name || `服务器 #${backend.id}`}（${queueStateLabel(backend)}${queued}）`);
+                option.value = String(backend.id);
+                options.push(option);
+            }
+            select.replaceChildren(...options);
+            select.value = options.some(option => option.value === current) ? current : '';
+            $('execution-server-row').hidden = backends.length < 2 && select.value === '';
+        }
+    }
+
+    /* ============================================================
        Queue
        ============================================================ */
     /** Reads local backend queue counts and the server's active generation claims. */
@@ -1750,6 +1814,7 @@
             }
             let result = await request('EcomCraftStudioQueue');
             renderQueue(result);
+            ExecutionServerPicker.render(result.backends || []);
             $('queue-message').hidden = true;
             $('queue-updated').textContent = `更新于 ${new Intl.DateTimeFormat('zh-CN', { timeStyle: 'medium' }).format(new Date())}，每 5 秒自动刷新`;
         }
@@ -1765,9 +1830,10 @@
     /** Returns the user-facing state of one execution server: 空闲 / 忙碌（有任务在执行但未排队）/ 繁忙（出现排队）. */
     function queueStateLabel(backend) {
         if (backend.status == 'running') {
-            if ((backend.pending || 0) > 0) { return '繁忙'; }
-            if ((backend.running || 0) > 0) { return '忙碌'; }
-            return '空闲';
+            if (backend.load == 'congested') { return '繁忙'; }
+            if (backend.load == 'working') { return '忙碌'; }
+            if (backend.load == 'idle') { return '空闲'; }
+            return '无响应';
         }
         if (backend.status == 'unresponsive') {
             return '无响应';
@@ -1784,9 +1850,10 @@
     /** Returns the indicator style for one execution server state; color is always paired with the text label. */
     function queueStateClass(backend) {
         if (backend.status == 'running') {
-            if ((backend.pending || 0) > 0) { return 'is-full'; }
-            if ((backend.running || 0) > 0) { return 'is-busy'; }
-            return 'is-idle';
+            if (backend.load == 'congested') { return 'is-full'; }
+            if (backend.load == 'working') { return 'is-busy'; }
+            if (backend.load == 'idle') { return 'is-idle'; }
+            return 'is-down';
         }
         return backend.status == 'waiting' || backend.status == 'loading' ? 'is-starting' : 'is-down';
     }
@@ -1802,7 +1869,8 @@
             let status = el('td');
             status.append(el('span', `server-state ${queueStateClass(backend)}`, queueStateLabel(backend)));
             let running = el('td', 'num', backend.running == null ? '—' : String(backend.running));
-            let pending = el('td', 'num', backend.pending == null ? '—' : String(backend.pending));
+            // Waiting includes tasks this platform assigned but has not yet handed to ComfyUI (R5.2).
+            let pending = el('td', 'num', backend.queue == null || backend.running == null ? '—' : String(Math.max(0, backend.queue - backend.running)));
             row.append(name, status, running, pending);
             backendList.append(row);
         }
@@ -3306,6 +3374,7 @@
             t.addEventListener('click', () => setMode(t.dataset.mode)));
 
         $('refresh-workflows').addEventListener('click', refreshCatalog);
+        $('execution-server').addEventListener('focus', () => ExecutionServerPicker.load());
         for (let id of ['negative', 'steps', 'cfg', 'seed', 'sampler', 'scheduler']) {
             $(id).addEventListener('change', updateControls);
         }
