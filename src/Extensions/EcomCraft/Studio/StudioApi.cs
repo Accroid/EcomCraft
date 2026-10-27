@@ -1633,7 +1633,14 @@ public static class StudioApi
             "Server failed to save an image." => "引擎生成了结果，但服务器保存文件失败，请检查输出目录和磁盘空间。",
             _ => $"引擎未完整返回结果。请在原生引擎检查{(workflow ? "工作流" : "模型")}依赖、参数和个人历史；可能已有部分输出，请勿直接重复提交。"
         };
-        if (detail.StartsWith("ComfyUI errored:", StringComparison.Ordinal))
+        string errorId = "generation_failed";
+        if (detail.StartsWith("Too many gens in queue.", StringComparison.Ordinal))
+        {
+            // R9.2: the per-role MaxQueued limit; reassigning would not help, so this gets its own code.
+            message = "你的排队任务已达到账号角色允许的上限（MaxQueued），本次没有提交。请等待已有任务完成，或在“队列”中结束部分任务后再提交；需要更高上限请联系管理员。";
+            errorId = "queue_limit";
+        }
+        else if (detail.StartsWith("ComfyUI errored:", StringComparison.Ordinal))
         {
             message = "ComfyUI 拒绝了这个工作流：节点或参数校验没有通过，任务没有开始执行。请在原生引擎打开该工作流检查节点和参数，或请管理员查看服务器日志。";
         }
@@ -1662,7 +1669,7 @@ public static class StudioApi
         {
             message += $" 请求编号：{requestId}。";
         }
-        return Error(message, "generation_failed");
+        return Error(message, errorId);
     }
 
     internal static JObject Error(string text, string id) => new() { ["error"] = text, ["error_id"] = id };
