@@ -700,6 +700,10 @@ public static class StudioApi
                 return Error("视频帧率须为 1–60，或留空以使用引擎默认值。", "invalid_parameters");
             }
         }
+        if (rawInput.Value<bool?>("async") is true)
+        {
+            return await SubmitBackgroundGeneration(session, images, input);
+        }
         try
         {
             JObject result = await T2IAPI.GenerateText2Image(session, images, input);
@@ -714,6 +718,37 @@ public static class StudioApi
             // No exception text in browser responses: upstream messages can contain paths or backend credentials.
             return Error("无法确认引擎执行结果。请在原生引擎核对队列和个人历史后再重试。", "generation_uncertain");
         }
+    }
+
+    /// <summary>Runs one studio generation in the background so the submitting browser stays usable; finished images are saved to the user's gallery as usual. The claim is watched for a few seconds so the caller can track the task id.</summary>
+    private static async Task<JObject> SubmitBackgroundGeneration(Session session, int images, JObject input)
+    {
+        HashSet<long> claimsBefore = [.. session.Claims.Keys];
+        _ = Utilities.RunCheckedTask(async () =>
+        {
+            try
+            {
+                JObject result = await T2IAPI.GenerateText2Image(session, images, input);
+                if (result.ContainsKey("error"))
+                {
+                    Logs.Warning($"EcomCraft background task did not complete: {result["error_id"]}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logs.Warning($"EcomCraft background task failed: {ex.ReadableString()}");
+            }
+        }, "ecomcraft background generate");
+        for (int i = 0; i < 30; i++)
+        {
+            long fresh = session.Claims.Keys.FirstOrDefault(id => !claimsBefore.Contains(id));
+            if (fresh != 0)
+            {
+                return new JObject() { ["queued"] = true, ["task_id"] = fresh };
+            }
+            await Task.Delay(100);
+        }
+        return new JObject() { ["queued"] = true, ["task_id"] = null };
     }
 
     /// <summary>Allows the stored-workflow selector only for a published workflow in an EcomCraft-local request.</summary>
@@ -1201,6 +1236,10 @@ public static class StudioApi
             [ExecutionScopeKey] = ExecutionScopeValue,
             [PublishedWorkflowScopeKey] = workflow.Name
         };
+        if (rawInput.Value<bool?>("async") is true)
+        {
+            return await SubmitBackgroundGeneration(session, images, input);
+        }
         try
         {
             JObject result = await T2IAPI.GenerateText2Image(session, images, input);

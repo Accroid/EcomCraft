@@ -30,9 +30,9 @@
         userId: null, outputAppendUser: false,
         view: 'create', type: 'image', mode: 'text2img',
         workflowId: '', workflowValues: {},
-        busy: false, uncertain: false,
+        busy: false, uncertain: false, submitting: false,
         reference: null, referenceLoading: false, referenceRevision: 0,
-        loras: [], results: [], timer: null,
+        loras: [], results: [], timer: null, pending: new Set(), pendingTimer: null,
         gallery: { items: [], filter: 'all', search: '', sort: 'Date', loading: false, current: null },
         queue: { loading: false, timer: null, stopping: new Set() }
     };
@@ -1507,9 +1507,9 @@
         }
         else if (!state.workflowId && state.mode === 'outpaint' && state.reference && !outpaintDirs.size) { hint = '请先选择至少一个扩图方向。'; }
         $('submit-hint').textContent = hint || '将由平台分配到具备所需模型和节点的 ComfyUI 执行服务器；实际耗时与显存取决于模型。';
-        $('generate').disabled = Boolean(hint);
+        $('generate').disabled = Boolean(hint) || state.submitting;
         const isVideo = state.type === 'video';
-        $('generate-label').textContent = state.busy ? '生成中…' : (isVideo ? '生成视频' : '生成图片');
+        $('generate-label').textContent = state.submitting ? '提交中…' : (isVideo ? '生成视频' : '生成图片');
         let promptLength = $('prompt').value.length;
         $('prompt-count').textContent = `${promptLength} / 12000`;
         $('prompt-count').classList.toggle('near-limit', promptLength > 11000);
@@ -1675,7 +1675,7 @@
 
     async function generate(event) {
         event.preventDefault();
-        if (state.busy || state.uncertain || $('generate').disabled || !$('creation-form').reportValidity()) { return; }
+        if (state.submitting || state.uncertain || $('generate').disabled || !$('creation-form').reportValidity()) { return; }
         let payload;
         try { payload = await buildPayload(); }
         catch (error) { setStatus(error.message || '无法组装请求。', true); return; }
@@ -1684,27 +1684,21 @@
             setStatus('本版只支持普通描述。原生 <…> 指令、预设或 __通配符__ 请在原生引擎使用。', true);
             return;
         }
-        if (state.results.length && !window.confirm('开始新创作会替换当前预览。需要的结果请先下载。继续吗？')) { return; }
-        state.busy = true;
-        state.results = [];
-        const started = Date.now();
-        $('elapsed').textContent = '已等待 0 秒';
-        state.timer = setInterval(() => { $('elapsed').textContent = `已等待 ${Math.floor((Date.now() - started) / 1000)} 秒`; }, 1000);
-        setStatus('已提交，正在等待执行服务器返回结果。节点进度可在“队列”中查看。');
+        // 提交后立即返回队列，不锁定创作区；可以继续改参数、切模式或再次提交。
+        payload.async = true;
+        state.submitting = true;
         updateControls();
-        renderResults();
         try {
             const result = await request('EcomCraftStudioGenerate', payload);
-            if (!Array.isArray(result.images)) { throw new ApiError('引擎响应格式不兼容，请到原生引擎核对结果。', 'generation_uncertain'); }
-            const media = result.images.map(safeMedia).filter(Boolean);
-            if (!media.length || media.length !== result.images.length) {
-                throw new ApiError('没有完整收到可安全预览的输出地址，请在原生引擎核对个人历史。', 'generation_uncertain');
+            if (result.task_id != null) {
+                state.pending.add(result.task_id);
+                startPendingTracker();
             }
-            state.results = media;
-            setStatus(`已生成 ${media.length} ${state.type == 'video' ? '条视频' : '张图片'}，已保存到作品画廊。`);
+            setStatus(`已加入队列${result.task_id != null ? `（任务 #${result.task_id}）` : ''}。可以继续编辑、切换图片/视频或再次提交；完成后结果会自动保存到作品画廊。`);
+            if (state.view == 'gallery') { loadGallery(); }
         } catch (error) {
             state.uncertain = uncertainErrors.has(error.code) || !(error instanceof ApiError);
-            setStatus(error.message || '无法确认执行结果，请在原生引擎核对。', true);
+            setStatus(error.message || '提交失败，请稍后重试。', true);
             if (error.code === 'invalid_session_id') {
                 state.catalog = null;
                 const m = $('connection-message-text');
@@ -1712,12 +1706,34 @@
                 $('connection-message').classList.add('error');
             }
         } finally {
-            clearInterval(state.timer);
-            state.timer = null;
-            state.busy = false;
-            renderResults();
+            state.submitting = false;
             updateControls();
         }
+    }
+
+    /** Polls the queue while this browser has queued tasks, reports finished ones and refreshes the gallery when it is open. */
+    function startPendingTracker() {
+        if (state.pendingTimer) { return; }
+        state.pendingTimer = setInterval(async () => {
+            if (!state.pending.size || document.hidden) { return; }
+            let mine;
+            try {
+                const res = await request('EcomCraftStudioQueue');
+                mine = new Set((res.tasks || []).filter(t => t.mine && t.id != null).map(t => t.id));
+            }
+            catch (error) { return; }
+            for (let id of Array.from(state.pending)) {
+                if (!mine.has(id)) {
+                    state.pending.delete(id);
+                    setStatus(`任务 #${id} 已结束；成功的结果已自动保存到作品画廊。`);
+                    if (state.view == 'gallery') { loadGallery(); }
+                }
+            }
+            if (!state.pending.size) {
+                clearInterval(state.pendingTimer);
+                state.pendingTimer = null;
+            }
+        }, 5000);
     }
 
     /* ============================================================
@@ -3526,7 +3542,7 @@
         });
 
         window.addEventListener('beforeunload', e => {
-            if (state.busy || state.uncertain) { e.preventDefault(); e.returnValue = ''; }
+            if (state.submitting || state.uncertain) { e.preventDefault(); e.returnValue = ''; }
         });
     }
 
