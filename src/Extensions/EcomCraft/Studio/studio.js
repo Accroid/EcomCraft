@@ -46,7 +46,7 @@
     const safeErrors = new Set(['bad_permissions','cloud_unavailable','invalid_model','invalid_mode','invalid_workflow','invalid_workflow_parameters',
         'local_unavailable','invalid_prompt','unsupported_prompt_syntax','invalid_parameters','invalid_reference','invalid_mask','invalid_loras','invalid_sampler',
         'invalid_scheduler','generation_failed','generation_uncertain','task_not_found','workflow_dependencies_missing',
-        'no_execution_server','execution_server_unavailable','invalid_execution_server',
+        'no_execution_server','execution_server_unavailable','invalid_execution_server','queue_limit',
         'workflow_state','invalid_review','review_save_failed',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
     const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
@@ -1764,11 +1764,13 @@
             $('reassign').hidden = true;
         }
 
-        /** Submits the failed request again without a server restriction, so the platform chooses a server by Rule 1. */
+        /** Submits the failed request again without a server restriction, so the platform chooses a server by Rule 1.
+         * Clicking it is the user's explicit decision, so it also clears the "result uncertain" lock that a failed submission sets. */
         static async retry() {
-            if (!this.current || state.submitting || state.uncertain) {
+            if (!this.current || state.submitting) {
                 return;
             }
+            state.uncertain = false;
             let payload = Object.assign({}, this.current);
             delete payload.execution_server_id;
             this.hide();

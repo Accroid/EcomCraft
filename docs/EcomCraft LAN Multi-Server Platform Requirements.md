@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20局域网多服务器平台需求.zh-CN.md)
 >
-> **Status:** In development (phase 1 steps 1–5 code complete) · **Version:** v1.7 · **Date:** 2026-10-27
+> **Status:** In development (phase 1 steps 1–6 code and documentation complete) · **Version:** v1.8 · **Date:** 2026-10-27
 >
 > This document is the reference for further development. When requirements change, update this document first (Chinese and English together), record the change in the change log at the end, and only then change the code. For the e-commerce image layer, the overall architecture and the MVP roadmap, see [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md).
 
@@ -268,7 +268,7 @@ AGENTS.md, the READMEs and the workflow documentation have been updated accordin
 | 3 Review and snapshots | Code complete, awaiting build and real tests | Added `Studio/WorkflowReview.cs` (review records and snapshots), `Studio/WorkflowReviewApi.cs` (review API) and the workspace "Workflows" view |
 | 4 Calling and scheduling | Code complete, awaiting build and real tests | Added `Studio/Generation/` (executor abstraction, Rule 1 selection logic, scheduler) and unit tests in `src/Extensions/EcomCraft/Tests/`; the workspace gained an "Execution server" choice |
 | 5 Queue, failures, gallery | Code complete, awaiting build and real tests | Added `Studio/Generation/TaskOutcomes.cs` (background task results); the workspace shows failures with "Reassign to another server", and the gallery shows the workflow and execution server |
-| 6 Multi-user configuration and documentation | Not started | |
+| 6 Multi-user configuration and documentation | Documentation complete, awaiting a deployment test following it | Added the [LAN Deployment Guide](EcomCraft%20LAN%20Deployment.md) (Chinese and English); the workspace shows a clear message when `MaxQueued` is exceeded (`queue_limit`) |
 | 7 Work storage | Not started | |
 
 Implementation notes for steps 1–2:
@@ -325,4 +325,5 @@ Implementation notes for step 5:
 | 2026-10-27 | v1.4 | D9 changed to "visible only to the owner within the platform; storage layer not isolated"; D11 changed to reserve cloud capability without developing it in this phase; added D12 and R11 work storage (local / NAS / shared folder, write locally then sync); R10 details the executor abstraction and three-stage generation flow; added step 7, V4 and A3; added this English version |
 | 2026-10-27 | v1.6 | Completed step 4 code (T34): executor abstraction, Rule 1 scheduling, pinned server with congestion hint, explained reasons when no server can run a task, model options filtered by online servers; added implementation notes |
 | 2026-10-27 | v1.7 | Completed step 5 code (T35): background task results and failure notices, reassignment to another server, gallery shows the workflow and execution server; added V5 |
+| 2026-10-27 | v1.8 | Completed step 6 (T36): added the LAN Deployment Guide (Chinese and English) covering account login, `MaxQueued`, firewalls, visibility on shared storage and browser restrictions under `http://`; exceeding the queue limit returns `queue_limit` |
 | 2026-10-27 | v1.5 | Static review of steps 1–3 (T33): workflow discovery now refreshes on a background timer started by the extension instead of only when a page is opened; added notes on server names and workflow IDs, and on re-review after conversion logic upgrades |

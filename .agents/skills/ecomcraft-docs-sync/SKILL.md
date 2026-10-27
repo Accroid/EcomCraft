@@ -25,6 +25,7 @@ description: 修改 EcomCraft 功能、API、配置项或安全边界后同步�
 | 产品定位、架构、MVP 范围、功能或任务的增删 | `docs/EcomCraft Architecture.zh-CN.md` 与 `docs/EcomCraft Architecture.md`，再更新 `docs/EcomCraft 开发总表.xlsx`（F / T 编号保持一致，编号不复用） |
 | 完成开发总表中的某个任务 | 开发总表“开发任务”的状态由用户确认后填写；需求文档的“开发进度”节同步更新（中英文） |
 | 工作台页面、按钮、配色、交互 | `docs/EcomCraft 工作台界面设计.zh-CN.md` 第 3 节控件清单（详见 `ecomcraft-studio-ui` 技能） |
+| 部署方式、账号登录、角色权限、排队上限、防火墙、HTTPS、共享存储可见性 | `docs/EcomCraft 局域网部署指南.zh-CN.md` 与 `docs/EcomCraft LAN Deployment.md` |
 | 提示词优化（MagicPrompt）、生成超时 | `docs/EcomCraft Prompt Enhancement.md`（文件名是英文，内容是中文） |
 | 配置键（如 `Settings.EcomCraft.ComfyWorkflowSearchPaths`） | 所有提到该键的文档，用 Grep 全文搜索，确保名称一致 |
 | 新增、删除或改名 EcomCraft 文档 | `docs/README.zh-CN.md` 与 `docs/README.md` 中的 EcomCraft 文档列表，以及两个根目录 README 的“文档”节 |
