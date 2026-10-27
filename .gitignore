@@ -44,10 +44,6 @@ superpowers/
 plans/
 Tests/
 tests/
-!/src/Extensions/EcomCraft/Tests/
-!/src/Extensions/EcomCraft/Tests/*.cjs
-!/src/Extensions/EcomCraft/Tests/*.cs
-!/src/Extensions/EcomCraft/Tests/*.csproj
 plan.md
 PLAN.md
 *-plan.md

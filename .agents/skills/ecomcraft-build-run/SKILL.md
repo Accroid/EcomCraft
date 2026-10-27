@@ -39,8 +39,6 @@ description: 构建、启动、重启 EcomCraft / SwarmUI 服务时使用，包�
 ### 只想验证能否编译
 
 - 主程序：`dotnet build src/SwarmUI.csproj -c Debug -o <临时目录>`，不要输出到正在使用的 `src/bin/live_release`。
-- 扩展单独的 C# 测试项目（如 `src/Extensions/EcomCraft/Tests/NativeWorkflows.csproj`）引用 `src/bin/live_release/SwarmUI.dll`，必须先有一份由当前源码生成的主程序。
-- NUnit 测试：`launchtools/run_tests.bat`（Windows）或 `launchtools/run_tests.sh`。
 
 ### 启动后检查
 

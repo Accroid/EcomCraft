@@ -4,8 +4,5 @@
     <RootNamespace>EcomCraftStudio</RootNamespace>
     <LangVersion>12</LangVersion>
   </PropertyGroup>
-  <ItemGroup>
-    <Compile Remove="Tests/**/*.cs" />
-  </ItemGroup>
   <Import Project="../../SwarmUI.extension.props" />
 </Project>

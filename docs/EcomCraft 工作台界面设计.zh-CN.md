@@ -278,17 +278,7 @@
 
 ## 5. 实现与验收说明
 
-### 5.1 本机预览
-
-不需要 SwarmUI、ComfyUI 或 GPU，就能在浏览器里查看工作台的真实页面：
-
-```
-node src/Extensions/EcomCraft/Tests/studio-preview.cjs 7899
-```
-
-然后打开 `http://127.0.0.1:7899/EcomCraft`。预览服务器只监听本机，使用真实的 `index.html`、`studio.css`、`studio.js`，接口返回假数据，图片是生成的示意图（视频没有示意文件，缩略图为空白）。地址加上 `?shot=result`、`?shot=gallery-select`、`?shot=result-lightbox`、`?shot=settings`、`?shot=result-dark` 等参数，会自动操作页面进入对应状态，便于截图对比。
-
-### 5.2 与检查清单的差异（有意保留或暂未实现）
+### 5.1 与检查清单的差异（有意保留或暂未实现）
 
 | 规则 | 现状 | 原因 |
 |---|---|---|

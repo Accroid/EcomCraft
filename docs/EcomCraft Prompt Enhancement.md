@@ -171,8 +171,6 @@ curl http://localhost:8000/v1/models
 
 工作台通过 `PreviewMagicPromptModels` 临时拉取所选后端的文本模型，需要配置保存和模型列表权限。此接口不调用配置或 Key 保存逻辑，不返回上游错误正文或凭据。
 
-开发回归检查：运行 `node --test src/Extensions/EcomCraft/Tests/prompt-settings.test.cjs`。服务启动后，可设置环境变量 `ECOMCRAFT_TEST_URL=http://127.0.0.1:7801`，再运行 `node --test src/Extensions/EcomCraft/Tests/model-preview.integration.cjs`；接口测试只使用本地模拟服务和测试密钥，不保存用户配置。
-
 ---
 
 ## 验证与排错

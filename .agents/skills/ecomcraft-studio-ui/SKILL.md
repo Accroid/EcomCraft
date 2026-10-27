@@ -23,13 +23,9 @@ description: 修改 EcomCraft 工作台页面（src/Extensions/EcomCraft/Studio 
 - 浏览器本地存储一律用 `readStorage` / `writeStorage`，不要直接访问 `localStorage`（隐私模式下可能抛异常，导致页面初始化中断）；需要可靠保存或多人共享的数据放在服务端。
 - 按钮点击区域不小于 32px；文字按钮 `.link-btn` 已用内边距加负外边距扩大点击区，新增样式时不要覆盖。
 - 弹窗打开时调用 `DialogFocus.enter`，关闭时调用 `DialogFocus.leave`，并在全局 `keydown` 中处理 Esc 和 `DialogFocus.trap`。
-- 保留现有元素 ID：`studio.js` 和 `Tests/*.test.cjs` 依赖它们。测试会截取 `    initTheme();` 之前的代码，并用只有 `value`、`hidden`、`disabled`、`textContent`、`classList.toggle` 的假元素运行；`updateControls` 等会被测试调用的函数只能使用这些属性。
+- 保留现有元素 ID：`studio.js` 依赖它们。
 - 文案：写用户能看懂的结果（“已删除 3 个作品”），加载状态以“…”结尾，错误说明原因和下一步；不用中点“·”拼接信息，不用全大写标签。
-- 修改后运行：
-  - `node --check src/Extensions/EcomCraft/Studio/studio.js`
-  - `node src/Extensions/EcomCraft/Tests/<name>.test.cjs`（逐个运行全部 `*.test.cjs`）
-  - `node src/Extensions/EcomCraft/Tests/studio-preview.cjs 7899` 后在浏览器打开 `http://127.0.0.1:7899/EcomCraft` 查看效果；Windows 上可以用 Edge 无头模式截图：`msedge --headless=new --user-data-dir=<临时目录> --window-size=1440,1000 --virtual-time-budget=9000 --screenshot=<文件> "http://127.0.0.1:7899/EcomCraft?shot=gallery#gallery"`
+- 修改后运行 `node --check src/Extensions/EcomCraft/Studio/studio.js`，再启动服务在浏览器中实际查看效果。
 - `studio.js` / `studio.css` 由 `StudioRoutes.cs` 以 `/EcomCraft/studio.js`、`/EcomCraft/studio.css` 提供，每次请求都从硬盘读取，和页面本身保持一致。不要改回 `/ExtensionFile/...`：SwarmUI 在 Release 模式下会把该路径的文件缓存在内存里直到重启，更新代码后会出现“新页面 + 旧脚本”，旧脚本一启动就报错，所有按钮失效。修改后仍要更新 `index.html` 链接里的 `?v=` 版本号，避免浏览器缓存。
 - `index.html` 中的 `#boot-check` 是启动失败兜底提示，`studio.js` 初始化的最后一步把它隐藏；新增初始化步骤时放在隐藏它之前。
 - 原生工作流 ID 必须在 `Utilities.StrictFilenameClean` 处理后保持不变（SwarmUI 生成时会再次清理名称，ID 一变就找不到工作流）。前端按第一个 `/` 拆出来源服务器分组。
-- 交互回归：`node src/Extensions/EcomCraft/Tests/studio-preview.cjs 7899` 后访问 `http://127.0.0.1:7899/EcomCraft?selftest=1`，浏览器控制台会逐项输出 `SELFTEST PASS/FAIL`。可用 Edge 无头模式加 `--enable-logging=stderr` 收集输出。预览服务器带有与 `StudioRoutes.cs` 相同的 CSP 响应头；修改预览服务器代码后需要重启它。

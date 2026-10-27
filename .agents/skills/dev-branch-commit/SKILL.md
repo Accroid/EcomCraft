@@ -27,7 +27,7 @@ description: 在本仓库提交或推送代码时使用；说明分支用途（�
 2. `git diff --stat` 和 `git diff`：逐项确认改动符合预期。
 3. `git diff --check`：没有行尾空格或冲突标记。
 4. 不提交 `src/bin`、`src/obj`、`Data/`、`Output/`、`Models/`、临时截图或测试输出。`.agents/skills/` 已在 `.gitignore` 中放行，可以提交；其他位置的 `SKILL.md` 和 `skills/` 会被忽略。
-5. 能运行的检查都运行一遍：`node --check src/Extensions/EcomCraft/Studio/studio.js`、`src/Extensions/EcomCraft/Tests/*.test.cjs`；C# 能编译就编译（见 `ecomcraft-build-run` 技能）。
+5. 能运行的检查都运行一遍：`node --check src/Extensions/EcomCraft/Studio/studio.js`；C# 能编译就编译（见 `ecomcraft-build-run` 技能）。
 6. 文档已按 `ecomcraft-docs-sync` 技能同步。
 
 ### 提交信息格式

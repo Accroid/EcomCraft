@@ -78,9 +78,7 @@ Release 模式下，C# 扩展程序集按 Git 提交短哈希缓存。修改 `sr
 
 本仓库结构复杂，各部分紧密关联，不容易进行模拟测试，并且高度依赖缓慢且成本高昂的 GPU 操作。
 
-NUnit 单元测试位于 `SwarmUITests` 项目中。在 Windows 上使用 `launchtools/run_tests.bat` 运行，在 Linux/macOS 上使用 `launchtools/run_tests.sh` 运行。GitHub Actions 会在推送和拉取请求时运行这些测试。
-
-这些测试覆盖独立的 C# 逻辑，不覆盖依赖真实 GPU 的行为。开发者仍须手动运行软件进行实际验证。代理无法运行大多数形式的测试。在开发者投入时间测试之前，代理应尽力通过静态分析和逐步跟踪执行逻辑来验证修改。
+仓库不包含自动化测试项目。开发者须手动运行软件进行实际验证。在开发者投入时间测试之前，代理应尽力通过静态分析和逐步跟踪执行逻辑来验证修改。
 
 ## 通用编辑策略
 
@@ -120,7 +118,6 @@ NUnit 单元测试位于 `SwarmUITests` 项目中。在 Windows 上使用 `launc
 - `src/wwwroot/css`：浏览器前端 CSS 样式表。
 - `src/Pages`：`.cshtml` C# Razor Pages，包含浏览器前端 HTML。
 - `src/*.cs`：C# 主服务器通用代码。
-- `SwarmUITests/`：NUnit 测试项目，不包含在常规构建中。通过 `launchtools/run_tests.bat` 或 `launchtools/run_tests.sh` 运行。
 - `src/BuiltinExtensions`：内置于主仓库的扩展。
 - `src/Extensions/EcomCraft`：本仓库直接维护的 EcomCraft 工作台、MagicPrompt 和工作流接口；修改时可同时更新其必要的核心入口、页面和文档。
 - `src/Extensions`：其他外部下载的扩展。如果任务未明确指定某个外部扩展，不得修改其内容。
