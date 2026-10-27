@@ -18,7 +18,7 @@ description: 构建、启动、重启 EcomCraft / SwarmUI 服务时使用，包�
 ### 先确认环境
 
 - 运行 `dotnet --list-sdks`。如果没有 .NET 8 SDK，就不能编译：只做静态检查，并在回复和提交信息里写明“C# 改动未经编译验证”。不要擅自安装 SDK，先问用户。
-- 当前有两个工作区：`EcomCraft-gallery-delete`（`dev` 分支，日常开发）和 `EcomCraft`（`main` 分支）。只在当前工作区构建和启动；同一个数据目录只能运行一个服务实例。
+- 日常开发在桌面的 `EcomCraft` 克隆（`dev` 分支）中进行；旧的 `EcomCraft-gallery-delete` 工作区已失效。只在当前工作区构建和启动；同一个数据目录只能运行一个服务实例。
 
 ### 停止旧进程
 

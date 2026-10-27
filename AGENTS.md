@@ -88,7 +88,7 @@ Release 模式下，C# 扩展程序集按 Git 提交短哈希缓存。修改 `sr
 
 修改桌面入口时，同时检查 `Desktop/`、`src/Core/Installation.cs`、启动脚本和 `src/wwwroot/ecomcraft.ico` 的名称与路径是否一致，避免重新生成 SwarmUI 旧桌面程序或快捷方式。
 
-修改文档时，英文原文和 `.zh-CN.md` 中文文档应保持语言入口一致；不要编辑 `docs/APIRoutes/` 自动生成文档。中文导读如果不是完整翻译，必须明确标注为导读并链接英文原文。
+修改文档时，英文原文和 `.zh-CN.md` 中文文档应保持语言入口一致；不要编辑 `docs/APIRoutes/` 自动生成文档。中文导读如果不是完整翻译，必须明确标注为导读并链接英文原文。EcomCraft 面向国内外用户：新增或修改 EcomCraft 文档时，必须同时编写或同步中文和英文两个版本；尚无英文版的旧文档，在下次修改时补齐英文版。
 
 提交前应检查 `git status --short`、`git diff --stat` 和 `git diff --check`。不要覆盖工作区中已有的用户修改；不要把仅由构建、启动或测试产生的文件加入提交。
 
@@ -103,6 +103,7 @@ Release 模式下，C# 扩展程序集按 Git 提交短哈希缓存。修改 `sr
 - 修改桌面入口或首页跳转时，应同时检查 `Desktop/`、`src/Core/Installation.cs`、`src/Core/Program.cs`、启动脚本、`src/Pages/Text2Image.cshtml` 和 `src/wwwroot/ecomcraft.ico` 的名称与路径一致性。
 - 修改 EcomCraft 功能后，应同步检查根目录的 `README.md`、`README.en.md`、`docs/README.zh-CN.md` 以及对应功能文档；API 名称、配置键和安全边界必须保持一致。
 - 局域网多服务器平台的开发以 [`docs/EcomCraft 局域网多服务器平台需求.zh-CN.md`](docs/EcomCraft%20局域网多服务器平台需求.zh-CN.md) 为准；需求变更先改该文档再改代码。
+- 产品定位、整体架构和 MVP 范围以 [`docs/EcomCraft Architecture.zh-CN.md`](docs/EcomCraft%20Architecture.zh-CN.md) 为准，功能和任务进度记录在 `docs/EcomCraft 开发总表.xlsx`（功能编号 F、任务编号 T 与架构文档一致）。范围变更先改架构文档和需求文档，再改开发总表，最后改代码。
 
 ## 项目结构
 

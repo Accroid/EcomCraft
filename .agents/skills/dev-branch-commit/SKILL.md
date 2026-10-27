@@ -19,7 +19,7 @@ description: 在本仓库提交或推送代码时使用；说明分支用途（�
 - `main`：正式发布分支。由用户确认功能后手动把 `dev` 合并进来；代理不得提交、合并或推送到 `main`。
 - `master`：从上游 SwarmUI 仓库 fork 的分支，只用于跟踪上游。只有用户明确要求同步上游时才操作它。
 - 不要自行新建功能分支或发起 PR，除非用户要求。
-- 工作区 `EcomCraft-gallery-delete` 检出 `dev`，工作区 `EcomCraft` 检出 `main`；在 `dev` 工作区里工作，不要切换另一个工作区的分支。
+- 日常开发在桌面的 `EcomCraft` 克隆中进行，检出 `dev` 并跟踪 `origin/dev`。旧的 `EcomCraft-gallery-delete` 工作区已失效（其主仓库已不存在），不要在其中工作。如果另有检出 `main` 的工作区，不要切换它的分支。
 
 ### 提交前检查
 
