@@ -11,7 +11,8 @@ using SwarmUI.Utils;
 
 namespace EcomCraftStudio.Studio;
 
-/// <summary>Discovers native ComfyUI workflows on execution servers in the background. Catalog and generation requests only read the cache.</summary>
+/// <summary>Discovers native ComfyUI workflows on execution servers in the background. Catalog and generation requests only read the cache.
+/// Discovered workflows are only review candidates: users run the frozen snapshots that <see cref="WorkflowReview"/> publishes.</summary>
 public static class WorkflowDiscovery
 {
     /// <summary>Minimum interval between background refreshes.</summary>
@@ -26,8 +27,10 @@ public static class WorkflowDiscovery
     /// <summary>Server ID for workflows found in a local directory that no registered execution server owns.</summary>
     public const int UnregisteredSource = -1;
 
-    /// <summary>One imported workflow, the execution server it was found on, and whether it came over HTTP.</summary>
-    private sealed record class Entry(ComfyUIBackendExtension.ComfyCustomWorkflow Workflow, int ServerId, bool Remote);
+    /// <summary>One discovered workflow: the converted template (null when it failed validation), the execution server it was found on,
+    /// whether it came over HTTP, the server display name, a content fingerprint and the reason it cannot be imported.</summary>
+    public sealed record class Entry(string Id, ComfyUIBackendExtension.ComfyCustomWorkflow Workflow, int ServerId, bool Remote,
+        string Server, string Fingerprint, string Problem);
 
     /// <summary>One workflow file read during a refresh, before naming and conversion.</summary>
     private sealed record class Found(string Prefix, int ServerId, bool Remote, string RelativeName, string SourceKey, string Json);
@@ -53,7 +56,7 @@ public static class WorkflowDiscovery
     /// <summary>Stops background refreshes when the extension shuts down.</summary>
     private static readonly CancellationTokenSource StopSource = new();
 
-    /// <summary>Starts a background refresh when the cache is stale, waits briefly only before the first result exists, then restores cached imports to the workflow registry.</summary>
+    /// <summary>Starts a background refresh when the cache is stale, waits briefly only before the first result exists, then restores published snapshots to the workflow registry.</summary>
     public static void EnsureFresh()
     {
         Task task;
@@ -79,33 +82,34 @@ public static class WorkflowDiscovery
                 // RefreshAsync logs its own failures.
             }
         }
-        Restore();
+        WorkflowReview.Restore();
     }
 
-    /// <summary>Re-adds cached imports after a ComfyUI workflow registry reload. Never replaces a stored workflow that has the same name.</summary>
-    public static void Restore()
+    /// <summary>All cached discoveries, ordered by ID.</summary>
+    public static List<Entry> ListEntries()
     {
         lock (EntriesLock)
         {
-            foreach (KeyValuePair<string, Entry> pair in Entries)
-            {
-                ComfyUIBackendExtension.CustomWorkflows.TryAdd(pair.Key, pair.Value.Workflow);
-            }
+            return [.. Entries.Values.OrderBy(entry => entry.Id, StringComparer.OrdinalIgnoreCase)];
         }
     }
 
-    /// <summary>Whether the workflow was imported by discovery rather than saved in SwarmUI.</summary>
-    public static bool IsNative(string name)
+    /// <summary>The cached discovery with this ID, or null.</summary>
+    public static Entry Find(string id)
     {
-        if (name is null)
+        if (string.IsNullOrWhiteSpace(id))
         {
-            return false;
+            return null;
         }
         lock (EntriesLock)
         {
-            return Entries.ContainsKey(name);
+            return Entries.TryGetValue(id, out Entry entry) ? entry : null;
         }
     }
+
+    /// <summary>Whether the source of a discovery can currently be read: local folders always, LAN servers while ready.</summary>
+    public static bool IsSourceOnline(Entry entry) => entry is not null && (!entry.Remote
+        || ExecutionServers.All.Any(data => data.ID == entry.ServerId && ExecutionServers.IsReady(data)));
 
     /// <summary>Stops future refreshes. A running refresh observes the cancellation and exits.</summary>
     public static void Shutdown()
@@ -167,31 +171,13 @@ public static class WorkflowDiscovery
                 {
                     continue;
                 }
-                ComfyUIBackendExtension.ComfyCustomWorkflow workflow = Convert(name, item, schemas);
-                if (workflow is not null)
-                {
-                    next[name] = new Entry(workflow, item.ServerId, item.Remote);
-                }
+                next[name] = Convert(name, item, schemas);
             }
             lock (EntriesLock)
             {
-                foreach (KeyValuePair<string, Entry> pair in Entries)
-                {
-                    if (!next.ContainsKey(pair.Key))
-                    {
-                        ComfyUIBackendExtension.CustomWorkflows.TryRemove(new KeyValuePair<string, ComfyUIBackendExtension.ComfyCustomWorkflow>(pair.Key, pair.Value.Workflow));
-                    }
-                }
-                foreach (KeyValuePair<string, Entry> pair in next)
-                {
-                    if (Entries.TryGetValue(pair.Key, out Entry old) && !ReferenceEquals(old.Workflow, pair.Value.Workflow))
-                    {
-                        ComfyUIBackendExtension.CustomWorkflows.TryUpdate(pair.Key, pair.Value.Workflow, old.Workflow);
-                    }
-                }
                 Entries = next;
             }
-            Restore();
+            WorkflowReview.Restore();
         }
         catch (OperationCanceledException)
         {
@@ -207,7 +193,7 @@ public static class WorkflowDiscovery
         }
     }
 
-    /// <summary>Picks "Server/relative path"; avoids stored SwarmUI workflows and other sources with a short path hash.
+    /// <summary>Picks "Server/relative path"; avoids stored SwarmUI workflows and other sources with a short path hash. Published snapshots share their source's name.
     /// Names are passed through <see cref="Utilities.StrictFilenameClean"/> here because SwarmUI cleans the custom-workflow
     /// name again when it reads the workflow for generation; a name that changes under cleaning would resolve to nothing.</summary>
     private static string UniqueName(Found item, Dictionary<string, Entry> taken)
@@ -219,7 +205,7 @@ public static class WorkflowDiscovery
             return null;
         }
         bool isFree(string candidate) => !taken.ContainsKey(candidate)
-            && (!ComfyUIBackendExtension.CustomWorkflows.TryGetValue(candidate, out ComfyUIBackendExtension.ComfyCustomWorkflow existing) || IsOwnedImport(candidate, existing));
+            && (!ComfyUIBackendExtension.CustomWorkflows.TryGetValue(candidate, out ComfyUIBackendExtension.ComfyCustomWorkflow existing) || WorkflowReview.IsSnapshot(candidate, existing));
         if (isFree(baseName))
         {
             return baseName;
@@ -229,28 +215,26 @@ public static class WorkflowDiscovery
         return isFree(hashed) ? hashed : null;
     }
 
-    /// <summary>Whether a registry entry is the one this discovery previously imported under that name.</summary>
-    private static bool IsOwnedImport(string name, ComfyUIBackendExtension.ComfyCustomWorkflow existing)
+    /// <summary>Converts a canvas into the server-owned prompt and parameter bindings. Unsupported graphs keep a reason instead of a template.
+    /// The fingerprint covers the executable graph, bindings and saved values before server model choices are added, so it changes only with the workflow itself.</summary>
+    private static Entry Convert(string name, Found item, List<JObject> schemas)
     {
-        lock (EntriesLock)
-        {
-            return Entries.TryGetValue(name, out Entry entry) && ReferenceEquals(entry.Workflow, existing);
-        }
-    }
-
-    /// <summary>Converts a canvas into the server-owned prompt and parameter bindings; returns null for unsupported graphs.</summary>
-    private static ComfyUIBackendExtension.ComfyCustomWorkflow Convert(string name, Found item, List<JObject> schemas)
-    {
-        JObject prompt = NativeWorkflowConverter.Convert(StudioApi.ParseWorkflowObject(item.Json), out JObject metadata, out JObject values);
+        JObject canvas = StudioApi.ParseWorkflowObject(item.Json);
+        JObject prompt = NativeWorkflowConverter.Convert(canvas, out JObject metadata, out JObject values);
         if (prompt is null)
         {
-            return null;
+            string problem = canvas is null ? "文件不是有效的 ComfyUI 工作流 JSON。"
+                : "工作流结构暂不支持：需要正负提示词各接一个文本编码节点、子图连接完整，且可配置参数不超过 60 个。";
+            return new Entry(name, null, item.ServerId, item.Remote, item.Prefix, WorkflowCatalogFilter.Fingerprint(new JObject { ["source"] = item.Json }), problem);
         }
+        string fingerprint = WorkflowCatalogFilter.Fingerprint(new JObject { ["prompt"] = prompt, ["parameters"] = metadata, ["values"] = values });
         NativeWorkflowParameters.AddChoices(metadata, schemas);
         string description = item.ServerId == UnregisteredSource
             ? "从本机 ComfyUI 安装目录自动发现。执行时由平台分配到具备所需模型和节点的执行服务器。"
             : $"从执行服务器“{item.Prefix}”的 ComfyUI 自动发现。执行时由平台分配到具备所需模型和节点的执行服务器。";
-        return new(name, item.Json, prompt.ToString(Formatting.None), metadata.ToString(Formatting.None), values.ToString(Formatting.None), null, description, true);
+        ComfyUIBackendExtension.ComfyCustomWorkflow workflow = new(name, item.Json, prompt.ToString(Formatting.None), metadata.ToString(Formatting.None),
+            values.ToString(Formatting.None), null, description, false);
+        return new Entry(name, workflow, item.ServerId, item.Remote, item.Prefix, fingerprint, null);
     }
 
     /// <summary>Scans the verified local workflow folders. Returns false when the time budget ran out before every folder was read.</summary>

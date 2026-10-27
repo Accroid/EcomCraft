@@ -56,14 +56,14 @@ public static class NativeWorkflowParameters
         }
     }
 
-    /// <summary>Returns only displayable defaults; no raw graph, source paths or private images.</summary>
+    /// <summary>Returns only displayable defaults; no raw graph, source paths or private images. Hidden parameters are left out, so the page hides their fields.</summary>
     public static JObject FormDefaults(JObject metadata, JObject values)
     {
         JObject defaults = new() { ["images"] = values["images"]?.DeepClone() ?? new JValue(1) };
         foreach (JProperty property in metadata.Properties())
         {
             string form = property.Value["form"]?.ToString();
-            if (!string.IsNullOrEmpty(form))
+            if (!string.IsNullOrEmpty(form) && property.Value.Value<bool?>("visible") != false)
             {
                 defaults[form] = values[property.Name]?.DeepClone() ?? property.Value["default"]?.DeepClone();
             }

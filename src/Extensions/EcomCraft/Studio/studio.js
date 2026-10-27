@@ -45,7 +45,8 @@
     }
     const safeErrors = new Set(['bad_permissions','cloud_unavailable','invalid_model','invalid_mode','invalid_workflow','invalid_workflow_parameters',
         'local_unavailable','invalid_prompt','unsupported_prompt_syntax','invalid_parameters','invalid_reference','invalid_mask','invalid_loras','invalid_sampler',
-        'invalid_scheduler','generation_failed','generation_uncertain','task_not_found',
+        'invalid_scheduler','generation_failed','generation_uncertain','task_not_found','workflow_dependencies_missing',
+        'workflow_state','invalid_review','review_save_failed',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
     const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
 
@@ -174,14 +175,15 @@
        ============================================================ */
     /** Shows one view, marks its navigation entry as current and loads its data. */
     function setView(view) {
-        if (!['create', 'gallery', 'queue'].includes(view)) {
+        if (!['create', 'gallery', 'queue', 'workflows'].includes(view)) {
             view = 'create';
         }
         state.view = view;
         $('view-create').hidden = view != 'create';
         $('view-gallery').hidden = view != 'gallery';
         $('view-queue').hidden = view != 'queue';
-        let titles = { create: '创作', gallery: '作品画廊', queue: '任务队列' };
+        $('view-workflows').hidden = view != 'workflows';
+        let titles = { create: '创作', gallery: '作品画廊', queue: '任务队列', workflows: WorkflowReviewView.reviewer() ? '工作流审核' : '提交工作流审核' };
         document.title = `${titles[view]} - EcomCraft 创作工作台`;
         for (let item of document.querySelectorAll('.nav-item[data-view]')) {
             if (item.dataset.view == view) {
@@ -197,10 +199,13 @@
         if (view == 'queue') {
             loadQueue();
         }
+        if (view == 'workflows') {
+            WorkflowReviewView.enter();
+        }
     }
     function route() {
         const hash = (location.hash || '').replace('#', '');
-        setView(['gallery', 'queue'].includes(hash) ? hash : 'create');
+        setView(['gallery', 'queue', 'workflows'].includes(hash) ? hash : 'create');
     }
 
     /** Opens the setup guide and records that the first-visit prompt was dismissed. */
@@ -599,6 +604,10 @@
             $('user-name').textContent = catalog.user_name;
             $('avatar').textContent = String(catalog.user_name || 'E').slice(0, 1).toUpperCase();
             $('enhancer-settings').hidden = !catalog.can_manage_settings;
+            WorkflowReviewView.updateAccess();
+            if (state.view == 'workflows') {
+                WorkflowReviewView.load();
+            }
             if (catalog.version) {
                 $('app-version').textContent = `EcomCraft Studio ${catalog.version}`;
             }
@@ -2272,6 +2281,557 @@
         }
     }
 
+    /* ============================================================
+       Workflow review
+       ============================================================ */
+    /** Lists discovered workflows for submitters and reviewers and runs the submit and review dialogs; the server checks every permission again. */
+    class WorkflowReviewView {
+        static items = [];
+        static filter = 'todo';
+        static loading = false;
+        static detail = null;
+        static detailRequest = null;
+        static controls = new Map();
+        static saving = false;
+        static submitTarget = null;
+        static stateLabels = { pending: '待审核', rereview: '待重新审核', published: '已发布', rejected: '已驳回', unpublished: '已下架', invalid: '无法导入' };
+        static filters = { todo: ['pending', 'rereview'], published: ['published', 'rereview'], closed: ['rejected', 'unpublished'], invalid: ['invalid'], all: null };
+
+        /** Whether the account may open this view. */
+        static available() {
+            return Boolean(state.catalog?.can_review_workflows || state.catalog?.can_submit_workflows);
+        }
+
+        /** Whether the account reviews rather than only submits. */
+        static reviewer() {
+            return Boolean(state.catalog?.can_review_workflows);
+        }
+
+        /** Shows the navigation entry and page texts for the account's permission; leaves the view when access was removed. */
+        static updateAccess() {
+            $('nav-workflows').hidden = !this.available();
+            $('workflows-title').textContent = this.reviewer() ? '工作流审核' : '提交工作流审核';
+            $('workflows-intro').textContent = this.reviewer()
+                ? '执行服务器上保存的 ComfyUI 工作流会自动出现在这里。通过审核时会保存一份快照，用户只能调用已发布的快照；来源文件修改后需要重新审核，通过前用户继续使用旧快照。'
+                : '在执行服务器的 ComfyUI 中保存工作流后，可以在这里提交审核。审核通过后，它会出现在创作页的工作流列表中。';
+            if (state.catalog && !this.available() && state.view == 'workflows') {
+                location.hash = 'create';
+            }
+        }
+
+        /** Opens the view: waits for the catalog when it is still loading, otherwise loads the list. */
+        static enter() {
+            if (!state.catalog) {
+                return;
+            }
+            this.updateAccess();
+            if (this.available()) {
+                this.load();
+            }
+        }
+
+        /** Reads the list allowed for this account. */
+        static async load() {
+            if (this.loading || !this.available()) {
+                return;
+            }
+            this.loading = true;
+            $('workflows-refresh').disabled = true;
+            try {
+                let result = await request(this.reviewer() ? 'EcomCraftStudioReviewList' : 'EcomCraftStudioWorkflowSubmissions');
+                this.items = Array.isArray(result.workflows) ? result.workflows : [];
+                $('workflows-message').hidden = true;
+                $('workflows-updated').textContent = `共 ${this.items.length} 个，更新于 ${new Intl.DateTimeFormat('zh-CN', { timeStyle: 'medium' }).format(new Date())}`;
+                this.render();
+            }
+            catch (error) {
+                this.showBanner(error.message || '工作流列表读取失败，请稍后重试。', true);
+            }
+            finally {
+                this.loading = false;
+                $('workflows-refresh').disabled = false;
+            }
+        }
+
+        /** Refreshes in the background while the view is open and no dialog is in use. */
+        static poll() {
+            if (state.view == 'workflows' && !document.hidden && $('review-modal').hidden && $('submit-modal').hidden) {
+                this.load();
+            }
+        }
+
+        /** Shows a page-level result or error. */
+        static showBanner(text, isError) {
+            $('workflows-message').textContent = text;
+            $('workflows-message').classList.toggle('error', Boolean(isError));
+            $('workflows-message').hidden = false;
+        }
+
+        /** Selects a status filter. */
+        static setFilter(filter) {
+            this.filter = Object.prototype.hasOwnProperty.call(this.filters, filter) ? filter : 'todo';
+            this.render();
+        }
+
+        /** Renders the filtered list and the count of workflows waiting for review. */
+        static render() {
+            let list = $('workflows-list');
+            list.replaceChildren();
+            let wanted = this.filters[this.filter];
+            let shown = this.items.filter(item => !wanted || wanted.includes(item.state));
+            for (let item of shown) {
+                list.append(this.row(item));
+            }
+            $('workflows-empty').hidden = shown.length > 0;
+            $('workflows-empty').textContent = this.items.length
+                ? '没有符合筛选条件的工作流。'
+                : '还没有发现工作流。请在执行服务器的 ComfyUI 中保存工作流，约 30 秒后点击“刷新”。';
+            let todo = this.items.filter(item => ['pending', 'rereview'].includes(item.state)).length;
+            $('workflows-count').textContent = todo;
+            $('workflows-count').hidden = !this.reviewer() || todo == 0;
+            for (let button of $('workflows-filter').querySelectorAll('[data-filter]')) {
+                let selected = button.dataset.filter == this.filter;
+                button.classList.toggle('selected', selected);
+                button.setAttribute('aria-pressed', String(selected));
+            }
+        }
+
+        /** Formats a Unix millisecond time for display. */
+        static time(ms) {
+            return ms ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(ms)) : '';
+        }
+
+        /** Summarizes which servers can run a workflow, e.g. "仅 A（B：缺少节点 X）". */
+        static runnableText(runnable) {
+            let servers = Array.isArray(runnable) ? runnable : [];
+            if (!servers.length) {
+                return '可运行服务器：还没有登记执行服务器';
+            }
+            let ok = servers.filter(server => server.ok).map(server => server.name);
+            let bad = servers.filter(server => !server.ok).map(server => `${server.name}：${(server.problems || []).join('、') || '不可用'}`);
+            if (!ok.length) {
+                return `没有服务器能运行（${bad.join('；')}）`;
+            }
+            return bad.length ? `可运行服务器：仅 ${ok.join('、')}（${bad.join('；')}）` : `可运行服务器：${ok.join('、')}`;
+        }
+
+        /** Builds one list row with the actions this account may take. */
+        static row(item) {
+            let row = el('li', 'review-item');
+            let main = el('div', 'review-item-main');
+            main.append(el('strong', '', item.name || item.id));
+            let source = item.source_missing ? '（来源文件已不存在）' : item.source_online ? '' : '（来源离线）';
+            let line = el('span');
+            let attention = ['pending', 'rereview', 'invalid'].includes(item.state);
+            line.append(el('span', `review-state${attention ? ' is-attention' : ''}`, this.stateLabels[item.state] || '未知状态'),
+                document.createTextNode(`，来源：${item.server || '未知'}${source}`));
+            main.append(line);
+            if (item.problem) {
+                main.append(el('span', '', item.problem));
+            }
+            if (this.reviewer()) {
+                if (item.state != 'invalid') {
+                    main.append(el('span', '', this.runnableText(item.runnable)));
+                }
+                if (item.submitted_by) {
+                    main.append(el('span', '', `${item.submitted_by} 于 ${this.time(item.submitted_at)} 提交${item.submit_note ? `：${item.submit_note}` : ''}`));
+                }
+                if (item.reject_reason && ['rejected', 'published'].includes(item.state)) {
+                    main.append(el('span', '', `${item.state == 'published' ? '新版本' : ''}驳回原因：${item.reject_reason}`));
+                }
+                if (item.published_at) {
+                    main.append(el('span', '', `快照发布于 ${this.time(item.published_at)}`));
+                }
+            }
+            else {
+                if (item.mine && item.submitted_at) {
+                    main.append(el('span', '', `我于 ${this.time(item.submitted_at)} 提交${item.submit_note ? `：${item.submit_note}` : ''}`));
+                }
+                if (item.reject_reason) {
+                    main.append(el('span', '', `驳回原因：${item.reject_reason}`));
+                }
+            }
+            let actions = el('div', 'review-item-actions');
+            if (this.reviewer() && item.state != 'invalid') {
+                let label = item.state == 'published' ? '查看配置' : item.state == 'rereview' ? '重新审核' : '审核';
+                let button = el('button', item.state == 'published' ? 'btn btn-sm' : 'btn btn-sm btn-primary', label);
+                button.type = 'button';
+                button.addEventListener('click', () => this.openReview(item, button));
+                actions.append(button);
+            }
+            if (!this.reviewer() && item.can_submit) {
+                let button = el('button', 'btn btn-sm', item.mine ? '重新提交' : '提交审核');
+                button.type = 'button';
+                button.addEventListener('click', () => this.openSubmit(item, button));
+                actions.append(button);
+            }
+            row.append(main, actions);
+            return row;
+        }
+
+        /** Opens the review dialog and loads the parameters of the version under review. */
+        static async openReview(item, opener) {
+            let modal = $('review-modal');
+            this.detail = null;
+            this.controls = new Map();
+            $('review-title').textContent = `审核：${item.name || item.id}`;
+            $('review-meta').textContent = `来源 ${item.server || '未知'}，${this.stateLabels[item.state] || ''}`;
+            $('review-loading').textContent = '正在读取工作流参数…';
+            $('review-loading').hidden = false;
+            $('review-content').hidden = true;
+            $('review-message').hidden = true;
+            $('review-reason').value = '';
+            this.updateReviewButtons();
+            modal.hidden = false;
+            DialogFocus.enter(modal, opener, $('review-close'));
+            this.detailRequest?.abort();
+            let controller = new AbortController();
+            this.detailRequest = controller;
+            try {
+                let detail = await request('EcomCraftStudioReviewDetail', { workflow_id: item.id }, controller.signal);
+                if (this.detailRequest != controller || modal.hidden) {
+                    return;
+                }
+                this.detail = detail;
+                this.renderDetail(detail);
+            }
+            catch (error) {
+                if (!controller.signal.aborted) {
+                    $('review-loading').textContent = error.message || '读取失败，请关闭后重试。';
+                }
+            }
+            finally {
+                if (this.detailRequest == controller) {
+                    this.detailRequest = null;
+                }
+                this.updateReviewButtons();
+            }
+        }
+
+        /** Closes the review dialog and drops any request still loading. */
+        static closeReview() {
+            if ($('review-modal').hidden) {
+                return;
+            }
+            this.detailRequest?.abort();
+            this.detailRequest = null;
+            $('review-modal').hidden = true;
+            DialogFocus.leave($('review-modal'));
+        }
+
+        /** Shows a result or error inside the review dialog. */
+        static reviewMessage(text, isError) {
+            $('review-message').textContent = text;
+            $('review-message').classList.toggle('is-error', Boolean(isError));
+            $('review-message').hidden = !text;
+        }
+
+        /** Enables the actions the current state allows; the server enforces the same rules. */
+        static updateReviewButtons() {
+            let detail = this.detail;
+            let stateName = detail?.state;
+            let canReject = ['pending', 'rereview'].includes(stateName);
+            $('review-approve').disabled = !detail || this.saving;
+            $('review-approve').textContent = stateName == 'published' ? '保存配置' : stateName == 'rereview' ? '通过新版本' : '通过并发布';
+            $('review-reject').hidden = !canReject;
+            $('review-reject').disabled = !detail || this.saving;
+            $('review-reason').closest('.fld').hidden = !canReject;
+            $('review-unpublish').hidden = !['published', 'rereview'].includes(stateName);
+            $('review-unpublish').disabled = !detail || this.saving;
+        }
+
+        /** Fills the dialog from a detail response. */
+        static renderDetail(detail) {
+            let kind = detail.kind == 'video' ? '视频' : '图片';
+            $('review-meta').textContent = `来源 ${detail.server || '未知'}${detail.source_online ? '' : '（离线）'}，${this.stateLabels[detail.state] || ''}，${kind}工作流`;
+            let notes = [];
+            if (detail.state == 'rereview') {
+                notes.push('来源文件已修改。下面是新版本，已沿用原快照的参数配置；通过前用户继续使用旧快照。');
+            }
+            if (detail.state == 'published' && !detail.reviewing_source) {
+                notes.push('来源文件暂时不可用或新版本已驳回，这里修改的是已发布快照的参数配置。');
+            }
+            if (detail.submitted_by) {
+                notes.push(`${detail.submitted_by} 提交说明：${detail.submit_note || '无'}`);
+            }
+            if (detail.reject_reason && detail.state == 'rejected') {
+                notes.push(`上次驳回原因：${detail.reject_reason}`);
+            }
+            $('review-submission').textContent = notes.join(' ');
+            $('review-submission').hidden = !notes.length;
+            let servers = $('review-servers');
+            servers.replaceChildren();
+            for (let server of detail.runnable || []) {
+                let text = server.ok ? `${server.name}：可以运行` : `${server.name}：${(server.problems || []).join('、') || '不可用'}`;
+                servers.append(el('li', `server-state ${server.ok ? 'is-idle' : 'is-down'}`, text));
+            }
+            if (!servers.children.length) {
+                servers.append(el('li', '', '还没有登记执行服务器。'));
+            }
+            $('review-description').value = detail.description || '';
+            let list = $('review-params');
+            list.replaceChildren();
+            this.controls = new Map();
+            let index = 0;
+            for (let param of detail.parameters || []) {
+                list.append(this.paramRow(param, index++));
+            }
+            if (!list.children.length) {
+                list.append(el('li', 'review-param', '此工作流没有可配置的参数。'));
+            }
+            $('review-loading').hidden = true;
+            $('review-content').hidden = false;
+        }
+
+        /** Builds the editors for one parameter: visibility, display name, default and range or options. */
+        static paramRow(param, index) {
+            let row = el('li', 'review-param');
+            let controls = { param };
+            let visibleWrap = el('label', 'review-param-visible');
+            controls.visible = document.createElement('input');
+            controls.visible.type = 'checkbox';
+            controls.visible.checked = param.visible != false;
+            controls.visible.disabled = Boolean(param.locked);
+            visibleWrap.append(controls.visible, document.createTextNode('显示'));
+            if (param.locked) {
+                visibleWrap.title = '页面固定显示此项';
+            }
+
+            let nameWrap = el('div', 'review-param-name');
+            controls.name = document.createElement('input');
+            controls.name.type = 'text';
+            controls.name.maxLength = 40;
+            controls.name.value = param.name || param.original_name || param.id;
+            controls.name.setAttribute('aria-label', `参数显示名：${param.original_name || param.id}`);
+            nameWrap.append(controls.name);
+            if (param.name != param.original_name) {
+                nameWrap.append(el('p', 'hint', `原名：${param.original_name}`));
+            }
+            if (param.form == 'prompt' || param.form == 'negativeprompt') {
+                nameWrap.append(el('p', 'hint', '用户每次生成时填写'));
+            }
+
+            let valueWrap = el('div', 'review-param-value');
+            let valueId = `review-param-${index}`;
+            let valueLabel = el('label', 'visually-hidden', `默认值：${param.original_name || param.id}`);
+            valueLabel.htmlFor = valueId;
+            valueWrap.append(valueLabel);
+            let type = String(param.type || 'text');
+            let current = param.default == null ? '' : String(param.default);
+            if (type == 'dropdown') {
+                let all = Array.isArray(param.all_values) ? param.all_values.map(String) : [];
+                let chosen = new Set((Array.isArray(param.values) ? param.values : all).map(String));
+                controls.value = document.createElement('select');
+                for (let option of all) {
+                    controls.value.append(new Option(option, option));
+                }
+                NativeWorkflowForm.setValue(controls.value, current);
+                valueWrap.append(controls.value);
+                let details = el('details', 'review-options');
+                details.append(el('summary', '', `可选项（${chosen.size}/${all.length}）`));
+                controls.options = [];
+                for (let option of all) {
+                    let label = el('label');
+                    let box = document.createElement('input');
+                    box.type = 'checkbox';
+                    box.value = option;
+                    box.checked = chosen.has(option);
+                    box.addEventListener('change', () => {
+                        let count = controls.options.filter(item => item.checked).length;
+                        details.querySelector('summary').textContent = `可选项（${count}/${all.length}）`;
+                    });
+                    controls.options.push(box);
+                    label.append(box, document.createTextNode(option));
+                    details.append(label);
+                }
+                valueWrap.append(details);
+            }
+            else if (type == 'integer' || type == 'decimal') {
+                controls.value = document.createElement('input');
+                controls.value.type = 'number';
+                controls.value.step = type == 'integer' ? '1' : 'any';
+                controls.value.value = current;
+                valueWrap.append(controls.value);
+                let range = el('div', 'review-range');
+                controls.min = document.createElement('input');
+                controls.max = document.createElement('input');
+                for (let [input, value, label] of [[controls.min, param.min, '最小值'], [controls.max, param.max, '最大值']]) {
+                    input.type = 'number';
+                    input.step = controls.value.step;
+                    input.value = value == null || (Number(param.min) == 0 && Number(param.max) == 0) ? '' : String(value);
+                    input.placeholder = label;
+                    input.setAttribute('aria-label', `${label}：${param.original_name || param.id}`);
+                }
+                range.append(document.createTextNode('范围'), controls.min, document.createTextNode('–'), controls.max);
+                valueWrap.append(range);
+                if (!(Number(param.original_min) == 0 && Number(param.original_max) == 0)) {
+                    valueWrap.append(el('p', 'hint', `工作流允许 ${param.original_min}–${param.original_max}`));
+                }
+            }
+            else {
+                controls.value = document.createElement(type == 'text' ? 'textarea' : 'input');
+                if (type == 'text') {
+                    controls.value.rows = 2;
+                }
+                else {
+                    controls.value.type = 'text';
+                }
+                controls.value.value = current;
+                valueWrap.append(controls.value);
+            }
+            controls.value.id = valueId;
+            if (param.description) {
+                valueWrap.append(el('p', 'hint', param.description));
+            }
+            row.append(visibleWrap, nameWrap, valueWrap);
+            this.controls.set(param.id, controls);
+            return row;
+        }
+
+        /** Reads the dialog into the configuration the server expects, or returns an error message. */
+        static collectConfig() {
+            let config = {};
+            for (let [id, controls] of this.controls) {
+                let param = controls.param;
+                let label = param.original_name || id;
+                let setting = {};
+                if (!param.locked) {
+                    setting.visible = controls.visible.checked;
+                }
+                let name = controls.name.value.trim();
+                if (!name) {
+                    return `请填写参数“${label}”的显示名。`;
+                }
+                setting.name = name;
+                let value = controls.value.value;
+                if (param.type == 'integer' || param.type == 'decimal') {
+                    if (value === '' && !param.locked) {
+                        return `请填写参数“${label}”的默认值。`;
+                    }
+                    if (value !== '') {
+                        setting.default = Number(value);
+                    }
+                    let min = controls.min.value;
+                    let max = controls.max.value;
+                    if ((min === '') != (max === '')) {
+                        return `参数“${label}”的范围需要同时填写最小值和最大值，或都留空。`;
+                    }
+                    if (min !== '') {
+                        setting.min = Number(min);
+                        setting.max = Number(max);
+                    }
+                }
+                else {
+                    setting.default = value;
+                }
+                if (param.type == 'dropdown') {
+                    setting.values = controls.options.filter(box => box.checked).map(box => box.value);
+                    if (!setting.values.length) {
+                        return `参数“${label}”至少要保留一个可选项。`;
+                    }
+                    if (!setting.values.includes(value)) {
+                        return `参数“${label}”的默认值必须是保留的可选项之一。`;
+                    }
+                }
+                config[id] = setting;
+            }
+            return config;
+        }
+
+        /** Sends one decision; the list and the creation page's workflow list refresh afterwards. */
+        static async decide(action) {
+            let detail = this.detail;
+            if (!detail || this.saving) {
+                return;
+            }
+            let body = { workflow_id: detail.id, action };
+            if (action == 'reject') {
+                let reason = $('review-reason').value.trim();
+                if (!reason) {
+                    this.reviewMessage('驳回时请填写原因，提交人会看到它。', true);
+                    $('review-reason').focus();
+                    return;
+                }
+                body.reason = reason;
+            }
+            if (action == 'unpublish' && !window.confirm(`下架后用户将不能再调用“${detail.name}”。确定下架吗？`)) {
+                return;
+            }
+            if (action == 'approve') {
+                let config = this.collectConfig();
+                if (typeof config == 'string') {
+                    this.reviewMessage(config, true);
+                    return;
+                }
+                body.parameters = config;
+                body.description = $('review-description').value.trim();
+            }
+            this.saving = true;
+            this.updateReviewButtons();
+            this.reviewMessage('正在保存…', false);
+            try {
+                await request('EcomCraftStudioReviewDecide', body);
+                let done = { approve: detail.state == 'published' ? '的配置已保存' : '已发布', reject: '已驳回', unpublish: '已下架' }[action];
+                this.closeReview();
+                await this.load();
+                this.showBanner(`“${detail.name}”${done}。`, false);
+                WorkflowCatalogRefresh.refresh();
+            }
+            catch (error) {
+                this.reviewMessage(error.message || '保存失败，请稍后重试。', true);
+            }
+            finally {
+                this.saving = false;
+                this.updateReviewButtons();
+            }
+        }
+
+        /** Opens the submit dialog for one workflow. */
+        static openSubmit(item, opener) {
+            this.submitTarget = item;
+            $('submit-meta').textContent = `${item.server || '未知'}/${item.name || item.id}`;
+            $('submit-note').value = item.submit_note || '';
+            $('submit-message').hidden = true;
+            $('submit-confirm').disabled = false;
+            $('submit-modal').hidden = false;
+            DialogFocus.enter($('submit-modal'), opener, $('submit-note'));
+        }
+
+        /** Closes the submit dialog. */
+        static closeSubmit() {
+            if ($('submit-modal').hidden) {
+                return;
+            }
+            $('submit-modal').hidden = true;
+            DialogFocus.leave($('submit-modal'));
+        }
+
+        /** Submits the workflow with the note. */
+        static async submit() {
+            let item = this.submitTarget;
+            if (!item || $('submit-confirm').disabled) {
+                return;
+            }
+            $('submit-confirm').disabled = true;
+            $('submit-message').textContent = '正在提交…';
+            $('submit-message').classList.remove('is-error');
+            $('submit-message').hidden = false;
+            try {
+                await request('EcomCraftStudioSubmitWorkflow', { workflow_id: item.id, note: $('submit-note').value.trim() });
+                this.closeSubmit();
+                await this.load();
+                this.showBanner(`已提交“${item.name || item.id}”，等待审核。`, false);
+            }
+            catch (error) {
+                $('submit-message').textContent = error.message || '提交失败，请稍后重试。';
+                $('submit-message').classList.add('is-error');
+            }
+            finally {
+                $('submit-confirm').disabled = false;
+            }
+        }
+    }
+
     /* ---------- Dialog focus ---------- */
     /** Moves focus into an open dialog, keeps Tab inside it and returns focus to the opener when it closes. */
     class DialogFocus {
@@ -2843,6 +3403,23 @@
         $('gallery-delete-selected').addEventListener('click', () => GallerySelection.deleteSelected());
         $('gallery-gocreate').addEventListener('click', () => { location.hash = 'create'; });
         $('queue-refresh').addEventListener('click', loadQueue);
+
+        // Workflow review
+        $('workflows-refresh').addEventListener('click', () => WorkflowReviewView.load());
+        for (let button of $('workflows-filter').querySelectorAll('[data-filter]')) {
+            button.addEventListener('click', () => WorkflowReviewView.setFilter(button.dataset.filter));
+        }
+        $('review-close').addEventListener('click', () => WorkflowReviewView.closeReview());
+        $('review-backdrop').addEventListener('click', () => WorkflowReviewView.closeReview());
+        $('review-cancel').addEventListener('click', () => WorkflowReviewView.closeReview());
+        $('review-approve').addEventListener('click', () => WorkflowReviewView.decide('approve'));
+        $('review-reject').addEventListener('click', () => WorkflowReviewView.decide('reject'));
+        $('review-unpublish').addEventListener('click', () => WorkflowReviewView.decide('unpublish'));
+        $('submit-close').addEventListener('click', () => WorkflowReviewView.closeSubmit());
+        $('submit-backdrop').addEventListener('click', () => WorkflowReviewView.closeSubmit());
+        $('submit-cancel').addEventListener('click', () => WorkflowReviewView.closeSubmit());
+        $('submit-confirm').addEventListener('click', () => WorkflowReviewView.submit());
+        setInterval(() => WorkflowReviewView.poll(), 30000);
         setInterval(pollBackendStatus, 5000);
         setInterval(() => WorkflowCatalogRefresh.refresh(), 30000);
         document.addEventListener('visibilitychange', () => {
@@ -2915,6 +3492,24 @@
                 }
                 else {
                     DialogFocus.trap($('setup-guide-modal'), e);
+                }
+                return;
+            }
+            if (!$('review-modal').hidden) {
+                if (e.key == 'Escape') {
+                    WorkflowReviewView.closeReview();
+                }
+                else {
+                    DialogFocus.trap($('review-modal'), e);
+                }
+                return;
+            }
+            if (!$('submit-modal').hidden) {
+                if (e.key == 'Escape') {
+                    WorkflowReviewView.closeSubmit();
+                }
+                else {
+                    DialogFocus.trap($('submit-modal'), e);
                 }
             }
         });
