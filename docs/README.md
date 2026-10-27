@@ -30,3 +30,9 @@
 - [Image Metadata Format](/docs/Image%20Metadata%20Format.md) for details about the format of metadata Swarm adds to generated images by default.
 - [Privacy](/docs/Privacy.md) contains notes for privacy-concerned Swarm users.
 - [Troubleshooting](/docs/Troubleshooting.md) for information about how to solve common problems.
+
+## EcomCraft
+
+- [EcomCraft Architecture and Roadmap](/docs/EcomCraft%20Architecture.md) for product positioning, deployment topology, layered architecture, MVP scope and later features (development planning, including features not yet implemented).
+- [EcomCraft LAN Multi-Server Platform Requirements](/docs/EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md) for execution servers, workflow review and snapshots, scheduling, multi-user use, work storage and the reserved cloud capability.
+- [Prompt Enhancement and Deployment](/docs/EcomCraft%20Prompt%20Enhancement.md) (Chinese) for MagicPrompt backend configuration and generation timeouts.

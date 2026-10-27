@@ -73,6 +73,7 @@ cd EcomCraft
 - [基础使用](docs/Basic%20Usage.zh-CN.md) · [常见问题排查](docs/Troubleshooting.zh-CN.md)
 - [EcomCraft ComfyUI 工作流调用](docs/EcomCraft%20ComfyUI%20工作流.zh-CN.md)
 - [提示词优化与部署](docs/EcomCraft%20Prompt%20Enhancement.md)
+- [EcomCraft 架构与路线图](docs/EcomCraft%20Architecture.zh-CN.md) · [局域网多服务器平台需求](docs/EcomCraft%20局域网多服务器平台需求.zh-CN.md)（开发规划，含尚未实现的内容）
 - [API 使用说明](docs/API.zh-CN.md) · [命令行参数](docs/Command%20Line%20Arguments.zh-CN.md)
 
 ## 数据与权限
