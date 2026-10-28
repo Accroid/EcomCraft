@@ -609,6 +609,8 @@ window.EcomCraftLanguages.en = {
     "导出位置": "Export location",
     "留空表示只保存在平台服务器本机": "Leave empty to keep works only on the platform server",
     "留空表示只提供下载": "Leave empty to offer downloads only",
+    "未选候选图保留天数": "Keep unpicked candidates for (days)",
+    "简易模式里没被选中、下载或导出的候选图，超过这个天数后自动清理；填 0 表示不清理。选中、下载或导出过的永久保留。": "Candidates in the simple mode that were never picked, downloaded or exported are cleaned up after this many days; enter 0 to disable it. Picked, downloaded or exported works are kept forever.",
     "迁移旧作品": "Migrate old works",
     "停止迁移": "Stop migration",
     "检测并保存": "Check and save",

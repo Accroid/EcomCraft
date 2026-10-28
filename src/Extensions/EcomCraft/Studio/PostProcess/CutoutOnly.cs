@@ -3,6 +3,7 @@ using EcomCraftStudio.Studio.Export;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SixLabors.ImageSharp;
+using ISImage = SixLabors.ImageSharp.Image;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
 using SwarmUI.Accounts;
@@ -29,7 +30,7 @@ public static class CutoutOnly
         }
         try
         {
-            using Image<Rgba32> cutout = Image.Load<Rgba32>(Convert.FromBase64String(cutoutDataUrl[(comma + 1)..]));
+            using Image<Rgba32> cutout = ISImage.Load<Rgba32>(Convert.FromBase64String(cutoutDataUrl[(comma + 1)..]));
             if (!ProductComposite.HasTransparency(cutout))
             {
                 return StudioApi.Error("纯白主图需要去掉背景的商品图，请先完成抠图。", "invalid_reference");

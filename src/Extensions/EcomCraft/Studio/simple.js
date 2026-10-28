@@ -1163,6 +1163,10 @@ class SimpleMode {
                 }
                 else {
                     this.selected.add(url);
+                    // Picked candidates are kept forever (F39); the server drops them from the cleanup registry.
+                    this.api.request('EcomCraftStudioMarkKept', { images: [url] }).catch(() => {
+                        // The server also marks them when downloading or exporting; a lost notice here is harmless.
+                    });
                 }
                 this.renderResults();
                 this.update();
@@ -1173,8 +1177,13 @@ class SimpleMode {
         this.renderExport();
     }
 
-    /** Downloads the selected candidates one by one through the browser. */
+    /** Downloads the selected candidates one by one through the browser; downloaded works are kept forever (F39). */
     static download() {
+        if (this.selected.size) {
+            this.api.request('EcomCraftStudioMarkKept', { images: Array.from(this.selected) }).catch(() => {
+                // Exporting or picking again still marks them kept.
+            });
+        }
         for (let url of this.selected) {
             let link = document.createElement('a');
             link.href = this.resultUrl(url);

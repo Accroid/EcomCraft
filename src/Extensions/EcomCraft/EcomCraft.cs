@@ -72,6 +72,7 @@ public class EcomCraft : Extension
         API.RegisterAPICall(StorageApi.EcomCraftStorageSave, true, Permissions.EditServerSettings);
         API.RegisterAPICall(StorageApi.EcomCraftStorageMigrate, true, Permissions.EditServerSettings);
         API.RegisterAPICall(StorageApi.EcomCraftStoragePending, false, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(StorageApi.EcomCraftStudioMarkKept, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(TemplateApi.EcomCraftStudioTemplates, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(TemplateApi.EcomCraftStudioPlatforms, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(PromptService.EcomCraftStudioStyles, false, Permissions.FundamentalGenerateTabAccess);
@@ -97,6 +98,7 @@ public class EcomCraft : Extension
         ComfyUIAPIAbstractBackend.QueueProgressObserved += StudioApi.ObserveComfyProgress;
         WorkflowDiscovery.Start();
         WorkSync.Start();
+        CandidateCleanup.Start();
         TemplateStore.Init(FilePath);
         PromptService.Init(FilePath);
     }
@@ -117,5 +119,6 @@ public class EcomCraft : Extension
         ComfyUIAPIAbstractBackend.QueueProgressObserved -= StudioApi.ObserveComfyProgress;
         WorkflowDiscovery.Shutdown();
         WorkSync.Shutdown();
+        CandidateCleanup.Shutdown();
     }
 }

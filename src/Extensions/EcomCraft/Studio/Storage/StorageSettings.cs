@@ -24,6 +24,9 @@ public static class StorageSettings
         /// <summary>Account that last saved the settings.</summary>
         public string ChangedBy = "";
 
+        /// <summary>How many days an unkept simple-mode candidate stays before it is deleted automatically (F39); 0 disables the cleanup.</summary>
+        public int CandidateRetentionDays = 14;
+
         /// <summary>Time of the last save, Unix milliseconds.</summary>
         public long ChangedAt;
     }

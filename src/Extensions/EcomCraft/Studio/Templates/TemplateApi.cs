@@ -1,4 +1,5 @@
 using EcomCraftStudio.Studio.PostProcess;
+using EcomCraftStudio.Studio.Storage;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
 using SwarmUI.WebAPI;
@@ -303,7 +304,10 @@ public static class TemplateApi
             }
         }
         ExportImageSize(platform, out int width, out int height);
-        return CutoutOnly.Create(session.User, cutout, width, height, templateId);
+        JObject cutoutResult = CutoutOnly.Create(session.User, cutout, width, height, templateId);
+        // The direct cut-out is also a candidate (F39): unpicked copies are cleaned after the retention time.
+        CandidateCleanup.Register(session.User, cutoutResult["images"] as JArray);
+        return cutoutResult;
     }
 
     /// <summary>The platform's export size, or 2000 × 2000 when it has none.</summary>

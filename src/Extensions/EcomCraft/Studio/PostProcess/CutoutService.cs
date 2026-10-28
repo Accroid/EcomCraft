@@ -5,6 +5,7 @@ using EcomCraftStudio.Studio.Generation;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SixLabors.ImageSharp;
+using ISImage = SixLabors.ImageSharp.Image;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
@@ -58,7 +59,7 @@ public static class CutoutService
         try
         {
             bytes = Convert.FromBase64String(product_image[(comma + 1)..]);
-            ImageInfo info = Image.Identify(bytes);
+            ImageInfo info = ISImage.Identify(bytes);
             if ((long)info.Width * info.Height > MaxPixels)
             {
                 return StudioApi.Error("商品图尺寸过大，请缩小到 4000 万像素以内。", "invalid_reference");
@@ -156,8 +157,8 @@ public static class CutoutService
     /// <summary>Puts the mask into the alpha of the user's own photo: white in the mask image is background (SwarmRemBg returns 1 − alpha), so alpha = 255 − mask.</summary>
     public static byte[] Combine(byte[] photo, byte[] maskImage)
     {
-        using Image<Rgba32> image = Image.Load<Rgba32>(photo);
-        using Image<Rgba32> mask = Image.Load<Rgba32>(maskImage);
+        using Image<Rgba32> image = ISImage.Load<Rgba32>(photo);
+        using Image<Rgba32> mask = ISImage.Load<Rgba32>(maskImage);
         if (mask.Width != image.Width || mask.Height != image.Height)
         {
             mask.Mutate(context => context.Resize(image.Width, image.Height));

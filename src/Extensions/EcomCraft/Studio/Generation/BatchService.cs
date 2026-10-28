@@ -4,6 +4,7 @@ using EcomCraftStudio.Studio.Prompting;
 using EcomCraftStudio.Studio.Templates;
 using Newtonsoft.Json.Linq;
 using SixLabors.ImageSharp;
+using ISImage = SixLabors.ImageSharp.Image;
 using SixLabors.ImageSharp.PixelFormats;
 using SwarmUI.Accounts;
 using SwarmUI.Utils;
@@ -325,7 +326,7 @@ public static class BatchService
                 return product.Cutout;
             }
             byte[] bytes = Convert.FromBase64String(product.Image[(product.Image.IndexOf(',') + 1)..]);
-            using (Image<Rgba32> image = Image.Load<Rgba32>(bytes))
+            using (Image<Rgba32> image = ISImage.Load<Rgba32>(bytes))
             {
                 if (ProductComposite.HasTransparency(image))
                 {

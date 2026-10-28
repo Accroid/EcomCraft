@@ -39,6 +39,7 @@ public static class StorageApi
             ["library_path"] = settings.LibraryPath,
             ["export_path"] = settings.ExportPath,
             ["previous_library_path"] = settings.PreviousLibraryPath,
+            ["candidate_retention_days"] = settings.CandidateRetentionDays,
             ["changed_by"] = settings.ChangedBy,
             ["changed_at"] = settings.ChangedAt > 0 ? settings.ChangedAt : null,
             ["pending"] = pending,
@@ -90,6 +91,7 @@ public static class StorageApi
         }
         settings.LibraryPath = values[0];
         settings.ExportPath = values[1];
+        settings.CandidateRetentionDays = Math.Clamp(rawInput.Value<int?>("candidate_retention_days") ?? 14, 0, 3650);
         settings.ChangedBy = session.User.UserID;
         settings.ChangedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         if (!StorageSettings.Save(settings))
@@ -133,5 +135,19 @@ public static class StorageApi
             return Task.FromResult(StudioApi.Error("无权访问创作工作台。", "bad_permissions"));
         }
         return Task.FromResult(new JObject() { ["pending"] = new JArray(WorkSync.PendingFor(session.User.UserID).Take(500)) });
+    }
+
+    [API.APIDescription("Mark works kept (picked, downloaded or exported) so the candidate cleanup never deletes them. images: [gallery path or result URL] of the current account.", "kept: 2")]
+    public static Task<JObject> EcomCraftStudioMarkKept(Session session, JArray images)
+    {
+        if (!StudioApi.CanView(session))
+        {
+            return Task.FromResult(StudioApi.Error("无权访问创作工作台。", "bad_permissions"));
+        }
+        if (images is null || images.Count == 0 || images.Count > 500)
+        {
+            return Task.FromResult(StudioApi.Error("请提交 1–500 个作品路径。", "invalid_parameters"));
+        }
+        return Task.FromResult(new JObject() { ["kept"] = CandidateCleanup.MarkKept(session.User, images) });
     }
 }

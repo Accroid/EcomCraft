@@ -4,6 +4,7 @@ using EcomCraftStudio.Studio.Storage;
 using EcomCraftStudio.Studio.Templates;
 using Newtonsoft.Json.Linq;
 using SixLabors.ImageSharp;
+using ISImage = SixLabors.ImageSharp.Image;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
@@ -131,6 +132,11 @@ public static class ExportService
         }
         string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
         string label = $"{stamp}-{platformId}";
+        // Exported works are kept forever (F39).
+        foreach (JObject group in rawInput["groups"] as JArray ?? new JArray())
+        {
+            CandidateCleanup.MarkKept(session.User, group["images"] as JArray);
+        }
         try
         {
             return await Task.Run(() => target == "zip" ? WriteZip(session.User.UserID, label, files, match.Preset) : WriteFolder(session.User.UserID, exportRoot, label, files, match.Preset));
@@ -187,7 +193,7 @@ public static class ExportService
             int number = counters.GetValueOrDefault(group) + 1;
             counters[group] = number;
             string name = $"{label}/{group}/{number:D2}.{preset.Format}";
-            using Image<Rgba32> source = Image.Load<Rgba32>(path);
+            using Image<Rgba32> source = ISImage.Load<Rgba32>(path);
             using Image<Rgb24> rendered = ExportImage.Render(source, preset);
             if (preset.RequireWhite && ComplianceRules.NonWhiteBorderFraction(rendered) > 0)
             {

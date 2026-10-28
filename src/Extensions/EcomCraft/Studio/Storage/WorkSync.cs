@@ -249,6 +249,22 @@ public static class WorkSync
         }
     }
 
+    /// <summary>Takes the account's queued copies of one work out of the queue (they are not retried afterwards), for the candidate cleanup (F39).</summary>
+    public static List<Item> TakePending(string userId, string relative)
+    {
+        lock (Lock)
+        {
+            EnsureLoaded();
+            List<Item> taken = [.. Items.Where(item => item.UserId == userId && item.Relative == relative)];
+            if (taken.Count > 0)
+            {
+                Items.RemoveAll(item => taken.Contains(item));
+                Save();
+            }
+            return taken;
+        }
+    }
+
     /// <summary>Copies the works whose next attempt is due, one at a time.</summary>
     private static async Task ProcessDueAsync()
     {

@@ -324,7 +324,7 @@ public static class StudioApi
     /// <summary>Plans the executor with Rule 1, pins the request to it and submits, counting the batch as assigned until it ends.
     /// Responses name the server but never its address.</summary>
     private static async Task<JObject> ScheduleAndSubmit(Session session, int images, JObject input, int? pinnedId, bool workflow, bool background,
-        Func<BackendHandler.T2IBackendData, List<string>> capability, Func<JObject, Task> postProcess = null)
+        Func<BackendHandler.T2IBackendData, List<string>> capability, Func<JObject, Task> postProcess = null, bool candidates = false)
     {
         SchedulerRules.Decision decision = await ExecutionScheduler.PlanAsync(capability, pinnedId);
         if (!decision.Success)
@@ -339,7 +339,7 @@ public static class StudioApi
         JObject response;
         if (background)
         {
-            response = await SubmitBackgroundGeneration(session, images, input, assignment, workflow, decision.ChosenName, postProcess);
+            response = await SubmitBackgroundGeneration(session, images, input, assignment, workflow, decision.ChosenName, postProcess, candidates);
         }
         else
         {
@@ -354,6 +354,11 @@ public static class StudioApi
                         await postProcess(result);
                     }
                     WorkSync.EnqueueResult(session.User, result);
+                    // Simple-mode generations produce candidates (F39): unpicked ones are cleaned up after the retention time.
+                    if (candidates)
+                    {
+                        CandidateCleanup.Register(session.User, result["images"] as JArray);
+                    }
                 }
             }
             catch (Exception)
@@ -932,7 +937,7 @@ public static class StudioApi
     /// The scheduler assignment is released when the generation ends. The result, success or a sanitized failure (R6.3), is kept briefly for the queue API;
     /// a failure that happens before the caller gets the task ID is returned directly.</summary>
     private static async Task<JObject> SubmitBackgroundGeneration(Session session, int images, JObject input, IDisposable assignment, bool workflow, string server,
-        Func<JObject, Task> postProcess)
+        Func<JObject, Task> postProcess, bool candidates = false)
     {
         HashSet<long> claimsBefore = [.. session.Claims.Keys];
         BackgroundTask task = new(session.User.UserID, server);
@@ -957,6 +962,11 @@ public static class StudioApi
                     // Only saved files (View/... or Output/...), never inline data, are kept for the queue API.
                     outputs = [.. (result["images"] as JArray ?? new JArray()).Select(image => image.Type == JTokenType.String ? image.ToString() : image["image"]?.ToString())
                         .Where(url => url is not null && (url.StartsWith("View/", StringComparison.Ordinal) || url.StartsWith("Output/", StringComparison.Ordinal))).Take(16)];
+                    if (candidates)
+                    {
+                        // Simple-mode candidates (F39); picking, downloading or exporting removes them from the cleanup registry.
+                        CandidateCleanup.Register(session.User, result["images"] as JArray);
+                    }
                 }
             }
             catch (Exception ex)
@@ -1493,7 +1503,7 @@ public static class StudioApi
             }
             return problems.Count > 0 ? problems : ["缺少所需节点或模型"];
         }
-        return await ScheduleAndSubmit(session, images, input, pinnedServer, true, rawInput.Value<bool?>("async") is true, capability, postProcess);
+        return await ScheduleAndSubmit(session, images, input, pinnedServer, true, rawInput.Value<bool?>("async") is true, capability, postProcess, candidates: templateId != null);
     }
 
     internal static bool ValidatePublishedWorkflowInput(Session session, string id, JToken value, JObject definition, out string error)
