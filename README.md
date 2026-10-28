@@ -70,7 +70,8 @@ cd EcomCraft
 - 合规：亚马逊白底主图走纯抠图分支，只把抠图居中放到纯白背景上，不调用生成模型；导出时检查主图背景是否纯白，并为 AI 生成或合成的图片写入 IPTC 数字来源类型等元数据。
 - 平台导出：选择平台后按预设等比缩放并补边，每个商品一个文件夹，打包下载 zip 或导出到管理员设置的共享文件夹；预设覆盖国内外平台、可在配置中修改，内置数值标为待核对。接口为 `EcomCraftStudioExportOptions` 和 `EcomCraftStudioExport`。
 - 商品库（简版）：上传的商品自动入库，保存原图、抠图和确认过的位置，下次出图直接选择；按账号隔离，可重命名和删除。接口为 `EcomCraftStudioProducts`、`EcomCraftStudioProductSave`、`EcomCraftStudioProductUpdate` 和 `EcomCraftStudioProductDelete`。
-- 一键套图与批量：多张商品图 × 平台套图中的每种图片类型展开成独立任务，分配到多台执行服务器并行；每人同时执行的任务数受限，失败项可单独重试，可取消剩余任务。接口为 `EcomCraftStudioGenerateSet`、`EcomCraftStudioBatchStatus`、`EcomCraftStudioBatchRetry` 和 `EcomCraftStudioBatchCancel`。
+- 一键套图与批量：多张商品图 × 平台套图中的每种图片类型展开成独立任务，分配到多台执行服务器并行；每人同时执行的任务数受限，失败项可单独重试，可取消剩余任务。
+- 卖点分析与套图分镜：根据商品描述（或提示词面板）、可选卖点、产品类型和风格，由提示词服务列出最多 5 条卖点，并规划最多 8 张图的分镜（每张 = 当前平台可用的图片类型 + 画面描述 + 用途）；用户可增删改后“按分镜出整套”。服务端只接受已登记模板 ID 和清理后的文字，提交时逐张重新校验；模型不可用时按平台套图类型列出可编辑的分镜。分镜只保存在当前页面。接口为 `EcomCraftStudioStoryboard`；套图接口为 `EcomCraftStudioGenerateSet`、`EcomCraftStudioBatchStatus`、`EcomCraftStudioBatchRetry` 和 `EcomCraftStudioBatchCancel`。
 - 内置 4 个电商场景模板：白底主图、场景图、细节图、模特或手持图；按约定名称引用专家制作的工作流（如 `ecomcraft/white-main`），工作流安装并审核通过前显示“缺少工作流”。
 - 商品保真：模板开启 `preserve_product` 后，平台在本地把透明背景的商品图按位置放到输入画布上，生成后再把原商品像素贴回成图，Logo、文字和形状不会被改动。简易模式中可一键抠图（在执行服务器上用 SwarmUI 的去背景节点，接口 `EcomCraftStudioCutout`），并拖动、缩放商品位置。
 - 提示词服务：用户选产品类型、可选风格并写一句描述（中文或英文），由已配置的提示词优化模型生成英文提示词，勾选“需要模特”时加入固定的模特描述片段；模型只能填写提示词文字；模型不可用时退回模板和风格的默认描述并说明。把商品图发给视觉模型默认关闭，只有管理员能开启。“AI 扩写”同时生成中英文提示词，修改过的中文提示词在提交时翻译成英文，翻译失败时按产品类型和风格的默认描述出图并说明，不阻塞出图。需要模型写提示词或翻译时，提交立即返回、提示词在后台生成（上限仍为 45 秒），任务依次显示“正在生成提示词 → 排队中 / 执行中（含执行服务器名）→ 已完成”；已扩写未改或改的是英文时不调用模型，直接排队；一键出整套同样先返回再在后台组合提示词。接口为 `EcomCraftStudioStyles`、`EcomCraftStudioProductTypes`、`EcomCraftStudioComposePrompt`、`EcomCraftStudioExpandPrompt`、`EcomCraftStudioPrepareStatus` 和 `EcomCraftPromptSettings`。
