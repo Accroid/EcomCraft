@@ -151,6 +151,8 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行�
 
 商品库：`EcomCraftStudioProducts` 列出当前账号保存的商品（`id`、`name`、`created`、`has_cutout`、`placement`、`image` / `cutout_image` 图片地址，不含文件位置）；`EcomCraftStudioProductSave`（`image`、可选 `name`、`cutout`）保存商品；`EcomCraftStudioProductUpdate`（`product_id`，可选 `name`、`cutout`、`placement`）重命名、保存确认过的抠图和位置；`EcomCraftStudioProductDelete` 删除商品及其文件。商品文件放在作品库位置的 `products/<账号>/<商品ID>/` 下，未设置作品库时放在平台服务器的 `Data/EcomCraft/product-files/`，不进入画廊；索引在 `Data/EcomCraft/products.json`。平台内按账号隔离，图片地址 `/EcomCraft/product-image/<ID>/original|cutout` 也只对本人开放。按模板生成和一键套图可以用 `product_id` 代替图片：服务端读取商品原图或已确认的抠图和位置，客户端不提交文件或路径。简易模式上传的商品自动入库，抠图和位置确认后同步更新，下次可从“从商品库选择”直接使用。
 
+平台导出：平台预设在扩展目录的 `Templates/platforms.json`（管理员可在 `Data/EcomCraft/platforms.json` 放一份同格式的文件覆盖），包含国内外平台的中英文名称和导出规格（`width`、`height`、`background`、`format` 为 jpg 或 png、`quality`、`source` 来源说明、`verified` 是否已核对）。内置数值取自各平台公开的常见要求，均标为未核对，使用前须对照平台最新规范（N06）并改为 `verified: true`。`EcomCraftStudioExportOptions`（可选 `language`）列出有导出规格的平台和是否可以导出到共享文件夹；`EcomCraftStudioExport`（`platform`、`target` 为 `zip` 或 `folder`、`groups` 为 `[{ name, images }]`，`images` 是本人作品的画廊路径或生成结果地址，最多 200 张）把作品等比缩放到规格内、居中并用背景色补边（透明处也显示背景色），每组一个文件夹：`zip` 返回 `download` 下载地址（只有本人能下载，保留 1 小时），`folder` 写入管理员设置的导出位置 `<账号>/<时间-平台>/<商品>/`。错误码为 `invalid_export` 和 `export_failed`。
+
 原生导入项额外返回 `native: true` 和 `defaults`。`inputs[].form` 标记绑定到标准页面字段的参数（如 `width`、`seed`）；其余输入通过 `workflow_params` 提交。省略标准字段时使用相应已发布参数或保存的默认值，同时提供时以标准字段为准。原生项无需提交根级 `model`，模型修改通过 `inputs` 中模型下拉框的 ID 提交，服务端仅接受公布的选项；参数 ID 是不透明标识，客户端不要自行构造。
 
 ## 安全边界

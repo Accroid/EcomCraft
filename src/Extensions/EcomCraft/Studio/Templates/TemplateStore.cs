@@ -41,12 +41,14 @@ public static class TemplateStore
         BuiltinDir = Path.Combine(extensionFolder, "Templates", "builtin");
     }
 
-    /// <summary>The built-in platform list (Templates/platforms.json): ID, Chinese and English names and region, as JSON objects. Unreadable files give an empty list.</summary>
+    /// <summary>The platform list with names, region and export presets: Data/EcomCraft/platforms.json when an administrator provided one, otherwise the built-in
+    /// Templates/platforms.json. Unreadable files give an empty list.</summary>
     public static List<JObject> Platforms()
     {
         try
         {
-            string file = Path.Combine(Path.GetDirectoryName(BuiltinDir) ?? "", "platforms.json");
+            string custom = Path.Combine(Program.DataDir, "EcomCraft", "platforms.json");
+            string file = File.Exists(custom) ? custom : Path.Combine(Path.GetDirectoryName(BuiltinDir) ?? "", "platforms.json");
             if (!File.Exists(file))
             {
                 return [];

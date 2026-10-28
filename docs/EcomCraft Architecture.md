@@ -72,7 +72,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 | | Scheduling | Rule 1: choose the runnable executor with the shortest queue; the executor abstraction reserves cloud types | Requirements step 4; `ExecutionServers` provides the base |
 | | Post-processing | Product-preserving compositing (paste the original product back, using the local cut-out as the mask); candidate scoring later | Product preservation implemented (`Studio/PostProcess/`) |
 | | Product library | Caches original product images and background-removal results for reuse | Simple version implemented (`Studio/Products/`) |
-| | Export | Chinese and international platform size presets, padding, zip or export to a shared folder, AI metadata, Amazon pure-white check | Planned |
+| | Export | Chinese and international platform size presets, padding, zip or export to a shared folder, AI metadata, Amazon pure-white check | Size presets, padding, zip and shared folder implemented (`Studio/Export/`) |
 | | Storage | Work library and export locations, write locally then sync, migration, cleanup | Planned, see requirement R11 |
 | Infrastructure | Reused from SwarmUI | Accounts and permissions, T2IEngine, `ComfyUIAPIBackend`, image processing | Existing |
 

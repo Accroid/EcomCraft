@@ -323,7 +323,7 @@ Implementation notes for step 7:
 - Local copies are kept in this phase: the gallery, thumbnails and opening originals all read local files and never scan shared storage (R11.6). Removing local copies after a successful sync is left to a later task.
 - The gallery shows "Pending sync" for works not yet copied. The ordinary-user API `EcomCraftStoragePending` returns only gallery-relative paths of the user's own works and never a storage location; the administrator APIs are `EcomCraftStorageSettings`, `EcomCraftStorageSave` and `EcomCraftStorageMigrate`.
 - After the library location changes, new works go to the new location while already queued works still go where they were queued; works in the old location stay there. Administrators can choose "Migrate old works": each file is copied, verified with SHA-256, then deleted from the old location, with progress shown and the option to stop at any time; files that fail stay in place.
-- In this phase the export location is only set and checked; exporting to a shared folder is implemented in the platform export task (T11).
+- The export location is used by platform export (T11): when users choose "Export to shared folder" in step 3 of the simple mode, works are processed to the platform spec and written to `export location/<account>/<time-platform>/<product>/`; they can also download a zip (R11.8).
 
 ## 11. Change Log
 
