@@ -35,7 +35,7 @@
         busy: false, uncertain: false, submitting: false,
         reference: null, referenceLoading: false, referenceRevision: 0,
         loras: [], results: [], timer: null, pending: new Set(), pendingTimer: null,
-        gallery: { items: [], filter: 'all', search: '', sort: 'Date', loading: false, current: null },
+        gallery: { items: [], filter: 'all', source: 'all', search: '', sort: 'Date', loading: false, current: null },
         queue: { loading: false, timer: null, stopping: new Set() }
     };
 
@@ -2148,6 +2148,32 @@
         let list = $('queue-list');
         list.replaceChildren();
         $('queue-empty').hidden = nativeTasks.length > 0 || tasks.length > 0;
+        let labels = { running: '执行中', waiting_backend: '等待服务器', queued: '排队中', stopping: '正在结束' };
+        /** One platform request row; the account's own requests can be ended. */
+        let requestRow = task => {
+            let row = el('li', 'queue-task');
+            if (task.mine) {
+                row.classList.add('is-mine');
+            }
+            let main = el('div', 'queue-task-main');
+            main.append(el('strong', '', task.mine ? tr('我的请求 #{0}', task.request_id || task.id) : '其他用户的请求'));
+            main.append(el('span', '', tr('{0}，{1} 张', tr(labels[task.state] || '处理中'), task.count)));
+            let age = el('span', 'queue-task-age', tr('已用 {0} 分 {1} 秒', Math.floor(task.elapsed_seconds / 60), task.elapsed_seconds % 60));
+            row.append(main, age);
+            if (task.mine && task.state != 'stopping') {
+                let stopping = state.queue.stopping.has(task.id);
+                let button = el('button', 'btn btn-sm btn-danger', stopping ? '正在结束…' : '结束任务');
+                button.type = 'button';
+                button.disabled = stopping;
+                button.addEventListener('click', () => cancelQueueTask(task.id, button));
+                row.append(button);
+            }
+            return row;
+        };
+        // The account's own requests come first (F66), then what the servers are running, then other accounts' requests.
+        for (let task of tasks.filter(task => task.mine)) {
+            list.append(requestRow(task));
+        }
         for (let task of nativeTasks) {
             let row = el('li', 'queue-task');
             let main = el('div', 'queue-task-main');
@@ -2171,23 +2197,8 @@
             row.append(main);
             list.append(row);
         }
-        let labels = { running: '执行中', waiting_backend: '等待服务器', queued: '排队中', stopping: '正在结束' };
-        for (let task of tasks) {
-            let row = el('li', 'queue-task');
-            let main = el('div', 'queue-task-main');
-            main.append(el('strong', '', task.mine ? tr('我的请求 #{0}', task.request_id || task.id) : '其他用户的请求'));
-            main.append(el('span', '', tr('{0}，{1} 张', tr(labels[task.state] || '处理中'), task.count)));
-            let age = el('span', 'queue-task-age', tr('已用 {0} 分 {1} 秒', Math.floor(task.elapsed_seconds / 60), task.elapsed_seconds % 60));
-            row.append(main, age);
-            if (task.mine && task.state != 'stopping') {
-                let stopping = state.queue.stopping.has(task.id);
-                let button = el('button', 'btn btn-sm btn-danger', stopping ? '正在结束…' : '结束任务');
-                button.type = 'button';
-                button.disabled = stopping;
-                button.addEventListener('click', () => cancelQueueTask(task.id, button));
-                row.append(button);
-            }
-            list.append(row);
+        for (let task of tasks.filter(task => !task.mine)) {
+            list.append(requestRow(task));
         }
     }
 
@@ -2236,6 +2247,17 @@
         return server ? tr('{0}｜{1}', workflow, server) : workflow;
     }
 
+    /** Where a work came from (F66): 'simple' when the simple mode made it from a template, otherwise 'pro' (professional mode or the native engine). */
+    function gallerySource(metadata) {
+        try {
+            let extra = typeof metadata == 'string' && metadata ? JSON.parse(metadata)?.sui_extra_data : null;
+            return extra && typeof extra.ecomcraft_template == 'string' && extra.ecomcraft_template ? 'simple' : 'pro';
+        }
+        catch (error) {
+            return 'pro';
+        }
+    }
+
     async function loadGallery() {
         if (state.gallery.loading) { return; }
         const g = state.gallery;
@@ -2264,7 +2286,7 @@
                 const src = f.src;
                 const name = src.split('/').pop();
                 const starred = src.startsWith('Starred/');
-                return { src, name, url: viewUrl(src), starred, video: /\.(mp4|webm)$/i.test(name), time: typeof f.time == 'number' ? f.time : 0, origin: galleryOrigin(f.metadata) };
+                return { src, name, url: viewUrl(src), starred, video: /\.(mp4|webm)$/i.test(name), time: typeof f.time == 'number' ? f.time : 0, origin: galleryOrigin(f.metadata), source: gallerySource(f.metadata) };
             });
             g.pending = new Set();
             try {
@@ -2356,13 +2378,14 @@
         $('gal-star').setAttribute('aria-pressed', String(filter == 'star'));
     }
 
-    /** Returns the gallery items that pass the current star filter. */
+    /** Returns the gallery items that pass the current star and source filters (F66). */
     function visibleGalleryItems() {
         let g = state.gallery;
-        if (g.filter == 'star') {
-            return g.items.filter(item => item.starred);
+        let items = g.filter == 'star' ? g.items.filter(item => item.starred) : g.items;
+        if (g.source != 'all') {
+            items = items.filter(item => item.source == g.source);
         }
-        return g.items;
+        return items;
     }
 
     /** Renders the contact sheet. Every action is a real button, so cards, stars and deletion work from the keyboard. */
@@ -4575,6 +4598,8 @@
         $('gallery-clear-filter').addEventListener('click', () => {
             setGallerySearch('');
             setGalleryFilter('all');
+            state.gallery.source = 'all';
+            $('gallery-source').value = 'all';
             loadGallery();
         });
         let searchReload = debounce(() => loadGallery(), 350);
@@ -4590,6 +4615,10 @@
         $('gallery-sort').addEventListener('change', () => {
             state.gallery.sort = $('gallery-sort').value;
             loadGallery();
+        });
+        $('gallery-source').addEventListener('change', () => {
+            state.gallery.source = $('gallery-source').value;
+            renderGallery();
         });
         $('gallery-refresh').addEventListener('click', loadGallery);
         $('gallery-select').addEventListener('click', () => GallerySelection.setActive(true));
