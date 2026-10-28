@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20Architecture.zh-CN.md)
 >
-> **Status:** MVP code complete, pending real-environment acceptance (multi-machine testing and seed-team trials not done); this document describes the target architecture and marks implemented parts · **Version:** v1.3 · **Date:** 2026-10-28
+> **Status:** MVP code complete, pending real-environment acceptance (multi-machine testing and seed-team trials not done); this document describes the target architecture and marks implemented parts · **Version:** v1.4 · **Date:** 2026-10-28
 >
 > Related files:
 > - [EcomCraft LAN Multi-Server Platform Requirements](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md): detailed requirements for the platform foundation (execution servers, review, scheduling, storage); it takes precedence.
@@ -60,19 +60,21 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 
 | Layer | Module | Responsibility | Status |
 |---|---|---|---|
-| Front end | Simple mode | Three-step image creation for operators and owners: upload → choose platform and style → pick and download | Implemented (`Studio/simple.js`), the default view; includes camera upload and upload quality notices |
+| Front end | Simple mode | Three-step image creation for operators and owners: upload → choose platform and style → pick and download | Implemented (`Studio/simple.js`), the default view; includes four upload sources, product types, the bilingual prompt panel, selling points and storyboards, brand kit choice and selling-point images (simple mode redesign v3 and later enhancements, pending acceptance) |
 | | Admin views | Workflow review, template configuration, server status, model checklist, storage settings, setup wizard | Implemented: review view, templates and model checklist, storage settings (with disk thresholds and backup/restore), first-setup wizard |
 | | Internationalization | Chinese / English translation tables; every UI string is looked up by key | Implemented for the workspace (`Studio/i18n.js`, `Studio/lang/en.js`) |
 | API | Catalog / templates | Returns template names, sample images and adjustable fields (minimal disclosure) | Extends the existing `EcomCraftStudioCatalog` |
 | | Generation / image sets | Accepts "template ID + product + platform + description" | Extends the existing `EcomCraftStudioGenerate` |
 | | Queue / gallery / export / review / admin | — | Implemented, plus operations APIs (diagnostics, backup/restore, candidate retention) |
 | Domain services | Templates and image sets | Template = published review snapshot + e-commerce information (Chinese and English names, sample images, target platforms); image set = a group of templates | Template data structure and management APIs implemented (`Studio/Templates/`) |
-| | Prompt service | One-sentence description + style → MagicPrompt → English prompt; its output may only fill prompt text fields | Implemented (`Studio/Prompting/`), wraps the existing MagicPrompt |
-| | Generation orchestration | Expands image sets and batches into tasks; per-user limits; tracks the status of each image | Implemented (`Studio/Generation/BatchService`) |
+| | Prompt service | One-sentence description + style → MagicPrompt → English prompt; its output may only fill prompt text fields | Implemented (`Studio/Prompting/`), wraps the existing MagicPrompt; also AI expansion and Chinese/English translation (F54) and selling-point storyboards (F25; the model may only answer in a fixed line format and every shot's template is checked) |
+| | Generation orchestration | Expands image sets and batches into tasks; per-user limits; tracks the status of each image | Implemented (`Studio/Generation/BatchService`); submissions that need the model return at once and the prompt is written in the background (F56); sets can expand by storyboard (F25) |
 | | Scheduling | Rule 1: choose the runnable executor with the shortest queue; the executor abstraction reserves cloud types | Implemented (requirements step 4, `Studio/Generation/ExecutionScheduler`) |
 | | Post-processing | Product-preserving compositing (paste the original product back, using the local cut-out as the mask); candidate scoring later | Product preservation implemented (`Studio/PostProcess/`) |
 | | Product library | Caches original product images and background-removal results for reuse | Simple version implemented (`Studio/Products/`) |
-| | Export | Chinese and international platform size presets, padding, zip or export to a shared folder, AI metadata, Amazon pure-white check | Implemented (`Studio/Export/`) |
+| | Brand kits | Brand colors, preferred background, logo and style references, per account | Implemented, pending acceptance (F12, `Studio/Brand/`); the prompt fragment applies to every template, images only fill a template's `brand_kit` slot |
+| | Project archive | Files works by customer or product batch with a recipe (template, seed, prompt, execution server) read from the work's metadata | Server side implemented, pending acceptance (F04/T09, `Studio/Projects/`); workspace interface T10 not started |
+| | Export | Chinese and international platform size presets, padding, zip or export to a shared folder, AI metadata, Amazon pure-white check | Implemented (`Studio/Export/`); also selling-point images (F47: the server draws the text with the bundled Noto Sans SC; no AI writes it) |
 | | Storage | Work library and export locations, write locally then sync, migration, cleanup, disk monitoring | Implemented (requirement R11, `Studio/Storage/`) |
 | Infrastructure | Reused from SwarmUI | Accounts and permissions, T2IEngine, `ComfyUIAPIBackend`, image processing | Existing |
 
@@ -209,11 +211,11 @@ Current status: the code for every MVP feature is complete (including the usabil
 
 | ID | Feature | Category |
 |---|---|---|
-| F25 | Selling-point analysis and image-set storyboards | Enhancement (first priority after the MVP) |
+| F25 | Selling-point analysis and image-set storyboards | Enhancement (implemented, pending acceptance, T30) |
 | F19 | Category presets | Enhancement |
-| F12 | Brand kits | Enhancement |
-| F04 | Project archive and history | Enhancement |
-| F47 | Selling-point images (fixed text layouts; text is not generated by AI) | Enhancement |
+| F12 | Brand kits | Enhancement (implemented, pending acceptance, T17) |
+| F04 | Project archive and history | Enhancement (server side implemented, pending acceptance, T09; interface T10 not started) |
+| F47 | Selling-point images (fixed text layouts; text is not generated by AI) | Enhancement (implemented, pending acceptance, T50) |
 | F48 | Product showcase videos | Enhancement |
 | F49 | Visible AI labels | Enhancement |
 | F21 | Automatic candidate filtering | Enhancement |
@@ -227,12 +229,12 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F14 | Usage statistics | Team and commercial |
 | F50 | User groups and work sharing | Team and commercial |
 | F51 | Server operations (maintenance mode, workflow distribution, remote cleanup) | Team and commercial |
-| F52 | Four upload sources (local, camera, product library, gallery pick) | Simple mode redesign v3 (confirmed) |
+| F52 | Four upload sources (local, camera, product library, gallery pick) | Simple mode redesign v3 (implemented, pending acceptance) |
 | F53 | Two-level product type, optional visual style and model checkbox | Simple mode redesign v3 (implemented, pending acceptance) |
-| F54 | Bilingual prompts and AI expansion | Simple mode redesign v3 (confirmed) |
+| F54 | Bilingual prompts and AI expansion | Simple mode redesign v3 (implemented, pending acceptance) |
 | F55 | Manual candidate count with a 20-image cap | Simple mode redesign v3 (implemented, pending acceptance) |
-| F56 | Faster generation path (queue on submit) | Simple mode redesign v3 (confirmed) |
-| F57 | Automatic standard workflow creation | Simple mode redesign v3 (confirmed) |
+| F56 | Faster generation path (queue on submit) | Simple mode redesign v3 (implemented, pending acceptance) |
+| F57 | Automatic standard workflow creation | Simple mode redesign v3 (deferred until N01 picks the default model) |
 | F16 | Paid feature licensing | Team and commercial |
 | F18 | Cloud generation | Reserved (change the rules first) |
 | F17 | Brand-specific model training | Reserved (custom service) |
@@ -260,5 +262,6 @@ For each task's files, dependencies, acceptance criteria and Claude Code prompt,
 | 2026-10-28 | v1.2 | Product preservation now uses the local cut-out as the mask: the platform builds the input canvas at the same placement and pastes the original product back after generation, so workflows need not output a product mask |
 | 2026-10-28 | v1.1 | The Chinese / English workspace interface (F24 / T22) is implemented; noted how it works and that server messages are not localized yet |
 | 2026-10-28 | v1.3 | All MVP code complete (T06, T16, T41–T49): status table refreshed (generation orchestration, scheduling, storage etc. now implemented); operations APIs (diagnostics, backup/restore) and usability features (upload quality, candidate cleanup, setup wizard, mobile upload, completion notices, disk monitoring) added; multi-machine testing and seed-team trials pending |
+| 2026-10-28 | v1.4 | Code complete for simple mode redesign v3 F52, F54 and F56 and for the enhancements F25 (storyboards), F12 (brand kits) and F47 (selling-point images); F04 project archive server side complete (T09, AGENTS.md gained the project archive rule); status table adds brand kits and the project archive; F57 deferred (waiting for N01); all pending build and manual acceptance |
 | 2026-10-28 | v1.4 | Simple mode redesign v3 added (F52–F57 / T54–T59, confirmed, development pending): four upload sources, two-level product type, bilingual prompts with AI expansion, a 20-image candidate cap, a faster generation path, and automatic standard workflow creation; requirements in "EcomCraft Simple Mode Redesign" |
 | 2026-10-28 | v1.5 | First two redesign tasks done and deployed: F53 (T55, 467c036d) and F55 (T57, 0e7c6b3e); handover notes and remaining tasks in "EcomCraft Simple Mode Redesign" section 11 |
