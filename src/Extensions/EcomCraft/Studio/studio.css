@@ -198,6 +198,11 @@ input[type=range] { width: 100%; accent-color: var(--key); }
     background: var(--backdrop); border: 1px solid var(--line-strong); font-size: var(--fs-12); font-weight: 600;
 }
 .user-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Hand-off to the professional mode (F64): desktop only, phones keep to the simple mode (U9). */
+@media (max-width: 720px) {
+    .simple-refine { display: none; }
+}
+
 /* Own uploaded workflows in professional mode (F60). */
 .own-workflows { display: grid; gap: 6px; margin-top: 8px; }
 .own-workflow-message { padding: 6px 10px; border-left: 3px solid var(--tally); background: var(--backdrop); border-radius: 0 6px 6px 0; font-size: var(--fs-13); overflow-wrap: anywhere; }

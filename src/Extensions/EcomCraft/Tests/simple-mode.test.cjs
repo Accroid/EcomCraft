@@ -279,3 +279,11 @@ test('own workflows are uploaded in professional mode only, as a name and the fi
     let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
     assert.match(studio, /request\('EcomCraftStudioWorkflowUpload', \{ name: file\.name, workflow: text \}\)/);
 });
+
+test('one picked candidate can be refined in professional mode, with the prompt read by the server (F64)', () => {
+    assert.match(section('view-simple'), /<button type="button" class="btn simple-refine" id="simple-refine" hidden>/);
+    let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    assert.match(studio, /request\('EcomCraftStudioWorkRecipe', \{ image: url \}\)/, 'the prompt comes from the work itself, not from page memory');
+    let css = fs.readFileSync(path.join(studioDir, 'studio.css'), 'utf8');
+    assert.match(css, /@media \(max-width: 720px\) \{\s*\.simple-refine \{ display: none; \}/, 'phones keep to the simple mode');
+});

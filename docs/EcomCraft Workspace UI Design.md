@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.23 · **Date:** 2026-10-29
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.24 · **Date:** 2026-10-29
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -194,6 +194,7 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Step 3 Task list | State of each set / batch task | New | "Product n｜type: state", failed items retryable with the reason on hover; "Cancel remaining"; finished candidates join the list below; finishing shows a banner and the tab title counts progress in the background (F43) |
 | Step 3 Export for platform | Scale and pad to the platform preset, then zip or shared folder | New | Appears with candidates; platform dropdown carries the size; only picked images export, one folder per product; unverified presets warn; the folder option hides without an export location |
 | Step 3 Make a selling-point image | Lays out a title and selling points on one picked candidate in a fixed layout (F47) | New | Folded section shown once there are candidates; title (up to 20 characters), three point inputs (up to 16 characters each, prefilled once from the storyboard), layout chips (bottom banner / left text column / title with badges) and an accent color (defaults to the brand kit's first color); "Make the image" works only with exactly one picked image and shows "Making the image…"; the result goes to the front of the candidates |
+| Step 3 Refine in professional mode | Takes one candidate to professional mode for further work (F64) | New | Shown next to "Download selected" when exactly one image candidate is picked; loads it as the image-to-image start picture and fills in the prompt read from the work's metadata, or asks the user to write one; hidden on narrow screens (≤720px); professional mode never writes back |
 | Step 3 Candidates | Pick the images you like | New | Chroma-key border and check when picked; "Download selected" one by one, "View all in gallery"; picking or downloading tells the server to keep the file forever (F39) |
 
 ### 3.2 Creation view — form
@@ -405,3 +406,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-29 | v1.21 | Task-first simple mode (F61/T64): three task cards at the top, step 2 fields by task, secondary options under "More options"; requirements in the EcomCraft UI and Workflow Redesign |
 | 2026-10-29 | v1.22 | Navigation and "Manage" menu (F62/T65): the top bar is Create images / Professional mode / Gallery / Queue, and administration plus the native engine moved into the administrators' "Manage" menu; consistent wording ("standard workspace" is now "standard parameters", the empty gallery points to "Create images") |
 | 2026-10-29 | v1.23 | Professional mode open to every account, with workflow upload and "My workflows" (F60/T63) |
+| 2026-10-29 | v1.24 | Step 3 gained "Refine in professional mode" (F64/T67) |
