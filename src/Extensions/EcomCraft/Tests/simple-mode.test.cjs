@@ -148,6 +148,18 @@ test('generation only sends the brand kit ID (F12)', () => {
     assert.deepStrictEqual({ ...SimpleMode.brandFields() }, { brand_kit_id: 'k1' });
 });
 
+test('selling-point images offer the server layouts and plain text inputs only (F47)', () => {
+    let simple = section('view-simple');
+    let layouts = [...simple.matchAll(/data-layout="([a-z]+)"/g)].map(match => match[1]);
+    let rules = fs.readFileSync(path.join(studioDir, 'Export', 'SellingImageRules.cs'), 'utf8');
+    let serverLayouts = [...rules.match(/Layouts = \[([^\]]*)\]/)[1].matchAll(/"([a-z]+)"/g)].map(match => match[1]);
+    assert.deepStrictEqual(layouts, serverLayouts, 'the page offers exactly the layouts the server draws');
+    for (let id of ['simple-selling-title', 'simple-selling-point-1', 'simple-selling-point-3', 'simple-selling-run']) {
+        assert.ok(simple.includes(`id="${id}"`), `${id} belongs to step 3`);
+    }
+    assert.match(simple, /id="simple-selling-title" type="text" maxlength="20"/);
+});
+
 test('task stages read: writing the prompt, queued or running on a server, done (F56)', () => {
     let SimpleMode = loadSimpleMode();
     SimpleMode.api = { tr: (text, ...args) => String(text).replace(/\{(\d+)\}/g, (match, index) => args[Number(index)]) };

@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.19 · **Date:** 2026-10-28
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.20 · **Date:** 2026-10-28
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -187,6 +187,7 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Step 3 Generation tasks | Stages of single generations (F56) | New | Under the status line, the last 10 submissions as "Product｜Type: Writing the prompt… / Queued (server) / Running (server) / Done (server) / Failed", hovering a failed one shows why; when the model writes the prompt, the task appears as "Writing the prompt…" right after submitting |
 | Step 3 Task list | State of each set / batch task | New | "Product n｜type: state", failed items retryable with the reason on hover; "Cancel remaining"; finished candidates join the list below; finishing shows a banner and the tab title counts progress in the background (F43) |
 | Step 3 Export for platform | Scale and pad to the platform preset, then zip or shared folder | New | Appears with candidates; platform dropdown carries the size; only picked images export, one folder per product; unverified presets warn; the folder option hides without an export location |
+| Step 3 Make a selling-point image | Lays out a title and selling points on one picked candidate in a fixed layout (F47) | New | Folded section shown once there are candidates; title (up to 20 characters), three point inputs (up to 16 characters each, prefilled once from the storyboard), layout chips (bottom banner / left text column / title with badges) and an accent color (defaults to the brand kit's first color); "Make the image" works only with exactly one picked image and shows "Making the image…"; the result goes to the front of the candidates |
 | Step 3 Candidates | Pick the images you like | New | Chroma-key border and check when picked; "Download selected" one by one, "View all in gallery"; picking or downloading tells the server to keep the file forever (F39) |
 
 ### 3.2 Creation view — form
@@ -394,3 +395,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-28 | v1.17 | Simple-mode redesign v3, step five (F52/T54): step 1 offers four equal entries (this computer, camera, product library, gallery); the product library moved from a folded list into a picker dialog; gallery picks are compressed to within 5 MB in the browser; thumbnails show their source |
 | 2026-10-28 | v1.18 | Selling points and set storyboard (F25/T30): step 2 gained the optional "Selling points and storyboard" section and "Generate set from storyboard"; the task list shows each shot's purpose; new `EcomCraftStudioStoryboard` API |
 | 2026-10-28 | v1.19 | Brand kits (F12/T17): step 2 gained the brand kit list and management dialog; new `EcomCraftStudioBrandKits` / `EcomCraftStudioBrandKitSave` / `EcomCraftStudioBrandKitDelete` APIs |
+| 2026-10-28 | v1.20 | Selling-point images (F47/T50): step 3 gained the "Make a selling-point image" section with three fixed layouts, the server draws the text with Noto Sans SC; new `EcomCraftStudioSellingImage` API |

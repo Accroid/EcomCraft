@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.32.0">
-    <script src="/EcomCraft/lang/en.js?v=0.32.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.32.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.32.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.32.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.33.0">
+    <script src="/EcomCraft/lang/en.js?v=0.33.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.33.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.33.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.33.0" defer></script>
 </head>
 
 <body>
@@ -209,6 +209,33 @@
                             <button type="button" class="btn" id="simple-export-folder" disabled hidden>导出到共享文件夹</button>
                         </div>
                     </div>
+                    <details class="simple-storyboard simple-selling" id="simple-selling" hidden>
+                        <summary>做成卖点图</summary>
+                        <p class="hint" id="simple-selling-note">先点选一张候选图。文字由程序按固定版式排版，不由 AI 生成；会另存为新作品，原图不变。</p>
+                        <div class="fld">
+                            <label for="simple-selling-title">标题</label>
+                            <input id="simple-selling-title" type="text" maxlength="20" autocomplete="off" placeholder="例如：春季焕新 深层保湿">
+                        </div>
+                        <span class="fld-label" id="simple-selling-points-label">卖点<span class="fld-optional">最多 3 条，每条 16 字以内</span></span>
+                        <div class="simple-points" role="group" aria-labelledby="simple-selling-points-label">
+                            <input id="simple-selling-point-1" type="text" maxlength="16" autocomplete="off" aria-label="卖点 1">
+                            <input id="simple-selling-point-2" type="text" maxlength="16" autocomplete="off" aria-label="卖点 2">
+                            <input id="simple-selling-point-3" type="text" maxlength="16" autocomplete="off" aria-label="卖点 3">
+                        </div>
+                        <span class="fld-label" id="simple-selling-layout-label">版式</span>
+                        <div class="simple-chips" id="simple-selling-layouts" role="group" aria-labelledby="simple-selling-layout-label">
+                            <button type="button" class="simple-chip" data-layout="banner" aria-pressed="true">底部横幅</button>
+                            <button type="button" class="simple-chip" data-layout="side" aria-pressed="false">左侧文字栏</button>
+                            <button type="button" class="simple-chip" data-layout="badges" aria-pressed="false">标题加角标</button>
+                        </div>
+                        <div class="inline-row">
+                            <label for="simple-selling-accent">强调色</label>
+                            <input id="simple-selling-accent" type="color" value="#1f2937">
+                        </div>
+                        <div class="recover-actions">
+                            <button type="button" class="btn" id="simple-selling-run" disabled>生成卖点图</button>
+                        </div>
+                    </details>
                     <div class="recover-actions">
                         <button type="button" class="btn btn-primary" id="simple-download" disabled>下载所选</button>
                         <a class="btn" href="#gallery">在画廊查看全部</a>

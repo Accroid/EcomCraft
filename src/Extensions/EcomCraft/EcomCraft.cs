@@ -88,6 +88,7 @@ public class EcomCraft : Extension
         API.RegisterAPICall(CutoutService.EcomCraftStudioCutout, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(EcomCraftStudio.Studio.Export.ExportService.EcomCraftStudioExportOptions, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(EcomCraftStudio.Studio.Export.ExportService.EcomCraftStudioExport, true, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(EcomCraftStudio.Studio.Export.SellingImageService.EcomCraftStudioSellingImage, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(EcomCraftStudio.Studio.Products.ProductLibrary.EcomCraftStudioProducts, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(EcomCraftStudio.Studio.Products.ProductLibrary.EcomCraftStudioProductSave, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(EcomCraftStudio.Studio.Products.ProductLibrary.EcomCraftStudioProductUpdate, true, Permissions.FundamentalGenerateTabAccess);
@@ -112,6 +113,7 @@ public class EcomCraft : Extension
         DiskMonitor.Start();
         TemplateStore.Init(FilePath);
         PromptService.Init(FilePath);
+        EcomCraftStudio.Studio.Export.SellingImageService.Init(FilePath);
     }
 
     /// <inheritdoc/>

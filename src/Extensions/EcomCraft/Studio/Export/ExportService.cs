@@ -214,7 +214,7 @@ public static class ExportService
     }
 
     /// <summary>The SwarmUI metadata text of a saved work (PNG text chunks or the JPEG user comment), or an empty string.</summary>
-    private static string MetadataText(Image<Rgba32> image)
+    internal static string MetadataText(Image<Rgba32> image)
     {
         StringBuilder text = new();
         foreach (SixLabors.ImageSharp.Formats.Png.Chunks.PngTextData item in image.Metadata.GetPngMetadata().TextData)
