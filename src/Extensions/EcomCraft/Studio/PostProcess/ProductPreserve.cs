@@ -3,6 +3,7 @@ using EcomCraftStudio.Studio.Storage;
 using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json.Linq;
 using SixLabors.ImageSharp;
+using ISImage = SixLabors.ImageSharp.Image;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
@@ -49,7 +50,7 @@ public static class ProductPreserve
         try
         {
             byte[] bytes = Convert.FromBase64String(productDataUrl[(comma + 1)..]);
-            using Image<Rgba32> cutout = Image.Load<Rgba32>(bytes);
+            using Image<Rgba32> cutout = ISImage.Load<Rgba32>(bytes);
             if ((long)cutout.Width * cutout.Height > MaxPixels)
             {
                 return "商品图尺寸过大，请缩小到 4000 万像素以内。";
@@ -147,8 +148,8 @@ public static class ProductPreserve
     /// <summary>Loads the saved image, pastes the product back and saves it in the same format through a temporary file.</summary>
     private static void Rewrite(string path, Job job)
     {
-        using Image<Rgba32> generated = Image.Load<Rgba32>(path);
-        using Image<Rgba32> cutout = Image.Load<Rgba32>(job.CutoutPng);
+        using Image<Rgba32> generated = ISImage.Load<Rgba32>(path);
+        using Image<Rgba32> cutout = ISImage.Load<Rgba32>(job.CutoutPng);
         ProductComposite.PasteBack(generated, cutout, job.Placement);
         IImageFormat format = generated.Metadata.DecodedImageFormat ?? throw new NotSupportedException("Unknown image format.");
         string temp = $"{path}.ecomcraft-tmp";

@@ -2435,6 +2435,7 @@
             if (fillInputs) {
                 $('storage-library').value = data.library_path || '';
                 $('storage-export').value = data.export_path || '';
+                $('storage-retention').value = String(data.candidate_retention_days == null ? 14 : data.candidate_retention_days);
             }
             let status = data.library_path ? tr('待同步 {0} 个作品', data.pending || 0) : tr('作品只保存在平台服务器本机。');
             if (data.failing) {
@@ -2474,7 +2475,11 @@
             $('storage-save').disabled = true;
             this.message(tr('正在检测位置，最长约 30 秒…'), false);
             try {
-                let result = await request('EcomCraftStorageSave', { library_path: $('storage-library').value.trim(), export_path: $('storage-export').value.trim() });
+                let result = await request('EcomCraftStorageSave', {
+                    library_path: $('storage-library').value.trim(),
+                    export_path: $('storage-export').value.trim(),
+                    candidate_retention_days: Math.max(0, Math.min(3650, Math.round(Number($('storage-retention').value) || 0)))
+                });
                 let library = result.checks?.library;
                 let detail = library ? tr('写入速度约 {0} MB/s', library.write_mbps) + (library.free_gb != null ? tr('，剩余 {0} GB', library.free_gb) : '') : '';
                 this.message(tr('已保存。') + (detail ? ' ' + detail + tr('。') : ''), false);
