@@ -52,6 +52,7 @@
         'workflow_state','invalid_review','review_save_failed',
         'invalid_storage_path','storage_check_failed','storage_save_failed','invalid_storage_action',
         'invalid_template','template_image_failed','prompt_settings_failed','cutout_failed','product_save_failed','invalid_export','export_failed','diagnostics_failed',
+        'backup_failed','backup_invalid','backup_confirm_required',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
     const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
 
@@ -134,7 +135,11 @@
                 throw new ApiError(message, 'api_error');
             }
             const code = safeErrors.has(data.error_id) ? data.error_id : 'api_error';
-            throw new ApiError(safeErrors.has(code) ? serverErrorText(code, data.error) : '服务未正常返回，请检查登录状态或联系管理员。', code);
+            const failure = new ApiError(safeErrors.has(code) ? serverErrorText(code, data.error) : '服务未正常返回，请检查登录状态或联系管理员。', code);
+            if (Array.isArray(data.problems)) {
+                failure.problems = data.problems;
+            }
+            throw failure;
         }
         return data;
     }
@@ -2561,6 +2566,74 @@
             }
             await this.load(false);
         }
+
+        /** Shows a line about the system-data backup below the form. */
+        static backupMessage(text, error) {
+            let box = $('backup-message');
+            box.textContent = text;
+            box.classList.toggle('is-error', Boolean(error));
+            box.hidden = !text;
+        }
+
+        /** Packs the system data into a backup zip and starts its download (F45). */
+        static async backupCreate() {
+            let button = $('backup-create');
+            button.disabled = true;
+            this.backupMessage(tr('正在打包备份…'), false);
+            try {
+                let result = await request('EcomCraftBackupCreate');
+                if (result.download) {
+                    let link = document.createElement('a');
+                    link.href = result.download;
+                    link.download = result.file_name || 'ecomcraft-backup.zip';
+                    document.body.append(link);
+                    link.click();
+                    link.remove();
+                    this.backupMessage(tr('备份已生成，包含 {0} 个文件，开始下载。', result.files), false);
+                }
+            }
+            catch (error) {
+                this.backupMessage(error.message || tr('备份没有生成，请稍后重试。'), true);
+            }
+            finally {
+                button.disabled = false;
+            }
+        }
+
+        /** Reads the chosen backup zip, asks for confirmation and restores it after the server validates the manifest (F45). */
+        static async backupRestore(file) {
+            if (!file) {
+                return;
+            }
+            this.backupMessage(tr('正在读取备份并校验…'), false);
+            let data = await new Promise((resolve, reject) => {
+                let reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+                reader.onerror = () => reject(new Error('read'));
+                reader.readAsDataURL(file);
+            }).catch(() => {
+                this.backupMessage(tr('备份文件无法读取，请重新选择。'), true);
+                return null;
+            });
+            if (!data) {
+                return;
+            }
+            if (!window.confirm(tr('恢复会覆盖当前的模板、审核快照、存储设置等系统数据，并在重启服务后生效。确定继续吗？'))) {
+                this.backupMessage('', false);
+                return;
+            }
+            try {
+                let result = await request('EcomCraftBackupRestore', { data, confirm: true });
+                let staged = (result.staged || []).length;
+                this.backupMessage(staged
+                    ? tr('已恢复 {0} 个文件；{1} 个账号数据库文件被占用，已放入暂存目录，请按升级说明在停止服务后替换，然后重启。', result.restored, staged)
+                    : tr('已恢复 {0} 个文件；请重启服务使全部设置生效。', result.restored), false);
+            }
+            catch (error) {
+                let detail = (error.problems || []).length ? ' ' + error.problems.join(' ') : '';
+                this.backupMessage((error.message || tr('恢复没有完成。')) + detail, true);
+            }
+        }
     }
 
     /** The administrator's first-setup wizard (F40): language → storage location → register servers → model check → common platforms.
@@ -4193,6 +4266,13 @@
         $('storage-save').addEventListener('click', () => StorageSettingsView.save());
         $('storage-migrate').addEventListener('click', () => StorageSettingsView.migrate('start'));
         $('storage-migrate-cancel').addEventListener('click', () => StorageSettingsView.migrate('cancel'));
+        $('backup-create').addEventListener('click', () => StorageSettingsView.backupCreate());
+        $('backup-restore-btn').addEventListener('click', () => $('backup-file').click());
+        $('backup-file').addEventListener('change', e => {
+            let file = e.target.files && e.target.files[0];
+            e.target.value = '';
+            StorageSettingsView.backupRestore(file);
+        });
         $('submit-backdrop').addEventListener('click', () => WorkflowReviewView.closeSubmit());
         $('submit-cancel').addEventListener('click', () => WorkflowReviewView.closeSubmit());
         $('submit-confirm').addEventListener('click', () => WorkflowReviewView.submit());
