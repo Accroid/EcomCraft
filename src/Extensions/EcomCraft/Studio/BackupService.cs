@@ -200,6 +200,12 @@ public static class BackupService
         {
             foreach (string file in Directory.EnumerateFiles(root, "*", new EnumerationOptions() { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint }))
             {
+                string name = Path.GetFileName(file);
+                if (name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".ecomcraft-tmp", StringComparison.OrdinalIgnoreCase)
+                    || name.Contains(".damaged-", StringComparison.Ordinal))
+                {
+                    continue;
+                }
                 string relative = Path.GetRelativePath(root, file);
                 if (ExcludedFolders.Any(folder => relative.StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
                 {

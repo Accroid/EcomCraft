@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20Architecture.zh-CN.md)
 >
-> **Status:** Planning (this document describes the target architecture; most modules are not implemented yet, and implemented parts are marked) · **Version:** v1.2 · **Date:** 2026-10-28
+> **Status:** MVP code complete, pending real-environment acceptance (multi-machine testing and seed-team trials not done); this document describes the target architecture and marks implemented parts · **Version:** v1.3 · **Date:** 2026-10-28
 >
 > Related files:
 > - [EcomCraft LAN Multi-Server Platform Requirements](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md): detailed requirements for the platform foundation (execution servers, review, scheduling, storage); it takes precedence.
@@ -60,20 +60,20 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 
 | Layer | Module | Responsibility | Status |
 |---|---|---|---|
-| Front end | Simple mode | Three-step image creation for operators and owners: upload → choose platform and style → pick and download | Implemented (`Studio/simple.js`), the default view |
-| | Admin views | Workflow review, template configuration, server status, model checklist, storage settings, setup wizard | Review view implemented |
+| Front end | Simple mode | Three-step image creation for operators and owners: upload → choose platform and style → pick and download | Implemented (`Studio/simple.js`), the default view; includes camera upload and upload quality notices |
+| | Admin views | Workflow review, template configuration, server status, model checklist, storage settings, setup wizard | Implemented: review view, templates and model checklist, storage settings (with disk thresholds and backup/restore), first-setup wizard |
 | | Internationalization | Chinese / English translation tables; every UI string is looked up by key | Implemented for the workspace (`Studio/i18n.js`, `Studio/lang/en.js`) |
 | API | Catalog / templates | Returns template names, sample images and adjustable fields (minimal disclosure) | Extends the existing `EcomCraftStudioCatalog` |
 | | Generation / image sets | Accepts "template ID + product + platform + description" | Extends the existing `EcomCraftStudioGenerate` |
-| | Queue / gallery / export / review / admin | — | Queue and review implemented |
+| | Queue / gallery / export / review / admin | — | Implemented, plus operations APIs (diagnostics, backup/restore, candidate retention) |
 | Domain services | Templates and image sets | Template = published review snapshot + e-commerce information (Chinese and English names, sample images, target platforms); image set = a group of templates | Template data structure and management APIs implemented (`Studio/Templates/`) |
 | | Prompt service | One-sentence description + style → MagicPrompt → English prompt; its output may only fill prompt text fields | Implemented (`Studio/Prompting/`), wraps the existing MagicPrompt |
-| | Generation orchestration | Expands image sets and batches into tasks; per-user limits; tracks the status of each image | Planned |
-| | Scheduling | Rule 1: choose the runnable executor with the shortest queue; the executor abstraction reserves cloud types | Requirements step 4; `ExecutionServers` provides the base |
+| | Generation orchestration | Expands image sets and batches into tasks; per-user limits; tracks the status of each image | Implemented (`Studio/Generation/BatchService`) |
+| | Scheduling | Rule 1: choose the runnable executor with the shortest queue; the executor abstraction reserves cloud types | Implemented (requirements step 4, `Studio/Generation/ExecutionScheduler`) |
 | | Post-processing | Product-preserving compositing (paste the original product back, using the local cut-out as the mask); candidate scoring later | Product preservation implemented (`Studio/PostProcess/`) |
 | | Product library | Caches original product images and background-removal results for reuse | Simple version implemented (`Studio/Products/`) |
-| | Export | Chinese and international platform size presets, padding, zip or export to a shared folder, AI metadata, Amazon pure-white check | Size presets, padding, zip and shared folder implemented (`Studio/Export/`) |
-| | Storage | Work library and export locations, write locally then sync, migration, cleanup | Planned, see requirement R11 |
+| | Export | Chinese and international platform size presets, padding, zip or export to a shared folder, AI metadata, Amazon pure-white check | Implemented (`Studio/Export/`) |
+| | Storage | Work library and export locations, write locally then sync, migration, cleanup, disk monitoring | Implemented (requirement R11, `Studio/Storage/`) |
 | Infrastructure | Reused from SwarmUI | Accounts and permissions, T2IEngine, `ComfyUIAPIBackend`, image processing | Existing |
 
 ## 5. Data Flow for a One-Click Image Set
@@ -152,6 +152,8 @@ src/Extensions/EcomCraft/
 ## 7. MVP Scope
 
 MVP acceptance: **an operator without design experience can, on their own, use a browser on the LAN to go from "upload product image → full image set → export for a platform", and the results can be listed for sale directly.**
+
+Current status: the code for every MVP feature is complete (including the usability and operations items below); multi-machine testing (N08) and seed-team trials (N07) are still pending, and the four expert-made workflows templates depend on (N02) are still conventional-name placeholders.
 
 ### MVP-A: Platform foundation
 
@@ -251,3 +253,4 @@ For each task's files, dependencies, acceptance criteria and Claude Code prompt,
 | 2026-10-27 | v1.0 | First version: positioning, deployment topology, layered architecture, data flow, design conventions, MVP scope and later features |
 | 2026-10-28 | v1.2 | Product preservation now uses the local cut-out as the mask: the platform builds the input canvas at the same placement and pastes the original product back after generation, so workflows need not output a product mask |
 | 2026-10-28 | v1.1 | The Chinese / English workspace interface (F24 / T22) is implemented; noted how it works and that server messages are not localized yet |
+| 2026-10-28 | v1.3 | All MVP code complete (T06, T16, T41–T49): status table refreshed (generation orchestration, scheduling, storage etc. now implemented); operations APIs (diagnostics, backup/restore) and usability features (upload quality, candidate cleanup, setup wizard, mobile upload, completion notices, disk monitoring) added; multi-machine testing and seed-team trials pending |

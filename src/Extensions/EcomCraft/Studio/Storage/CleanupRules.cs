@@ -21,10 +21,17 @@ public static class CleanupRules
         return now - created >= retentionDays * 86_400_000L;
     }
 
-    /// <summary>Whether a resolved path lies strictly inside <paramref name="root"/> and carries a picture or video extension.</summary>
+    /// <summary>Whether a resolved path lies strictly inside <paramref name="root"/> and is a work file: a picture or video, or the
+    /// `.swarm.json` metadata sidecar that belongs to one.</summary>
     public static bool SafeToDelete(string path, string root)
     {
-        if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(root) || !WorkExtensions.Contains(Path.GetExtension(path)))
+        if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(root))
+        {
+            return false;
+        }
+        bool workFile = WorkExtensions.Contains(Path.GetExtension(path))
+            || Path.GetFileName(path).EndsWith(".swarm.json", StringComparison.OrdinalIgnoreCase);
+        if (!workFile)
         {
             return false;
         }

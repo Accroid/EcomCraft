@@ -107,7 +107,7 @@ public static class StorageApi
         int critical = Math.Clamp(rawInput.Value<int?>("disk_critical_gb") ?? settings.DiskCriticalGB, 0, 100_000);
         if (warn > 0 && critical > warn)
         {
-            return StudioApi.Error("磁盘严重不足阈值不能高于警告阈值。", "invalid_storage_path");
+            return StudioApi.Error("磁盘严重不足阈值不能高于警告阈值。", "invalid_parameters");
         }
         settings.DiskWarnGB = warn;
         settings.DiskCriticalGB = critical;

@@ -101,6 +101,7 @@ window.EcomCraftLanguages.en = {
     "在画廊查看全部": "See everything in the gallery",
     "无法读取模板和风格，请刷新页面重试。": "Could not read templates and styles. Reload the page and try again.",
     "正在读取模板和风格…": "Reading templates and styles…",
+    "正在读取…": "Reading…",
     "请选择图片类型。": "Choose an image type.",
     "请先上传商品图。": "Upload a product photo first.",
     "请选择风格。": "Choose a style.",

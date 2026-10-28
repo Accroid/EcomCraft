@@ -27,6 +27,7 @@ public class CandidateCleanupTests
         string works = Path.Combine(Root, "works");
         Assert.True(CleanupRules.SafeToDelete(Path.Combine(works, "a.png"), works));
         Assert.True(CleanupRules.SafeToDelete(Path.Combine(works, "sub", "a.MP4"), works));
+        Assert.True(CleanupRules.SafeToDelete(Path.Combine(works, "a.swarm.json"), works), "a metadata sidecar goes with its work");
         Assert.False(CleanupRules.SafeToDelete(Path.Combine(works, "notes.json"), works), "not a picture or video");
         Assert.False(CleanupRules.SafeToDelete(Path.Combine(works, "..", "outside.png"), works), "outside the root");
         Assert.False(CleanupRules.SafeToDelete(works + Path.DirectorySeparatorChar, works), "the root itself is never deleted");
