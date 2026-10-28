@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20Architecture.zh-CN.md)
 >
-> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); this document describes the target architecture and marks implemented parts · **Version:** v1.9 · **Date:** 2026-10-28
+> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); this document describes the target architecture and marks implemented parts · **Version:** v2.0 · **Date:** 2026-10-29
 >
 > Related files:
 > - [EcomCraft LAN Multi-Server Platform Requirements](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md): detailed requirements for the platform foundation (execution servers, review, scheduling, storage); it takes precedence.
@@ -12,9 +12,13 @@
 
 ## 1. Product Positioning
 
-EcomCraft is a **LAN product-image production platform for e-commerce operators and small shop owners**:
+EcomCraft is a **LAN product-image production platform for e-commerce operators, graphic designers and small shop owners**:
 
-- **Users**: operators and shop owners without design experience. They only upload product images, choose a platform and a style, then pick and download images; they never deal with prompts, models or parameters. An administrator (the shop's technical staff, or our deployment service) handles installation and configuration.
+- **Users**:
+  - Operators and shop owners: create images quickly in simple mode. They only upload product images, choose a platform and a style, then pick and download images; they never deal with prompts, models or parameters.
+  - Graphic designers: adjust models, samplers, LoRAs, steps and other parameters in professional mode to create more and richer results.
+  - Administrators (the shop's technical staff, or our deployment service): handle installation and configuration.
+- **Sales model**: sold as software, priced per account (A12).
 - **Deployment**: one or more GPU computers run ComfyUI, and one of them also runs the EcomCraft platform. Team members open the same page in a browser on the LAN, and the platform automatically sends tasks to idle GPU computers.
 - **Markets**: both Chinese platforms (Taobao/Tmall, JD, Pinduoduo, Douyin and others) and international platforms (Amazon, Shopify, TikTok Shop and others); the interface and documentation are available in Chinese and English.
 - **Differentiators**: fully local generation (product images never leave the company), product preservation, team collaboration, and one-click export that follows each platform's rules.
@@ -24,7 +28,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 | ID | Decision |
 |---|---|
 | A1 | Deployment is "one GPU computer + browser access", with support for several GPU computers on the LAN; users see a single front-end page and tasks are dispatched automatically. |
-| A2 | Target users are operators and shop owners without design experience: the default interface keeps only the essential steps, and advanced parameters are visible only to administrators. |
+| A2 | Target users are operators, graphic designers and shop owners: the default interface is simple mode with only the essential steps; any account can switch to professional mode, with no role restriction (administrators still handle installation, configuration and review). |
 | A3 | Both Chinese and international platforms are supported; the interface, documentation and platform presets are provided in Chinese and English. |
 | A4 | Users do not write prompts: a one-sentence description (Chinese or English) plus style options is turned into a prompt by the integrated online LLM (MagicPrompt). |
 | A5 | Online LLMs process text only. Sending product images to an online vision model (to describe products automatically) is off by default; the administrator can enable it or use a local vision model instead. |
@@ -34,11 +38,12 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 | A9 | We will not take image orders ourselves to validate demand; instead, 3–5 seed teams will try the MVP after release. |
 | A10 | Single server first: the MVP is deployed and accepted as "one platform server that is also the execution server". The architecture and code for multi-server access, scheduling and storage remain in place; multi-machine testing (F28 / T33, N08) is deferred until a customer asks for it or the test environment is ready. |
 | A11 | Both reference-image paths are open (F59): "borrow the composition" (prompt reference) and "scene reference" (image-to-image) are both offered, the latter needing the administrator to install an image-to-image model (N10); the goal is restoring the feel of layout and light, never a 1:1 copy. Reference mode is standalone: once references are uploaded the other step-2 options stop applying, per-reference prompts are shown and editable, and each reference makes exactly one image (cap 8, mutually exclusive with storyboards); references are temporary and never stored. |
+| A12 | Revenue model: sold as software, priced per account. No complex roles or permissions: accounts are either administrators or regular accounts, and licensing limits only the number of accounts, never tiers features. |
 
 ## 3. Deployment Topology
 
 ```
-  Browsers (operators / owners / administrators; Chinese or English UI; any computer or phone on the LAN)
+  Browsers (operators / designers / owners / administrators; Chinese or English UI; any computer or phone on the LAN)
                          │  HTTP, account login
                          ▼
   ┌──────────────── Platform server A: SwarmUI + EcomCraft ────────────────┐
@@ -62,7 +67,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 
 | Layer | Module | Responsibility | Status |
 |---|---|---|---|
-| Front end | Simple mode | Three-step image creation for operators and owners: upload → choose platform and style → pick and download | Implemented (`Studio/simple.js`), the default view; includes four upload sources, product types, the bilingual prompt panel, selling points and storyboards, brand kit choice and selling-point images (simple mode redesign v3 and later enhancements, pending acceptance) |
+| Front end | Simple mode | Three-step image creation for operators and owners (any account can switch to professional mode, see A2): upload → choose platform and style → pick and download | Implemented (`Studio/simple.js`), the default view; includes four upload sources, product types, the bilingual prompt panel, selling points and storyboards, brand kit choice and selling-point images (simple mode redesign v3 and later enhancements, pending acceptance) |
 | | Admin views | Workflow review, template configuration, server status, model checklist, storage settings, setup wizard | Implemented: review view, templates and model checklist, storage settings (with disk thresholds and backup/restore), first-setup wizard |
 | | Internationalization | Chinese / English translation tables; every UI string is looked up by key | Implemented for the workspace (`Studio/i18n.js`, `Studio/lang/en.js`) |
 | API | Catalog / templates | Returns template names, sample images and adjustable fields (minimal disclosure) | Extends the existing `EcomCraftStudioCatalog` |
@@ -228,7 +233,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F09 | Template import and export | Enhancement |
 | F27 | ComfyUI App Mode compatibility | Enhancement |
 | F23 | One-click install on Apple silicon Macs | Enhancement |
-| F11 | Finer roles and permissions | Team and commercial |
+| F11 | Finer roles and permissions | Not planned (A12: accounts are only administrators or regular accounts) |
 | F13 | Work approval flow | Team and commercial |
 | F14 | Usage statistics | Team and commercial |
 | F50 | User groups and work sharing | Team and commercial |
@@ -241,7 +246,8 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F57 | Automatic standard workflow creation | Simple mode redesign v3 (default model chosen in N01, plan pending; text-to-image first, image-to-image waits for N10) |
 | F58 | Platform presets by slot (per-slot size and ratio, subject fill, size caps, forbidden content, AI labelling) | Enhancement (implemented, pending acceptance, T60; design in [EcomCraft Platform Preset Slots](EcomCraft%20Platform%20Preset%20Slots.md), values pending the N06 check) |
 | F59 | Reference images (one image per reference: borrow the composition and scene reference) | Enhancement (P1 implemented, pending acceptance, T61; P2 scene reference depends on N10, T62; requirements in [EcomCraft Reference Images](EcomCraft%20Reference%20Images.md)) |
-| F16 | Paid feature licensing | Team and commercial |
+| F60 | Professional mode open to every account (A2) | Feature enhancement (T63, to do) |
+| F16 | Per-account licensing (limits the number of accounts only, no feature tiers) | Team and commercial (A12) |
 | F18 | Cloud generation | Reserved (change the rules first) |
 | F17 | Brand-specific model training | Reserved (custom service) |
 
@@ -249,6 +255,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 
 - A public SaaS for small sellers, credits and online payment.
 - SaaS-style restrictions such as watermarked previews.
+- A complex role and permission system, or feature-tiered pricing (A12).
 - Building separate workflows for each customer (differences go into category presets and brand kits; anything beyond that is paid customization).
 - Cloud generation and taking image orders ourselves during the MVP.
 
@@ -275,3 +282,4 @@ For each task's files, dependencies, acceptance criteria and Claude Code prompt,
 | 2026-10-28 | v1.7 | F58 platform presets by slot implemented pending acceptance (T60): platforms.json upgraded to v3 slots, image sets composed by slot kind, exports follow slot specs with automatic size-cap compression, pure-white and subject-fill hints, forbidden-content and AI-declaration notices; values still await the N06 check |
 | 2026-10-28 | v1.8 | Added the F59 reference-image requirements (decision A11): two paths (borrow the composition / scene reference via image-to-image), each reference generating its own image (cap 8, mutually exclusive with storyboards, temporary and never stored), copyright boundary (restore the feel, stronger notices on international platforms); T61 pending, T62 depends on N10; reserved the P3 direction of whole-set references to a whole set |
 | 2026-10-28 | v1.9 | F59 P1 standalone reference mode implemented pending acceptance (T61): reference upload (cap 8), per-reference editable prompts (EcomCraftStudioReferenceDescribe), the other step-2 options disabled, one image per reference per product (fixed scene template, mutually exclusive with storyboards), reference thumbnails on task cards, reference mode unavailable with vision off; AGENTS.md gained the reference-image rule; P2 still waits for N10 |
+| 2026-10-29 | v2.0 | Graphic designers added to the target users (simple mode for operators and owners, professional mode for designers); A2 now lets any account switch to professional mode; new A12 revenue model: sold as software, priced per account, no complex roles or permissions (F11 now not planned, F16 now per-account licensing); new F60 / T63 opens professional mode (to do) |
