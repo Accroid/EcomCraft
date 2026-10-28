@@ -234,7 +234,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F54 | Bilingual prompts and AI expansion | Simple mode redesign v3 (implemented, pending acceptance) |
 | F55 | Manual candidate count with a 20-image cap | Simple mode redesign v3 (implemented, pending acceptance) |
 | F56 | Faster generation path (queue on submit) | Simple mode redesign v3 (implemented, pending acceptance) |
-| F57 | Automatic standard workflow creation | Simple mode redesign v3 (deferred until N01 picks the default model) |
+| F57 | Automatic standard workflow creation | Simple mode redesign v3 (default model chosen in N01, plan pending; text-to-image first, image-to-image waits for N10) |
 | F16 | Paid feature licensing | Team and commercial |
 | F18 | Cloud generation | Reserved (change the rules first) |
 | F17 | Brand-specific model training | Reserved (custom service) |

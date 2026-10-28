@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20简易模式改版需求.zh-CN.md)
 >
-> **Status:** In development (F53 and F55 implemented and deployed, pending manual acceptance; F54 and F56 implemented, pending build and manual acceptance; F52 implemented, pending manual acceptance; F57 deferred) · **Version:** v3.5 · **Date:** 2026-10-28
+> **Status:** In development (F53 and F55 implemented and deployed, pending manual acceptance; F54 and F56 implemented, pending build and manual acceptance; F52 implemented, pending manual acceptance; F57 default model chosen, plan pending) · **Version:** v3.6 · **Date:** 2026-10-28
 >
 > This document holds the finalized requirements for the simple-mode (three-step) redesign. Development follows this document; when requirements change, update this document first (Chinese and English together), record the change in the change log, and only then change the code. For the overall architecture and MVP roadmap see [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md); for the interactive prototype see [EcomCraft Simple Mode Redesign Prototype](EcomCraft%20简易模式改版原型.html) (open directly in a browser; Chinese UI).
 
@@ -136,6 +136,8 @@ After the redesign:
   1. after startup the server checks automatically: a built-in template's workflow unpublished and an execution server online → generate and register;
   2. an "Initialize standard workflows" button plus a status list (generated / missing model / failed) in the administrator settings as a fallback.
 - **Model dependency**: blueprints use the administrator-configured **default checkpoint**; before generating, the target execution server is checked for the model (F08 dependency check reused); without it, nothing is registered and a clear notice is shown.
+  - Default models (N01, decided 2026-10-28): UNet `qwen-image-2.1-UC-Q4_K_M.gguf` (GGUF, needs the ComfyUI-GGUF nodes), text encoder `qwen3vl_8b_int8_convrot.safetensors`, VAE `qwen_image_2.1_vae_bf16.safetensors`. The first blueprints support only this model set and only **text-to-image**; the commercial license of this exact version still needs checking.
+  - Image-to-image (product reference, inpainting, product blending) has no plan yet and is listed as non-development item **N10** (to do); blueprints are extended once it is decided.
 - **Initial scope**: scene, detail and model scenes (one blueprint, prompt-differentiated); the white main image needs no workflow (cutout-only branch); the dedicated "model image" template keeps the manual configuration path.
 
 **Acceptance**: in a fresh environment with an execution server registered and the default model installed, scene and detail images generate without hand-built workflows; the review list shows the "system-generated" source and supports unpublishing; missing models produce a clear notice and no registration.
@@ -182,14 +184,14 @@ Development order: **T55 → T57 → T56 → T58 → T59 → T54** (controls fir
 | F55 candidate count and button texts | T57 | **Implemented**, deployed, pending manual acceptance | 0e7c6b3e | Number input 1–20; single generations and sets share the 20-image cap (enforced server-side too); UI design doc v1.14 |
 | F54 bilingual prompts and AI expansion | T56 | **Implemented**, not yet built, pending deployment and manual acceptance | 8124a752 | New `EcomCraftStudioExpandPrompt` API; the generate and set APIs accept `prompt_en` / `prompt_zh` and answer with `prompt_used` / `prompt_translated`; translation fallback code `prompt_untranslated`; the server still adds the product-type, model and style fragments; `simple-mode.test.cjs` now allows only the two panel text boxes; UI design doc v1.15. Translation currently runs inside the submit request; T58 moves it to the background |
 | F56 faster generation path | T58 | **Implemented**, not yet built, pending deployment and manual acceptance | aee5a0bd | When the model is needed the submission returns `prepare_id` at once and the new `EcomCraftStudioPrepareStatus` API reports the stage; at most 5 submissions per account wait for their prompt; set tasks start in state `prompt` (cancellable); step 3 gained a task list for single generations; UI design doc v1.16 |
-| F57 automatic workflow creation | T59 | **Deferred** (decided by the user on 2026-10-28) | — | See section 7; a plan follows once N01 (a commercially usable default model) is done; the generated workflow JSON needs verification in an environment with ComfyUI |
+| F57 automatic workflow creation | T59 | Plan pending (N01 done, no longer deferred) | — | See section 7; the first version is text-to-image only (default models in section 7), image-to-image waits for N10; the generated workflow JSON needs verification in an environment with ComfyUI |
 | F52 four upload sources | T54 | **Implemented** (front end only), pending manual acceptance | 01c120e7 | Four equal buttons; the library and the gallery share a picker dialog; the gallery lists the latest 60 generated images and compresses picks over 5 MB to JPEG in the browser; thumbnails show their source; UI design doc v1.17 |
 
 Service state: T56 (8124a752), T58 (aee5a0bd) and T54 (01c120e7, front end only) were written on a development machine without the .NET SDK and have not been built or restarted yet; rebuild the extension as in step 2 before deploying.
 
 ### 11.2 How to continue
 
-1. Only **T59** remains in this redesign and it is deferred (it depends on non-development item N01: an administrator first picks a commercially usable default model); once N01 is done, propose a plan before developing. One task at a time. Each task's files, dependencies, acceptance criteria, test method and a ready-to-paste Claude Code prompt are in the "开发任务" sheet (column K) of the [development sheet](EcomCraft%20开发总表.xlsx).
+1. Only **T59** remains in this redesign: N01 is done (default models in section 7); propose a plan and get the user's confirmation before developing; the image-to-image part waits for N10. One task at a time. Each task's files, dependencies, acceptance criteria, test method and a ready-to-paste Claude Code prompt are in the "开发任务" sheet (column K) of the [development sheet](EcomCraft%20开发总表.xlsx).
 2. Required verification after every task:
    - `node --check src/Extensions/EcomCraft/Studio/simple.js` (and any other changed js)
    - `node --test src/Extensions/EcomCraft/Tests/studio-i18n.test.cjs src/Extensions/EcomCraft/Tests/error-codes.test.cjs src/Extensions/EcomCraft/Tests/simple-mode.test.cjs`
@@ -212,3 +214,4 @@ Interactive prototype (confirmed; this document governs): [EcomCraft Simple Mode
 | 2026-10-28 | v3.3 | F56 (T58, aee5a0bd) implemented: submissions return at once, the prompt is written in the background, three-stage task status, sets reworked the same way; pending build and manual acceptance |
 | 2026-10-28 | v3.4 | F52 (T54, 01c120e7) implemented: four upload entries, picker dialog for the library and the gallery, gallery compression and source labels; pending manual acceptance |
 | 2026-10-28 | v3.5 | F57 (T59) deferred until N01 picks the default model; the other five features are code complete, pending build and manual acceptance |
+| 2026-10-28 | v3.6 | N01 done: the default text-to-image models are the Qwen-Image 2.1 GGUF set; T59 no longer deferred, first version text-to-image only; image-to-image listed as to-do N10 |
