@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.20 · **Date:** 2026-10-28
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.21 · **Date:** 2026-10-29
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -165,6 +165,9 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Control | Purpose | Current | After |
 |---|---|---|---|
 | Navigation "Create" / "Professional mode" | Switch views | New | Everyone starts in "Create"; "Professional mode" is the former creation view, visible only to administrators; other accounts bounce from `#create` |
+| Task cards: Follow a reference / Make one image / Make a full set | Choose what to make, then fill it in (F61) | New | Three cards at the top; "Follow a reference" comes first and is the first-visit default; the chosen card has the green-screen border and `aria-pressed`; remembered in the browser; step 2 shows only that task's fields (marked with `data-tasks` in HTML, hidden by CSS from `data-simple-task`), and its title becomes "Pick platform and references / image type / product type"; switching tasks keeps product photos and references |
+| Step 2 References (Follow a reference) | Upload 1–8 references with an editable prompt each (F59) | New | Shown and required only in "Follow a reference"; the main button "Generate by reference" makes one image per reference for every product photo |
+| Step 2 More options | Folds visual style, model, brand kit, one-line description with AI expand, and the prompt panel (F61) | New | Shown in "Make one image" and "Make a full set", folded by default with the open state remembered in the browser; selling points and storyboard appear only in "Make a full set" |
 | Step 1 Upload product photo | Click or drop PNG / JPEG / WebP (≤5 MB) | New | Previewed in page memory only, sent on submit; "Use another photo" clears |
 | Step 1 Camera upload | Opens the phone camera (F42) | New | Hidden file input with `capture`, works over `http://` LAN addresses; on desktop equals choosing a file |
 | Step 1 Upload quality notice | Resolution, sharpness or product share too low (F38) | New | Checked right after upload (Laplacian variance, cut-out share); amber left bar explains why and suggests what to do; the user can continue |
@@ -396,3 +399,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-28 | v1.18 | Selling points and set storyboard (F25/T30): step 2 gained the optional "Selling points and storyboard" section and "Generate set from storyboard"; the task list shows each shot's purpose; new `EcomCraftStudioStoryboard` API |
 | 2026-10-28 | v1.19 | Brand kits (F12/T17): step 2 gained the brand kit list and management dialog; new `EcomCraftStudioBrandKits` / `EcomCraftStudioBrandKitSave` / `EcomCraftStudioBrandKitDelete` APIs |
 | 2026-10-28 | v1.20 | Selling-point images (F47/T50): step 3 gained the "Make a selling-point image" section with three fixed layouts, the server draws the text with Noto Sans SC; new `EcomCraftStudioSellingImage` API |
+| 2026-10-29 | v1.21 | Task-first simple mode (F61/T64): three task cards at the top, step 2 fields by task, secondary options under "More options"; requirements in the EcomCraft UI and Workflow Redesign |

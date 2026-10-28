@@ -203,3 +203,40 @@ test('the prompt panel sends edited English as is, edited Chinese for translatio
     assert.strictEqual(SimpleMode.promptSource(panel('只写了中文', '')), 'zh', 'typing without expanding counts as an edit');
     assert.strictEqual(SimpleMode.promptSource(panel('', 'a red mug', synced, 'zh')), 'en', 'a cleared Chinese text falls back to the English one');
 });
+
+test('simple mode starts by choosing a task, "follow a reference" first and default (F61)', () => {
+    let simple = section('view-simple');
+    assert.match(simple, /<section class="view" id="view-simple"[^>]*data-simple-task="reference"/);
+    let tasks = [...simple.matchAll(/<button type="button" class="simple-task" data-task="([a-z]+)" aria-pressed="(true|false)"/g)].map(match => [match[1], match[2]]);
+    assert.deepStrictEqual(tasks, [['reference', 'true'], ['single', 'false'], ['set', 'false']]);
+});
+
+test('each task shows only its own step-2 fields and main button (F61)', () => {
+    let simple = section('view-simple');
+    let marks = { 'simple-generate': 'single', 'simple-generate-set': 'set', 'simple-generate-reference': 'reference',
+        'simple-references-fld': 'reference', 'simple-reference-list-block': 'reference', 'simple-storyboard': 'set', 'simple-more': 'single set' };
+    for (let [id, tasks] of Object.entries(marks)) {
+        assert.match(simple, new RegExp(`id="${id}"[^>]*data-tasks="${tasks}"`), `${id} belongs to ${tasks}`);
+    }
+    let start = simple.indexOf('id="simple-more"');
+    let more = simple.slice(start, simple.indexOf('</details>', start));
+    for (let id of ['simple-styles', 'simple-model', 'simple-brand', 'simple-description', 'simple-expand', 'simple-prompt-zh', 'simple-prompt-en']) {
+        assert.ok(more.includes(`id="${id}"`), `${id} is folded under "More options"`);
+    }
+    let css = fs.readFileSync(path.join(studioDir, 'studio.css'), 'utf8');
+    for (let task of ['reference', 'single', 'set']) {
+        assert.ok(css.includes(`[data-simple-task="${task}"] [data-tasks]:not([data-tasks~="${task}"])`), `CSS hides the other tasks' fields for ${task}`);
+    }
+});
+
+test('reference mode follows the chosen task and needs at least one reference (F61)', () => {
+    let SimpleMode = loadSimpleMode();
+    SimpleMode.api = { tr: text => text, state: { session: 'x' } };
+    SimpleMode.references = [];
+    SimpleMode.chosenTask = 'reference';
+    assert.strictEqual(SimpleMode.referenceMode(), true);
+    assert.match(SimpleMode.referenceProblem(), /参考图/);
+    SimpleMode.chosenTask = 'set';
+    assert.strictEqual(SimpleMode.referenceMode(), false);
+    assert.strictEqual(SimpleMode.referenceProblem(), '');
+});

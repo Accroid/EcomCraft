@@ -28,6 +28,15 @@ class SimpleMode {
     /** The optional image slots ticked for the chosen platform (F58); same-kind optional slots only add export targets, so only kinds not already in the default set are offered. */
     static optionalSlots = new Set();
 
+    /** The task chosen at the top of the page (F61): 'reference' (follow a reference, the default), 'single' (one image type) or 'set' (the platform's set). */
+    static chosenTask = 'reference';
+
+    /** The tasks of the task picker, in display order (F61). */
+    static taskKinds = ['reference', 'single', 'set'];
+
+    /** Whether "More options" (style, model, brand kit, description and prompt) is unfolded; remembered in this browser (F61). */
+    static moreOpen = false;
+
     /** Reference images of reference mode (F59): each { image, promptEn, promptZh, edited, describing, failed }; one image is made per reference. */
     static references = [];
 
@@ -323,6 +332,14 @@ class SimpleMode {
             e.target.value = '';
         });
         $('simple-generate-reference').addEventListener('click', () => this.generateReference());
+        // Task-first simple mode (F61): the chosen task decides which step-2 fields and which main button are shown.
+        for (let button of Array.from($('simple-task-picker').querySelectorAll('button[data-task]'))) {
+            button.addEventListener('click', () => this.setTask(button.dataset.task));
+        }
+        $('simple-more').addEventListener('toggle', () => {
+            this.moreOpen = $('simple-more').open;
+            this.remember();
+        });
         $('simple-count').addEventListener('input', () => this.update());
         $('simple-count').addEventListener('change', () => this.update());
         $('simple-batch-cancel').addEventListener('click', () => this.cancelBatch());
@@ -343,16 +360,44 @@ class SimpleMode {
                 this.choice.category = String(parsed.category || '');
                 this.choice.subtype = String(parsed.subtype || '');
                 this.choice.brandKit = String(parsed.brand_kit || '');
+                if (this.taskKinds.includes(parsed.task)) {
+                    this.chosenTask = parsed.task;
+                }
+                this.moreOpen = parsed.more_open == true;
             }
             catch (error) {
                 // A damaged preference only resets the remembered choice.
             }
         }
+        $('simple-more').open = this.moreOpen;
+        this.renderTask();
     }
 
-    /** Remembers the platform, product type and style in this browser (never the photo or description). */
+    /** Switches the task of the page (F61); uploaded product photos and references are kept, references only apply to "follow a reference". */
+    static setTask(task) {
+        if (!this.taskKinds.includes(task) || task == this.chosenTask) {
+            return;
+        }
+        this.chosenTask = task;
+        this.remember();
+        this.update();
+    }
+
+    /** Marks the chosen task card and shows the step-2 fields of that task; CSS hides fields whose data-tasks does not name it (F61). */
+    static renderTask() {
+        let $ = this.api.$;
+        $('view-simple').dataset.simpleTask = this.chosenTask;
+        for (let button of Array.from($('simple-task-picker').querySelectorAll('button[data-task]'))) {
+            button.setAttribute('aria-pressed', String(button.dataset.task == this.chosenTask));
+        }
+        let titles = { reference: '选平台和参考图', single: '选平台和图片类型', set: '选平台和产品类型' };
+        $('simple-step2-text').textContent = this.api.tr(titles[this.chosenTask]);
+    }
+
+    /** Remembers the platform, product type, style, task and "More options" state in this browser (never the photo or description). */
     static remember() {
-        this.api.writeStorage(this.storageKey, JSON.stringify({ platform: this.choice.platform, style: this.choice.style, category: this.choice.category, subtype: this.choice.subtype, brand_kit: this.choice.brandKit }));
+        this.api.writeStorage(this.storageKey, JSON.stringify({ platform: this.choice.platform, style: this.choice.style, category: this.choice.category, subtype: this.choice.subtype, brand_kit: this.choice.brandKit,
+            task: this.chosenTask, more_open: this.moreOpen }));
     }
 
     /** Called when the view opens; loads platforms, templates and styles once per language. */
@@ -1544,12 +1589,13 @@ class SimpleMode {
             return;
         }
         this.renderQuality();
+        this.renderTask();
         // Reference mode (F59): the other step-2 options stop applying and a single "generate by reference" button takes over.
         this.setReferenceOptions();
         let refMode = this.referenceMode();
         let refProblem = this.referenceProblem();
-        this.api.$('simple-generate').hidden = refMode;
-        this.api.$('simple-generate-set').hidden = refMode;
+        this.api.$('simple-generate').hidden = this.chosenTask != 'single';
+        this.api.$('simple-generate-set').hidden = this.chosenTask != 'set';
         this.api.$('simple-generate-reference').hidden = !refMode;
         this.api.$('simple-generate-reference').disabled = Boolean(refProblem);
         // Cut-out-only platforms (white main images) never generate, so the model flag does not apply to them (F53).
@@ -1577,6 +1623,8 @@ class SimpleMode {
         let count = countProblem ? 0 : this.countValue();
         this.api.$('simple-hint').textContent = refMode
             ? (refProblem ? this.api.tr(refProblem) : '')
+            : this.chosenTask == 'set'
+            ? this.api.tr(this.setBlocker())
             : blocker
             ? this.api.tr(blocker)
             : (cutoutOnly
@@ -1607,6 +1655,20 @@ class SimpleMode {
         this.api.$('simple-storyboard-run').disabled = this.storyboard.running || !this.loaded || !this.api.state.session;
         this.api.$('simple-storyboard-run').textContent = this.storyboard.running ? this.api.tr('正在生成分镜…') : this.api.tr('生成分镜');
         this.api.$('simple-download').disabled = this.selected.size == 0;
+    }
+
+    /** What a whole set still needs before it can start (F61): product photos and a product type; empty when only the count or the cap is left, which the set hint explains. */
+    static setBlocker() {
+        if (!this.api.state.session || !this.loaded) {
+            return '正在读取模板和风格…';
+        }
+        if (!this.products.length) {
+            return '请先上传商品图。';
+        }
+        if (!this.choice.subtype) {
+            return '请选择产品类型。';
+        }
+        return '';
     }
 
     /** Reads the account's brand kits (F12) and refreshes the step 2 list; a stale remembered choice falls back to "none". */
@@ -2020,7 +2082,7 @@ class SimpleMode {
     }
 
     /** Adds reference image files (F59): at most 8 in total, each compressed like a product photo; every new one is described in the background.
-     * Uploading the first reference enters reference mode and clears any storyboard, which is mutually exclusive with references. */
+     * References only apply to the "follow a reference" task and storyboards only to "make a full set" (F61), so neither clears the other. */
     static async addReferenceFiles(files) {
         let tr = this.api.tr;
         for (let file of files) {
@@ -2042,10 +2104,6 @@ class SimpleMode {
             catch (error) {
                 this.message(tr('有参考图无法读取，请重新选择。'), true);
             }
-        }
-        if (this.references.length && this.storyboard.shots.length) {
-            this.storyboard.shots = [];
-            this.renderStoryboard();
         }
         this.renderReferences();
         this.update();
@@ -2087,9 +2145,9 @@ class SimpleMode {
         }
     }
 
-    /** Whether reference mode is on: at least one reference image is uploaded (F59). */
+    /** Whether reference mode is on: the "follow a reference" task is chosen (F61); its references are required (F59). */
     static referenceMode() {
-        return this.references.length > 0;
+        return this.chosenTask == 'reference';
     }
 
     /** Shows the reference thumbnails and the per-reference prompt list (F59): the English prompt is editable, the Chinese translation read-only. */
@@ -2157,7 +2215,7 @@ class SimpleMode {
             : tr('参考图只用于借鉴构图与光线，请使用有权使用的图片（自己拍摄、已授权或无版权限制）；生成结果请勿与参考图雷同。');
     }
 
-    /** Turns the other step-2 options on or off (F59): in reference mode they do not apply and the reference note explains it. */
+    /** Turns the other step-2 options on or off (F59): in reference mode they do not apply (and are hidden by the task, F61). */
     static setReferenceOptions() {
         let off = this.referenceMode();
         let ids = ['simple-templates', 'simple-categories', 'simple-subtypes', 'simple-styles', 'simple-model',
@@ -2180,7 +2238,6 @@ class SimpleMode {
             let field = node.closest('.fld') || node;
             field.classList.toggle('simple-mode-off', off);
         }
-        this.api.$('simple-reference-off-note').hidden = !off;
     }
 
     /** Why "generate by reference" cannot run yet (F59); empty when it can. */
@@ -2191,6 +2248,9 @@ class SimpleMode {
         }
         if (this.referenceVisionOff) {
             return '借鉴构图需要管理员开启看图描述，当前未开启。';
+        }
+        if (!this.references.length) {
+            return '请添加参考图（1–8 张），每张参考图出 1 张。';
         }
         if (!this.products.length) {
             return '请先在第 1 步上传商品图。';
