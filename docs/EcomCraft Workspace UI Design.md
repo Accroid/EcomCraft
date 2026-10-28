@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.28 · **Date:** 2026-10-29
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.29 · **Date:** 2026-10-29
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -152,6 +152,7 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Brand | Return to the workspace start | Gradient block + monospace subline | Plain text "EcomCraft", returns to the creation view |
 | Create / Gallery / Queue navigation | Switch views, URL follows `#create` etc. | OK; gallery and queue carry counts | Top-bar tabs; the current item gets an underline and `aria-current="page"`; counts use tabular numerals and appear only after data loaded, never a wrong 0 |
 | Workflows navigation | Opens `#workflows` submission | New | Only for accounts that can submit but not review; reviewers use the "Manage" menu (F62) |
+| Standard workflows dialog (administrators) | Check and initialize the built-in templates' standard workflows (F57) | New | An entry of the "Manage" menu; lists the scene and detail states (published / taken down / missing nodes or models with names / no server online, …) and the default model names; "Initialize standard workflows" generates and publishes now, disabled while running; Escape closes and focus returns to "Manage" |
 | "Manage" menu (administrators) | Holds administration (F62) | New | Button at the right of the top bar, visible to accounts with server-settings or review permission, with the pending review count; lists workflow review (reviewers), first-setup wizard, prompt enhancement settings, storage and backup, download diagnostics and the native engine (new tab; these five need server-settings permission); `aria-expanded` shows the state, Escape, an outside click or choosing an entry closes it, and dialogs opened from it return focus to the button |
 | Mobile menu button `rail-toggle` | Expand navigation on small screens | **Defect: clicking errors out** (`$('.rail')` is gone) | Removed; top-bar tabs stay directly clickable when narrow |
 | Server health `health` | Online execution server count | Dot + text; text hidden when narrow | Clickable, opens the task queue; narrow screens show the number |
@@ -412,3 +413,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-29 | v1.26 | Phones get simple mode only (F63/T66): narrow screens hide the professional mode entry, the lightbox "Create from this image" and "Refine in professional mode" |
 | 2026-10-29 | v1.27 | Gallery source filter, own requests first in the queue (F66/T69) |
 | 2026-10-29 | v1.28 | My workflows: submit for review and review state (T73) |
+| 2026-10-29 | v1.29 | "Manage" menu gained the "Standard workflows" dialog (F57/T59) |

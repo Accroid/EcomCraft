@@ -84,6 +84,18 @@ public class Settings : AutoConfiguration
         /// <summary>Extra ComfyUI node types refused in workflows that accounts upload for their own use.</summary>
         [ConfigComment("ComfyUI node types (class names) refused in workflows that accounts upload for their own use, in addition to nodes whose names mark code or shell execution. Uploads with path-like inputs are always refused.")]
         public List<string> DeniedWorkflowNodes = [];
+
+        /// <summary>Diffusion model of the standard workflows EcomCraft generates for its built-in templates.</summary>
+        [ConfigComment("Diffusion model (UNet or checkpoint file name) used by the standard workflows EcomCraft generates for its built-in templates. The model must be installed on an execution server; otherwise the workflows are not published and the administrators' status list names what is missing.")]
+        public string StandardWorkflowUnet = "qwen-image-2.1-UC-Q4_K_M.gguf";
+
+        /// <summary>Text encoder of the standard workflows.</summary>
+        [ConfigComment("Text encoder file name used by the standard workflows EcomCraft generates for its built-in templates.")]
+        public string StandardWorkflowTextEncoder = "qwen3vl_8b_int8_convrot.safetensors";
+
+        /// <summary>VAE of the standard workflows.</summary>
+        [ConfigComment("VAE file name used by the standard workflows EcomCraft generates for its built-in templates.")]
+        public string StandardWorkflowVae = "qwen_image_2.1_vae_bf16.safetensors";
     }
 
     /// <summary>Settings related to Swarm server maintenance..</summary>

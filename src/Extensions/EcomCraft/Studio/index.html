@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.48.0">
-    <script src="/EcomCraft/lang/en.js?v=0.48.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.48.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.48.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.48.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.49.0">
+    <script src="/EcomCraft/lang/en.js?v=0.49.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.49.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.49.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.49.0" defer></script>
 </head>
 
 <body>
@@ -52,6 +52,7 @@
                 <div class="admin-menu-list" id="admin-menu-list" hidden>
                     <a class="admin-menu-item" href="#workflows" id="admin-menu-workflows" hidden>工作流审核<span class="nav-count" id="admin-menu-workflows-count" hidden></span></a>
                     <button type="button" class="admin-menu-item" id="admin-menu-wizard" data-admin-only>首次设置向导</button>
+                    <button type="button" class="admin-menu-item" id="admin-menu-standard" data-admin-only>标准工作流</button>
                     <button type="button" class="admin-menu-item" id="admin-menu-prompt" data-admin-only>提示词优化设置</button>
                     <button type="button" class="admin-menu-item" id="admin-menu-storage" data-admin-only>存储与备份</button>
                     <button type="button" class="admin-menu-item" id="admin-menu-diagnostics" data-admin-only>下载诊断包</button>
@@ -957,6 +958,27 @@
     </div>
 
     <!-- 配置指引 -->
+    <div class="modal" id="standard-modal" hidden>
+        <div class="modal-backdrop" id="standard-backdrop"></div>
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="standard-title">
+            <div class="modal-head">
+                <div>
+                    <h3 id="standard-title">标准工作流</h3>
+                    <p class="hint">内置的场景图、细节图模板使用系统按默认模型生成的工作流，不需要在 ComfyUI 里手工搭建。</p>
+                </div>
+                <button type="button" class="icon-btn" id="standard-close" aria-label="关闭标准工作流">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="hint" id="standard-models" data-i18n-skip></p>
+                <ul class="standard-list" id="standard-list" aria-live="polite"></ul>
+                <p class="hint">服务启动后会自动检查并发布；在审核中下架后不会自动恢复，点“初始化标准工作流”会重新生成并发布。默认模型在服务器设置 EcomCraft 一节修改。</p>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-primary" id="standard-init">初始化标准工作流</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal setup-guide-modal" id="setup-guide-modal" hidden>
         <div class="modal-backdrop" id="setup-guide-backdrop"></div>
         <div class="modal-dialog modal-wide" role="dialog" aria-modal="true" aria-labelledby="setup-guide-title">

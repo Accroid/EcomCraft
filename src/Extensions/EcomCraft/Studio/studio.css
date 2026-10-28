@@ -203,6 +203,13 @@ input[type=range] { width: 100%; accent-color: var(--key); }
     .simple-refine, .pro-only { display: none; }
 }
 
+/* Standard workflow status (F57). */
+.standard-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.standard-list li { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--field); font-size: var(--fs-13); }
+.standard-list li.is-ok { border-left: 3px solid var(--key); }
+.standard-list li.is-problem { border-left: 3px solid var(--tally); }
+.standard-state { color: var(--ink-2); font-size: var(--fs-12); overflow-wrap: anywhere; }
+
 /* The account's own queue requests stand out (F66). */
 .queue-task.is-mine { border-left: 3px solid var(--key); }
 

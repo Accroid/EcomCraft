@@ -309,3 +309,10 @@ test('the gallery filters by source and the queue lists the account\'s own reque
     let others = studio.indexOf('for (let task of tasks.filter(task => !task.mine))');
     assert.ok(own > 0 && own < servers && servers < others, 'own requests, then server tasks, then other accounts');
 });
+
+test('administrators reach the standard workflows from the "Manage" menu; the page only reads states or asks to initialize (F57)', () => {
+    assert.match(html, /<button type="button" class="admin-menu-item" id="admin-menu-standard" data-admin-only>/);
+    assert.match(html, /<div class="modal" id="standard-modal" hidden>/);
+    let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    assert.match(studio, /request\('EcomCraftStandardWorkflows', action \? \{ action \} : \{\}\)/, 'no graph or model names are sent from the page');
+});
