@@ -672,5 +672,21 @@ window.EcomCraftLanguages.en = {
     "error:product_save_failed": "The product could not be saved: the work library location may be offline or full. Try again later.",
     "error:invalid_export": "The export request is invalid: the platform has no preset, the export location is not set, or a work does not belong to this account.",
     "error:export_failed": "The export did not finish: the shared folder may be offline or not writable. Try again later.",
-    "error:cutout_failed": "Background removal did not finish. Try again later, or upload a PNG whose background is already transparent."
+    "error:cutout_failed": "Background removal did not finish. Try again later, or upload a PNG whose background is already transparent.",
+
+    // Template model requirements and licenses
+    "模板所需模型与商用许可": "Models templates need and commercial-use licenses",
+    "模型由管理员在每台执行服务器上手动安装，平台不跨服务器下载。“禁止商用”或“许可未知”的模型生成的图片不应直接用于商品销售，请先确认许可。": "Administrators install models by hand on each execution server; the platform does not download them across servers. Pictures made with models marked \"Commercial use forbidden\" or \"License unknown\" should not be used to sell products until the license is confirmed.",
+    "允许商用": "Commercial use allowed",
+    "禁止商用": "Commercial use forbidden",
+    "许可未知": "License unknown",
+    "许可": "License",
+    "模板所需模型读取失败，请稍后重试。": "The models templates need could not be read. Try again later.",
+    "还没有能检查的执行服务器": "no execution server can be checked yet",
+    "缺少：{0}": "missing on: {0}",
+    "各服务器都已安装": "installed on every server",
+    "模板没有声明所需模型和节点。": "The template declares no required models or nodes.",
+    "，{0}，安装到 ComfyUI/models/{1}，{2}": ", {0}, install into ComfyUI/models/{1}, {2}",
+    "节点 {0}，{1}": "Node {0}, {1}",
+    "还没有模板。": "No templates yet."
 };

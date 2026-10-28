@@ -16,6 +16,7 @@
     <Compile Include="../Studio/Export/ComplianceRules.cs" Link="ComplianceRules.cs" />
     <Compile Include="../Studio/Storage/StorageRules.cs" Link="StorageRules.cs" />
     <Compile Include="../Studio/Templates/EcomTemplate.cs" Link="EcomTemplate.cs" />
+    <Compile Include="../Studio/Templates/RequirementRules.cs" Link="RequirementRules.cs" />
     <Compile Include="../Studio/Prompting/PromptRules.cs" Link="PromptRules.cs" />
     <Compile Include="../Studio/PostProcess/Placement.cs" Link="Placement.cs" />
     <Compile Include="../Studio/PostProcess/ProductComposite.cs" Link="ProductComposite.cs" />
