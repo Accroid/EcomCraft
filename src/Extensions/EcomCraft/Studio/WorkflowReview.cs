@@ -117,6 +117,74 @@ public static class WorkflowReview
 
         /// <summary>Upload time of an <see cref="Own"/> workflow, Unix milliseconds.</summary>
         public long UploadedAt;
+
+        /// <summary>ID of the published copy made when a reviewer approved this <see cref="Own"/> workflow (T73), or null.</summary>
+        public string PublishedAs;
+    }
+
+    /// <summary>Review state of an own workflow (T73): "draft" (never submitted), "pending" (submitted and not decided since),
+    /// "rejected" (the last decision after the last submission), "published" (approved into a copy for everyone), or null for other records.</summary>
+    public static string OwnState(Record record)
+    {
+        if (record?.Status != Own)
+        {
+            return null;
+        }
+        if (record.SubmittedAt <= 0)
+        {
+            return "draft";
+        }
+        if (record.ReviewedAt < record.SubmittedAt)
+        {
+            return Pending;
+        }
+        return record.PublishedAs is not null && record.RejectReason is null ? Published : Rejected;
+    }
+
+    /// <summary>Publishes an approved own workflow (T73): stores a published record under <paramref name="publishedId"/> with the reviewer's snapshot
+    /// and marks the own record as published, in one save. The own workflow stays with its owner. Returns null, or an error message.</summary>
+    public static string PublishOwn(string ownId, string publishedId, Snapshot snapshot, string reviewer)
+    {
+        lock (Lock)
+        {
+            EnsureLoaded();
+            if (!Records.TryGetValue(ownId, out Record own) || OwnState(own) != Pending)
+            {
+                return "该工作流的审核状态刚被修改，请刷新后重新审核。";
+            }
+            if (Records.ContainsKey(publishedId) || ComfyUIBackendExtension.CustomWorkflows.ContainsKey(publishedId))
+            {
+                return "发布名称已被占用，请刷新后重试。";
+            }
+            long now = Now;
+            Record published = new()
+            {
+                Status = Published,
+                Snapshot = snapshot,
+                Reviewer = reviewer,
+                ReviewedAt = now,
+                SubmittedBy = own.SubmittedBy,
+                SubmitNote = own.SubmitNote,
+                SubmittedAt = own.SubmittedAt
+            };
+            Record updated = Copy(own);
+            updated.Reviewer = reviewer;
+            updated.ReviewedAt = now;
+            updated.RejectReason = null;
+            updated.PublishedAs = publishedId;
+            Records[publishedId] = published;
+            Records[ownId] = updated;
+            if (!Save())
+            {
+                Records.Remove(publishedId);
+                Records[ownId] = own;
+                return SaveFailedMessage;
+            }
+            ComfyUIBackendExtension.ComfyCustomWorkflow built = Build(publishedId, snapshot);
+            Registered[publishedId] = built;
+            ComfyUIBackendExtension.CustomWorkflows.TryAdd(publishedId, built);
+            return null;
+        }
     }
 
     /// <summary>Records by workflow ID.</summary>

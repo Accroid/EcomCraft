@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20界面改版需求.zh-CN.md)
 >
-> **Status:** Confirmed (2026-10-29), built task by task · **Version:** v1.2 · **Date:** 2026-10-29
+> **Status:** Confirmed (2026-10-29), built task by task · **Version:** v1.3 · **Date:** 2026-10-29
 >
 > Related: [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md) (decisions A2, A12), [EcomCraft Workspace UI Design](EcomCraft%20Workspace%20UI%20Design.md) (control list), [EcomCraft development table](EcomCraft%20开发总表.xlsx) (F60–F69 / T63–T72).
 
@@ -71,7 +71,7 @@ Three task cards sit at the top; the chosen task is remembered in the browser an
 - Only the Save format is accepted; the API export is refused with a hint to use Save. Unsupported structures, files over 2 MB and more than 20 per account are refused with the reason.
 - Deny rules (three layers): node types whose words include `python`, `exec`, `execute`, `eval`, `script`, `shell`, `command`, `cmd`, `code` or `subprocess` are refused; text inputs that look like file paths (drive letters, network shares, absolute paths starting with `/`, or `..`) are refused; administrators can add node types in the server setting `EcomCraft.DeniedWorkflowNodes`. A refusal lists the nodes and input names.
 - Own workflows are visible to the uploader only: the catalog, generation, parameter provider and execution server check all verify the owner; they never appear in the review list, review calls refuse them, and templates cannot reference them. The workflow JSON stays on the server and is never returned to clients.
-- Submitting for review and publishing to everyone is left to T73.
+- Review and publishing (T73): in "My workflows", one never submitted or rejected can be "Submitted for review" with an optional note; administrators see it under "Manage → Workflow review" with the source "uploaded by an account", configure parameters and approve or reject it like any workflow. Approval copies it into a published snapshot `上传/<name>` for every account, and unpublishing acts on that copy; the uploader keeps the own original. The rejection reason goes to the uploader only, who fixes it, uploads again and resubmits.
 
 ## 6. Stars and Personal Analysis (F67, draft to-do)
 
@@ -105,3 +105,4 @@ This section is a direction only; confirm it again before development, and add d
 | 2026-10-29 | v1.0 | First version: decisions U1–U11, wording, navigation and administration, simple mode by task, stars and personal analysis draft, task list |
 | 2026-10-29 | v1.1 | U6 now lets the uploader use a workflow at once (other accounts still need review and publishing); new U12 image description on by default with setup guidance, F68/T71, and the one-click install script F69/T72 |
 | 2026-10-29 | v1.2 | New 5.1 own workflow rules (Save format only, three-layer deny rules, 20 per account, 2 MB); submitting for review and publishing split into T73 |
+| 2026-10-29 | v1.3 | 5.1 adds own workflow review and publishing (T73) |

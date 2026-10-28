@@ -36,7 +36,11 @@ public static class OwnWorkflowApi
             ["name"] = record.Name ?? id,
             ["kind"] = prompt is null ? null : StudioApi.InferWorkflowKind(snapshot.Prompt),
             ["uploaded_at"] = record.UploadedAt,
-            ["runnable"] = runnable
+            ["runnable"] = runnable,
+            // Review of the submission for everyone (T73); the rejection reason goes to the owner only.
+            ["review_state"] = WorkflowReview.OwnState(record),
+            ["reject_reason"] = WorkflowReview.OwnState(record) == WorkflowReview.Rejected ? record.RejectReason : null,
+            ["published_name"] = record.PublishedAs
         };
     }
 
@@ -137,6 +141,52 @@ public static class OwnWorkflowApi
         WorkflowReview.Restore();
         JArray items = new(WorkflowReview.OwnBy(session.User.UserID).Select(pair => Item(pair.Key, pair.Value)));
         return Task.FromResult(new JObject() { ["workflows"] = items, ["limit"] = OwnWorkflowRules.MaxPerAccount });
+    }
+
+    [API.APIDescription("Submit one of this account's own workflows for review (T73), so a reviewer can publish a copy for every account. "
+        + "Allowed while it was never submitted or after a rejection; note is optional (up to 500 characters).", "success: true, review_state: \"pending\"")]
+    public static Task<JObject> EcomCraftStudioWorkflowSubmitOwn(Session session, string workflow_id, string note = "")
+    {
+        if (!CanUse(session))
+        {
+            return Task.FromResult(StudioApi.Error("此账号没有上传工作流的权限。", "bad_permissions"));
+        }
+        note = (note ?? "").Trim();
+        if (note.Length > WorkflowReview.MaxTextLength)
+        {
+            return Task.FromResult(StudioApi.Error($"提交说明最多 {WorkflowReview.MaxTextLength} 个字符。", "invalid_review"));
+        }
+        string userId = session.User.UserID;
+        if (WorkflowReview.OwnerOf(workflow_id) != userId)
+        {
+            return Task.FromResult(StudioApi.Error("这个工作流不存在或不是你上传的，请刷新列表。", "invalid_workflow"));
+        }
+        string error = WorkflowReview.Update(workflow_id, record =>
+        {
+            if (record.Status != WorkflowReview.Own || record.Owner != userId)
+            {
+                return "这个工作流不存在或不是你上传的，请刷新列表。";
+            }
+            string state = WorkflowReview.OwnState(record);
+            if (state == WorkflowReview.Pending)
+            {
+                return "已经提交过，正在等待审核。";
+            }
+            if (state == WorkflowReview.Published)
+            {
+                return "已经审核发布给所有账号，不需要再次提交。";
+            }
+            record.SubmittedBy = userId;
+            record.SubmitNote = note;
+            record.SubmittedAt = WorkflowReview.Now;
+            record.RejectReason = null;
+            return null;
+        });
+        if (error is not null)
+        {
+            return Task.FromResult(StudioApi.Error(error, error == WorkflowReview.SaveFailedMessage ? "review_save_failed" : "workflow_state"));
+        }
+        return Task.FromResult(new JObject() { ["success"] = true, ["review_state"] = WorkflowReview.Pending });
     }
 
     [API.APIDescription("Delete one of this account's own uploaded workflows (F60).", "success: true")]

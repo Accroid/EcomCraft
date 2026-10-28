@@ -3816,16 +3816,69 @@
                 let name = el('span', 'own-workflow-name', item.name || item.id);
                 name.setAttribute('data-i18n-skip', '');
                 main.append(name, el('span', 'own-workflow-state', this.stateText(item)));
+                let review = this.reviewText(item);
+                if (review) {
+                    main.append(el('span', 'own-workflow-state', review));
+                }
+                if (item.review_state == 'draft' || item.review_state == 'rejected') {
+                    let submit = el('button', 'link-btn', tr('提交审核'));
+                    submit.type = 'button';
+                    submit.setAttribute('aria-label', tr('提交审核 {0}', item.name || item.id));
+                    submit.disabled = this.busy;
+                    submit.addEventListener('click', () => this.submit(item));
+                    row.append(main, submit);
+                }
+                else {
+                    row.append(main);
+                }
                 let remove = el('button', 'link-btn', tr('删除'));
                 remove.type = 'button';
                 remove.setAttribute('aria-label', tr('删除工作流 {0}', item.name || item.id));
                 remove.disabled = this.busy;
                 remove.addEventListener('click', () => this.remove(item));
-                row.append(main, remove);
+                row.append(remove);
                 rows.push(row);
             }
             $('own-workflow-list').replaceChildren(...rows);
             $('own-workflow-upload').disabled = this.busy;
+        }
+
+        /** The review state of a submission for everyone (T73): waiting, rejected with the reason, or published; nothing for a draft. */
+        static reviewText(item) {
+            if (item.review_state == 'pending') {
+                return tr('已提交审核，等待管理员处理；通过后所有账号都能用。');
+            }
+            if (item.review_state == 'rejected') {
+                return tr('审核未通过：{0}。修改后可重新上传再提交。', item.reject_reason || tr('未说明原因'));
+            }
+            if (item.review_state == 'published') {
+                return tr('已审核发布给所有账号。');
+            }
+            return '';
+        }
+
+        /** Submits one own workflow for review, with an optional note (T73). */
+        static async submit(item) {
+            if (this.busy) {
+                return;
+            }
+            let note = window.prompt(tr('提交审核：可以写一句说明给管理员（可不填）。'), '');
+            if (note === null) {
+                return;
+            }
+            this.busy = true;
+            this.render();
+            try {
+                await request('EcomCraftStudioWorkflowSubmitOwn', { workflow_id: item.id, note: note.slice(0, 500) });
+                this.message(tr('已提交“{0}”审核，通过后所有账号都能用。', item.name || item.id), true);
+            }
+            catch (error) {
+                this.message(error.message || tr('提交失败，请稍后重试。'), false);
+            }
+            finally {
+                this.busy = false;
+                await this.load();
+            }
         }
 
         /** The plain-language line for one refused node or input of an upload. */
