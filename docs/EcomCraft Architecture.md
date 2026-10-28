@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20Architecture.zh-CN.md)
 >
-> **Status:** Planning (this document describes the target architecture; most modules are not implemented yet, and implemented parts are marked) · **Version:** v1.0 · **Date:** 2026-10-27
+> **Status:** Planning (this document describes the target architecture; most modules are not implemented yet, and implemented parts are marked) · **Version:** v1.1 · **Date:** 2026-10-28
 >
 > Related files:
 > - [EcomCraft LAN Multi-Server Platform Requirements](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md): detailed requirements for the platform foundation (execution servers, review, scheduling, storage); it takes precedence.
@@ -62,7 +62,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 |---|---|---|---|
 | Front end | Simple mode | Three-step image creation for operators and owners: upload → choose platform and style → pick and download | Planned |
 | | Admin views | Workflow review, template configuration, server status, model checklist, storage settings, setup wizard | Review view implemented |
-| | Internationalization | Chinese / English translation tables; every UI string is looked up by key | Planned |
+| | Internationalization | Chinese / English translation tables; every UI string is looked up by key | Implemented for the workspace (`Studio/i18n.js`, `Studio/lang/en.js`) |
 | API | Catalog / templates | Returns template names, sample images and adjustable fields (minimal disclosure) | Extends the existing `EcomCraftStudioCatalog` |
 | | Generation / image sets | Accepts "template ID + product + platform + description" | Extends the existing `EcomCraftStudioGenerate` |
 | | Queue / gallery / export / review / admin | — | Queue and review implemented |
@@ -109,7 +109,7 @@ When cloud services are added later, only the executor in steps 6–7 changes; b
 
 ### 6.2 Internationalization
 
-- Interface: every workspace string lives in `zh-CN` / `en` translation tables, and switching language does not reload the page; tests check that no Chinese remains in English mode.
+- Interface: every workspace string lives in `zh-CN` / `en` translation tables, and switching language does not reload the page; tests check that no Chinese remains in English mode. Implemented: the Chinese source text is the translation key, the English table is `Studio/lang/en.js`, and the test is `Tests/studio-i18n.test.cjs`. In English mode, server errors show a generic English message per error code; localizing the server messages themselves is not done yet.
 - Content: names and descriptions of templates, styles and platform presets are stored with both Chinese and English fields.
 - Prompts: users may describe in either language; the prompt service always outputs English prompts.
 - Documentation: EcomCraft documents are written in Chinese and English together.
@@ -249,3 +249,4 @@ For each task's files, dependencies, acceptance criteria and Claude Code prompt,
 | Date | Version | Description |
 |---|---|---|
 | 2026-10-27 | v1.0 | First version: positioning, deployment topology, layered architecture, data flow, design conventions, MVP scope and later features |
+| 2026-10-28 | v1.1 | The Chinese / English workspace interface (F24 / T22) is implemented; noted how it works and that server messages are not localized yet |

@@ -21,6 +21,8 @@
         }
         return svg;
     }
+    /** Translates Chinese source text through I18n (see i18n.js); {0}, {1}… are filled with the extra arguments. */
+    let tr = (source, ...args) => I18n.t(source, ...args);
     const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
     class ApiError extends Error { constructor(message, code) { super(message); this.code = code; } }
@@ -87,6 +89,17 @@
         return '提示词优化服务返回错误。请检查服务地址、模型 ID 和服务端日志。';
     }
 
+    /** Server messages are written in Chinese. In another language a known error code shows its translated message
+     * (table key "error:<code>"), which drops the server's specific details; unknown codes keep the server text. */
+    function serverErrorText(code, text) {
+        let key = `error:${code}`;
+        let translated = tr(key);
+        if (I18n.current != I18n.sourceLanguage && translated != key) {
+            return translated;
+        }
+        return String(text || '');
+    }
+
     async function request(route, body = {}, signal = undefined) {
         let response, data;
         const isMagicPromptRoute = /MagicPrompt/.test(route) || route === 'SetAPIKey' || route === 'GetAPIKeyStatus';
@@ -119,7 +132,7 @@
                 throw new ApiError(message, 'api_error');
             }
             const code = safeErrors.has(data.error_id) ? data.error_id : 'api_error';
-            throw new ApiError(safeErrors.has(code) ? String(data.error) : '服务未正常返回，请检查登录状态或联系管理员。', code);
+            throw new ApiError(safeErrors.has(code) ? serverErrorText(code, data.error) : '服务未正常返回，请检查登录状态或联系管理员。', code);
         }
         return data;
     }
@@ -164,6 +177,32 @@
         applyTheme(theme);
     }
 
+    /** Shows the language the button switches to; its own text is never translated (data-i18n-skip). */
+    function updateLanguageToggle() {
+        let target = I18n.current == 'en' ? 'zh-CN' : 'en';
+        let offer = I18n.switchTo[target];
+        let button = $('lang-toggle');
+        button.textContent = offer.text;
+        button.lang = target;
+        button.setAttribute('aria-label', offer.label);
+        button.title = offer.label;
+    }
+
+    /** After I18n has switched the static page, redraws the text that was built with variable parts. Typed prompts and chosen files stay. */
+    function onLanguageChange() {
+        updateLanguageToggle();
+        setView(state.view);
+        $('workflow-description').textContent = workflowDescriptionText(currentWorkflow());
+        if (state.catalog) {
+            $('connection-message-text').textContent = connectionText(state.catalog, state.catalog.models.length);
+            updateModelMeta();
+            updateHealth();
+        }
+        renderResults();
+        updateControls();
+        ExecutionServerPicker.load(true);
+    }
+
     /** Switches between light and dark themes and remembers the choice in this browser. */
     function toggleTheme() {
         let next = document.documentElement.getAttribute('data-theme') == 'dark' ? 'light' : 'dark';
@@ -185,7 +224,7 @@
         $('view-queue').hidden = view != 'queue';
         $('view-workflows').hidden = view != 'workflows';
         let titles = { create: '创作', gallery: '作品画廊', queue: '任务队列', workflows: WorkflowReviewView.reviewer() ? '工作流审核' : '提交工作流审核' };
-        document.title = `${titles[view]} - EcomCraft 创作工作台`;
+        document.title = tr('{0} - EcomCraft 创作工作台', tr(titles[view]));
         for (let item of document.querySelectorAll('.nav-item[data-view]')) {
             if (item.dataset.view == view) {
                 item.setAttribute('aria-current', 'page');
@@ -411,11 +450,7 @@
         const selected = Boolean(workflow);
         NativeWorkflowForm.sync(workflow);
         $('image-mode-tabs').style.display = selected || state.type === 'video' ? 'none' : '';
-        $('workflow-description').textContent = selected
-            ? `${workflow.description || '管理员发布的工作流模板。'} 创作方式由工作流决定；要用图生图、局部重绘，请切回标准工作台。`
-            : ((state.catalog?.workflows || []).length
-                ? '按来源服务器分组。生成时平台会自动选择能运行它的服务器。'
-                : '暂时没有可用的工作流。确认执行服务器在线、工作流已保存且模型和节点齐全后，点击“刷新列表”。');
+        $('workflow-description').textContent = workflowDescriptionText(workflow);
         $('workflow-params').hidden = !selected || !(workflow.inputs || []).length;
         const meta = modeMeta[state.mode] || modeMeta.text2img;
         $('reference-fld').hidden = selected || !meta.needsRef;
@@ -425,6 +460,16 @@
         $('upscale-fld').hidden = selected || !meta.upscale;
         $('lora-fld').hidden = selected;
         $('workflow-tag').textContent = selected ? (workflow.name || '自定义工作流') : meta.tag;
+    }
+
+    /** The explanation under the workflow selector for the selected workflow, or for the standard workspace when none is selected. */
+    function workflowDescriptionText(workflow) {
+        if (workflow) {
+            return tr('{0} 创作方式由工作流决定；要用图生图、局部重绘，请切回标准工作台。', workflow.description || tr('管理员发布的工作流模板。'));
+        }
+        return (state.catalog?.workflows || []).length
+            ? tr('按来源服务器分组。生成时平台会自动选择能运行它的服务器。')
+            : tr('暂时没有可用的工作流。确认执行服务器在线、工作流已保存且模型和节点齐全后，点击“刷新列表”。');
     }
 
     function workflowDefaultValue(field) {
@@ -499,17 +544,17 @@
                     if (!file) { return; }
                     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || !file.size || file.size > 5 * 1024 * 1024) {
                         control.value = '';
-                        setStatus(`“${field.name || field.id}”需要不超过 5 MB 的 PNG、JPEG 或 WebP 图片。`, true);
+                        setStatus(tr('“{0}”需要不超过 5 MB 的 PNG、JPEG 或 WebP 图片。', field.name || field.id), true);
                         return;
                     }
                     const reader = new FileReader();
                     reader.onload = () => {
                         if (typeof reader.result === 'string') {
                             setWorkflowValue(field.id, reader.result);
-                            setStatus(`已读取工作流图片参数“${field.name || field.id}”，提交生成时才发送。`);
+                            setStatus(tr('已读取工作流图片参数“{0}”，提交生成时才发送。', field.name || field.id));
                         }
                     };
-                    reader.onerror = () => setStatus(`无法读取工作流图片参数“${field.name || field.id}”。`, true);
+                    reader.onerror = () => setStatus(tr('无法读取工作流图片参数“{0}”。', field.name || field.id), true);
                     reader.readAsDataURL(file);
                 });
                 if (initial && String(initial).startsWith('data:image/')) {
@@ -548,8 +593,8 @@
             $(field).step = step;
             $(field).min = Math.ceil(256 / step) * step;
         }
-        $('resolution-hint').textContent = `256–2048 像素，${step} 的倍数`;
-        $('model-help').textContent = model ? `模型类型：${model.class_name}`
+        $('resolution-hint').textContent = tr('256–2048 像素，{0} 的倍数', step);
+        $('model-help').textContent = model ? tr('模型类型：{0}', model.class_name)
             : '没有可用的模型。请在原生引擎添加模型，或请管理员检查账号的模型权限。';
         updateControls();
     }
@@ -569,7 +614,7 @@
     /** One plain sentence about execution servers and available models for the status line above the form. */
     function connectionText(status, modelCount) {
         if (status.local_backends_observed > 0) {
-            return `${status.local_backends_observed} 台执行服务器在线，标准工作台有 ${modelCount} 个模型可用。`;
+            return tr('{0} 台执行服务器在线，标准工作台有 {1} 个模型可用。', status.local_backends_observed, modelCount);
         }
         if (status.local_backends_starting > 0) {
             return '执行服务器正在启动，启动完成后即可生成。';
@@ -719,7 +764,7 @@
         const text = $('health-text');
         h.classList.remove('ok', 'warn', 'err');
         const count = state.catalog?.local_backends_observed || 0;
-        if (state.catalog && count > 0) { h.classList.add('ok'); text.textContent = `${count} 台服务器在线`; }
+        if (state.catalog && count > 0) { h.classList.add('ok'); text.textContent = tr('{0} 台服务器在线', count); }
         else if (state.catalog) {
             h.classList.add('warn');
             text.textContent = state.catalog.local_backends_starting > 0 ? '服务器正在启动'
@@ -803,7 +848,7 @@
         if (state.reference) {
             $('reference-image').src = state.reference.url;
             $('reference-name').textContent = state.reference.name;
-            $('remove-reference').setAttribute('aria-label', `移除初始图 ${state.reference.name}`);
+            $('remove-reference').setAttribute('aria-label', tr('移除初始图 {0}', state.reference.name));
         }
         else {
             $('reference-image').removeAttribute('src');
@@ -1074,13 +1119,13 @@
         select.value = id;
         const w = el('input'); w.type = 'number'; w.min = '-10'; w.max = '10'; w.step = '0.1'; w.value = weight;
         let position = state.loras.length + 1;
-        select.setAttribute('aria-label', `第 ${position} 个 LoRA`);
-        w.setAttribute('aria-label', `第 ${position} 个 LoRA 的权重`);
+        select.setAttribute('aria-label', tr('第 {0} 个 LoRA', position));
+        w.setAttribute('aria-label', tr('第 {0} 个 LoRA 的权重', position));
         w.inputMode = 'decimal';
         let remove = el('button', 'icon-btn icon-btn-sm');
         remove.type = 'button';
         remove.textContent = '✕';
-        remove.setAttribute('aria-label', `移除第 ${position} 个 LoRA`);
+        remove.setAttribute('aria-label', tr('移除第 {0} 个 LoRA', position));
         row.append(select, w, remove);
         const item = { select, w, row };
         state.loras.push(item);
@@ -1377,7 +1422,7 @@
             if (!res.models || res.models.length === 0) {
                 showEnhCfgMessage('未拉取到模型，请确认服务已启动、地址与 Key 正确。', true);
             } else {
-                showEnhCfgMessage(`已拉取 ${res.models.length} 个模型。请在上方“提示词模型”框中选择或输入，点击“保存”才会应用配置。`, false);
+                showEnhCfgMessage(tr('已拉取 {0} 个模型。请在上方“提示词模型”框中选择或输入，点击“保存”才会应用配置。', res.models.length), false);
             }
         } catch (err) {
             if (revision == PromptSettingsRequests.revision) {
@@ -1478,7 +1523,7 @@
                 changed++;
             }
         }
-        return changed ? `已填写 ${changed} 项` : '按模型需要填写';
+        return changed ? tr('已填写 {0} 项', changed) : '按模型需要填写';
     }
 
     /** Syncs every form control, the submit button and its explanation with the current state. */
@@ -1561,17 +1606,17 @@
                 card.append(frame);
             }
             else {
-                node.alt = `第 ${i + 1} 张生成结果`;
+                node.alt = tr('第 {0} 张生成结果', i + 1);
                 let open = el('button', 'result-open');
                 open.type = 'button';
-                open.setAttribute('aria-label', `放大查看第 ${i + 1} 张结果`);
+                open.setAttribute('aria-label', tr('放大查看第 {0} 张结果', i + 1));
                 open.append(node);
                 open.addEventListener('click', () => Lightbox.open(results, i, 'result', open));
                 card.append(open);
             }
             let actions = el('figcaption', 'result-actions');
             if (results.length > 1) {
-                actions.append(el('span', 'result-label', `第 ${i + 1} ${media.video ? '条' : '张'}`));
+                actions.append(el('span', 'result-label', media.video ? tr('第 {0} 条', i + 1) : tr('第 {0} 张', i + 1)));
             }
             let download = el('a', 'btn btn-sm', '下载');
             download.href = media.url;
@@ -1705,9 +1750,10 @@
                 Reassign.remember(result.task_id, payload);
                 startPendingTracker();
             }
-            let server = result.execution_server ? `，由“${result.execution_server}”执行` : '';
+            let task = result.task_id != null ? tr('（任务 #{0}）', result.task_id) : '';
+            let server = result.execution_server ? tr('，由“{0}”执行', result.execution_server) : '';
             let hint = result.server_hint ? ` ${result.server_hint}` : '';
-            setStatus(`已加入队列${result.task_id != null ? `（任务 #${result.task_id}）` : ''}${server}。可以继续编辑、切换图片/视频或再次提交；完成后结果会自动保存到作品画廊。${hint}`);
+            setStatus(tr('已加入队列{0}{1}。可以继续编辑、切换图片/视频或再次提交；完成后结果会自动保存到作品画廊。', task, server) + hint);
             ExecutionServerPicker.load(true);
             if (state.view == 'gallery') { loadGallery(); }
         }
@@ -1806,16 +1852,17 @@
                 }
                 state.pending.delete(id);
                 let payload = Reassign.take(id);
-                let server = outcome?.execution_server ? `（${outcome.execution_server}）` : '';
+                let server = outcome?.execution_server ? tr('（{0}）', outcome.execution_server) : '';
                 if (outcome?.state == 'failed') {
-                    setStatus(`任务 #${id} 失败${server}。`, true);
-                    Reassign.show(`任务 #${id} 失败${server}：${outcome.error || '执行服务器没有返回结果。'}`, outcome.error_id == 'generation_uncertain' ? null : payload);
+                    setStatus(tr('任务 #{0} 失败{1}。', id, server), true);
+                    let reason = outcome.error_id ? serverErrorText(outcome.error_id, outcome.error) : (outcome.error || tr('执行服务器没有返回结果。'));
+                    Reassign.show(tr('任务 #{0} 失败{1}：{2}', id, server, reason), outcome.error_id == 'generation_uncertain' ? null : payload);
                 }
                 else if (outcome) {
-                    setStatus(`任务 #${id} 已完成${server}，结果已保存到作品画廊。`);
+                    setStatus(tr('任务 #{0} 已完成{1}，结果已保存到作品画廊。', id, server));
                 }
                 else {
-                    setStatus(`任务 #${id} 已结束；成功的结果已自动保存到作品画廊。`);
+                    setStatus(tr('任务 #{0} 已结束；成功的结果已自动保存到作品画廊。', id));
                 }
                 if (state.view == 'gallery') { loadGallery(); }
             }
@@ -1872,8 +1919,8 @@
             auto.value = '';
             let options = [auto];
             for (let backend of backends) {
-                let queued = backend.queue ? `，排队 ${backend.queue}` : '';
-                let option = el('option', '', `${backend.name || `服务器 #${backend.id}`}（${queueStateLabel(backend)}${queued}）`);
+                let queued = backend.queue ? tr('，排队 {0}', backend.queue) : '';
+                let option = el('option', '', tr('{0}（{1}{2}）', backend.name || tr('服务器 #{0}', backend.id), tr(queueStateLabel(backend)), queued));
                 option.value = String(backend.id);
                 options.push(option);
             }
@@ -1899,7 +1946,7 @@
             renderQueue(result);
             ExecutionServerPicker.render(result.backends || []);
             $('queue-message').hidden = true;
-            $('queue-updated').textContent = `更新于 ${new Intl.DateTimeFormat('zh-CN', { timeStyle: 'medium' }).format(new Date())}，每 5 秒自动刷新`;
+            $('queue-updated').textContent = tr('更新于 {0}，每 5 秒自动刷新', new Intl.DateTimeFormat(I18n.locale(), { timeStyle: 'medium' }).format(new Date()));
         }
         catch (error) {
             $('queue-message').textContent = error.message || '队列读取失败。';
@@ -1948,7 +1995,7 @@
         for (let backend of result.backends || []) {
             let row = el('tr');
             let name = el('td');
-            name.append(el('strong', '', backend.name || `服务器 #${backend.id}`));
+            name.append(el('strong', '', backend.name || tr('服务器 #{0}', backend.id)));
             let status = el('td');
             status.append(el('span', `server-state ${queueStateClass(backend)}`, queueStateLabel(backend)));
             let running = el('td', 'num', backend.running == null ? '—' : String(backend.running));
@@ -1969,27 +2016,27 @@
         let nativeTasks = result.native_tasks || [];
         $('queue-count').textContent = nativeTasks.length || tasks.length;
         $('queue-count').hidden = false;
-        $('queue-task-count').textContent = `服务器上 ${nativeTasks.length} 项，平台请求 ${tasks.length} 项`;
+        $('queue-task-count').textContent = tr('服务器上 {0} 项，平台请求 {1} 项', nativeTasks.length, tasks.length);
         let list = $('queue-list');
         list.replaceChildren();
         $('queue-empty').hidden = nativeTasks.length > 0 || tasks.length > 0;
         for (let task of nativeTasks) {
             let row = el('li', 'queue-task');
             let main = el('div', 'queue-task-main');
-            main.append(el('strong', '', `${task.backend_name || `服务器 #${task.backend_id}`}：${task.state == 'running' ? '执行中' : `等待中，第 ${task.position} 位`}`));
+            main.append(el('strong', '', tr('{0}：{1}', task.backend_name || tr('服务器 #{0}', task.backend_id), task.state == 'running' ? tr('执行中') : tr('等待中，第 {0} 位', task.position))));
             let node = task.current_node
-                ? `节点 ${task.current_node}${task.node_type ? `（${task.node_type}）` : ''}`
-                : task.state == 'running' ? '当前节点暂无数据' : `共 ${task.total_nodes} 个节点`;
+                ? tr('节点 {0}', task.current_node) + (task.node_type ? tr('（{0}）', task.node_type) : '')
+                : task.state == 'running' ? '当前节点暂无数据' : tr('共 {0} 个节点', task.total_nodes);
             main.append(el('span', '', node));
             if (task.state == 'running') {
                 let overall = Number.isFinite(task.overall_percent) ? Math.round(task.overall_percent) : null;
                 let current = Number.isFinite(task.node_percent) ? Math.round(task.node_percent) : null;
-                main.append(el('span', '', `当前节点 ${current == null ? '暂无数据' : `${current}%`}，总体约 ${overall == null ? '暂无数据' : `${overall}%`}`));
+                main.append(el('span', '', tr('当前节点 {0}，总体约 {1}', current == null ? tr('暂无数据') : `${current}%`, overall == null ? tr('暂无数据') : `${overall}%`)));
                 if (overall != null) {
                     let bar = el('progress', 'queue-progress');
                     bar.max = 100;
                     bar.value = overall;
-                    bar.setAttribute('aria-label', `总体进度 ${overall}%`);
+                    bar.setAttribute('aria-label', tr('总体进度 {0}%', overall));
                     main.append(bar);
                 }
             }
@@ -2000,9 +2047,9 @@
         for (let task of tasks) {
             let row = el('li', 'queue-task');
             let main = el('div', 'queue-task-main');
-            main.append(el('strong', '', task.mine ? `我的请求 #${task.request_id || task.id}` : '其他用户的请求'));
-            main.append(el('span', '', `${labels[task.state] || '处理中'}，${task.count} 张`));
-            let age = el('span', 'queue-task-age', `已用 ${Math.floor(task.elapsed_seconds / 60)} 分 ${task.elapsed_seconds % 60} 秒`);
+            main.append(el('strong', '', task.mine ? tr('我的请求 #{0}', task.request_id || task.id) : '其他用户的请求'));
+            main.append(el('span', '', tr('{0}，{1} 张', tr(labels[task.state] || '处理中'), task.count)));
+            let age = el('span', 'queue-task-age', tr('已用 {0} 分 {1} 秒', Math.floor(task.elapsed_seconds / 60), task.elapsed_seconds % 60));
             row.append(main, age);
             if (task.mine && task.state != 'stopping') {
                 let stopping = state.queue.stopping.has(task.id);
@@ -2018,7 +2065,7 @@
 
     /** Cancels one task after the server verifies its authenticated owner. */
     async function cancelQueueTask(id, button = null) {
-        if (state.queue.stopping.has(id) || !window.confirm('结束这个任务？已经生成的结果会保留在画廊。')) { return; }
+        if (state.queue.stopping.has(id) || !window.confirm(tr('结束这个任务？已经生成的结果会保留在画廊。'))) { return; }
         state.queue.stopping.add(id);
         if (button) {
             button.disabled = true;
@@ -2057,8 +2104,8 @@
         if (!server && !extra.ecomcraft_execution_scope) {
             return null;
         }
-        let workflow = typeof extra.ecomcraft_published_workflow == 'string' && extra.ecomcraft_published_workflow ? extra.ecomcraft_published_workflow : '标准工作台';
-        return server ? `${workflow}｜${server}` : workflow;
+        let workflow = typeof extra.ecomcraft_published_workflow == 'string' && extra.ecomcraft_published_workflow ? extra.ecomcraft_published_workflow : tr('标准工作台');
+        return server ? tr('{0}｜{1}', workflow, server) : workflow;
     }
 
     async function loadGallery() {
@@ -2146,7 +2193,7 @@
         if (dayOf(d) == dayOf(now)) { return '今天'; }
         let yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
         if (dayOf(d) == dayOf(yesterday)) { return '昨天'; }
-        return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+        return new Intl.DateTimeFormat(I18n.locale(), { dateStyle: 'long' }).format(d);
     }
 
     /** Formats a generation time as a local HH:mm:ss clock string, or a dash when unknown. */
@@ -2223,7 +2270,7 @@
                     currentGroup = key;
                     let head = el('li', 'sheet-group');
                     head.append(el('span', 'sheet-group-date', galleryDateLabel(item.time)));
-                    head.append(el('span', 'sheet-group-count', `${groupCounts.get(key)} 项`));
+                    head.append(el('span', 'sheet-group-count', tr('{0} 项', groupCounts.get(key))));
                     grid.append(head);
                 }
             }
@@ -2236,10 +2283,10 @@
             open.title = item.name;
             if (GallerySelection.active) {
                 open.setAttribute('aria-pressed', String(selected));
-                open.setAttribute('aria-label', `选择 ${item.name}`);
+                open.setAttribute('aria-label', tr('选择 {0}', item.name));
             }
             else {
-                open.setAttribute('aria-label', `查看 ${item.name}`);
+                open.setAttribute('aria-label', tr('查看 {0}', item.name));
             }
             let media;
             if (item.video) {
@@ -2277,7 +2324,7 @@
             star.dataset.src = item.src;
             star.dataset.role = 'star';
             star.setAttribute('aria-pressed', String(item.starred));
-            star.setAttribute('aria-label', item.starred ? `取消收藏 ${item.name}` : `收藏 ${item.name}`);
+            star.setAttribute('aria-label', item.starred ? tr('取消收藏 {0}', item.name) : tr('收藏 {0}', item.name));
             star.disabled = GallerySelection.active;
             star.addEventListener('click', () => toggleStar(item));
             meta.append(star);
@@ -2287,7 +2334,7 @@
                 remove.type = 'button';
                 remove.dataset.src = item.src;
                 remove.dataset.role = 'delete';
-                remove.setAttribute('aria-label', `删除 ${item.name}`);
+                remove.setAttribute('aria-label', tr('删除 {0}', item.name));
                 remove.title = '删除';
                 remove.addEventListener('click', () => GallerySelection.deleteOne(item));
                 meta.append(remove);
@@ -2379,7 +2426,7 @@
             $('gallery-select').hidden = !allowed || this.active || !state.gallery.items.length;
             $('gallery-select').setAttribute('aria-pressed', String(this.active));
             $('gallery-selection').hidden = !this.active;
-            $('gallery-selected-count').textContent = `已选 ${this.selected.size} 项`;
+            $('gallery-selected-count').textContent = tr('已选 {0} 项', this.selected.size);
             $('gallery-delete-selected').disabled = this.deleting || !this.selected.size;
             $('gallery-delete-selected').textContent = this.deleting ? '正在删除…' : '删除所选';
             $('gallery-select-all').disabled = this.deleting;
@@ -2388,7 +2435,7 @@
 
         /** Deletes one item after confirmation, for the card button and the lightbox. */
         static async deleteOne(item) {
-            if (this.deleting || !window.confirm(`确定删除「${item.name}」？${item.starred ? '已收藏的作品会同时删除收藏副本和原始文件。' : ''}${this.recycleNote()}`)) {
+            if (this.deleting || !window.confirm(tr('确定删除「{0}」？', item.name) + (item.starred ? tr('已收藏的作品会同时删除收藏副本和原始文件。') : '') + tr(this.recycleNote()))) {
                 return;
             }
             closeLightbox();
@@ -2399,7 +2446,7 @@
         static async deleteSelected() {
             let items = state.gallery.items.filter(item => this.selected.has(item.src));
             let hasStarred = items.some(item => item.starred);
-            if (this.deleting || !items.length || !window.confirm(`确定删除选中的 ${items.length} 个作品？${hasStarred ? '已收藏的作品会同时删除收藏副本和原始文件。' : ''}${this.recycleNote()}`)) {
+            if (this.deleting || !items.length || !window.confirm(tr('确定删除选中的 {0} 个作品？', items.length) + (hasStarred ? tr('已收藏的作品会同时删除收藏副本和原始文件。') : '') + tr(this.recycleNote()))) {
                 return;
             }
             await this.deleteItems(items);
@@ -2453,12 +2500,12 @@
             let message = $('gallery-message');
             let skipped = items.length - deleted - failures.length;
             if (!failures.length) {
-                message.textContent = `已删除 ${deleted} 个作品。`;
+                message.textContent = tr('已删除 {0} 个作品。', deleted);
                 message.classList.remove('error');
             }
             else {
-                message.textContent = `已删除 ${deleted} 个作品，${failures.length} 个删除失败${skipped > 0 ? `，${skipped} 个未处理` : ''}：`
-                    + `${failures.slice(0, 3).join('、')}${failures.length > 3 ? ' 等' : ''}。请刷新后重试，或检查账号的删除权限。`;
+                message.textContent = tr('已删除 {0} 个作品，{1} 个删除失败{2}：', deleted, failures.length, skipped > 0 ? tr('，{0} 个未处理', skipped) : '')
+                    + failures.slice(0, 3).join(tr('、')) + (failures.length > 3 ? ' ' + tr('等') : '') + tr('。请刷新后重试，或检查账号的删除权限。');
                 message.classList.add('error');
             }
             message.hidden = false;
@@ -2472,14 +2519,14 @@
             await loadGallery();
             if (announce) {
                 let message = $('gallery-message');
-                message.textContent = res.new_state ? `已收藏「${item.name}」。` : `已取消收藏「${item.name}」。`;
+                message.textContent = res.new_state ? tr('已收藏「{0}」。', item.name) : tr('已取消收藏「{0}」。', item.name);
                 message.classList.remove('error');
                 message.hidden = false;
             }
         }
         catch (error) {
             let message = $('gallery-message');
-            message.textContent = `收藏没有成功：${error.message || '请刷新后重试'}`;
+            message.textContent = tr('收藏没有成功：{0}', error.message || tr('请刷新后重试'));
             message.classList.add('error');
             message.hidden = false;
         }
@@ -2545,7 +2592,7 @@
                 let result = await request(this.reviewer() ? 'EcomCraftStudioReviewList' : 'EcomCraftStudioWorkflowSubmissions');
                 this.items = Array.isArray(result.workflows) ? result.workflows : [];
                 $('workflows-message').hidden = true;
-                $('workflows-updated').textContent = `共 ${this.items.length} 个，更新于 ${new Intl.DateTimeFormat('zh-CN', { timeStyle: 'medium' }).format(new Date())}`;
+                $('workflows-updated').textContent = tr('共 {0} 个，更新于 {1}', this.items.length, new Intl.DateTimeFormat(I18n.locale(), { timeStyle: 'medium' }).format(new Date()));
                 this.render();
             }
             catch (error) {
@@ -2602,7 +2649,7 @@
 
         /** Formats a Unix millisecond time for display. */
         static time(ms) {
-            return ms ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(ms)) : '';
+            return ms ? new Intl.DateTimeFormat(I18n.locale(), { dateStyle: 'short', timeStyle: 'short' }).format(new Date(ms)) : '';
         }
 
         /** Summarizes which servers can run a workflow, e.g. "仅 A（B：缺少节点 X）". */
@@ -2612,11 +2659,11 @@
                 return '可运行服务器：还没有登记执行服务器';
             }
             let ok = servers.filter(server => server.ok).map(server => server.name);
-            let bad = servers.filter(server => !server.ok).map(server => `${server.name}：${(server.problems || []).join('、') || '不可用'}`);
+            let bad = servers.filter(server => !server.ok).map(server => tr('{0}：{1}', server.name, (server.problems || []).join(tr('、')) || tr('不可用')));
             if (!ok.length) {
-                return `没有服务器能运行（${bad.join('；')}）`;
+                return tr('没有服务器能运行（{0}）', bad.join(tr('；')));
             }
-            return bad.length ? `可运行服务器：仅 ${ok.join('、')}（${bad.join('；')}）` : `可运行服务器：${ok.join('、')}`;
+            return bad.length ? tr('可运行服务器：仅 {0}（{1}）', ok.join(tr('、')), bad.join(tr('；'))) : tr('可运行服务器：{0}', ok.join(tr('、')));
         }
 
         /** Builds one list row with the actions this account may take. */
@@ -2628,7 +2675,7 @@
             let line = el('span');
             let attention = ['pending', 'rereview', 'invalid'].includes(item.state);
             line.append(el('span', `review-state${attention ? ' is-attention' : ''}`, this.stateLabels[item.state] || '未知状态'),
-                document.createTextNode(`，来源：${item.server || '未知'}${source}`));
+                document.createTextNode(tr('，来源：{0}{1}', item.server || tr('未知'), tr(source))));
             main.append(line);
             if (item.problem) {
                 main.append(el('span', '', item.problem));
@@ -2638,21 +2685,21 @@
                     main.append(el('span', '', this.runnableText(item.runnable)));
                 }
                 if (item.submitted_by) {
-                    main.append(el('span', '', `${item.submitted_by} 于 ${this.time(item.submitted_at)} 提交${item.submit_note ? `：${item.submit_note}` : ''}`));
+                    main.append(el('span', '', tr('{0} 于 {1} 提交', item.submitted_by, this.time(item.submitted_at)) + (item.submit_note ? tr('：{0}', item.submit_note) : '')));
                 }
                 if (item.reject_reason && ['rejected', 'published'].includes(item.state)) {
-                    main.append(el('span', '', `${item.state == 'published' ? '新版本' : ''}驳回原因：${item.reject_reason}`));
+                    main.append(el('span', '', item.state == 'published' ? tr('新版本驳回原因：{0}', item.reject_reason) : tr('驳回原因：{0}', item.reject_reason)));
                 }
                 if (item.published_at) {
-                    main.append(el('span', '', `快照发布于 ${this.time(item.published_at)}`));
+                    main.append(el('span', '', tr('快照发布于 {0}', this.time(item.published_at))));
                 }
             }
             else {
                 if (item.mine && item.submitted_at) {
-                    main.append(el('span', '', `我于 ${this.time(item.submitted_at)} 提交${item.submit_note ? `：${item.submit_note}` : ''}`));
+                    main.append(el('span', '', tr('我于 {0} 提交', this.time(item.submitted_at)) + (item.submit_note ? tr('：{0}', item.submit_note) : '')));
                 }
                 if (item.reject_reason) {
-                    main.append(el('span', '', `驳回原因：${item.reject_reason}`));
+                    main.append(el('span', '', tr('驳回原因：{0}', item.reject_reason)));
                 }
             }
             let actions = el('div', 'review-item-actions');
@@ -2678,8 +2725,8 @@
             let modal = $('review-modal');
             this.detail = null;
             this.controls = new Map();
-            $('review-title').textContent = `审核：${item.name || item.id}`;
-            $('review-meta').textContent = `来源 ${item.server || '未知'}，${this.stateLabels[item.state] || ''}`;
+            $('review-title').textContent = tr('审核：{0}', item.name || item.id);
+            $('review-meta').textContent = tr('来源 {0}，{1}', item.server || tr('未知'), tr(this.stateLabels[item.state] || ''));
             $('review-loading').textContent = '正在读取工作流参数…';
             $('review-loading').hidden = false;
             $('review-content').hidden = true;
@@ -2746,8 +2793,8 @@
 
         /** Fills the dialog from a detail response. */
         static renderDetail(detail) {
-            let kind = detail.kind == 'video' ? '视频' : '图片';
-            $('review-meta').textContent = `来源 ${detail.server || '未知'}${detail.source_online ? '' : '（离线）'}，${this.stateLabels[detail.state] || ''}，${kind}工作流`;
+            let kind = detail.kind == 'video' ? tr('视频工作流') : tr('图片工作流');
+            $('review-meta').textContent = tr('来源 {0}{1}，{2}，{3}', detail.server || tr('未知'), detail.source_online ? '' : tr('（离线）'), tr(this.stateLabels[detail.state] || ''), kind);
             let notes = [];
             if (detail.state == 'rereview') {
                 notes.push('来源文件已修改。下面是新版本，已沿用原快照的参数配置；通过前用户继续使用旧快照。');
@@ -2756,17 +2803,17 @@
                 notes.push('来源文件暂时不可用或新版本已驳回，这里修改的是已发布快照的参数配置。');
             }
             if (detail.submitted_by) {
-                notes.push(`${detail.submitted_by} 提交说明：${detail.submit_note || '无'}`);
+                notes.push(tr('{0} 提交说明：{1}', detail.submitted_by, detail.submit_note || tr('无')));
             }
             if (detail.reject_reason && detail.state == 'rejected') {
-                notes.push(`上次驳回原因：${detail.reject_reason}`);
+                notes.push(tr('上次驳回原因：{0}', detail.reject_reason));
             }
             $('review-submission').textContent = notes.join(' ');
             $('review-submission').hidden = !notes.length;
             let servers = $('review-servers');
             servers.replaceChildren();
             for (let server of detail.runnable || []) {
-                let text = server.ok ? `${server.name}：可以运行` : `${server.name}：${(server.problems || []).join('、') || '不可用'}`;
+                let text = server.ok ? tr('{0}：可以运行', server.name) : tr('{0}：{1}', server.name, (server.problems || []).join(tr('、')) || tr('不可用'));
                 servers.append(el('li', `server-state ${server.ok ? 'is-idle' : 'is-down'}`, text));
             }
             if (!servers.children.length) {
@@ -2806,10 +2853,10 @@
             controls.name.type = 'text';
             controls.name.maxLength = 40;
             controls.name.value = param.name || param.original_name || param.id;
-            controls.name.setAttribute('aria-label', `参数显示名：${param.original_name || param.id}`);
+            controls.name.setAttribute('aria-label', tr('参数显示名：{0}', param.original_name || param.id));
             nameWrap.append(controls.name);
             if (param.name != param.original_name) {
-                nameWrap.append(el('p', 'hint', `原名：${param.original_name}`));
+                nameWrap.append(el('p', 'hint', tr('原名：{0}', param.original_name)));
             }
             if (param.form == 'prompt' || param.form == 'negativeprompt') {
                 nameWrap.append(el('p', 'hint', '用户每次生成时填写'));
@@ -2817,7 +2864,7 @@
 
             let valueWrap = el('div', 'review-param-value');
             let valueId = `review-param-${index}`;
-            let valueLabel = el('label', 'visually-hidden', `默认值：${param.original_name || param.id}`);
+            let valueLabel = el('label', 'visually-hidden', tr('默认值：{0}', param.original_name || param.id));
             valueLabel.htmlFor = valueId;
             valueWrap.append(valueLabel);
             let type = String(param.type || 'text');
@@ -2832,7 +2879,7 @@
                 NativeWorkflowForm.setValue(controls.value, current);
                 valueWrap.append(controls.value);
                 let details = el('details', 'review-options');
-                details.append(el('summary', '', `可选项（${chosen.size}/${all.length}）`));
+                details.append(el('summary', '', tr('可选项（{0}/{1}）', chosen.size, all.length)));
                 controls.options = [];
                 for (let option of all) {
                     let label = el('label');
@@ -2842,7 +2889,7 @@
                     box.checked = chosen.has(option);
                     box.addEventListener('change', () => {
                         let count = controls.options.filter(item => item.checked).length;
-                        details.querySelector('summary').textContent = `可选项（${count}/${all.length}）`;
+                        details.querySelector('summary').textContent = tr('可选项（{0}/{1}）', count, all.length);
                     });
                     controls.options.push(box);
                     label.append(box, document.createTextNode(option));
@@ -2864,12 +2911,12 @@
                     input.step = controls.value.step;
                     input.value = value == null || (Number(param.min) == 0 && Number(param.max) == 0) ? '' : String(value);
                     input.placeholder = label;
-                    input.setAttribute('aria-label', `${label}：${param.original_name || param.id}`);
+                    input.setAttribute('aria-label', tr('{0}：{1}', tr(label), param.original_name || param.id));
                 }
                 range.append(document.createTextNode('范围'), controls.min, document.createTextNode('–'), controls.max);
                 valueWrap.append(range);
                 if (!(Number(param.original_min) == 0 && Number(param.original_max) == 0)) {
-                    valueWrap.append(el('p', 'hint', `工作流允许 ${param.original_min}–${param.original_max}`));
+                    valueWrap.append(el('p', 'hint', tr('工作流允许 {0}–{1}', param.original_min, param.original_max)));
                 }
             }
             else {
@@ -2904,13 +2951,13 @@
                 }
                 let name = controls.name.value.trim();
                 if (!name) {
-                    return `请填写参数“${label}”的显示名。`;
+                    return tr('请填写参数“{0}”的显示名。', label);
                 }
                 setting.name = name;
                 let value = controls.value.value;
                 if (param.type == 'integer' || param.type == 'decimal') {
                     if (value === '' && !param.locked) {
-                        return `请填写参数“${label}”的默认值。`;
+                        return tr('请填写参数“{0}”的默认值。', label);
                     }
                     if (value !== '') {
                         setting.default = Number(value);
@@ -2918,7 +2965,7 @@
                     let min = controls.min.value;
                     let max = controls.max.value;
                     if ((min === '') != (max === '')) {
-                        return `参数“${label}”的范围需要同时填写最小值和最大值，或都留空。`;
+                        return tr('参数“{0}”的范围需要同时填写最小值和最大值，或都留空。', label);
                     }
                     if (min !== '') {
                         setting.min = Number(min);
@@ -2931,10 +2978,10 @@
                 if (param.type == 'dropdown') {
                     setting.values = controls.options.filter(box => box.checked).map(box => box.value);
                     if (!setting.values.length) {
-                        return `参数“${label}”至少要保留一个可选项。`;
+                        return tr('参数“{0}”至少要保留一个可选项。', label);
                     }
                     if (!setting.values.includes(value)) {
-                        return `参数“${label}”的默认值必须是保留的可选项之一。`;
+                        return tr('参数“{0}”的默认值必须是保留的可选项之一。', label);
                     }
                 }
                 config[id] = setting;
@@ -2958,7 +3005,7 @@
                 }
                 body.reason = reason;
             }
-            if (action == 'unpublish' && !window.confirm(`下架后用户将不能再调用“${detail.name}”。确定下架吗？`)) {
+            if (action == 'unpublish' && !window.confirm(tr('下架后用户将不能再调用“{0}”。确定下架吗？', detail.name))) {
                 return;
             }
             if (action == 'approve') {
@@ -2975,10 +3022,10 @@
             this.reviewMessage('正在保存…', false);
             try {
                 await request('EcomCraftStudioReviewDecide', body);
-                let done = { approve: detail.state == 'published' ? '的配置已保存' : '已发布', reject: '已驳回', unpublish: '已下架' }[action];
+                let done = { approve: detail.state == 'published' ? '“{0}”的配置已保存。' : '“{0}”已发布。', reject: '“{0}”已驳回。', unpublish: '“{0}”已下架。' }[action];
                 this.closeReview();
                 await this.load();
-                this.showBanner(`“${detail.name}”${done}。`, false);
+                this.showBanner(tr(done, detail.name), false);
                 WorkflowCatalogRefresh.refresh();
             }
             catch (error) {
@@ -2993,7 +3040,7 @@
         /** Opens the submit dialog for one workflow. */
         static openSubmit(item, opener) {
             this.submitTarget = item;
-            $('submit-meta').textContent = `${item.server || '未知'}/${item.name || item.id}`;
+            $('submit-meta').textContent = (item.server || tr('未知')) + '/' + (item.name || item.id);
             $('submit-note').value = item.submit_note || '';
             $('submit-message').hidden = true;
             $('submit-confirm').disabled = false;
@@ -3024,7 +3071,7 @@
                 await request('EcomCraftStudioSubmitWorkflow', { workflow_id: item.id, note: $('submit-note').value.trim() });
                 this.closeSubmit();
                 await this.load();
-                this.showBanner(`已提交“${item.name || item.id}”，等待审核。`, false);
+                this.showBanner(tr('已提交“{0}”，等待审核。', item.name || item.id), false);
             }
             catch (error) {
                 $('submit-message').textContent = error.message || '提交失败，请稍后重试。';
@@ -3142,7 +3189,7 @@
             }
             media.append(node);
             this.resetZoom();
-            let position = this.items.length > 1 ? `（${this.index + 1} / ${this.items.length}）` : '';
+            let position = this.items.length > 1 ? tr('（{0} / {1}）', this.index + 1, this.items.length) : '';
             $('lightbox-name').textContent = `${item.name}${position}`;
             $('lb-download').href = item.url;
             $('lb-download').setAttribute('download', item.name);
@@ -3433,7 +3480,7 @@
         try {
             const response = await fetch(item.url, { cache: 'no-store' });
             if (!response.ok) {
-                throw new Error(`服务器返回 ${response.status}，文件可能已被删除`);
+                throw new Error(tr('服务器返回 {0}，文件可能已被删除', response.status));
             }
             const blob = await response.blob();
             const data = await new Promise((resolve, reject) => {
@@ -3466,7 +3513,7 @@
             if (state.view != 'create') {
                 location.hash = 'create';
             }
-            setStatus(`无法载入这张图：${error.message || '请刷新后重试'}。`, true);
+            setStatus(tr('无法载入这张图：{0}。', error.message || tr('请刷新后重试')), true);
         }
     }
 
@@ -3475,6 +3522,9 @@
        ============================================================ */
     function bind() {
         $('theme-toggle').addEventListener('click', toggleTheme);
+        $('lang-toggle').addEventListener('click', () => I18n.set(I18n.current == 'en' ? 'zh-CN' : 'en'));
+        I18n.onChange(onLanguageChange);
+        updateLanguageToggle();
         window.addEventListener('hashchange', route);
 
         $('mode-image').addEventListener('click', () => setType('image'));
@@ -3535,7 +3585,7 @@
             const w = $('width').value; $('width').value = $('height').value; $('height').value = w;
         });
         $('insert-example').addEventListener('click', () => {
-            if ($('prompt').value.trim() && !window.confirm('用示例替换当前描述？')) { return; }
+            if ($('prompt').value.trim() && !window.confirm(tr('用示例替换当前描述？'))) { return; }
             $('prompt').value = state.type === 'image'
                 ? '一瓶透明玻璃精华液，置于浅灰色石台，柔和侧光，突出瓶身质感，画面右侧留白用于排版。'
                 : '镜头缓慢环绕一双白色运动鞋，鞋底细节逐渐进入画面，柔和棚拍灯光，背景保持简洁，镜头运动平稳。';
@@ -3544,7 +3594,7 @@
         });
 
         $('unlock').addEventListener('click', () => {
-            if (!window.confirm('请确认已在原生引擎核对队列和个人历史。重新提交可能产生第二个任务，确定解锁吗？')) { return; }
+            if (!window.confirm(tr('请确认已在原生引擎核对队列和个人历史。重新提交可能产生第二个任务，确定解锁吗？'))) { return; }
             state.uncertain = false;
             updateControls();
         });

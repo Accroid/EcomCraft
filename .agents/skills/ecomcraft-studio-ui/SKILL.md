@@ -24,8 +24,10 @@ description: 修改 EcomCraft 工作台页面（src/Extensions/EcomCraft/Studio 
 - 按钮点击区域不小于 32px；文字按钮 `.link-btn` 已用内边距加负外边距扩大点击区，新增样式时不要覆盖。
 - 弹窗打开时调用 `DialogFocus.enter`，关闭时调用 `DialogFocus.leave`，并在全局 `keydown` 中处理 Esc 和 `DialogFocus.trap`。
 - 保留现有元素 ID：`studio.js` 依赖它们。
+- **新文字必须走翻译表**：界面原文写中文，中文原文就是翻译 key，英文写进 `Studio/lang/en.js`。固定文字（HTML 中的文字和 `title`、`placeholder`、`aria-label`、`alt`，以及 JS 里直接写入页面的中文字符串）由 `i18n.js` 自动查表；带变量的文字必须写成 `tr('已删除 {0} 个作品。', count)`，不要用带中文的模板字符串或 `+` 拼接中文。`window.confirm`、`document.title` 等不经过页面元素的文字也要用 `tr()`。用户内容（提示词、作品名、工作流名）不翻译，需要排除的元素加 `data-i18n-skip`。服务端错误在英文模式下按错误码显示 `error:<code>` 条目，新增错误码时同步补英文。改完运行 `node --test src/Extensions/EcomCraft/Tests/studio-i18n.test.cjs`：缺译、多余条目、英文里混入中文或占位符不一致都会失败。
+- 切换语言不刷新页面：静态文字由 `i18n.js` 重新翻译；用 `tr()` 生成的动态文字需要在 `studio.js` 的 `onLanguageChange` 中重新渲染。
 - 文案：写用户能看懂的结果（“已删除 3 个作品”），加载状态以“…”结尾，错误说明原因和下一步；不用中点“·”拼接信息，不用全大写标签。
-- 修改后运行 `node --check src/Extensions/EcomCraft/Studio/studio.js`，再启动服务在浏览器中实际查看效果。
-- `studio.js` / `studio.css` 由 `StudioRoutes.cs` 以 `/EcomCraft/studio.js`、`/EcomCraft/studio.css` 提供，每次请求都从硬盘读取，和页面本身保持一致。不要改回 `/ExtensionFile/...`：SwarmUI 在 Release 模式下会把该路径的文件缓存在内存里直到重启，更新代码后会出现“新页面 + 旧脚本”，旧脚本一启动就报错，所有按钮失效。修改后仍要更新 `index.html` 链接里的 `?v=` 版本号，避免浏览器缓存。
+- 修改后运行 `node --check src/Extensions/EcomCraft/Studio/studio.js` 和上面的翻译测试，再启动服务在浏览器中实际查看效果（中英文各看一遍）。
+- `studio.js`、`studio.css`、`i18n.js`、`lang/en.js` 由 `StudioRoutes.cs` 以 `/EcomCraft/...` 路径提供（新增前端文件时要在 `StudioRoutes.Assets` 中登记），每次请求都从硬盘读取，和页面本身保持一致。不要改回 `/ExtensionFile/...`：SwarmUI 在 Release 模式下会把该路径的文件缓存在内存里直到重启，更新代码后会出现“新页面 + 旧脚本”，旧脚本一启动就报错，所有按钮失效。修改后仍要更新 `index.html` 链接里的 `?v=` 版本号，避免浏览器缓存。
 - `index.html` 中的 `#boot-check` 是启动失败兜底提示，`studio.js` 初始化的最后一步把它隐藏；新增初始化步骤时放在隐藏它之前。
 - 原生工作流 ID 必须在 `Utilities.StrictFilenameClean` 处理后保持不变（SwarmUI 生成时会再次清理名称，ID 一变就找不到工作流）。前端按第一个 `/` 拆出来源服务器分组。
