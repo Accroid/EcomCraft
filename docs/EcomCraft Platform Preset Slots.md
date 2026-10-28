@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20平台预设槽位设计.zh-CN.md)
 >
-> **Status:** Design draft (F58 / T60, not yet developed), to be confirmed before implementation; every platform rule value in this document must be checked against the platform's current official rules under N06 · **Version:** v1.0 · **Date:** 2026-10-28
+> **Status:** Confirmed (F58 / T60, not yet developed), ready to implement as T60; every platform rule value in this document must still be checked against the platform's current official rules under N06 · **Version:** v1.1 · **Date:** 2026-10-28
 >
 > Related files: [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md) (6.3 platform presets, F58) and the [EcomCraft development tracker](EcomCraft%20开发总表.xlsx) (F05, F22, F58, T60; N06; Chinese spreadsheet). When this design changes, update this document (Chinese and English together) first, then the code.
 
@@ -147,15 +147,20 @@ Check each field against the platform's current official rules (help centres / s
 
 Security boundaries unchanged: clients still submit only platform IDs, template IDs and allowlisted parameters; preset files are read server-side.
 
-## 6. Open Questions
+## 6. Confirmed Design Decisions
 
-1. Should `subject_ratio_min` also shape generation (product placement defaults) or only hint at export? Suggestion: hints only for the first version.
-2. Behaviour when still over `max_bytes` after two re-encodes: export anyway with a notice, or refuse? Suggestion: export with a notice (operators can rework the image).
-3. Is it agreed that `video_cover` records its spec only and joins image sets later with F48?
-4. Should category-specific rules (#10 in section 2) live in platform presets or template categories (F19)? Suggestion: decide after N09 picks the main category.
+The four questions below were open until 2026-10-28, when they were decided (the user delegated the decision to the agent):
+
+| # | Question | Decision | Rationale |
+|---|---|---|---|
+| 1 | Should `subject_ratio_min` also shape generation? | **Export hint only**; no generation-side coupling in the first version | Generation-side coupling changes product placement defaults for every template and is hard to verify in isolation; hint at export first, and reconsider coupling only if real generations regularly fall below the minimum |
+| 2 | Behaviour when still over `max_bytes` after two re-encodes | **Export anyway and say so in the result** | Refusing wastes the operator's time; platforms compress or reject on upload anyway, and the notice lets the operator act knowingly |
+| 3 | Should `video_cover` join image sets this phase? | **Spec only; not part of image sets** | Main-image video is F48 (not developed); recording the 9:16 / 3:4 specs now means the data is ready when F48 lands |
+| 4 | Where do category-specific rules (#10 in section 2) live: platform presets or template categories? | **Decide after N09 picks the main category**; no category-rule fields in the first version | Whether such rules follow the platform or the category depends on their actual shape; both F19 category presets and F58 platform presets will exist by then, so place each rule where it belongs instead of guessing now |
 
 ## 7. Change Log
 
 | Date | Version | Description |
 |---|---|---|
 | 2026-10-28 | v1.0 | First draft: background and problem, ten difference dimensions, the v3 slot schema, slot-to-template mapping, export behaviour, compatibility, the N06 checklist, involved changes and open questions |
+| 2026-10-28 | v1.1 | The four open questions in section 6 became confirmed design decisions (the user delegated them to the agent): subject fill hints at export only, export anyway when still over the size cap with a notice, video covers record their spec only, category rules wait for N09; status changed to confirmed |
