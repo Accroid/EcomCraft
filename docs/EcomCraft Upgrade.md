@@ -35,6 +35,7 @@ An administrator clicks **Back up and download** under **Gallery → Storage set
 
 - The zip contains the configuration, review snapshots, templates and product library index under `Data/EcomCraft/`, plus the account database (`Users.ldb` etc.) and the role settings (`Roles.fds`).
 - It does not contain generated works, product image files or models; keep works through the work library location or a separate copy.
+- It also contains the project archive records (`projects.json`), which include the prompts staff works were made with; only administrators can create and download backups, so keep backup files safe.
 - Every file's size and SHA-256 are recorded in a manifest (`manifest.json`) and checked one by one on restore.
 - The zip stays on the server for one day only; download it promptly.
 

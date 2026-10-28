@@ -874,6 +874,7 @@ window.EcomCraftLanguages.en = {
     "error:brand_kit_save_failed": "The brand kit could not be saved: the work library may be offline or full, or the server data folder is not writable. Try again later.",
     "error:invalid_selling_text": "Check the title and selling points: a title is required, up to 20 characters and 3 points of at most 16 characters each, without emoji.",
     "error:selling_font_missing": "The fonts for selling-point images are missing. Ask your administrator to check the extension's Assets/fonts folder.",
+    "error:project_save_failed": "The project record could not be saved to the server data folder. Ask your administrator to check the disk and folder permissions, then try again.",
     "error:template_image_failed": "The template was saved, but its example image could not be written to the server data folder.",
     "error:prompt_settings_failed": "The prompt settings could not be saved in the server data folder.",
     "error:product_save_failed": "The product could not be saved: the work library location may be offline or full. Try again later.",
