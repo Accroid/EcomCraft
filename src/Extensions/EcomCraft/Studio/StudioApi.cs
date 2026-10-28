@@ -208,7 +208,7 @@ public static class StudioApi
         T2IParamInput input = generation.UserInput;
         if (input.ExtraMeta.TryGetValue(ExecutionScopeKey, out object scope) && scope?.ToString() == ExecutionScopeValue
             && input.ExtraMeta.TryGetValue(PublishedWorkflowScopeKey, out object workflowId)
-            && WorkflowReview.IsPublished(workflowId?.ToString())
+            && WorkflowReview.IsUsableBy(workflowId?.ToString(), input.SourceSession?.User?.UserID)
             && TryGetPublishedWorkflow(workflowId?.ToString(), out _, out JObject metadata, out _))
         {
             NativeWorkflowParameters.SynchronizeSeeds(input, metadata);
@@ -240,7 +240,7 @@ public static class StudioApi
             input.RefusalReasons.Add("Standard workspace generation requires the SwarmUI ComfyUI nodes on the execution server.");
         }
         if (allowed && input.ExtraMeta.TryGetValue(PublishedWorkflowScopeKey, out object workflowId)
-            && WorkflowReview.IsPublished(workflowId?.ToString())
+            && WorkflowReview.IsUsableBy(workflowId?.ToString(), input.SourceSession?.User?.UserID)
             && TryGetPublishedWorkflow(workflowId?.ToString(), out ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
                 out JObject metadata, out JObject savedValues))
         {
@@ -1240,7 +1240,8 @@ public static class StudioApi
             || input?.SourceSession?.User is not User user
             || !user.HasPermission(EcomCraft.PermUsePublishedWorkflows)
             || !input.ExtraMeta.TryGetValue(ExecutionScopeKey, out object scope) || scope?.ToString() != ExecutionScopeValue
-            || !input.ExtraMeta.TryGetValue(PublishedWorkflowScopeKey, out object requested) || requested?.ToString() != value)
+            || !input.ExtraMeta.TryGetValue(PublishedWorkflowScopeKey, out object requested) || requested?.ToString() != value
+            || !WorkflowReview.NotOthersOwn(value, user.UserID))
         {
             return false;
         }
@@ -1255,6 +1256,7 @@ public static class StudioApi
             || !user.HasPermission(EcomCraft.PermUsePublishedWorkflows)
             || !context.ExtraMeta.TryGetValue(ExecutionScopeKey, out object scope) || scope?.ToString() != ExecutionScopeValue
             || !context.ExtraMeta.TryGetValue(PublishedWorkflowScopeKey, out object requested)
+            || !WorkflowReview.NotOthersOwn(requested?.ToString(), user.UserID)
             || !TryGetPublishedWorkflow(requested?.ToString(), out _, out JObject metadata, out JObject savedValues))
         {
             return null;
@@ -1300,8 +1302,9 @@ public static class StudioApi
         HashSet<string> modelKinds = new(LocalModels(session).Select(Kind).Where(kind => kind is not null));
         foreach (string name in ComfyUIBackendExtension.CustomWorkflows.Keys.OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
         {
-            if (!TryGetPublishedWorkflow(name, out ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
-                out JObject metadata, out JObject savedValues))
+            // Another account's own upload (F60) never appears here.
+            if (!WorkflowReview.NotOthersOwn(name, session.User.UserID)
+                || !TryGetPublishedWorkflow(name, out ComfyUIBackendExtension.ComfyCustomWorkflow workflow, out JObject metadata, out JObject savedValues))
             {
                 continue;
             }
@@ -1310,7 +1313,8 @@ public static class StudioApi
             {
                 continue;
             }
-            bool native = WorkflowReview.IsPublished(workflow.Name);
+            bool own = WorkflowReview.IsOwnBy(workflow.Name, session.User.UserID);
+            bool native = own || WorkflowReview.IsPublished(workflow.Name);
             string kind = InferWorkflowKind(workflow);
             if (kind == "video" && !session.User.HasPermission(Permissions.ParamVideo))
             {
@@ -1330,7 +1334,8 @@ public static class StudioApi
             published.Add(new JObject()
             {
                 ["id"] = workflow.Name,
-                ["name"] = workflow.Name,
+                ["name"] = own ? WorkflowReview.Get(workflow.Name)?.Name ?? workflow.Name : workflow.Name,
+                ["own"] = own,
                 ["kind"] = kind,
                 ["description"] = workflow.Description ?? "",
                 ["inputs"] = fields,
@@ -1507,8 +1512,8 @@ public static class StudioApi
         }
         // ComfyUI backend refreshes clear the in-memory workflow registry, so restore published snapshots before lookup.
         WorkflowReview.Restore();
-        if (!TryGetPublishedWorkflow(workflowId, out ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
-            out JObject metadata, out JObject savedValues))
+        if (!WorkflowReview.NotOthersOwn(workflowId, session.User.UserID)
+            || !TryGetPublishedWorkflow(workflowId, out ComfyUIBackendExtension.ComfyCustomWorkflow workflow, out JObject metadata, out JObject savedValues))
         {
             return Error("工作流不存在、未发布到简单工作台，或工作流配置无效。请刷新工作流列表。", "invalid_workflow");
         }
@@ -1525,7 +1530,7 @@ public static class StudioApi
         {
             return Error("所选工作流与当前创作类型不匹配，请切换图片/视频类型或选择其他工作流。", "invalid_mode");
         }
-        bool native = WorkflowReview.IsPublished(workflow.Name);
+        bool native = WorkflowReview.IsUsableBy(workflow.Name, session.User.UserID);
         rawInput = (JObject)rawInput.DeepClone();
         if (native)
         {
