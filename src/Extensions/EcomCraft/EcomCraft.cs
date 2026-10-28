@@ -102,6 +102,7 @@ public class EcomCraft : Extension
         WorkflowDiscovery.Start();
         WorkSync.Start();
         CandidateCleanup.Start();
+        DiskMonitor.Start();
         TemplateStore.Init(FilePath);
         PromptService.Init(FilePath);
     }
@@ -123,5 +124,6 @@ public class EcomCraft : Extension
         WorkflowDiscovery.Shutdown();
         WorkSync.Shutdown();
         CandidateCleanup.Shutdown();
+        DiskMonitor.Shutdown();
     }
 }

@@ -554,7 +554,13 @@ public static class StudioApi
                 ["images"] = new JArray(outcome.Images ?? [])
             });
         }
-        return new JObject() { ["backends"] = backends, ["native_tasks"] = nativeTasks, ["tasks"] = tasks, ["finished_tasks"] = finished };
+        JObject queueResult = new() { ["backends"] = backends, ["native_tasks"] = nativeTasks, ["tasks"] = tasks, ["finished_tasks"] = finished };
+        // Administrators see the disk-space warning on the queue page (F46); ordinary accounts get nothing extra.
+        if (session.User.HasPermission(Permissions.EditServerSettings))
+        {
+            queueResult["disk"] = StorageApi.DiskJson();
+        }
+        return queueResult;
     }
 
     [API.APIDescription("Cancel one active generation claim belonging to the authenticated user.", "success: true")]
@@ -645,6 +651,12 @@ public static class StudioApi
         if (!CanView(session) || !session.User.HasPermission(Permissions.BasicImageGeneration))
         {
             return Error("此账号没有生成权限。请联系管理员。", "bad_permissions");
+        }
+        // A critically full disk rejects new work up front (F46); saves would fail midway otherwise.
+        string diskFull = DiskMonitor.CriticalText();
+        if (diskFull is not null)
+        {
+            return Error(diskFull, "disk_full");
         }
         if ((string)rawInput["source"] != "local")
         {

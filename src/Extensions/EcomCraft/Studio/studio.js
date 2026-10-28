@@ -52,7 +52,7 @@
         'workflow_state','invalid_review','review_save_failed',
         'invalid_storage_path','storage_check_failed','storage_save_failed','invalid_storage_action',
         'invalid_template','template_image_failed','prompt_settings_failed','cutout_failed','product_save_failed','invalid_export','export_failed','diagnostics_failed',
-        'backup_failed','backup_invalid','backup_confirm_required',
+        'backup_failed','backup_invalid','backup_confirm_required','disk_full',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
     const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
 
@@ -2066,6 +2066,15 @@
 
     /** Renders the server table, native ComfyUI entries and SwarmUI claims without exposing workflow inputs. */
     function renderQueue(result) {
+        let disk = result.disk;
+        if (disk && disk.level == 'critical') {
+            $('queue-message').textContent = tr('磁盘空间严重不足，已停止接收新生成：平台服务器剩余 {0} GB。', disk.output_free_gb == null ? tr('未知') : disk.output_free_gb);
+            $('queue-message').hidden = false;
+        }
+        else if (disk && disk.level == 'low') {
+            $('queue-message').textContent = tr('磁盘空间偏低：平台服务器剩余 {0} GB。', disk.output_free_gb == null ? tr('未知') : disk.output_free_gb);
+            $('queue-message').hidden = false;
+        }
         let backendList = $('queue-backends');
         backendList.replaceChildren();
         for (let backend of result.backends || []) {
@@ -2495,10 +2504,26 @@
                 $('storage-library').value = data.library_path || '';
                 $('storage-export').value = data.export_path || '';
                 $('storage-retention').value = String(data.candidate_retention_days == null ? 14 : data.candidate_retention_days);
+                $('disk-warn').value = String(data.disk_warn_gb == null ? 10 : data.disk_warn_gb);
+                $('disk-critical').value = String(data.disk_critical_gb == null ? 2 : data.disk_critical_gb);
+            }
+            let disk = data.disk || {};
+            let diskNote = '';
+            if (disk.level == 'critical') {
+                diskNote = tr('磁盘空间严重不足，已停止接收新生成：平台服务器剩余 {0} GB。', disk.output_free_gb == null ? tr('未知') : disk.output_free_gb);
+            }
+            else if (disk.level == 'low') {
+                diskNote = tr('磁盘空间偏低：平台服务器剩余 {0} GB。', disk.output_free_gb == null ? tr('未知') : disk.output_free_gb);
+            }
+            if (diskNote && disk.library_free_gb != null) {
+                diskNote += tr('作品库剩余 {0} GB。', disk.library_free_gb);
             }
             let status = data.library_path ? tr('待同步 {0} 个作品', data.pending || 0) : tr('作品只保存在平台服务器本机。');
             if (data.failing) {
                 status += tr('，其中 {0} 个暂时复制失败：{1}', data.failing, data.last_error || tr('会自动重试'));
+            }
+            if (diskNote) {
+                status += ' ' + diskNote;
             }
             $('storage-status').textContent = status;
             let migration = data.migration || {};
@@ -2537,7 +2562,9 @@
                 let result = await request('EcomCraftStorageSave', {
                     library_path: $('storage-library').value.trim(),
                     export_path: $('storage-export').value.trim(),
-                    candidate_retention_days: Math.max(0, Math.min(3650, Math.round(Number($('storage-retention').value) || 0)))
+                    candidate_retention_days: Math.max(0, Math.min(3650, Math.round(Number($('storage-retention').value) || 0))),
+                    disk_warn_gb: Math.max(0, Math.min(100000, Math.round(Number($('disk-warn').value) || 0))),
+                    disk_critical_gb: Math.max(0, Math.min(100000, Math.round(Number($('disk-critical').value) || 0)))
                 });
                 let library = result.checks?.library;
                 let detail = library ? tr('写入速度约 {0} MB/s', library.write_mbps) + (library.free_gb != null ? tr('，剩余 {0} GB', library.free_gb) : '') : '';

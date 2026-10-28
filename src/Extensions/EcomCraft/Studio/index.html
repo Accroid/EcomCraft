@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.23.0">
-    <script src="/EcomCraft/lang/en.js?v=0.23.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.23.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.23.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.23.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.24.0">
+    <script src="/EcomCraft/lang/en.js?v=0.24.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.24.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.24.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.24.0" defer></script>
 </head>
 
 <body>
@@ -675,6 +675,13 @@
                     <label for="storage-retention">未选候选图保留天数</label>
                     <input id="storage-retention" type="number" inputmode="numeric" min="0" max="3650" step="1" value="14">
                     <p class="hint">简易模式里没被选中、下载或导出的候选图，超过这个天数后自动清理；填 0 表示不清理。选中、下载或导出过的永久保留。</p>
+                </div>
+                <div class="fld">
+                    <label for="disk-warn">磁盘空间警告阈值（GB）</label>
+                    <input id="disk-warn" type="number" inputmode="numeric" min="0" max="100000" step="1" value="10">
+                    <label for="disk-critical">严重不足阈值（GB）</label>
+                    <input id="disk-critical" type="number" inputmode="numeric" min="0" max="100000" step="1" value="2">
+                    <p class="hint">后台定期检查平台服务器和作品库的剩余空间：低于警告阈值时管理员可见提醒，低于严重不足阈值时拒绝新的生成。填 0 表示不启用。</p>
                 </div>
                 <div class="fld">
                     <span class="fld-label">系统数据备份与恢复</span>
