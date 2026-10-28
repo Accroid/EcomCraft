@@ -15,6 +15,7 @@
   "sets": [
     "standard"
   ],
+  "kind": "scene_main",
   "prompt": {
     "prefix": "commercial product photography, the product placed naturally in a realistic scene,",
     "suffix": "photorealistic lighting that matches the scene, shallow depth of field",

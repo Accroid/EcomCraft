@@ -15,6 +15,7 @@
   "sets": [
     "standard"
   ],
+  "kind": "model",
   "prompt": {
     "prefix": "lifestyle photo of a person naturally using or holding the product,",
     "suffix": "natural pose, realistic skin and hands, soft flattering light",

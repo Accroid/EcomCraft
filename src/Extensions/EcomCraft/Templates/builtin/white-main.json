@@ -15,6 +15,7 @@
   "sets": [
     "standard"
   ],
+  "kind": "white_main",
   "prompt": {
     "prefix": "professional e-commerce product photo on a pure white background,",
     "suffix": "evenly lit, soft natural shadow, centered composition, high detail",

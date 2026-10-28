@@ -33,16 +33,28 @@ public static class ExportService
     /// <summary>Folder of prepared zips.</summary>
     private static string ZipDir => Path.Combine(Program.DataDir, "EcomCraft", "exports");
 
-    /// <summary>The platforms that have a valid export preset, with their presets.</summary>
-    public static List<(JObject Platform, ExportPreset Preset)> Presets()
+    /// <summary>One platform's export data (F58): its JSON, verified flag, source note and parsed slots.</summary>
+    public sealed record class PlatformExport(JObject Platform, List<ExportSlot> Slots, bool Verified, string Source)
     {
-        List<(JObject, ExportPreset)> result = [];
+        /// <summary>The slot exports go to when the request does not name one: the first non-optional slot, else the first.</summary>
+        public ExportSlot DefaultSlot => Slots.FirstOrDefault(slot => !slot.Optional) ?? Slots[0];
+
+        /// <summary>The slot with the given ID, or null.</summary>
+        public ExportSlot Find(string id) => Slots.FirstOrDefault(slot => slot.Id == id);
+    }
+
+    /// <summary>The platforms that have a usable slot, with their slots (F58).</summary>
+    public static List<PlatformExport> PlatformPresets()
+    {
+        List<PlatformExport> result = [];
         foreach (JObject platform in TemplateStore.Platforms())
         {
-            ExportPreset preset = ExportRules.Parse(platform["export"] as JObject, out _);
-            if (preset is not null)
+            List<ExportSlot> slots = ExportRules.ParseSlots(platform, out _);
+            if (slots is not null)
             {
-                result.Add((platform, preset));
+                bool verified = platform.Value<bool?>("verified") == true || (platform["export"] as JObject)?.Value<bool?>("verified") == true;
+                string source = platform.Value<string>("source") ?? (platform["export"] as JObject)?.Value<string>("source") ?? "";
+                result.Add(new PlatformExport(platform, slots, verified, source));
             }
         }
         return result;
@@ -63,7 +75,29 @@ public static class ExportService
         return stream.ToArray();
     }
 
-    [API.APIDescription("List the platforms that have an export preset (size, whether an administrator verified it) in the requested language, and whether exporting to the shared folder is available.", "platforms: [{ id: \"amazon\", name: \"\", width: 2000, height: 2000, verified: false }], folder_available: false")]
+    /// <summary>Encodes within the slot's size cap when it has one (F58): JPEGs walk the quality ladder (two re-encodes at most); PNGs encode once.
+    /// <paramref name="overCap"/> says whether the result is still over the cap, so the export can say so instead of refusing.</summary>
+    private static byte[] Encode(Image<Rgb24> image, ExportSlot slot, out bool overCap)
+    {
+        overCap = false;
+        if (slot.MaxBytes <= 0)
+        {
+            return Encode(image, slot.Preset);
+        }
+        byte[] best = null;
+        foreach (int quality in ExportRules.QualityLadder(slot.Preset.Quality))
+        {
+            best = Encode(image, slot.Preset.Format == "png" ? slot.Preset : slot.Preset with { Quality = quality });
+            if (best.Length <= slot.MaxBytes)
+            {
+                return best;
+            }
+        }
+        overCap = true;
+        return best;
+    }
+
+    [API.APIDescription("List the platforms that have an export slot (slots with size and optional flag, whether an administrator verified them) in the requested language, and whether exporting to the shared folder is available.", "platforms: [{ id: \"amazon\", name: \"\", width: 2000, height: 2000, verified: false, slots: [{ id: \"white_main\", kind: \"white_main\", optional: false }], main_image_count: 9, ai_declaration: true }], folder_available: false")]
     public static Task<JObject> EcomCraftStudioExportOptions(Session session, string language = "zh-CN")
     {
         if (!StudioApi.CanView(session))
@@ -72,23 +106,46 @@ public static class ExportService
         }
         language = language == "en" ? "en" : "zh-CN";
         JArray platforms = new();
-        foreach ((JObject platform, ExportPreset preset) in Presets())
+        foreach (PlatformExport platform in PlatformPresets())
         {
-            Dictionary<string, string> names = platform["name"]?.ToObject<Dictionary<string, string>>() ?? [];
+            Dictionary<string, string> names = platform.Platform["name"]?.ToObject<Dictionary<string, string>>() ?? [];
+            ExportSlot main = platform.DefaultSlot;
+            JArray slots = new();
+            foreach (ExportSlot slot in platform.Slots)
+            {
+                Dictionary<string, string> slotNames = (platform.Platform["slots"] as JArray)?.OfType<JObject>()
+                    .FirstOrDefault(item => item["id"]?.ToString() == slot.Id)?["name"]?.ToObject<Dictionary<string, string>>() ?? [];
+                string slotName = EcomTemplate.Pick(slotNames, language);
+                slots.Add(new JObject()
+                {
+                    ["id"] = slot.Id,
+                    ["kind"] = slot.Kind,
+                    ["name"] = string.IsNullOrEmpty(slotName) ? slot.Id : slotName,
+                    ["width"] = slot.Preset.Width,
+                    ["height"] = slot.Preset.Height,
+                    ["optional"] = slot.Optional,
+                    ["position"] = slot.Position,
+                    ["max_bytes"] = slot.MaxBytes,
+                    ["subject_ratio_min"] = slot.SubjectRatioMin
+                });
+            }
             platforms.Add(new JObject()
             {
-                ["id"] = platform["id"]?.ToString(),
+                ["id"] = platform.Platform["id"]?.ToString(),
                 ["name"] = EcomTemplate.Pick(names, language),
-                ["width"] = preset.Width,
-                ["height"] = preset.Height,
-                ["format"] = preset.Format,
-                ["verified"] = preset.Verified
+                ["width"] = main.Preset.Width,
+                ["height"] = main.Preset.Height,
+                ["format"] = main.Preset.Format,
+                ["verified"] = platform.Verified,
+                ["slots"] = slots,
+                ["main_image_count"] = platform.Platform.Value<int?>("main_image_count") ?? 0,
+                ["ai_declaration"] = (platform.Platform["ai_label"] as JObject)?.Value<bool?>("platform_declaration") == true
             });
         }
         return Task.FromResult(new JObject() { ["platforms"] = platforms, ["folder_available"] = !string.IsNullOrEmpty(StorageSettings.Get().ExportPath) });
     }
 
-    [API.APIDescription("Export the current account's works for a platform: groups [{ name, images: [gallery path or result URL] }] (at most 200 images), target \"zip\" (returns a download URL) or \"folder\" (writes to the export location). rawInput is the root request JSON.", "download: \"/EcomCraft/export/…\", count: 4, verified: false")]
+    [API.APIDescription("Export the current account's works for a platform: groups [{ name, images: [gallery path, result URL or { url, slot }] }] (at most 200 images), target \"zip\" (returns a download URL) or \"folder\" (writes to the export location), and the optional slot ID every image goes to when the entries do not name one (F58). Warnings come back as codes the page words in its language. rawInput is the root request JSON.", "download: \"/EcomCraft/export/…\", count: 4, verified: false, warnings: [{ code: \"size_over\", slot: \"white_main\", count: 1 }]")]
     public static async Task<JObject> EcomCraftStudioExport(Session session, JObject rawInput)
     {
         if (!StudioApi.CanView(session))
@@ -96,10 +153,16 @@ public static class ExportService
             return StudioApi.Error("无权访问创作工作台。", "bad_permissions");
         }
         string platformId = rawInput.Value<string>("platform") ?? "";
-        (JObject Platform, ExportPreset Preset) match = Presets().FirstOrDefault(item => item.Platform["id"]?.ToString() == platformId);
-        if (match.Preset is null)
+        PlatformExport match = PlatformPresets().FirstOrDefault(item => item.Platform["id"]?.ToString() == platformId);
+        if (match is null)
         {
             return StudioApi.Error("这个平台没有可用的导出规格。", "invalid_export");
+        }
+        string defaultSlotId = rawInput.Value<string>("slot") ?? "";
+        ExportSlot defaultSlot = defaultSlotId.Length == 0 ? match.DefaultSlot : match.Find(defaultSlotId);
+        if (defaultSlot is null)
+        {
+            return StudioApi.Error("所选槽位不存在，请重新选择。", "invalid_export");
         }
         string target = rawInput.Value<string>("target") == "folder" ? "folder" : "zip";
         string exportRoot = StorageSettings.Get().ExportPath;
@@ -107,13 +170,13 @@ public static class ExportService
         {
             return StudioApi.Error("管理员还没有设置导出位置，请改用打包下载。", "invalid_export");
         }
-        List<(string Group, string Path)> files = [];
+        List<FileEntry> files = [];
         foreach (JObject group in (rawInput["groups"] as JArray ?? new JArray()).OfType<JObject>())
         {
             string name = ExportRules.SafeName(group.Value<string>("name"), "product");
             foreach (JToken image in group["images"] as JArray ?? new JArray())
             {
-                string url = image.Type == JTokenType.String ? image.ToString() : null;
+                string url = image.Type == JTokenType.String ? image.ToString() : image is JObject wrapped && wrapped["url"]?.Type == JTokenType.String ? wrapped.Value<string>("url") : null;
                 if (url is not null && !url.StartsWith("View/", StringComparison.Ordinal) && !url.StartsWith("Output/", StringComparison.Ordinal))
                 {
                     url = $"View/{session.User.UserID}/{url}";
@@ -123,7 +186,13 @@ public static class ExportService
                 {
                     return StudioApi.Error("有作品不存在或不属于当前账号，请刷新后重新选择。", "invalid_export");
                 }
-                files.Add((name, path));
+                string slotId = image is JObject withSlot && withSlot["slot"]?.Type == JTokenType.String ? withSlot.Value<string>("slot") : "";
+                ExportSlot slot = slotId.Length == 0 ? defaultSlot : match.Find(slotId);
+                if (slot is null)
+                {
+                    return StudioApi.Error("所选槽位不存在，请重新选择。", "invalid_export");
+                }
+                files.Add(new FileEntry(name, path, slot));
             }
         }
         if (files.Count == 0 || files.Count > MaxImages)
@@ -139,7 +208,7 @@ public static class ExportService
         }
         try
         {
-            return await Task.Run(() => target == "zip" ? WriteZip(session.User.UserID, label, files, match.Preset) : WriteFolder(session.User.UserID, exportRoot, label, files, match.Preset));
+            return await Task.Run(() => target == "zip" ? WriteZip(session.User.UserID, label, files, match) : WriteFolder(session.User.UserID, exportRoot, label, files, match));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or UnknownImageFormatException or InvalidImageContentException or NotSupportedException)
         {
@@ -148,11 +217,36 @@ public static class ExportService
         }
     }
 
+    /// <summary>One work to export, with the slot it goes to (F58).</summary>
+    private sealed record class FileEntry(string Group, string Path, ExportSlot Slot);
+
+    /// <summary>Export hints (F58), counted per code and slot; the page words them in the UI language. Codes: size_over (still over the slot's cap after
+    /// re-encoding), subject_small (below a white slot's subject fill) and text_image (a selling-point image on a platform that forbids promotional text).</summary>
+    private sealed class ExportWarnings
+    {
+        /// <summary>Counts per code and slot.</summary>
+        private readonly Dictionary<(string Code, string Slot), int> Counts = [];
+
+        /// <summary>Records one hint.</summary>
+        public void Add(string code, string slot)
+        {
+            Counts[(code, slot)] = Counts.GetValueOrDefault((code, slot)) + 1;
+        }
+
+        /// <summary>The hints as JSON, ordered for stable display.</summary>
+        public JArray ToJson()
+        {
+            return [.. Counts.OrderBy(item => item.Key.Code).ThenBy(item => item.Key.Slot)
+                .Select(item => new JObject() { ["code"] = item.Key.Code, ["slot"] = item.Key.Slot, ["count"] = item.Value })];
+        }
+    }
+
     /// <summary>Packs the rendered works into a zip with one folder per group.</summary>
-    private static JObject WriteZip(string userId, string label, List<(string Group, string Path)> files, ExportPreset preset)
+    private static JObject WriteZip(string userId, string label, List<FileEntry> files, PlatformExport platform)
     {
         Cleanup();
         List<string> notWhite = [];
+        ExportWarnings warnings = new();
         string id = Guid.NewGuid().ToString("N");
         string folder = Path.Combine(ZipDir, userId);
         Directory.CreateDirectory(folder);
@@ -160,44 +254,55 @@ public static class ExportService
         using (FileStream stream = File.Create(zipPath))
         using (ZipArchive zip = new(stream, ZipArchiveMode.Create))
         {
-            foreach ((string name, byte[] data) in Rendered(label, files, preset, notWhite))
+            foreach ((string name, byte[] data) in Rendered(label, files, platform, notWhite, warnings))
             {
                 ZipArchiveEntry entry = zip.CreateEntry(name, CompressionLevel.NoCompression);
                 using Stream entryStream = entry.Open();
                 entryStream.Write(data, 0, data.Length);
             }
         }
-        return new JObject() { ["download"] = $"/EcomCraft/export/{id}", ["file_name"] = $"{label}.zip", ["count"] = files.Count, ["verified"] = preset.Verified, ["not_white"] = new JArray(notWhite) };
+        return new JObject() { ["download"] = $"/EcomCraft/export/{id}", ["file_name"] = $"{label}.zip", ["count"] = files.Count, ["verified"] = platform.Verified, ["not_white"] = new JArray(notWhite), ["warnings"] = warnings.ToJson(), ["ai_declaration"] = (platform.Platform["ai_label"] as JObject)?.Value<bool?>("platform_declaration") == true };
     }
 
     /// <summary>Writes the rendered works under the export location: export/&lt;account&gt;/&lt;time-platform&gt;/&lt;group&gt;/.</summary>
-    private static JObject WriteFolder(string userId, string root, string label, List<(string Group, string Path)> files, ExportPreset preset)
+    private static JObject WriteFolder(string userId, string root, string label, List<FileEntry> files, PlatformExport platform)
     {
         List<string> notWhite = [];
-        foreach ((string name, byte[] data) in Rendered(label, files, preset, notWhite))
+        ExportWarnings warnings = new();
+        foreach ((string name, byte[] data) in Rendered(label, files, platform, notWhite, warnings))
         {
             string path = Path.Combine(root, userId, name.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             File.WriteAllBytes(path, data);
         }
-        return new JObject() { ["exported"] = files.Count, ["folder"] = $"{userId}/{label}", ["verified"] = preset.Verified, ["not_white"] = new JArray(notWhite) };
+        return new JObject() { ["exported"] = files.Count, ["folder"] = $"{userId}/{label}", ["verified"] = platform.Verified, ["not_white"] = new JArray(notWhite), ["warnings"] = warnings.ToJson(), ["ai_declaration"] = (platform.Platform["ai_label"] as JObject)?.Value<bool?>("platform_declaration") == true };
     }
 
-    /// <summary>Renders every work, naming them "&lt;label&gt;/&lt;group&gt;/&lt;n&gt;.&lt;ext&gt;" numbered within each group. AI provenance metadata is written
-    /// from the work's own markers (F22), and works whose border is not pure white are added to <paramref name="notWhite"/> when the preset requires it.</summary>
-    private static IEnumerable<(string Name, byte[] Data)> Rendered(string label, List<(string Group, string Path)> files, ExportPreset preset, List<string> notWhite)
+    /// <summary>Renders every work to its slot (F58), naming them "&lt;label&gt;/&lt;group&gt;/&lt;n&gt;.&lt;ext&gt;" numbered within each group. AI provenance metadata is written
+    /// from the work's own markers (F22); hints collect into <paramref name="warnings"/> (over-cap, low subject fill, text image) and works whose border is
+    /// not pure white are added to <paramref name="notWhite"/> when the slot requires it.</summary>
+    private static IEnumerable<(string Name, byte[] Data)> Rendered(string label, List<FileEntry> files, PlatformExport platform, List<string> notWhite, ExportWarnings warnings)
     {
         Dictionary<string, int> counters = [];
-        foreach ((string group, string path) in files)
+        bool forbidsPromoText = ComplianceRules.ForbidsPromoText(platform.Platform);
+        foreach (FileEntry file in files)
         {
-            int number = counters.GetValueOrDefault(group) + 1;
-            counters[group] = number;
-            string name = $"{label}/{group}/{number:D2}.{preset.Format}";
-            using Image<Rgba32> source = ISImage.Load<Rgba32>(path);
-            using Image<Rgb24> rendered = ExportImage.Render(source, preset);
-            if (preset.RequireWhite && ComplianceRules.NonWhiteBorderFraction(rendered) > 0)
+            int number = counters.GetValueOrDefault(file.Group) + 1;
+            counters[file.Group] = number;
+            string name = $"{label}/{file.Group}/{number:D2}.{file.Slot.Preset.Format}";
+            using Image<Rgba32> source = ISImage.Load<Rgba32>(file.Path);
+            using Image<Rgb24> rendered = ExportImage.Render(source, file.Slot.Preset);
+            if (file.Slot.RequireWhite && ComplianceRules.NonWhiteBorderFraction(rendered) > 0)
             {
-                notWhite.Add($"{group}/{number:D2}.{preset.Format}");
+                notWhite.Add($"{file.Group}/{number:D2}.{file.Slot.Preset.Format}");
+            }
+            if (file.Slot.SubjectRatioMin > 0 && file.Slot.Kind == "white_main" && ComplianceRules.SubjectFillFraction(rendered) < file.Slot.SubjectRatioMin)
+            {
+                warnings.Add("subject_small", file.Slot.Id);
+            }
+            if (forbidsPromoText && MetadataText(source).Contains("ecomcraft_selling_image", StringComparison.Ordinal))
+            {
+                warnings.Add("text_image", file.Slot.Id);
             }
             string kind = ComplianceRules.SourceKind(MetadataText(source));
             string type = ComplianceRules.DigitalSourceType(kind);
@@ -209,7 +314,12 @@ public static class ExportService
                 rendered.Metadata.ExifProfile.SetValue(ExifTag.Software, ComplianceRules.CreatorTool);
                 rendered.Metadata.ExifProfile.SetValue(ExifTag.ImageDescription, description);
             }
-            yield return (name, Encode(rendered, preset));
+            byte[] data = Encode(rendered, file.Slot, out bool overCap);
+            if (overCap)
+            {
+                warnings.Add("size_over", file.Slot.Id);
+            }
+            yield return (name, data);
         }
     }
 

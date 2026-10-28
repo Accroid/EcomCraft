@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using EcomCraftStudio.Studio.Export;
 using Newtonsoft.Json.Linq;
 
 namespace EcomCraftStudio.Studio.Templates;
@@ -60,6 +61,9 @@ public sealed class EcomTemplate
     /// <summary>Platforms where the template skips generation and only centers the product cut-out on pure white (F22), for example Amazon main images.</summary>
     public List<string> CutoutOnlyPlatforms = [];
 
+    /// <summary>The image slot kind the template serves (F58): white_main, scene_main, detail or model; empty when the template joins sets the old way, by set membership only.</summary>
+    public string Kind = "";
+
     /// <summary>Models the template needs (F08), with commercial-use license status; installed by administrators by hand.</summary>
     public List<ModelRequirement> RequiredModels = [];
 
@@ -115,7 +119,7 @@ public static class TemplateValidator
     private static readonly Regex IdPattern = new("^[a-z0-9][a-z0-9-]{0,47}$", RegexOptions.CultureInvariant);
 
     /// <summary>Keys a template file may contain; anything else is rejected so typos do not silently disable a setting.</summary>
-    private static readonly HashSet<string> TemplateKeys = ["id", "name", "description", "example_image", "platforms", "sets", "prompt", "categories", "brand_kit", "execution_plans", "enabled", "preserve_product", "cutout_only_platforms", "requirements"];
+    private static readonly HashSet<string> TemplateKeys = ["id", "name", "description", "example_image", "platforms", "sets", "kind", "prompt", "categories", "brand_kit", "execution_plans", "enabled", "preserve_product", "cutout_only_platforms", "requirements"];
 
     /// <summary>Keys an execution plan may contain.</summary>
     private static readonly HashSet<string> PlanKeys = ["kind", "workflow", "presets", "user_fields"];
@@ -165,6 +169,15 @@ public static class TemplateValidator
             errors.Add("platforms 至少需要一项（任何平台都适用时填 \"*\"）。");
         }
         template.Sets = IdList(json["sets"], "sets", false, errors);
+        string kind = Text(json["kind"]);
+        if (kind is not null && !ExportSlot.Kinds.Contains(kind))
+        {
+            errors.Add($"kind 须为 {string.Join(" / ", ExportSlot.Kinds)} 之一。");
+        }
+        else
+        {
+            template.Kind = kind ?? "";
+        }
         template.Categories = IdList(json["categories"], "categories", false, errors);
         template.CutoutOnlyPlatforms = IdList(json["cutout_only_platforms"], "cutout_only_platforms", false, errors);
         (template.RequiredModels, template.RequiredNodes) = RequirementRules.Parse(json["requirements"], errors);

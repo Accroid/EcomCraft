@@ -25,6 +25,9 @@ class SimpleMode {
     static picker = '';
     static galleryItems = null;
     static galleryError = '';
+    /** The optional image slots ticked for the chosen platform (F58); same-kind optional slots only add export targets, so only kinds not already in the default set are offered. */
+    static optionalSlots = new Set();
+
     static exportOptions = { platforms: [], folder_available: false };
     static resultGroups = new Map();
     static taskProducts = new Map();
@@ -208,6 +211,8 @@ class SimpleMode {
         window.addEventListener('resize', () => this.renderStage());
         $('simple-platform').addEventListener('change', e => {
             this.choice.platform = e.target.value;
+            this.optionalSlots.clear();
+            this.renderPlatformSlots();
             this.remember();
             this.renderTemplates();
             this.renderStoryboard();
@@ -313,6 +318,7 @@ class SimpleMode {
         $('simple-export-zip').addEventListener('click', () => this.exportSelected('zip'));
         $('simple-export-folder').addEventListener('click', () => this.exportSelected('folder'));
         $('simple-export-platform').addEventListener('change', () => this.renderExport());
+        $('simple-export-slot').addEventListener('change', () => this.renderExport());
         $('simple-product-delete').addEventListener('click', () => this.deleteProduct());
         $('simple-size').addEventListener('change', () => this.savePlacement());
         $('simple-download').addEventListener('click', () => this.download());
@@ -552,7 +558,21 @@ class SimpleMode {
         if (options.some(option => option.value == current)) {
             select.value = current;
         }
+        this.renderExportSlots();
         this.renderExport();
+    }
+
+    /** Fills the export slot picker for the chosen export platform (F58): every slot of the platform, its size in the label; the current choice stays selected when it still exists. */
+    static renderExportSlots() {
+        let select = this.api.$('simple-export-slot');
+        let platform = (this.exportOptions.platforms || []).find(item => item.id == this.api.$('simple-export-platform').value);
+        let slots = platform && platform.slots ? platform.slots : [];
+        let current = select.value;
+        let options = slots.map(slot => new Option(this.api.tr('{0}（{1}×{2}）', slot.name, slot.width, slot.height), slot.id));
+        select.replaceChildren(...options);
+        if (options.some(option => option.value == current)) {
+            select.value = current;
+        }
     }
 
     /** Shows the export panel once there are candidates, with a notice when the chosen preset is not verified yet. */
@@ -561,12 +581,16 @@ class SimpleMode {
         let platform = (this.exportOptions.platforms || []).find(item => item.id == this.api.$('simple-export-platform').value);
         this.api.$('simple-export').hidden = !this.results.length || !(this.exportOptions.platforms || []).length;
         this.api.$('simple-export-folder').hidden = !this.exportOptions.folder_available;
+        this.renderExportSlots();
         let ready = Boolean(platform) && this.selected.size > 0 && !this.exporting;
         this.api.$('simple-export-zip').disabled = !ready;
         this.api.$('simple-export-folder').disabled = !ready;
         let note = this.selected.size ? tr('将导出已选的 {0} 张，每个商品一个文件夹。', this.selected.size) : tr('先点选要导出的图片。');
         if (platform && !platform.verified) {
             note += ' ' + tr('这个平台的尺寸规格还没有经过管理员核对，上传前请对照平台最新要求。');
+        }
+        if (platform && platform.ai_declaration) {
+            note += ' ' + tr('这个平台要求上传时声明图片由 AI 生成，请在商家后台按平台要求声明。');
         }
         this.api.$('simple-export-note').textContent = note;
         this.renderSelling();
@@ -646,13 +670,14 @@ class SimpleMode {
         }
     }
 
-    /** Exports the selected candidates for the chosen platform, grouped by product. */
+    /** Exports the selected candidates for the chosen platform, grouped by product, to the chosen slot (F58). */
     static async exportSelected(target) {
         let tr = this.api.tr;
         let platform = this.api.$('simple-export-platform').value;
         if (!platform || !this.selected.size || this.exporting) {
             return;
         }
+        let slot = this.api.$('simple-export-slot').value || '';
         let groups = new Map();
         for (let url of this.selected) {
             let name = this.resultGroups.get(url) || tr('商品');
@@ -664,7 +689,7 @@ class SimpleMode {
         this.exporting = true;
         this.renderExport();
         try {
-            let result = await this.api.request('EcomCraftStudioExport', { platform, target, groups: Array.from(groups, ([name, images]) => ({ name, images })) });
+            let result = await this.api.request('EcomCraftStudioExport', { platform, slot, target, groups: Array.from(groups, ([name, images]) => ({ name, images })) });
             if (result.download) {
                 let link = document.createElement('a');
                 link.href = result.download;
@@ -680,6 +705,9 @@ class SimpleMode {
             if ((result.not_white || []).length) {
                 this.message(tr('注意：{0} 张图片的背景不是纯白（RGB 255,255,255），这个平台的主图可能被拒：{1}', result.not_white.length, result.not_white.join(tr('、'))), true);
             }
+            for (let warning of result.warnings || []) {
+                this.message(this.warningText(warning), true);
+            }
         }
         catch (error) {
             this.message(error.message || tr('导出失败，请稍后重试。'), true);
@@ -688,6 +716,26 @@ class SimpleMode {
             this.exporting = false;
             this.renderExport();
         }
+    }
+
+    /** The plain-language text for one export warning code (F58): still over the slot's size cap, subject fill too small, or drawn text on a platform that forbids it. */
+    static warningText(warning) {
+        let tr = this.api.tr;
+        let count = warning.count || 1;
+        if (warning.code == 'size_over') {
+            return tr('有 {0} 张图压到最低质量后仍超过“{1}”的大小上限，已照常导出，上传前请自行压缩。', count, this.slotName(warning.slot));
+        }
+        if (warning.code == 'subject_small') {
+            return tr('有 {0} 张白底图的商品占比低于“{1}”的要求，建议重新构图后再导出。', count, this.slotName(warning.slot));
+        }
+        return tr('有 {0} 张图带促销文字，平台可能按“牛皮癣”拒收，建议只放在允许的位置。', count);
+    }
+
+    /** The display name of an export slot ID, from the export platform's slot list. */
+    static slotName(id) {
+        let platform = (this.exportOptions.platforms || []).find(item => item.id == this.api.$('simple-export-platform').value);
+        let slot = platform && (platform.slots || []).find(slot => slot.id == id);
+        return slot ? slot.name : id;
     }
 
     /** Reads the account's saved products for the "from the product library" list. */
@@ -1040,6 +1088,56 @@ class SimpleMode {
             this.choice.platform = preferred.length ? preferred[0] : '';
         }
         select.value = this.choice.platform;
+        this.renderPlatformSlots();
+    }
+
+    /** Shows the chosen platform's slot hints (F58): where the white image goes, how many main images fit, and checkboxes for optional slots
+     * whose kind is not already in the default set (same-kind optional slots only add export targets). */
+    static renderPlatformSlots() {
+        let tr = this.api.tr;
+        let note = this.api.$('simple-platform-note');
+        let box = this.api.$('simple-optional-slots');
+        let platform = this.data.platforms.find(item => item.id == this.choice.platform);
+        let slots = platform && platform.slots ? platform.slots : [];
+        if (!slots.length) {
+            note.hidden = true;
+            box.hidden = true;
+            box.replaceChildren();
+            return;
+        }
+        let texts = [];
+        let white = slots.find(slot => slot.kind == 'white_main');
+        if (white && white.position && (!white.optional || this.optionalSlots.has(white.id))) {
+            texts.push(tr('白底图建议放第 {0} 张。', white.position));
+        }
+        if (platform.main_image_count) {
+            texts.push(tr('主图最多 {0} 张。', platform.main_image_count));
+        }
+        note.textContent = texts.join(' ');
+        note.hidden = !texts.length;
+        let defaultKinds = new Set(slots.filter(slot => !slot.optional).map(slot => slot.kind));
+        let optional = slots.filter(slot => slot.optional && !defaultKinds.has(slot.kind));
+        let rows = [];
+        for (let slot of optional) {
+            let input = document.createElement('input');
+            input.type = 'checkbox';
+            input.checked = this.optionalSlots.has(slot.id);
+            input.addEventListener('change', () => {
+                if (input.checked) {
+                    this.optionalSlots.add(slot.id);
+                }
+                else {
+                    this.optionalSlots.delete(slot.id);
+                }
+                this.renderPlatformSlots();
+                this.update();
+            });
+            let row = this.api.el('label', 'simple-slot-opt');
+            row.append(input, document.createTextNode(slot.name));
+            rows.push(row);
+        }
+        box.replaceChildren(...rows);
+        box.hidden = !rows.length;
     }
 
     /** Templates that suit the chosen platform. */
@@ -1941,8 +2039,33 @@ class SimpleMode {
     }
 
     /** Templates of the standard set for the chosen platform, as the server will expand them. */
+    /** The set's templates for the chosen platform: composed by the platform's slot kinds when it defines slots (F58), matching the server's
+     * composition; platforms without slots keep the old composition by set membership. */
     static setTemplates() {
-        return this.visibleTemplates().filter(template => (template.sets || []).includes('standard'));
+        let visible = this.visibleTemplates();
+        let platform = this.data.platforms.find(item => item.id == this.choice.platform);
+        let slots = platform && platform.slots ? platform.slots : [];
+        if (!slots.length) {
+            return visible.filter(template => (template.sets || []).includes('standard'));
+        }
+        let kinds = [];
+        for (let slot of slots) {
+            if (slot.optional && !this.optionalSlots.has(slot.id)) {
+                continue;
+            }
+            if (!kinds.includes(slot.kind)) {
+                kinds.push(slot.kind);
+            }
+        }
+        let set = [];
+        for (let kind of kinds) {
+            for (let template of visible) {
+                if ((template.sets || []).includes('standard') && template.slot_kind == kind) {
+                    set.push(template);
+                }
+            }
+        }
+        return set;
     }
 
     /** Starts a one-click set for every uploaded product: each product × each image type of the set, with the chosen number of candidates. */
@@ -1958,6 +2081,7 @@ class SimpleMode {
         let payload = {
             language: I18n.current,
             platform: this.choice.platform,
+            optional_slots: Array.from(this.optionalSlots),
             set_id: 'standard',
             style_id: this.choice.style,
             product_type_id: this.choice.subtype,

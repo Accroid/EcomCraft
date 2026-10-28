@@ -1,3 +1,4 @@
+using EcomCraftStudio.Studio.Export;
 using EcomCraftStudio.Studio.PostProcess;
 using EcomCraftStudio.Studio.Storage;
 using Newtonsoft.Json.Linq;
@@ -63,6 +64,7 @@ public static class TemplateApi
                 ["kind"] = workflow["kind"]?.DeepClone(),
                 ["platforms"] = new JArray(template.Platforms),
                 ["sets"] = new JArray(template.Sets),
+                ["slot_kind"] = template.Kind,
                 ["cutout_only_platforms"] = new JArray(template.CutoutOnlyPlatforms),
                 ["preserve_product"] = template.PreserveProduct,
                 ["fields"] = new JArray((workflow["inputs"] as JArray ?? new JArray()).OfType<JObject>().Where(field => userFields.Contains(field["id"]?.ToString() ?? "")).Select(field => field.DeepClone()))
@@ -71,7 +73,7 @@ public static class TemplateApi
         return Task.FromResult(new JObject() { ["templates"] = templates, ["hidden"] = hidden });
     }
 
-    [API.APIDescription("List the shop platforms templates can target, with names in the requested language (zh-CN or en).", "platforms: [{ id: \"amazon\", name: \"Amazon\", region: \"global\" }]")]
+    [API.APIDescription("List the shop platforms templates can target, with names in the requested language (zh-CN or en) and each platform's image slots (F58): the slot ID, kind, localized name, suggested white-image position and whether the slot joins image sets only when ticked.", "platforms: [{ id: \"jd\", name: \"\", region: \"cn\", slots: [{ id: \"white_main\", kind: \"white_main\", optional: false, position: 1 }] }]")]
     public static Task<JObject> EcomCraftStudioPlatforms(Session session, string language = "zh-CN")
     {
         if (!StudioApi.CanView(session))
@@ -83,7 +85,29 @@ public static class TemplateApi
         foreach (JObject platform in TemplateStore.Platforms())
         {
             Dictionary<string, string> names = platform["name"].ToObject<Dictionary<string, string>>() ?? [];
-            platforms.Add(new JObject() { ["id"] = platform["id"]?.ToString(), ["name"] = EcomTemplate.Pick(names, language), ["region"] = platform["region"]?.ToString() ?? "" });
+            JArray slots = new();
+            foreach (ExportSlot slot in ExportRules.ParseSlots(platform, out _) ?? [])
+            {
+                Dictionary<string, string> slotNames = (platform["slots"] as JArray)?.OfType<JObject>()
+                    .FirstOrDefault(item => item["id"]?.ToString() == slot.Id)?["name"]?.ToObject<Dictionary<string, string>>() ?? [];
+                string slotName = EcomTemplate.Pick(slotNames, language);
+                slots.Add(new JObject()
+                {
+                    ["id"] = slot.Id,
+                    ["kind"] = slot.Kind,
+                    ["name"] = string.IsNullOrEmpty(slotName) ? slot.Id : slotName,
+                    ["optional"] = slot.Optional,
+                    ["position"] = slot.Position
+                });
+            }
+            platforms.Add(new JObject()
+            {
+                ["id"] = platform["id"]?.ToString(),
+                ["name"] = EcomTemplate.Pick(names, language),
+                ["region"] = platform["region"]?.ToString() ?? "",
+                ["slots"] = slots,
+                ["main_image_count"] = platform.Value<int?>("main_image_count") ?? 0
+            });
         }
         (int minSide, double blur, double ratio) = TemplateStore.UploadQuality();
         return Task.FromResult(new JObject()
@@ -331,12 +355,13 @@ public static class TemplateApi
         return cutoutResult;
     }
 
-    /// <summary>The platform's export size, or 2000 × 2000 when it has none.</summary>
+    /// <summary>The platform's size for white main images (the white_main slot, F58), or its default slot, or 2000 × 2000 when it has none.</summary>
     private static void ExportImageSize(string platform, out int width, out int height)
     {
-        (_, Export.ExportPreset preset) = Export.ExportService.Presets().FirstOrDefault(item => item.Platform["id"]?.ToString() == platform);
-        width = preset?.Width ?? 2000;
-        height = preset?.Height ?? 2000;
+        ExportService.PlatformExport match = Export.ExportService.PlatformPresets().FirstOrDefault(item => item.Platform["id"]?.ToString() == platform);
+        ExportSlot slot = match?.Slots.FirstOrDefault(slot => slot.Kind == "white_main") ?? match?.DefaultSlot;
+        width = slot?.Preset.Width ?? 2000;
+        height = slot?.Preset.Height ?? 2000;
     }
 
     /// <summary>Output size of a template run: the preset or user value of the parameters bound to the width and height fields, else the snapshot defaults, else 1024.</summary>
