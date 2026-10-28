@@ -651,6 +651,18 @@ main:focus:not(:focus-visible) { outline: none; }
     .contact-sheet { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
 
+/* 窄屏手机：画廊单列，主要操作占满行宽 */
+@media (max-width: 560px) {
+    .contact-sheet { grid-template-columns: 1fr; gap: 16px; }
+    .simple-steps { gap: 20px; }
+    .recover-actions { flex-wrap: wrap; }
+    .simple-upload-actions { display: flex; }
+    .simple-upload-actions .btn { flex: 1; }
+    .toolbar { flex-wrap: wrap; }
+    .search-wrap, .sort-wrap { flex: 1; min-width: 140px; }
+    .queue-list .queue-task { flex-wrap: wrap; }
+}
+
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
 }
