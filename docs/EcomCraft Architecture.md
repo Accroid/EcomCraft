@@ -254,7 +254,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F63 | Phones get simple mode only | UI redesign v4 (T66) |
 | F64 | One-way hand-off from simple to professional mode | UI redesign v4 (T67) |
 | F65 | Star candidates (first filter) | UI redesign v4 (T68) |
-| F66 | Gallery and queue cleanup | UI redesign v4 (T69, to do) |
+| F66 | Gallery and queue cleanup | UI redesign v4 (T69) |
 | F67 | Star preference analysis and prompt feedback | UI redesign v4 (T70, deferred, design pending) |
 | F68 | Image description on by default, with setup guidance | UI redesign v4 (T71) |
 | F69 | One-click vision model install script | UI redesign v4 (T72, `launchtools/install-vision-model-*`) |

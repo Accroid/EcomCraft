@@ -296,3 +296,16 @@ test('candidates are starred with the gallery star, by their gallery path (F65)'
     assert.match(js, /request\('ToggleImageStarred', \{ path: this\.galleryPath\(url\) \}\)/);
     assert.match(js, /new_state\) \{\s*this\.starred\.add\(url\);\s*this\.api\.request\('EcomCraftStudioMarkKept'/, 'a starred candidate is kept from cleanup');
 });
+
+test('the gallery filters by source and the queue lists the account\'s own requests first (F66)', () => {
+    let gallery = section('view-gallery');
+    for (let value of ['all', 'simple', 'pro']) {
+        assert.ok(gallery.includes(`<option value="${value}">`), `source option ${value}`);
+    }
+    let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    assert.match(studio, /extra\.ecomcraft_template \? 'simple' : 'pro'/, 'works made from a template come from the simple mode');
+    let own = studio.indexOf('for (let task of tasks.filter(task => task.mine))');
+    let servers = studio.indexOf('for (let task of nativeTasks)');
+    let others = studio.indexOf('for (let task of tasks.filter(task => !task.mine))');
+    assert.ok(own > 0 && own < servers && servers < others, 'own requests, then server tasks, then other accounts');
+});

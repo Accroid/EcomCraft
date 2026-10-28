@@ -203,6 +203,9 @@ input[type=range] { width: 100%; accent-color: var(--key); }
     .simple-refine, .pro-only { display: none; }
 }
 
+/* The account's own queue requests stand out (F66). */
+.queue-task.is-mine { border-left: 3px solid var(--key); }
+
 /* Own uploaded workflows in professional mode (F60). */
 .own-workflows { display: grid; gap: 6px; margin-top: 8px; }
 .own-workflow-message { padding: 6px 10px; border-left: 3px solid var(--tally); background: var(--backdrop); border-radius: 0 6px 6px 0; font-size: var(--fs-13); overflow-wrap: anywhere; }

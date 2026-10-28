@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.26 · **Date:** 2026-10-29
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.27 · **Date:** 2026-10-29
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -249,6 +249,7 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Control | Purpose | Current | After |
 |---|---|---|---|
 | All / Starred | Filter | OK | Kept, `aria-pressed` |
+| Work source | All sources / Create images / Professional mode (F66) | New | A select; works whose metadata names a template (`ecomcraft_template`) count as "Create images", the rest (professional mode, native engine) as "Professional mode"; "Clear search and show all" also resets the source |
 | Search | Filter by file name, 350ms debounce | OK | Kept; own clear button; empty state offers "clear search" |
 | Sort | Newest / name | OK | Kept |
 | Refresh | Reread the list | Icon button | Kept; spins and disables while loading |
@@ -272,7 +273,7 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Refresh | Immediate; every 5s while open | OK | Kept; "Updated …" in local time |
 | Server list | Name, state, running, waiting | Grid | A table; idle / working / congested / offline / unresponsive pair color and text; "waiting" includes platform-assigned tasks not yet handed to ComfyUI |
 | Native tasks | ComfyUI running / waiting with progress | OK | Kept; progress bars with percent text |
-| Registered requests | SwarmUI claims | OK | Kept; others' requests show count and state only |
+| Registered requests | SwarmUI claims | OK | Kept; others' requests show count and state only; order is my requests (green-screen left edge) → server tasks → other accounts' requests (F66) |
 | Stop task | End one's own task | OK, confirmed | Kept; "Stopping…" while busy |
 | Empty state | No tasks | OK | Kept with guidance |
 
@@ -409,3 +410,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-29 | v1.24 | Step 3 gained "Refine in professional mode" (F64/T67) |
 | 2026-10-29 | v1.25 | Star button on candidates (F65/T68) |
 | 2026-10-29 | v1.26 | Phones get simple mode only (F63/T66): narrow screens hide the professional mode entry, the lightbox "Create from this image" and "Refine in professional mode" |
+| 2026-10-29 | v1.27 | Gallery source filter, own requests first in the queue (F66/T69) |
