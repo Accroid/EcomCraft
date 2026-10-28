@@ -5,7 +5,7 @@ using Newtonsoft.Json.Linq;
 namespace EcomCraftStudio.Studio.Export;
 
 /// <summary>One platform's export preset (F05): output size, padding color, file format and whether an administrator checked it against the platform's current rules.</summary>
-public sealed record class ExportPreset(int Width, int Height, byte R, byte G, byte B, string Format, int Quality, bool Verified, string Source);
+public sealed record class ExportPreset(int Width, int Height, byte R, byte G, byte B, string Format, int Quality, bool Verified, string Source, bool RequireWhite = false);
 
 /// <summary>Export rules independent of SwarmUI so sizes, padding and names can be unit tested.</summary>
 public static class ExportRules
@@ -46,7 +46,8 @@ public static class ExportRules
             return null;
         }
         byte channel(int index) => byte.Parse(background.Substring(index, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-        return new ExportPreset(width, height, channel(1), channel(3), channel(5), format, quality, export.Value<bool?>("verified") == true, export.Value<string>("source") ?? "");
+        return new ExportPreset(width, height, channel(1), channel(3), channel(5), format, quality, export.Value<bool?>("verified") == true, export.Value<string>("source") ?? "",
+            export.Value<bool?>("require_white_background") == true);
     }
 
     /// <summary>Where a picture goes inside the export canvas: scaled to fit entirely (up or down), keeping its aspect ratio, centered; the rest is padding.</summary>

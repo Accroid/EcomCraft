@@ -34,6 +34,8 @@ window.EcomCraftLanguages.en = {
     "点击或拖入商品图": "Click or drop a product photo",
     "PNG、JPEG 或 WebP，最大 5 MB；只在提交时发送": "PNG, JPEG or WebP, up to 5 MB; sent only when you start",
     "换一张": "Use another photo",
+    "注意：{0} 张图片的背景不是纯白（RGB 255,255,255），这个平台的主图可能被拒：{1}": "Note: {0} images do not have a pure white background (RGB 255,255,255) and may be rejected as main images on this platform: {1}",
+    "已按平台要求把商品抠图放到纯白背景上（不调用生成模型），结果在下方。": "As this platform requires, the product cut-out was placed on pure white without any generation model; the result is below.",
     "导出到平台": "Export for platform",
     "按平台打包下载": "Download zip for platform",
     "导出到共享文件夹": "Export to shared folder",

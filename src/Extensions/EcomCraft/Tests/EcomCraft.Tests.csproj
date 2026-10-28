@@ -13,6 +13,7 @@
     <Compile Include="../Studio/Products/ProductIndex.cs" Link="ProductIndex.cs" />
     <Compile Include="../Studio/Export/ExportRules.cs" Link="ExportRules.cs" />
     <Compile Include="../Studio/Export/ExportImage.cs" Link="ExportImage.cs" />
+    <Compile Include="../Studio/Export/ComplianceRules.cs" Link="ComplianceRules.cs" />
     <Compile Include="../Studio/Storage/StorageRules.cs" Link="StorageRules.cs" />
     <Compile Include="../Studio/Templates/EcomTemplate.cs" Link="EcomTemplate.cs" />
     <Compile Include="../Studio/Prompting/PromptRules.cs" Link="PromptRules.cs" />

@@ -103,6 +103,9 @@ public static class BatchService
         /// <summary>Optional pinned execution server.</summary>
         public int? Server;
 
+        /// <summary>Target platform, so main-image templates can take the cut-out-only branch.</summary>
+        public string Platform = "";
+
         /// <summary>Cancels tasks still waiting; replaced when a task is retried after cancelling.</summary>
         public CancellationTokenSource Cancel = new();
 
@@ -173,6 +176,7 @@ public static class BatchService
             return StudioApi.Error("每种图片的候选张数须为 1–4。", "invalid_parameters");
         }
         batch.Candidates = candidates;
+        batch.Platform = platform;
         if (rawInput["execution_server_id"]?.Type == JTokenType.Integer)
         {
             int pinned = rawInput.Value<int>("execution_server_id");
@@ -300,7 +304,8 @@ public static class BatchService
             ["prompt"] = batch.Prompt,
             ["negativeprompt"] = batch.Negative,
             ["images"] = batch.Candidates,
-            ["placement"] = new JObject() { ["x"] = product.Placement.CenterX, ["y"] = product.Placement.CenterY, ["size"] = product.Placement.Size }
+            ["placement"] = new JObject() { ["x"] = product.Placement.CenterX, ["y"] = product.Placement.CenterY, ["size"] = product.Placement.Size },
+            ["platform"] = batch.Platform
         };
         if (batch.Server is int server)
         {

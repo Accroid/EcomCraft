@@ -260,6 +260,9 @@ class SimpleMode {
             else {
                 this.message(tr('已导出 {0} 张图片到共享文件夹：{1}', result.exported, result.folder), false);
             }
+            if ((result.not_white || []).length) {
+                this.message(tr('注意：{0} 张图片的背景不是纯白（RGB 255,255,255），这个平台的主图可能被拒：{1}', result.not_white.length, result.not_white.join(tr('、'))), true);
+            }
         }
         catch (error) {
             this.message(error.message || tr('导出失败，请稍后重试。'), true);
@@ -927,6 +930,7 @@ class SimpleMode {
             style_id: this.choice.style,
             description: this.api.$('simple-description').value.trim(),
             images: Number(this.api.$('simple-count').value) || 1,
+            platform: this.choice.platform,
             async: true
         };
         if (field && this.product && this.product.id) {
@@ -939,13 +943,21 @@ class SimpleMode {
         this.update();
         try {
             let result = await this.api.request('EcomCraftStudioGenerate', payload);
+            if (result.cutout_only) {
+                // Main images for platforms such as Amazon are made right away from the cut-out on pure white, without generation.
+                for (let url of result.images || []) {
+                    this.results.unshift(url);
+                    this.resultGroups.set(url, this.product ? this.product.name : '');
+                }
+                this.renderResults();
+            }
             if (result.task_id != null) {
                 this.pending.add(result.task_id);
                 this.taskProducts.set(result.task_id, this.product ? this.product.name : '');
                 this.track();
             }
-            let status = tr('已开始出图，完成后候选图会出现在下方。');
-            if (result.execution_server) {
+            let status = result.cutout_only ? tr('已按平台要求把商品抠图放到纯白背景上（不调用生成模型），结果在下方。') : tr('已开始出图，完成后候选图会出现在下方。');
+            if (result.execution_server && !result.cutout_only) {
                 status = tr('已开始出图（由“{0}”执行），完成后候选图会出现在下方。', result.execution_server);
             }
             this.api.$('simple-status').textContent = status;

@@ -2,23 +2,159 @@
   "version": 2,
   "note": "Export presets come from commonly published platform guidelines and must be checked against the platforms' current official rules before use (N06). Set verified to true after checking. Administrators can override this file with Data/EcomCraft/platforms.json.",
   "platforms": [
-    { "id": "taobao", "name": { "zh-CN": "淘宝 / 天猫", "en": "Taobao / Tmall" }, "region": "cn",
-      "export": { "width": 800, "height": 800, "background": "#FFFFFF", "format": "jpg", "quality": 92, "verified": false, "source": "淘宝 / 天猫主图规范：正方形，700 px 以上支持放大" } },
-    { "id": "jd", "name": { "zh-CN": "京东", "en": "JD.com" }, "region": "cn",
-      "export": { "width": 800, "height": 800, "background": "#FFFFFF", "format": "jpg", "quality": 92, "verified": false, "source": "京东商品主图规范：正方形" } },
-    { "id": "pinduoduo", "name": { "zh-CN": "拼多多", "en": "Pinduoduo" }, "region": "cn",
-      "export": { "width": 750, "height": 750, "background": "#FFFFFF", "format": "jpg", "quality": 92, "verified": false, "source": "拼多多商品轮播图规范：正方形 750 px" } },
-    { "id": "douyin", "name": { "zh-CN": "抖音电商", "en": "Douyin Shop" }, "region": "cn",
-      "export": { "width": 800, "height": 800, "background": "#FFFFFF", "format": "jpg", "quality": 92, "verified": false, "source": "抖店商品主图规范：1:1" } },
-    { "id": "xiaohongshu", "name": { "zh-CN": "小红书", "en": "Xiaohongshu" }, "region": "cn",
-      "export": { "width": 1080, "height": 1440, "background": "#FFFFFF", "format": "jpg", "quality": 92, "verified": false, "source": "小红书笔记图常用 3:4" } },
-    { "id": "amazon", "name": { "zh-CN": "亚马逊", "en": "Amazon" }, "region": "global",
-      "export": { "width": 2000, "height": 2000, "background": "#FFFFFF", "format": "jpg", "quality": 92, "verified": false, "source": "Amazon Seller Central product image requirements: main image on pure white (RGB 255, 255, 255); longest side 1000 px or more enables zoom" } },
-    { "id": "shopify", "name": { "zh-CN": "Shopify 独立站", "en": "Shopify" }, "region": "global",
-      "export": { "width": 2048, "height": 2048, "background": "#FFFFFF", "format": "jpg", "quality": 92, "verified": false, "source": "Shopify Help Center: 2048 x 2048 px square images recommended" } },
-    { "id": "tiktok-shop", "name": { "zh-CN": "TikTok Shop", "en": "TikTok Shop" }, "region": "global",
-      "export": { "width": 1000, "height": 1000, "background": "#FFFFFF", "format": "jpg", "quality": 92, "verified": false, "source": "TikTok Shop product image guidelines: 1:1, at least 600 px" } },
-    { "id": "ebay", "name": { "zh-CN": "eBay", "en": "eBay" }, "region": "global",
-      "export": { "width": 1600, "height": 1600, "background": "#FFFFFF", "format": "jpg", "quality": 92, "verified": false, "source": "eBay picture requirements: at least 500 px, 1600 px recommended" } }
+    {
+      "id": "taobao",
+      "name": {
+        "zh-CN": "淘宝 / 天猫",
+        "en": "Taobao / Tmall"
+      },
+      "region": "cn",
+      "export": {
+        "width": 800,
+        "height": 800,
+        "background": "#FFFFFF",
+        "format": "jpg",
+        "quality": 92,
+        "verified": false,
+        "source": "淘宝 / 天猫主图规范：正方形，700 px 以上支持放大"
+      }
+    },
+    {
+      "id": "jd",
+      "name": {
+        "zh-CN": "京东",
+        "en": "JD.com"
+      },
+      "region": "cn",
+      "export": {
+        "width": 800,
+        "height": 800,
+        "background": "#FFFFFF",
+        "format": "jpg",
+        "quality": 92,
+        "verified": false,
+        "source": "京东商品主图规范：正方形"
+      }
+    },
+    {
+      "id": "pinduoduo",
+      "name": {
+        "zh-CN": "拼多多",
+        "en": "Pinduoduo"
+      },
+      "region": "cn",
+      "export": {
+        "width": 750,
+        "height": 750,
+        "background": "#FFFFFF",
+        "format": "jpg",
+        "quality": 92,
+        "verified": false,
+        "source": "拼多多商品轮播图规范：正方形 750 px"
+      }
+    },
+    {
+      "id": "douyin",
+      "name": {
+        "zh-CN": "抖音电商",
+        "en": "Douyin Shop"
+      },
+      "region": "cn",
+      "export": {
+        "width": 800,
+        "height": 800,
+        "background": "#FFFFFF",
+        "format": "jpg",
+        "quality": 92,
+        "verified": false,
+        "source": "抖店商品主图规范：1:1"
+      }
+    },
+    {
+      "id": "xiaohongshu",
+      "name": {
+        "zh-CN": "小红书",
+        "en": "Xiaohongshu"
+      },
+      "region": "cn",
+      "export": {
+        "width": 1080,
+        "height": 1440,
+        "background": "#FFFFFF",
+        "format": "jpg",
+        "quality": 92,
+        "verified": false,
+        "source": "小红书笔记图常用 3:4"
+      }
+    },
+    {
+      "id": "amazon",
+      "name": {
+        "zh-CN": "亚马逊",
+        "en": "Amazon"
+      },
+      "region": "global",
+      "export": {
+        "width": 2000,
+        "height": 2000,
+        "background": "#FFFFFF",
+        "format": "jpg",
+        "quality": 92,
+        "verified": false,
+        "source": "Amazon Seller Central product image requirements: main image on pure white (RGB 255, 255, 255); longest side 1000 px or more enables zoom",
+        "require_white_background": true
+      }
+    },
+    {
+      "id": "shopify",
+      "name": {
+        "zh-CN": "Shopify 独立站",
+        "en": "Shopify"
+      },
+      "region": "global",
+      "export": {
+        "width": 2048,
+        "height": 2048,
+        "background": "#FFFFFF",
+        "format": "jpg",
+        "quality": 92,
+        "verified": false,
+        "source": "Shopify Help Center: 2048 x 2048 px square images recommended"
+      }
+    },
+    {
+      "id": "tiktok-shop",
+      "name": {
+        "zh-CN": "TikTok Shop",
+        "en": "TikTok Shop"
+      },
+      "region": "global",
+      "export": {
+        "width": 1000,
+        "height": 1000,
+        "background": "#FFFFFF",
+        "format": "jpg",
+        "quality": 92,
+        "verified": false,
+        "source": "TikTok Shop product image guidelines: 1:1, at least 600 px"
+      }
+    },
+    {
+      "id": "ebay",
+      "name": {
+        "zh-CN": "eBay",
+        "en": "eBay"
+      },
+      "region": "global",
+      "export": {
+        "width": 1600,
+        "height": 1600,
+        "background": "#FFFFFF",
+        "format": "jpg",
+        "quality": 92,
+        "verified": false,
+        "source": "eBay picture requirements: at least 500 px, 1600 px recommended"
+      }
+    }
   ]
 }
