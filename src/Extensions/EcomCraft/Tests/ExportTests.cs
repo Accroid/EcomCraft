@@ -65,7 +65,7 @@ public class ExportTests
     [Theory]
     [InlineData("红色 马克杯", "红色 马克杯")]
     [InlineData("../../etc", "_.._etc")]
-    [InlineData("a/b\c:d", "a_b_c_d")]
+    [InlineData("a/b\\c:d", "a_b_c_d")]
     [InlineData("   ", "product")]
     public void NamesAreSafe(string name, string expected)
     {

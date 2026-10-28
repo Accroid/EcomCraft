@@ -33,6 +33,7 @@ class SimpleMode {
     static cutting = false;
     static drag = null;
     static storageKey = 'ecomcraft.simple';
+    static quality = { min_side: 512, blur_variance: 30, min_cutout_ratio: 0.08 };
 
     /** The product rectangle on a canvas, the same math as Placement.Rect on the server: centered at (x, y) as fractions of the canvas,
      * longer side = size × the canvas's shorter side, aspect ratio kept. */
@@ -60,6 +61,72 @@ class SimpleMode {
             }
         }
         return transparent * 50 >= data.length / 4;
+    }
+
+    /** Variance of the 4-neighbour Laplacian over a grayscale copy, the classic sharpness score: blurry photos score low. */
+    static laplacianVariance(imageData) {
+        let width = imageData.width, height = imageData.height, data = imageData.data;
+        if (width < 3 || height < 3) {
+            return 0;
+        }
+        let gray = new Float64Array(width * height);
+        for (let i = 0; i < gray.length; i++) {
+            gray[i] = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
+        }
+        let sum = 0, sumSq = 0, count = 0;
+        for (let y = 1; y < height - 1; y++) {
+            for (let x = 1; x < width - 1; x++) {
+                let i = y * width + x;
+                let lap = 4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - width] - gray[i + width];
+                sum += lap;
+                sumSq += lap * lap;
+                count++;
+            }
+        }
+        if (!count) {
+            return 0;
+        }
+        let mean = sum / count;
+        return sumSq / count - mean * mean;
+    }
+
+    /** Share of pixels that are at least half opaque, as the product's share of a cut-out (0–1). */
+    static opaqueRatio(imageData) {
+        let data = imageData.data;
+        let opaque = 0;
+        for (let i = 3; i < data.length; i += 4) {
+            if (data[i] >= 128) {
+                opaque++;
+            }
+        }
+        return data.length ? opaque / (data.length / 4) : 1;
+    }
+
+    /** Upload quality issues of an original photo (F38): resolution below the configured minimum or a blurry picture.
+     * Each issue is { code, ... } and only leads to a warning; the user can always continue. */
+    static uploadIssues(width, height, imageData, quality) {
+        let q = quality || this.quality;
+        let issues = [];
+        let min = Number(q.min_side) || 512;
+        if (Math.min(width || 0, height || 0) < min) {
+            issues.push({ code: 'resolution', width, height, min_side: min });
+        }
+        let blur = q.blur_variance == null ? 30 : Number(q.blur_variance);
+        if (imageData && this.laplacianVariance(imageData) < blur) {
+            issues.push({ code: 'blur', threshold: blur });
+        }
+        return issues;
+    }
+
+    /** The cut-out issue when the product covers too little of the picture: [{ code: 'ratio', ratio }], or none. */
+    static cutoutIssues(imageData, quality) {
+        let q = quality || this.quality;
+        let min = q.min_cutout_ratio == null ? 0.08 : Number(q.min_cutout_ratio);
+        if (!imageData || !(min > 0)) {
+            return [];
+        }
+        let ratio = this.opaqueRatio(imageData);
+        return ratio < min ? [{ code: 'ratio', ratio, min }] : [];
     }
 
     /** Which views an account sees: everyone gets the simple mode; only administrators get the professional mode with sampler, LoRA and step settings. */
@@ -174,6 +241,7 @@ class SimpleMode {
                 this.api.request('EcomCraftStudioStyles', { language })
             ]);
             this.data.platforms = platforms.platforms || [];
+            this.quality = platforms.quality || this.quality;
             this.data.templates = templates.templates || [];
             this.data.styles = styles.styles || [];
             if (!this.data.styles.some(style => style.id == this.choice.style)) {
@@ -544,12 +612,17 @@ class SimpleMode {
                 canvas.height = Math.max(1, Math.round(image.naturalHeight * canvas.width / Math.max(1, image.naturalWidth)));
                 let context = canvas.getContext('2d');
                 context.drawImage(image, 0, 0, canvas.width, canvas.height);
-                if (this.hasTransparency(context.getImageData(0, 0, canvas.width, canvas.height))) {
+                let imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                // Quality checks (F38): warnings with suggestions, never a block; the photo is usable anyway.
+                this.product.qualityIssues = this.uploadIssues(image.naturalWidth, image.naturalHeight, imageData, this.quality);
+                if (this.hasTransparency(imageData)) {
                     this.product.cutout = this.product.data;
+                    this.product.qualityIssues = this.product.qualityIssues.concat(this.cutoutIssues(imageData, this.quality));
                 }
             }
             catch (error) {
                 // Without a readable preview the photo can still be used by templates that do not preserve the product.
+                this.product.qualityIssues = [];
             }
             this.renderCutout();
             let preview = this.api.$('simple-preview');
@@ -661,6 +734,20 @@ class SimpleMode {
             let source = product.data || await this.toDataUrl(product.source);
             let result = await this.api.request('EcomCraftStudioCutout', { product_image: source });
             product.cutout = result.cutout;
+            // A tiny cut-out means the photo was taken too far away (F38): suggest getting closer, but let the user continue.
+            try {
+                let image = await this.loadImage(product.cutout);
+                let canvas = document.createElement('canvas');
+                canvas.width = Math.min(512, image.naturalWidth);
+                canvas.height = Math.max(1, Math.round(image.naturalHeight * canvas.width / Math.max(1, image.naturalWidth)));
+                let context = canvas.getContext('2d');
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                let ratioIssues = this.cutoutIssues(context.getImageData(0, 0, canvas.width, canvas.height), this.quality);
+                product.qualityIssues = (product.qualityIssues || []).filter(issue => issue.code != 'ratio').concat(ratioIssues);
+            }
+            catch (error) {
+                // The cut-out is still usable when its preview cannot be read back.
+            }
             if (product.id) {
                 this.api.request('EcomCraftStudioProductUpdate', { product_id: product.id, cutout: result.cutout }).then(() => this.loadLibrary()).catch(() => {
                     // The cut-out is still used on this page; it just is not remembered for next time.
@@ -720,11 +807,35 @@ class SimpleMode {
         return '';
     }
 
+    /** The plain-language warning for one quality issue, with a suggestion; the user can always continue. */
+    static qualityText(issue) {
+        let tr = this.api.tr;
+        if (issue.code == 'resolution') {
+            return tr('这张图只有 {0}×{1} 像素，建议上传短边至少 {2} 像素的图，否则细节会模糊。也可以继续使用。', issue.width, issue.height, issue.min_side);
+        }
+        if (issue.code == 'blur') {
+            return tr('这张图看起来有些模糊，建议对准商品重新拍一张。也可以继续使用。');
+        }
+        return tr('抠图后商品只占画面约 {0}%，建议拍得更近一些，让商品占满画面。也可以继续使用。', Math.round((issue.ratio || 0) * 100));
+    }
+
+    /** Shows the current product's quality warnings under the upload step; empty when there is nothing to complain about. */
+    static renderQuality() {
+        if (!this.api) {
+            return;
+        }
+        let box = this.api.$('simple-quality');
+        let issues = this.product && this.product.qualityIssues ? this.product.qualityIssues : [];
+        box.replaceChildren(...issues.map(issue => this.api.el('p', '', this.qualityText(issue))));
+        box.hidden = !issues.length;
+    }
+
     /** Enables the buttons and shows what is missing. */
     static update() {
         if (!this.api) {
             return;
         }
+        this.renderQuality();
         let blocker = this.blocker();
         this.api.$('simple-generate').disabled = Boolean(blocker);
         let set = this.setTemplates();

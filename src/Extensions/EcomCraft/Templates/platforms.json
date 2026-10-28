@@ -1,6 +1,12 @@
 {
   "version": 2,
   "note": "Export presets come from commonly published platform guidelines and must be checked against the platforms' current official rules before use (N06). Set verified to true after checking. Administrators can override this file with Data/EcomCraft/platforms.json.",
+  "upload_quality": {
+    "note": "Upload quality checks (F38): photos below min_side pixels, under blur_variance (Laplacian variance) or cut-outs with less than min_cutout_ratio opaque pixels get a plain warning with a suggestion; the user can still continue.",
+    "min_side": 512,
+    "blur_variance": 30.0,
+    "min_cutout_ratio": 0.08
+  },
   "platforms": [
     {
       "id": "taobao",

@@ -63,6 +63,33 @@ public static class TemplateStore
         }
     }
 
+    /// <summary>The upload quality thresholds of the platform file (F38): minimum side in pixels, Laplacian-variance floor for sharpness and the smallest
+    /// share of opaque pixels accepted in a cut-out. Defaults apply when the file names none.</summary>
+    public static (int MinSide, double BlurVariance, double MinCutoutRatio) UploadQuality()
+    {
+        try
+        {
+            string custom = Path.Combine(Program.DataDir, "EcomCraft", "platforms.json");
+            string file = File.Exists(custom) ? custom : Path.Combine(Path.GetDirectoryName(BuiltinDir) ?? "", "platforms.json");
+            if (!File.Exists(file))
+            {
+                return Default;
+            }
+            JObject quality = JObject.Parse(File.ReadAllText(file))["upload_quality"] as JObject;
+            return (
+                Math.Clamp(quality?.Value<int?>("min_side") ?? Default.MinSide, 64, 8192),
+                Math.Clamp(quality?.Value<double?>("blur_variance") ?? Default.BlurVariance, 0, 10_000),
+                Math.Clamp(quality?.Value<double?>("min_cutout_ratio") ?? Default.MinCutoutRatio, 0, 1));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return Default;
+        }
+    }
+
+    /// <summary>Default upload quality thresholds, used whenever the platform file does not override them.</summary>
+    public static (int MinSide, double BlurVariance, double MinCutoutRatio) Default => (512, 30.0, 0.08);
+
     /// <summary>Folder holding a template's example image.</summary>
     public static string ImageDir(string source) => source == "builtin" ? BuiltinDir : CustomImageDir;
 

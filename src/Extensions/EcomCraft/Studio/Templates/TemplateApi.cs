@@ -83,7 +83,12 @@ public static class TemplateApi
             Dictionary<string, string> names = platform["name"].ToObject<Dictionary<string, string>>() ?? [];
             platforms.Add(new JObject() { ["id"] = platform["id"]?.ToString(), ["name"] = EcomTemplate.Pick(names, language), ["region"] = platform["region"]?.ToString() ?? "" });
         }
-        return Task.FromResult(new JObject() { ["platforms"] = platforms });
+        (int minSide, double blur, double ratio) = TemplateStore.UploadQuality();
+        return Task.FromResult(new JObject()
+        {
+            ["platforms"] = platforms,
+            ["quality"] = new JObject() { ["min_side"] = minSide, ["blur_variance"] = blur, ["min_cutout_ratio"] = ratio }
+        });
     }
 
     /// <summary>Templates this account can run now, with the resolved snapshot ID and the snapshot's image field for the product photo (null when there is none).</summary>
