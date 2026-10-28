@@ -10,10 +10,12 @@
     <Compile Include="../../../GlobalUsings.cs" Link="GlobalUsings.cs" />
     <Compile Include="../Studio/Generation/SchedulerRules.cs" Link="SchedulerRules.cs" />
     <Compile Include="../Studio/Storage/StorageRules.cs" Link="StorageRules.cs" />
+    <Compile Include="../Studio/Templates/EcomTemplate.cs" Link="EcomTemplate.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
 </Project>

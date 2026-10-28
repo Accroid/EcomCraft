@@ -66,7 +66,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 | API | Catalog / templates | Returns template names, sample images and adjustable fields (minimal disclosure) | Extends the existing `EcomCraftStudioCatalog` |
 | | Generation / image sets | Accepts "template ID + product + platform + description" | Extends the existing `EcomCraftStudioGenerate` |
 | | Queue / gallery / export / review / admin | — | Queue and review implemented |
-| Domain services | Templates and image sets | Template = published review snapshot + e-commerce information (Chinese and English names, sample images, target platforms); image set = a group of templates | Planned, built on the existing `WorkflowReview` |
+| Domain services | Templates and image sets | Template = published review snapshot + e-commerce information (Chinese and English names, sample images, target platforms); image set = a group of templates | Template data structure and management APIs implemented (`Studio/Templates/`) |
 | | Prompt service | One-sentence description + style → MagicPrompt → English prompt; its output may only fill prompt text fields | Planned, wraps the existing MagicPrompt |
 | | Generation orchestration | Expands image sets and batches into tasks; per-user limits; tracks the status of each image | Planned |
 | | Scheduling | Rule 1: choose the runnable executor with the shortest queue; the executor abstraction reserves cloud types | Requirements step 4; `ExecutionServers` provides the base |

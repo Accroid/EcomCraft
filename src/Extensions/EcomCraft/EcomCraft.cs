@@ -1,6 +1,7 @@
 using EcomCraftStudio.MagicPrompt.WebAPI;
 using EcomCraftStudio.Studio;
 using EcomCraftStudio.Studio.Storage;
+using EcomCraftStudio.Studio.Templates;
 using SwarmUI.Text2Image;
 using SwarmUI.Accounts;
 using SwarmUI.Core;
@@ -69,11 +70,15 @@ public class EcomCraft : Extension
         API.RegisterAPICall(StorageApi.EcomCraftStorageSave, true, Permissions.EditServerSettings);
         API.RegisterAPICall(StorageApi.EcomCraftStorageMigrate, true, Permissions.EditServerSettings);
         API.RegisterAPICall(StorageApi.EcomCraftStoragePending, false, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateAdminList, false, PermReviewWorkflows);
+        API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateSave, true, PermReviewWorkflows);
+        API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateDelete, true, PermReviewWorkflows);
         T2IEngine.AltBackendValidators.Add(StudioApi.ValidateExecutionBackend);
         T2IEngine.PreGenerateEvent += StudioApi.PrepareNativeWorkflowSeeds;
         ComfyUIAPIAbstractBackend.QueueProgressObserved += StudioApi.ObserveComfyProgress;
         WorkflowDiscovery.Start();
         WorkSync.Start();
+        TemplateStore.Init(FilePath);
     }
 
     /// <inheritdoc/>
