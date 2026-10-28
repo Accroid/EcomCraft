@@ -33,7 +33,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 | A8 | Within the platform, works are visible only to their owner; the storage layer is not isolated. See D9 in the requirements. |
 | A9 | We will not take image orders ourselves to validate demand; instead, 3–5 seed teams will try the MVP after release. |
 | A10 | Single server first: the MVP is deployed and accepted as "one platform server that is also the execution server". The architecture and code for multi-server access, scheduling and storage remain in place; multi-machine testing (F28 / T33, N08) is deferred until a customer asks for it or the test environment is ready. |
-| A11 | Both reference-image paths are open (F59): "borrow the composition" (prompt reference) and "scene reference" (image-to-image) are both offered, the latter needing the administrator to install an image-to-image model (N10); the goal is restoring the feel of layout and light, never a 1:1 copy; each reference generates its own image (cap 8, mutually exclusive with storyboards); references are temporary and never stored. |
+| A11 | Both reference-image paths are open (F59): "borrow the composition" (prompt reference) and "scene reference" (image-to-image) are both offered, the latter needing the administrator to install an image-to-image model (N10); the goal is restoring the feel of layout and light, never a 1:1 copy. Reference mode is standalone: once references are uploaded the other step-2 options stop applying, per-reference prompts are shown and editable, and each reference makes exactly one image (cap 8, mutually exclusive with storyboards); references are temporary and never stored. |
 
 ## 3. Deployment Topology
 
