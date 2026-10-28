@@ -11,6 +11,7 @@
     <Compile Include="../Studio/Generation/SchedulerRules.cs" Link="SchedulerRules.cs" />
     <Compile Include="../Studio/Storage/StorageRules.cs" Link="StorageRules.cs" />
     <Compile Include="../Studio/Templates/EcomTemplate.cs" Link="EcomTemplate.cs" />
+    <Compile Include="../Studio/Prompting/PromptRules.cs" Link="PromptRules.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />

@@ -6,6 +6,7 @@ using EcomCraftStudio.MagicPrompt.WebAPI;
 using EcomCraftStudio.Studio.Generation;
 using EcomCraftStudio.Studio.Storage;
 using EcomCraftStudio.Studio.Templates;
+using EcomCraftStudio.Studio.Prompting;
 using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
@@ -646,13 +647,34 @@ public static class StudioApi
         string requestedTemplate = rawInput["template_id"]?.Type == JTokenType.String ? rawInput.Value<string>("template_id") : null;
         if (!string.IsNullOrWhiteSpace(requestedTemplate))
         {
+            // Without a prompt, a style and one-line description are turned into the prompt here, so the model's answer can only become prompt text (F37).
+            JObject templateInput = rawInput;
+            PromptService.Composed composed = null;
+            string description = rawInput["description"]?.Type == JTokenType.String ? rawInput.Value<string>("description").Trim() : "";
+            string styleId = rawInput["style_id"]?.Type == JTokenType.String ? rawInput.Value<string>("style_id") : "";
+            if (string.IsNullOrWhiteSpace(rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : null) && (description.Length > 0 || styleId.Length > 0))
+            {
+                if (description.Length > PromptService.MaxDescriptionLength)
+                {
+                    return Error($"描述最多 {PromptService.MaxDescriptionLength} 个字符。", "invalid_prompt");
+                }
+                composed = await PromptService.ComposeAsync(session, styleId, description, null);
+                templateInput = (JObject)rawInput.DeepClone();
+                templateInput["prompt"] = composed.Prompt;
+            }
             // The template decides the workflow and presets; the client's own workflow_id and workflow_params are replaced.
-            JObject resolved = TemplateApi.Resolve(session, rawInput, requestedTemplate, out JObject templateError);
+            JObject resolved = TemplateApi.Resolve(session, templateInput, requestedTemplate, out JObject templateError);
             if (resolved is null)
             {
                 return templateError;
             }
-            return await GeneratePublishedWorkflow(session, resolved, resolved.Value<string>("workflow_id"), pinnedServer, requestedTemplate);
+            JObject templateResult = await GeneratePublishedWorkflow(session, resolved, resolved.Value<string>("workflow_id"), pinnedServer, requestedTemplate);
+            if (composed?.NoticeCode is not null && !templateResult.ContainsKey("error"))
+            {
+                templateResult["prompt_notice"] = composed.Notice;
+                templateResult["prompt_notice_code"] = composed.NoticeCode;
+            }
+            return templateResult;
         }
         string requestedWorkflow = (string)rawInput["workflow_id"];
         if (!string.IsNullOrWhiteSpace(requestedWorkflow))

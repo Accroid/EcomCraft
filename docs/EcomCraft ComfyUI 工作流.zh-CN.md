@@ -140,6 +140,8 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行�
 
 可读取 `POST /API/EcomCraftStudioTemplates`（可选 `language` 为 `zh-CN` 或 `en`）获取当前账号能运行的电商场景模板：`templates[]` 只含 `id`、`name`、`description`、`example_image`（模板示例图地址）、`kind`、`platforms`、`sets` 和 `fields`（允许修改的参数，格式同工作流的 `inputs`）；不能运行的模板列在 `hidden[]`，`reason` 为 `invalid`（模板配置无效）或 `unavailable`（没有在线服务器能运行，或账号无权使用其中的模型），审核人还会收到 `detail` 说明。按模板生成时，向 `EcomCraftStudioGenerate` 提交 `template_id` 和可选的 `template_params`（参数 ID 到值，只能是模板的 `fields`），以及 `prompt`、`negativeprompt`、`images` 等普通字段；服务端把模板解析成已发布快照、预设参数和提示词片段，再按快照白名单校验，客户端提交的 `workflow_id` 和 `workflow_params` 会被忽略。模板不可用时返回 `invalid_template` 或 `no_execution_server`，作品元数据记录 `ecomcraft_template`。
 
+提示词服务：`EcomCraftStudioStyles`（可选 `language`）返回可选的视觉风格（`id`、`name`、`description`）；`EcomCraftStudioComposePrompt`（`style_id`、`description`，可选 `product_image`）把风格和一句话描述（中文或英文）通过已配置的提示词优化模型变成英文提示词，返回 `prompt`、`source`（`model` 或 `template`），模型不可用或 45 秒内没有回应时退回风格默认描述并返回 `notice` 和 `notice_code`（`description_used` 表示直接用了英文描述，`description_unused` 表示中文描述这次没有用上）。按模板生成时也可以不填 `prompt`，改为提交 `description` 和 `style_id`，由服务端组成提示词，响应中带 `prompt_notice` / `prompt_notice_code`。模型的回答只会作为提示词文字：服务端去掉原生指令、通配符、引号和多余段落，不能影响工作流、参数或执行服务器。把商品图发给视觉模型描述商品的功能默认关闭，只有拥有服务器设置权限的管理员能通过 `EcomCraftPromptSettings`（`vision_enabled` 为 `true` / `false`）开启，接口同时返回图片会发送到的服务商（`vision_provider`）和模型。
+
 原生导入项额外返回 `native: true` 和 `defaults`。`inputs[].form` 标记绑定到标准页面字段的参数（如 `width`、`seed`）；其余输入通过 `workflow_params` 提交。省略标准字段时使用相应已发布参数或保存的默认值，同时提供时以标准字段为准。原生项无需提交根级 `model`，模型修改通过 `inputs` 中模型下拉框的 ID 提交，服务端仅接受公布的选项；参数 ID 是不透明标识，客户端不要自行构造。
 
 ## 安全边界

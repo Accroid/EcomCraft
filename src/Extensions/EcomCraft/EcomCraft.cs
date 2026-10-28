@@ -2,6 +2,7 @@ using EcomCraftStudio.MagicPrompt.WebAPI;
 using EcomCraftStudio.Studio;
 using EcomCraftStudio.Studio.Storage;
 using EcomCraftStudio.Studio.Templates;
+using EcomCraftStudio.Studio.Prompting;
 using SwarmUI.Text2Image;
 using SwarmUI.Accounts;
 using SwarmUI.Core;
@@ -71,6 +72,9 @@ public class EcomCraft : Extension
         API.RegisterAPICall(StorageApi.EcomCraftStorageMigrate, true, Permissions.EditServerSettings);
         API.RegisterAPICall(StorageApi.EcomCraftStoragePending, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(TemplateApi.EcomCraftStudioTemplates, false, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(PromptService.EcomCraftStudioStyles, false, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(PromptService.EcomCraftStudioComposePrompt, false, Permissions.BasicImageGeneration);
+        API.RegisterAPICall(PromptService.EcomCraftPromptSettings, true, Permissions.EditServerSettings);
         API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateAdminList, false, PermReviewWorkflows);
         API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateSave, true, PermReviewWorkflows);
         API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateDelete, true, PermReviewWorkflows);
@@ -80,6 +84,7 @@ public class EcomCraft : Extension
         WorkflowDiscovery.Start();
         WorkSync.Start();
         TemplateStore.Init(FilePath);
+        PromptService.Init(FilePath);
     }
 
     /// <inheritdoc/>
