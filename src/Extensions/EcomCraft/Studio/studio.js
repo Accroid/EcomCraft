@@ -2504,6 +2504,89 @@
         }
     }
 
+    /** Models and nodes each template needs, their commercial-use license status and the servers that lack them (F08). Reviewers only. */
+    class TemplateRequirementsView {
+        static licenseLabels = { allowed: '允许商用', forbidden: '禁止商用', unknown: '许可未知' };
+
+        /** Reads the requirements and renders them; hides the section for accounts that do not review. */
+        static async load() {
+            $('requirements-section').hidden = !WorkflowReviewView.reviewer();
+            if ($('requirements-section').hidden) {
+                return;
+            }
+            try {
+                let result = await request('EcomCraftTemplateRequirements');
+                this.render(Array.isArray(result.templates) ? result.templates : [], Array.isArray(result.servers) ? result.servers : []);
+            }
+            catch (error) {
+                $('requirements-list').replaceChildren();
+                $('requirements-empty').hidden = false;
+                $('requirements-empty').textContent = error.message || tr('模板所需模型读取失败，请稍后重试。');
+            }
+        }
+
+        /** Names the servers in a missing_on list, e.g. "缺少：本机 #0、服务器 #2". */
+        static missingText(ids, servers) {
+            if (!servers.some(server => server.checked)) {
+                return tr('还没有能检查的执行服务器');
+            }
+            let names = [];
+            for (let server of servers) {
+                if ((ids || []).includes(server.id)) {
+                    names.push(server.name);
+                }
+            }
+            return names.length ? tr('缺少：{0}', names.join(tr('、'))) : tr('各服务器都已安装');
+        }
+
+        /** Builds a link element when the URL is http(s); the server already validated it. */
+        static link(url, label) {
+            if (!/^https?:\/\//i.test(url || '')) {
+                return null;
+            }
+            let a = el('a', '', label);
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            return a;
+        }
+
+        /** Renders one row per template with each model and node. */
+        static render(templates, servers) {
+            let list = $('requirements-list');
+            list.replaceChildren();
+            for (let template of templates) {
+                let row = el('li', 'review-item');
+                let main = el('div', 'review-item-main');
+                main.append(el('strong', '', template.name || template.id));
+                let models = Array.isArray(template.models) ? template.models : [];
+                let nodes = Array.isArray(template.nodes) ? template.nodes : [];
+                if (!models.length && !nodes.length) {
+                    main.append(el('span', '', '模板没有声明所需模型和节点。'));
+                }
+                for (let model of models) {
+                    let line = el('span');
+                    let warn = model.commercial != 'allowed';
+                    line.append(el('span', `review-state${warn ? ' is-attention' : ''}`, this.licenseLabels[model.commercial] || '许可未知'),
+                        document.createTextNode(tr('，{0}，安装到 ComfyUI/models/{1}，{2}', model.name, model.folder, this.missingText(model.missing_on, servers))));
+                    for (let anchor of [this.link(model.license_url, '许可'), this.link(model.download_url, '下载')]) {
+                        if (anchor) {
+                            line.append(document.createTextNode(' '), anchor);
+                        }
+                    }
+                    main.append(line);
+                }
+                for (let node of nodes) {
+                    main.append(el('span', '', tr('节点 {0}，{1}', node.name, this.missingText(node.missing_on, servers))));
+                }
+                row.append(main);
+                list.append(row);
+            }
+            $('requirements-empty').hidden = templates.length > 0;
+            $('requirements-empty').textContent = '还没有模板。';
+        }
+    }
+
     /** Single and batch deletion of the current user's gallery files through the native DeleteImage API. */
     class GallerySelection {
         static active = false;
@@ -2738,6 +2821,7 @@
                 $('workflows-message').hidden = true;
                 $('workflows-updated').textContent = tr('共 {0} 个，更新于 {1}', this.items.length, new Intl.DateTimeFormat(I18n.locale(), { timeStyle: 'medium' }).format(new Date()));
                 this.render();
+                TemplateRequirementsView.load();
             }
             catch (error) {
                 this.showBanner(error.message || '工作流列表读取失败，请稍后重试。', true);

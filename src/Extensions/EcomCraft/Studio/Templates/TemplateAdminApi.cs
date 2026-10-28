@@ -1,6 +1,8 @@
 using System.IO;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
+using SwarmUI.Backends;
+using SwarmUI.Builtin_ComfyUIBackend;
 using SwarmUI.Utils;
 using SwarmUI.WebAPI;
 
@@ -40,6 +42,58 @@ public static class TemplateAdminApi
             });
         }
         return Task.FromResult(new JObject() { ["templates"] = items });
+    }
+
+    [API.APIDescription("List the models and nodes each template needs, each model's commercial-use license status, and which execution servers lack them. Servers are given by ID and name only. Requires the review permission.", "servers: [{ id: 0, name: \"本机 #0\", checked: true }], templates: [{ id: \"scene\", models: [{ name, folder, commercial, missing_on: [0] }], nodes: [{ name, missing_on: [] }] }]")]
+    public static Task<JObject> EcomCraftTemplateRequirements(Session session)
+    {
+        if (!CanManage(session))
+        {
+            return Task.FromResult(StudioApi.Error("此账号没有管理模板的权限。", "bad_permissions"));
+        }
+        JArray servers = new();
+        List<(int Id, HashSet<string> Models, HashSet<string> Nodes)> inventories = [];
+        foreach (BackendHandler.T2IBackendData data in ExecutionServers.All)
+        {
+            JObject schema = ExecutionServers.Schema(data);
+            servers.Add(new JObject() { ["id"] = data.ID, ["name"] = ExecutionServers.DisplayName(data), ["checked"] = schema is not null });
+            if (schema is not null)
+            {
+                inventories.Add((data.ID, RequirementRules.OfferedModels(schema), (data.Backend as ComfyUIAPIAbstractBackend)?.NodeTypes ?? []));
+            }
+        }
+        JArray templates = new();
+        foreach (TemplateStore.Entry entry in TemplateStore.All().Where(entry => entry.Template is not null))
+        {
+            JArray models = new();
+            foreach (ModelRequirement model in entry.Template.RequiredModels)
+            {
+                JArray missing = new(inventories.Where(server => RequirementRules.MissingModels([model], server.Models).Count > 0).Select(server => server.Id));
+                models.Add(new JObject()
+                {
+                    ["name"] = model.Name,
+                    ["folder"] = model.Folder,
+                    ["commercial"] = model.Commercial,
+                    ["license_url"] = model.LicenseUrl,
+                    ["download_url"] = model.DownloadUrl,
+                    ["missing_on"] = missing
+                });
+            }
+            JArray nodes = new();
+            foreach (string node in entry.Template.RequiredNodes)
+            {
+                nodes.Add(new JObject() { ["name"] = node, ["missing_on"] = new JArray(inventories.Where(server => !server.Nodes.Contains(node)).Select(server => server.Id)) });
+            }
+            templates.Add(new JObject()
+            {
+                ["id"] = entry.Id,
+                ["source"] = entry.Source,
+                ["name"] = EcomTemplate.Pick(entry.Template.Name, "zh-CN"),
+                ["models"] = models,
+                ["nodes"] = nodes
+            });
+        }
+        return Task.FromResult(new JObject() { ["servers"] = servers, ["templates"] = templates });
     }
 
     [API.APIDescription("Add or replace an administrator template. The template must pass structure checks and reference a published snapshot with whitelisted parameters; example_image_data may carry a PNG, JPEG or WebP data URL. Requires the review permission. rawInput is the root request JSON.", "success: true")]

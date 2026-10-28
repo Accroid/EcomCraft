@@ -90,6 +90,7 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行�
 - `prompt`：加在用户描述前后的提示词片段和排除内容；不能包含 `<…>` 指令或 `__通配符__`。
 - `execution_plans`：本期每个模板必须有且只有一个本地方案（`kind` 为 `local`），`workflow` 是已发布快照的 ID。`presets` 固定快照参数的值，不能预设提示词或图片；`user_fields` 是允许用户修改的参数，必须是审核时未隐藏、且没有预设的参数。云端方案（`cloud_comfy`、`cloud_model_api`）是预留类型，本期会被拒绝。
 - `preserve_product`（可选，默认 `false`）：商品保真。开启后，用户上传的商品图必须是去掉背景的透明 PNG 或 WebP；平台在本地把商品按位置放到输出尺寸的白色画布上，作为模板的商品图参数；生成完成后再按同一位置把原商品像素贴回每张结果（边缘向内羽化 2 像素），覆写已保存的作品并保留其中的元数据，因此商品的 Logo、文字和形状不会被生成改动。开启时模板必须把一个图片参数开放给用户。位置可由请求中的 `placement`（`x`、`y` 为商品中心占画面宽高的比例，0–1；`size` 为商品长边占画面短边的比例，0.1–1.5）指定，默认居中、0.7。工作流不需要输出商品蒙版；抠图结果只保存在内存中，最多两小时。
+- `requirements`（可选）：模板所需的模型和节点。`models` 每项为 `{ name, folder, commercial, license_url, download_url }`：`name` 是模型文件名（可带子目录，不能含 `..` 或反斜杠），`folder` 是 ComfyUI `models` 下的目录（如 `checkpoints`、`loras`、`vae`），`commercial` 为商用许可状态 `allowed`（允许）、`forbidden`（禁止）或 `unknown`（未知，缺省值），两个链接只能是 http 或 https。`nodes` 是 ComfyUI 节点类名列表。模型由管理员在每台服务器上手动安装（假设 A2），平台不跨服务器下载。
 - `cutout_only_platforms`（可选）：在这些平台上不调用生成模型，只把商品抠图居中放到纯白（RGB 255,255,255）背景上，商品长边约占画面短边的 85%，尺寸取该平台的导出规格（没有时 2000×2000），作为作品保存在画廊。内置白底主图对 `amazon` 开启。请求需带 `platform`。这样的作品标记为纯抠图，导出时不写 AI 生成标记。
 - `categories`（品类预设）和 `brand_kit`（品牌资料包）是预留字段，`brand_kit` 本期须为 `null`。
 
@@ -97,7 +98,7 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行�
 
 内置模板随版本发布，放在扩展目录 `Templates/builtin/`（每个文件一个模板，示例图放在同一目录）；管理员自定义的模板保存在 `Data/EcomCraft/templates.json`，示例图在 `Data/EcomCraft/template-images/`，两者分开存放，升级不会覆盖自定义模板。自定义模板不能使用内置模板的 ID。
 
-不合格的模板不会提供给用户，原因记录在服务器日志中，并通过管理接口返回。引用的快照被下架、参数被隐藏或预设值超出范围时，模板也会显示为不可用。管理接口需要审核权限（`ecomcraft_review_workflows`）：`EcomCraftTemplateAdminList` 列出所有模板及不可用原因，`EcomCraftTemplateSave` 新增或替换自定义模板（`template` 为模板 JSON，可选 `example_image_data` 为不超过 2 MB 的 PNG、JPEG 或 WebP 图片），`EcomCraftTemplateDelete` 删除自定义模板。
+不合格的模板不会提供给用户，原因记录在服务器日志中，并通过管理接口返回。引用的快照被下架、参数被隐藏或预设值超出范围时，模板也会显示为不可用。管理接口需要审核权限（`ecomcraft_review_workflows`）：`EcomCraftTemplateAdminList` 列出所有模板及不可用原因，`EcomCraftTemplateSave` 新增或替换自定义模板（`template` 为模板 JSON，可选 `example_image_data` 为不超过 2 MB 的 PNG、JPEG 或 WebP 图片），`EcomCraftTemplateDelete` 删除自定义模板。`EcomCraftTemplateRequirements` 列出每个模板所需的模型和节点、每个模型的商用许可状态以及哪些执行服务器缺少它们（按服务器 ObjectInfo 中的模型文件和节点比对，服务器只给 ID 和名称）；工作流页面的“模板所需模型与商用许可”区域显示这些信息，“禁止商用”和“许可未知”会突出提示。
 
 ## 局域网执行服务器
 
