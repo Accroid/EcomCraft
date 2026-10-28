@@ -1,0 +1,37 @@
+{
+  "id": "detail",
+  "name": {
+    "zh-CN": "细节图",
+    "en": "Detail close-up"
+  },
+  "description": {
+    "zh-CN": "突出材质、做工或功能细节的近景图；保留原商品像素。",
+    "en": "A close-up that highlights material, craftsmanship or functional details; keeps the original product pixels."
+  },
+  "example_image": null,
+  "platforms": [
+    "*"
+  ],
+  "sets": [
+    "standard"
+  ],
+  "prompt": {
+    "prefix": "macro close-up product photography highlighting texture and craftsmanship,",
+    "suffix": "crisp focus, soft studio lighting, clean background",
+    "negative": "text, watermark, blur, noise, deformed details"
+  },
+  "preserve_product": true,
+  "categories": [],
+  "brand_kit": null,
+  "execution_plans": [
+    {
+      "kind": "local",
+      "workflow": "*/ecomcraft/detail",
+      "presets": {},
+      "user_fields": [
+        "@image"
+      ]
+    }
+  ],
+  "enabled": true
+}

@@ -94,7 +94,21 @@ public static class TemplateStore
             return entry.Errors;
         }
         ExecutionPlan plan = entry.Template.LocalPlan;
-        return TemplateValidator.CheckPlan(plan, SnapshotParameters(plan.Workflow), entry.Template.PreserveProduct);
+        return TemplateValidator.CheckPlan(plan, SnapshotParameters(WorkflowIdFor(plan)), entry.Template.PreserveProduct);
+    }
+
+    /// <summary>The published snapshot a plan runs. "*/path" picks the first published snapshot (by ID) whose path after the server name matches,
+    /// so built-in templates can name a conventional workflow without knowing the server; null when none is published.</summary>
+    public static string WorkflowIdFor(ExecutionPlan plan)
+    {
+        if (plan?.Workflow is null || !plan.Workflow.StartsWith(TemplateValidator.AnyServerPrefix, StringComparison.Ordinal))
+        {
+            return plan?.Workflow;
+        }
+        string path = plan.Workflow[TemplateValidator.AnyServerPrefix.Length..];
+        return WorkflowReview.All().Where(pair => pair.Value.Snapshot is not null && pair.Key.Contains('/')
+                && pair.Key[(pair.Key.IndexOf('/') + 1)..].Equals(path, StringComparison.OrdinalIgnoreCase) && WorkflowReview.IsPublished(pair.Key))
+            .Select(pair => pair.Key).Order(StringComparer.OrdinalIgnoreCase).FirstOrDefault();
     }
 
     /// <summary>Parameter definitions of a published snapshot, or null when the ID is not a published EcomCraft snapshot.</summary>
@@ -218,7 +232,7 @@ public static class TemplateStore
         {
             return string.Join(" ", errors);
         }
-        List<string> problems = TemplateValidator.CheckPlan(template.LocalPlan, SnapshotParameters(template.LocalPlan.Workflow), template.PreserveProduct);
+        List<string> problems = TemplateValidator.CheckPlan(template.LocalPlan, SnapshotParameters(WorkflowIdFor(template.LocalPlan)), template.PreserveProduct);
         if (problems.Count > 0)
         {
             return string.Join(" ", problems);

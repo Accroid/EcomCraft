@@ -1,0 +1,37 @@
+{
+  "id": "white-main",
+  "name": {
+    "zh-CN": "白底主图",
+    "en": "White background main image"
+  },
+  "description": {
+    "zh-CN": "纯白背景、商品居中，适合各平台主图；保留原商品像素。",
+    "en": "Pure white background with the product centered, for main images on any platform; keeps the original product pixels."
+  },
+  "example_image": null,
+  "platforms": [
+    "*"
+  ],
+  "sets": [
+    "standard"
+  ],
+  "prompt": {
+    "prefix": "professional e-commerce product photo on a pure white background,",
+    "suffix": "evenly lit, soft natural shadow, centered composition, high detail",
+    "negative": "text, watermark, logo overlay, props, colored background, busy background"
+  },
+  "preserve_product": true,
+  "categories": [],
+  "brand_kit": null,
+  "execution_plans": [
+    {
+      "kind": "local",
+      "workflow": "*/ecomcraft/white-main",
+      "presets": {},
+      "user_fields": [
+        "@image"
+      ]
+    }
+  ],
+  "enabled": true
+}
