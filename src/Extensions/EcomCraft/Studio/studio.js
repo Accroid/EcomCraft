@@ -51,7 +51,7 @@
         'no_execution_server','execution_server_unavailable','invalid_execution_server','queue_limit',
         'workflow_state','invalid_review','review_save_failed',
         'invalid_storage_path','storage_check_failed','storage_save_failed','invalid_storage_action',
-        'invalid_template','template_image_failed','prompt_settings_failed','cutout_failed','product_save_failed','invalid_export','export_failed',
+        'invalid_template','template_image_failed','prompt_settings_failed','cutout_failed','product_save_failed','invalid_export','export_failed','diagnostics_failed',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
     const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
 
@@ -709,6 +709,7 @@
             $('avatar').textContent = String(catalog.user_name || 'E').slice(0, 1).toUpperCase();
             $('enhancer-settings').hidden = !catalog.can_manage_settings;
             $('storage-open').hidden = !catalog.can_manage_settings;
+            $('diagnostics-open').hidden = !catalog.can_manage_settings;
             // The professional mode (sampler, LoRA, steps and other parameters) is for administrators only; everyone else uses the simple mode.
             let access = SimpleMode.viewAccess(catalog);
             $('nav-create').hidden = !access.pro;
@@ -4163,6 +4164,29 @@
         $('review-unpublish').addEventListener('click', () => WorkflowReviewView.decide('unpublish'));
         $('submit-close').addEventListener('click', () => WorkflowReviewView.closeSubmit());
         $('storage-open').addEventListener('click', () => StorageSettingsView.open($('storage-open')));
+        $('diagnostics-open').addEventListener('click', async () => {
+            let button = $('diagnostics-open');
+            button.disabled = true;
+            try {
+                let result = await request('EcomCraftDiagnostics');
+                if (result.download) {
+                    let link = document.createElement('a');
+                    link.href = result.download;
+                    link.download = result.file_name || 'ecomcraft-diagnostics.zip';
+                    document.body.append(link);
+                    link.click();
+                    link.remove();
+                }
+            }
+            catch (error) {
+                let message = $('gallery-message');
+                message.textContent = error.message || tr('诊断包没有生成，请稍后重试。');
+                message.hidden = false;
+            }
+            finally {
+                button.disabled = false;
+            }
+        });
         $('storage-close').addEventListener('click', () => StorageSettingsView.close());
         $('storage-cancel').addEventListener('click', () => StorageSettingsView.close());
         $('storage-backdrop').addEventListener('click', () => StorageSettingsView.close());

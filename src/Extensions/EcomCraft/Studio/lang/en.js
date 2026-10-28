@@ -606,6 +606,9 @@ window.EcomCraftLanguages.en = {
 
     // Work storage (administrators)
     "存储设置": "Storage settings",
+    "下载诊断包": "Download diagnostics",
+    "诊断包没有生成，请稍后重试。": "The diagnostics package was not created. Try again later.",
+    "error:diagnostics_failed": "The diagnostics package was not created. Try again later.",
     "作品存储": "Work storage",
     "作品总是先保存在平台服务器本机，再在后台复制到作品库；作品库离线不影响生成。": "Works are always saved on the platform server first, then copied to the work library in the background; an offline library never blocks generation.",
     "作品库位置": "Work library location",
