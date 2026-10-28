@@ -163,6 +163,8 @@ Operations APIs (administrators): `EcomCraftDiagnostics` builds a diagnostics zi
 
 Disk space: the free space of the platform server's output folder and the work library is checked in the background (thresholds in the storage settings: 10 GB warning and 2 GB critical by default, 0 disables). When critically low, `EcomCraftStudioGenerate` and `EcomCraftStudioGenerateSet` reject with `disk_full`; `EcomCraftStudioQueue` additionally returns `disk` (`level`, `output_free_gb`, `library_free_gb`) to administrators.
 
+Instantly finished tasks: a generation that fully hits ComfyUI's cache can end before the submit request returns; such a response carries no `task_id` but includes `images` directly (like the cut-out-only branch), and the works are still saved to the gallery. Clients should handle both response forms.
+
 Native imported entries additionally return `native: true` and `defaults`. `inputs[].form` marks parameters bound to standard page fields (such as `width` and `seed`); other inputs are submitted through `workflow_params`. When a standard field is omitted, the corresponding published parameter or saved default is used; when both are given, the standard field wins. Native entries do not need a root-level `model`; model changes are submitted through the ID of the model drop-down in `inputs`, and the server accepts only the published options. Parameter IDs are opaque identifiers; clients must not construct them.
 
 ## Security boundaries

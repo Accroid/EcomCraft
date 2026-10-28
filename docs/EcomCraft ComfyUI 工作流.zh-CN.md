@@ -163,6 +163,8 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行�
 
 磁盘空间：后台定期检查平台服务器输出目录和作品库的剩余空间（阈值在存储设置中，警告默认 10 GB、严重不足默认 2 GB，填 0 关闭）。严重不足时 `EcomCraftStudioGenerate` 和 `EcomCraftStudioGenerateSet` 直接拒绝并返回 `disk_full`；`EcomCraftStudioQueue` 对管理员额外返回 `disk`（`level`、`output_free_gb`、`library_free_gb`）。
 
+即时完成的任务：完全命中 ComfyUI 缓存的生成可能在提交请求返回前就结束，此时响应不带 `task_id`，而是直接携带 `images`（与纯抠图分支相同）；作品仍会保存到画廊。客户端应同时处理两种返回形式。
+
 原生导入项额外返回 `native: true` 和 `defaults`。`inputs[].form` 标记绑定到标准页面字段的参数（如 `width`、`seed`）；其余输入通过 `workflow_params` 提交。省略标准字段时使用相应已发布参数或保存的默认值，同时提供时以标准字段为准。原生项无需提交根级 `model`，模型修改通过 `inputs` 中模型下拉框的 ID 提交，服务端仅接受公布的选项；参数 ID 是不透明标识，客户端不要自行构造。
 
 ## 安全边界
