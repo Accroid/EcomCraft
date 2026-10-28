@@ -4384,6 +4384,15 @@
                 }
                 return;
             }
+            if (!$('simple-picker-modal').hidden) {
+                if (e.key == 'Escape') {
+                    SimpleMode.closePicker();
+                }
+                else {
+                    DialogFocus.trap($('simple-picker-modal'), e);
+                }
+                return;
+            }
             if (!$('setup-guide-modal').hidden) {
                 if (e.key == 'Escape') {
                     closeSetupGuide();
@@ -4440,7 +4449,8 @@
        ============================================================ */
     initTheme();
     bind();
-    SimpleMode.attach({ $, el, tr, request, readStorage, writeStorage, serverErrorText, state,
+    SimpleMode.attach({ $, el, tr, request, readStorage, writeStorage, serverErrorText, state, viewUrl,
+        dialogEnter: (dialog, opener, initial) => DialogFocus.enter(dialog, opener, initial), dialogLeave: dialog => DialogFocus.leave(dialog),
         titleAdd: count => TitleProgress.add(count), titleDone: count => TitleProgress.done(count) });
     updateControls();
     setType('image');

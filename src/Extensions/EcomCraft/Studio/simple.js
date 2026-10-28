@@ -17,6 +17,9 @@ class SimpleMode {
     static product = null;
     static products = [];
     static library = [];
+    static picker = '';
+    static galleryItems = null;
+    static galleryError = '';
     static exportOptions = { platforms: [], folder_available: false };
     static resultGroups = new Map();
     static taskProducts = new Map();
@@ -149,9 +152,15 @@ class SimpleMode {
         this.api = api;
         let $ = api.$;
         let drop = $('simple-drop');
+        // Four equal ways to add a product photo (F52): this computer, the camera, the product library and the gallery of generated works.
+        $('simple-file-btn').addEventListener('click', () => $('simple-file').click());
+        $('simple-library-btn').addEventListener('click', e => this.openPicker('library', e.currentTarget));
+        $('simple-gallery-btn').addEventListener('click', e => this.openPicker('gallery', e.currentTarget));
+        $('simple-picker-close').addEventListener('click', () => this.closePicker());
+        $('simple-picker-backdrop').addEventListener('click', () => this.closePicker());
         $('simple-file').addEventListener('change', e => {
             for (let file of Array.from(e.target.files || [])) {
-                this.readFile(file);
+                this.readFile(file, 'local');
             }
             e.target.value = '';
         });
@@ -164,7 +173,7 @@ class SimpleMode {
             e.preventDefault();
             drop.classList.remove('is-over');
             for (let file of Array.from(e.dataTransfer.files || [])) {
-                this.readFile(file);
+                this.readFile(file, 'local');
             }
         });
         $('simple-clear').addEventListener('click', () => this.clearProduct());
@@ -172,7 +181,7 @@ class SimpleMode {
         $('simple-camera-btn').addEventListener('click', () => $('simple-camera').click());
         $('simple-camera').addEventListener('change', e => {
             for (let file of Array.from(e.target.files || [])) {
-                this.readFile(file);
+                this.readFile(file, 'camera');
             }
             e.target.value = '';
         });
@@ -261,6 +270,7 @@ class SimpleMode {
         this.renderResults();
         this.renderPromptUsed();
         this.renderTasks();
+        this.renderProducts();
         this.update();
     }
 
@@ -530,25 +540,175 @@ class SimpleMode {
         this.renderLibrary();
     }
 
-    /** Shows saved products as thumbnails; choosing one skips uploading and cutting out again. */
+    /** Refreshes the product-library picker when it is open; choosing a saved product skips uploading and cutting out again. */
     static renderLibrary() {
-        let el = this.api.el;
-        let items = [];
-        for (let saved of this.library) {
-            let button = el('button', 'simple-product');
-            button.type = 'button';
-            button.title = saved.name;
-            button.setAttribute('aria-label', this.api.tr('选择商品 {0}', saved.name));
-            let image = el('img');
-            image.src = saved.cutout_image || saved.image;
-            image.alt = '';
-            image.loading = 'lazy';
-            button.append(image);
-            button.addEventListener('click', () => this.useSaved(saved));
-            items.push(button);
+        if (this.picker == 'library') {
+            this.renderPicker();
         }
-        this.api.$('simple-library-list').replaceChildren(...items);
-        this.api.$('simple-library').hidden = items.length == 0;
+    }
+
+    /** Opens the picker for the product library or the gallery of generated works (F52). */
+    static async openPicker(kind, opener) {
+        let tr = this.api.tr;
+        this.picker = kind;
+        this.galleryItems = kind == 'gallery' ? null : this.galleryItems;
+        this.api.$('simple-picker-title').textContent = kind == 'library' ? tr('从商品库选择') : tr('从画廊选择');
+        this.api.$('simple-picker-hint').textContent = kind == 'library'
+            ? tr('已入库的商品会带上确认过的抠图和位置。')
+            : tr('这里是你已生成的作品，选一张作为商品图；作品本身不会被改动，超过 5 MB 的图会先压缩。');
+        this.api.$('simple-picker-modal').hidden = false;
+        this.renderPicker();
+        this.api.dialogEnter(this.api.$('simple-picker-modal'), opener, this.api.$('simple-picker-close'));
+        if (kind == 'gallery') {
+            await this.loadGalleryItems();
+        }
+        else {
+            await this.loadLibrary();
+        }
+    }
+
+    /** Closes the picker. */
+    static closePicker() {
+        if (!this.picker) {
+            return;
+        }
+        this.picker = '';
+        this.api.$('simple-picker-modal').hidden = true;
+        this.api.dialogLeave(this.api.$('simple-picker-modal'));
+    }
+
+    /** Reads this account's recent generated images for the gallery picker (newest first, images only, starred copies skipped). */
+    static async loadGalleryItems() {
+        try {
+            let result = await this.api.request('ListImages', { path: '', depth: 4, sortBy: 'Date', sortReverse: false, filter: null });
+            this.galleryItems = (result.files || []).map(file => String(file.src || ''))
+                .filter(src => src && !src.startsWith('Starred/') && /\.(png|jpe?g|webp)$/i.test(src)).slice(0, 60);
+        }
+        catch (error) {
+            this.galleryItems = [];
+            this.galleryError = error.message || this.api.tr('画廊暂时无法读取，请稍后重试。');
+        }
+        if (this.picker == 'gallery') {
+            this.renderPicker();
+        }
+        this.galleryError = '';
+    }
+
+    /** Fills the picker with saved products or generated works as selectable tiles. */
+    static renderPicker() {
+        let tr = this.api.tr;
+        let tiles = [];
+        let empty = '';
+        if (this.picker == 'library') {
+            for (let saved of this.library) {
+                tiles.push(this.pickerTile(saved.cutout_image || saved.image, saved.name, tr('选择商品 {0}', saved.name), async () => {
+                    this.closePicker();
+                    await this.useSaved(saved);
+                }));
+            }
+            empty = tiles.length ? '' : tr('商品库还是空的。上传的商品图会自动存入商品库。');
+        }
+        else if (this.picker == 'gallery') {
+            if (this.galleryItems == null) {
+                empty = tr('正在读取画廊…');
+            }
+            else {
+                for (let src of this.galleryItems) {
+                    let name = src.split('/').pop();
+                    tiles.push(this.pickerTile(this.api.viewUrl(src), name, tr('选择已生成作品 {0}', name), button => this.useGalleryImage(src, name, button)));
+                }
+                empty = this.galleryError || (tiles.length ? '' : tr('画廊里还没有已生成的图片。'));
+            }
+        }
+        this.api.$('simple-picker-list').replaceChildren(...tiles);
+        let note = this.api.$('simple-picker-empty');
+        note.textContent = empty;
+        note.hidden = !empty;
+    }
+
+    /** One picker tile: a thumbnail with its name. */
+    static pickerTile(source, name, label, onPick) {
+        let el = this.api.el;
+        let button = el('button', 'simple-picker-item');
+        button.type = 'button';
+        button.title = name;
+        button.setAttribute('aria-label', label);
+        let image = el('img');
+        image.src = source;
+        image.alt = '';
+        image.loading = 'lazy';
+        button.append(image, el('span', '', name));
+        button.addEventListener('click', () => onPick(button));
+        return button;
+    }
+
+    /** Uses a generated work from the gallery as a product photo (F52): read as is when it fits, otherwise compressed in the browser to at most 5 MB.
+     * The work itself is not changed; the copy goes through the same quality check and product library as an upload. */
+    static async useGalleryImage(src, name, button) {
+        let tr = this.api.tr;
+        if (this.products.length >= 20) {
+            this.message(tr('一次最多 20 张商品图。'), true);
+            return;
+        }
+        button.disabled = true;
+        try {
+            let response = await fetch(this.api.viewUrl(src), { credentials: 'same-origin' });
+            if (!response.ok) {
+                throw new Error('fetch');
+            }
+            let blob = await response.blob();
+            let data = await this.blobToDataUrl(blob);
+            if (!['image/png', 'image/jpeg', 'image/webp'].includes(blob.type) || blob.size > this.maxProductBytes) {
+                data = await this.compressImage(data, this.maxProductBytes);
+            }
+            this.closePicker();
+            await this.addPhoto(data, name, 'gallery');
+        }
+        catch (error) {
+            this.message(tr('这张作品暂时无法读取，请换一张或稍后重试。'), true);
+        }
+        finally {
+            button.disabled = false;
+        }
+    }
+
+    /** Reads a blob as a data URL. */
+    static blobToDataUrl(blob) {
+        return new Promise((resolve, reject) => {
+            let reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(new Error('read'));
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    /** The first scale for compressing an image: at most 16 megapixels, which every mobile browser can draw on a canvas. */
+    static compressionScale(width, height) {
+        let pixels = Math.max(1, width) * Math.max(1, height);
+        return Math.min(1, Math.sqrt(16000000 / pixels));
+    }
+
+    /** Re-encodes an image as JPEG on a white background, lowering the quality and then the size until it fits in maxBytes. */
+    static async compressImage(dataUrl, maxBytes) {
+        let image = await this.loadImage(dataUrl);
+        let scale = this.compressionScale(image.naturalWidth, image.naturalHeight);
+        for (let attempt = 0; attempt < 8; attempt++) {
+            let canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+            let context = canvas.getContext('2d');
+            context.fillStyle = '#FFFFFF';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+            for (let quality of [0.92, 0.82, 0.7]) {
+                let blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+                if (blob && blob.size <= maxBytes) {
+                    return await this.blobToDataUrl(blob);
+                }
+            }
+            scale *= 0.75;
+        }
+        throw new Error('compress');
     }
 
     /** Makes a saved product the current one, with its confirmed cut-out and placement. */
@@ -562,7 +722,7 @@ class SimpleMode {
             this.message(this.api.tr('一次最多 20 张商品图。'), true);
             return;
         }
-        let product = { id: saved.id, name: saved.name, data: null, source: saved.image, cutout: saved.cutout_image || null, width: 0, height: 0 };
+        let product = { id: saved.id, name: saved.name, origin: 'library', data: null, source: saved.image, cutout: saved.cutout_image || null, width: 0, height: 0 };
         try {
             let image = await this.loadImage(product.cutout || product.source);
             product.width = image.naturalWidth;
@@ -837,8 +997,8 @@ class SimpleMode {
         return (template?.fields || []).find(field => field.type == 'image') || null;
     }
 
-    /** Reads the product photo into memory; it is sent only with the generation request. */
-    static readFile(file) {
+    /** Reads a product photo from this computer or the camera into memory (origin 'local' or 'camera'). */
+    static readFile(file, origin) {
         let tr = this.api.tr;
         if (!file) {
             return;
@@ -848,48 +1008,50 @@ class SimpleMode {
             return;
         }
         let reader = new FileReader();
-        reader.onload = async () => {
-            if (this.products.length >= 20) {
-                this.message(this.api.tr('一次最多 20 张商品图。'), true);
-                return;
-            }
-            this.product = { id: null, name: file.name, data: String(reader.result), source: String(reader.result), cutout: null, width: 0, height: 0 };
-            this.products.push(this.product);
-            try {
-                let image = await this.loadImage(this.product.data);
-                this.product.width = image.naturalWidth;
-                this.product.height = image.naturalHeight;
-                let canvas = document.createElement('canvas');
-                canvas.width = Math.min(512, image.naturalWidth);
-                canvas.height = Math.max(1, Math.round(image.naturalHeight * canvas.width / Math.max(1, image.naturalWidth)));
-                let context = canvas.getContext('2d');
-                context.drawImage(image, 0, 0, canvas.width, canvas.height);
-                let imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-                // Quality checks (F38): warnings with suggestions, never a block; the photo is usable anyway.
-                this.product.qualityIssues = this.uploadIssues(image.naturalWidth, image.naturalHeight, imageData, this.quality);
-                if (this.hasTransparency(imageData)) {
-                    this.product.cutout = this.product.data;
-                    this.product.qualityIssues = this.product.qualityIssues.concat(this.cutoutIssues(imageData, this.quality));
-                }
-            }
-            catch (error) {
-                // Without a readable preview the photo can still be used by templates that do not preserve the product.
-                this.product.qualityIssues = [];
-            }
-            this.renderCutout();
-            let preview = this.api.$('simple-preview');
-            preview.src = this.product.data;
-            preview.hidden = false;
-            this.api.$('simple-drop-text').textContent = file.name;
-            this.api.$('simple-clear').hidden = false;
-            this.message('', false);
-            this.renderProducts();
-            this.renderProductMeta();
-            this.update();
-            this.saveToLibrary(this.product);
-        };
+        reader.onload = () => this.addPhoto(String(reader.result), file.name, origin || 'local');
         reader.onerror = () => this.message(tr('无法读取文件，请重新选择。'), true);
         reader.readAsDataURL(file);
+    }
+
+    /** Adds a new product photo (a data URL of at most 5 MB) from any entry (F52): checks its quality (F38), makes it the current photo and saves it to the product library.
+     * <origin> is 'local', 'camera' or 'gallery' and is shown on the thumbnail. */
+    static async addPhoto(data, name, origin) {
+        if (this.products.length >= 20) {
+            this.message(this.api.tr('一次最多 20 张商品图。'), true);
+            return;
+        }
+        let product = { id: null, name, origin, data, source: data, cutout: null, width: 0, height: 0 };
+        this.product = product;
+        this.products.push(product);
+        try {
+            let image = await this.loadImage(product.data);
+            product.width = image.naturalWidth;
+            product.height = image.naturalHeight;
+            let canvas = document.createElement('canvas');
+            canvas.width = Math.min(512, image.naturalWidth);
+            canvas.height = Math.max(1, Math.round(image.naturalHeight * canvas.width / Math.max(1, image.naturalWidth)));
+            let context = canvas.getContext('2d');
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+            let imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            // Quality checks (F38): warnings with suggestions, never a block; the photo is usable anyway.
+            product.qualityIssues = this.uploadIssues(image.naturalWidth, image.naturalHeight, imageData, this.quality);
+            if (this.hasTransparency(imageData)) {
+                product.cutout = product.data;
+                product.qualityIssues = product.qualityIssues.concat(this.cutoutIssues(imageData, this.quality));
+            }
+        }
+        catch (error) {
+            // Without a readable preview the photo can still be used by templates that do not preserve the product.
+            product.qualityIssues = [];
+        }
+        if (this.product == product) {
+            this.selectProduct(product);
+        }
+        else {
+            this.renderProducts();
+        }
+        this.message('', false);
+        this.saveToLibrary(product);
     }
 
     /** Loads an image element from a data URL. */
@@ -1152,7 +1314,13 @@ class SimpleMode {
         this.api.$('simple-download').disabled = this.selected.size == 0;
     }
 
-    /** Shows the uploaded product photos as thumbnails when there is more than one; clicking one makes it the current photo. */
+    /** The plain-language source of a product photo (F52): this computer, the camera, the product library or the gallery. */
+    static originText(origin) {
+        let names = { local: '本机', camera: '拍照', library: '商品库', gallery: '画廊' };
+        return this.api.tr(names[origin] || '本机');
+    }
+
+    /** Shows the product photos as thumbnails with their source (F52); clicking one makes it the current photo. */
     static renderProducts() {
         let el = this.api.el;
         let list = this.api.$('simple-products');
@@ -1161,16 +1329,18 @@ class SimpleMode {
             let button = el('button', 'simple-product');
             button.type = 'button';
             button.setAttribute('aria-pressed', product == this.product ? 'true' : 'false');
-            button.setAttribute('aria-label', this.api.tr('商品图 {0}', index + 1));
+            let origin = this.originText(product.origin);
+            button.setAttribute('aria-label', this.api.tr('商品图 {0}（来自{1}）', index + 1, origin));
+            button.title = product.name || '';
             let image = el('img');
             image.src = product.cutout || product.source || product.data;
             image.alt = '';
-            button.append(image);
+            button.append(image, el('span', 'simple-product-source', origin));
             button.addEventListener('click', () => this.selectProduct(product));
             items.push(button);
         }
         list.replaceChildren(...items);
-        list.hidden = this.products.length < 2;
+        list.hidden = this.products.length == 0;
     }
 
     /** Makes a product photo the current one for preview, cut-out and single generation. */
