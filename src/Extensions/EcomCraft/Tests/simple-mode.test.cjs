@@ -63,3 +63,29 @@ test('templates are filtered by platform, with "*" matching every platform', () 
     SimpleMode.choice.platform = '';
     assert.deepStrictEqual(SimpleMode.visibleTemplates().map(template => template.id), ['a', 'b', 'c']);
 });
+
+test('placement math matches the server (Placement.Rect)', () => {
+    let SimpleMode = loadSimpleMode();
+    assert.deepStrictEqual({ ...SimpleMode.placementRect(200, 100, 40, 20, { x: 0.5, y: 0.5, size: 0.5 }) }, { x: 75, y: 38, width: 50, height: 25 });
+    assert.deepStrictEqual({ ...SimpleMode.placementRect(300, 300, 1000, 500, { x: 0.25, y: 0.75, size: 1 }) }, { x: -75, y: 150, width: 300, height: 150 });
+});
+
+test('dragged placements are clamped to the ranges the server accepts', () => {
+    let SimpleMode = loadSimpleMode();
+    assert.deepStrictEqual({ ...SimpleMode.clampPlacement({ x: -0.2, y: 1.4, size: 3 }) }, { x: 0, y: 1, size: 1.5 });
+    assert.deepStrictEqual({ ...SimpleMode.clampPlacement({ x: 0.3, y: 0.6, size: 0.01 }) }, { x: 0.3, y: 0.6, size: 0.1 });
+    assert.deepStrictEqual({ ...SimpleMode.clampPlacement({ x: NaN, y: 0.5, size: 0.7 }) }, { x: 0, y: 0.5, size: 0.7 });
+});
+
+test('transparency detection follows the server rule (at least 2% transparent pixels)', () => {
+    let SimpleMode = loadSimpleMode();
+    let pixels = (count, transparent) => {
+        let data = new Uint8ClampedArray(count * 4).fill(255);
+        for (let i = 0; i < transparent; i++) {
+            data[i * 4 + 3] = 0;
+        }
+        return { data };
+    };
+    assert.strictEqual(SimpleMode.hasTransparency(pixels(100, 2)), true);
+    assert.strictEqual(SimpleMode.hasTransparency(pixels(100, 1)), false);
+});

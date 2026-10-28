@@ -19,7 +19,38 @@ class SimpleMode {
     static results = [];
     static selected = new Set();
     static maxProductBytes = 5 * 1024 * 1024;
+    static placement = { x: 0.5, y: 0.5, size: 0.7 };
+    static cutting = false;
+    static drag = null;
     static storageKey = 'ecomcraft.simple';
+
+    /** The product rectangle on a canvas, the same math as Placement.Rect on the server: centered at (x, y) as fractions of the canvas,
+     * longer side = size × the canvas's shorter side, aspect ratio kept. */
+    static placementRect(canvasWidth, canvasHeight, productWidth, productHeight, placement) {
+        let longest = Math.max(1, productWidth, productHeight);
+        let target = placement.size * Math.min(canvasWidth, canvasHeight);
+        let width = Math.max(1, Math.round(productWidth / longest * target));
+        let height = Math.max(1, Math.round(productHeight / longest * target));
+        return { x: Math.round(placement.x * canvasWidth - width / 2), y: Math.round(placement.y * canvasHeight - height / 2), width, height };
+    }
+
+    /** Keeps a placement inside the ranges the server accepts: center 0–1, size 0.1–1.5. */
+    static clampPlacement(placement) {
+        let clamp = (value, min, max) => Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
+        return { x: clamp(placement.x, 0, 1), y: clamp(placement.y, 0, 1), size: clamp(placement.size, 0.1, 1.5) };
+    }
+
+    /** Whether at least 2% of an image's pixels are transparent, as the server checks a cut-out. */
+    static hasTransparency(imageData) {
+        let transparent = 0;
+        let data = imageData.data;
+        for (let i = 3; i < data.length; i += 4) {
+            if (data[i] < 16) {
+                transparent++;
+            }
+        }
+        return transparent * 50 >= data.length / 4;
+    }
 
     /** Which views an account sees: everyone gets the simple mode; only administrators get the professional mode with sampler, LoRA and step settings. */
     static viewAccess(catalog) {
@@ -45,6 +76,22 @@ class SimpleMode {
             }
         });
         $('simple-clear').addEventListener('click', () => this.clearProduct());
+        $('simple-cutout-run').addEventListener('click', () => this.runCutout());
+        $('simple-placement-reset').addEventListener('click', () => {
+            this.placement = { x: 0.5, y: 0.5, size: 0.7 };
+            $('simple-size').value = '70';
+            this.renderStage();
+        });
+        $('simple-size').addEventListener('input', e => {
+            this.placement = this.clampPlacement({ ...this.placement, size: Number(e.target.value) / 100 });
+            this.renderStage();
+        });
+        let product = $('simple-stage-product');
+        product.addEventListener('pointerdown', e => this.startDrag(e));
+        product.addEventListener('pointermove', e => this.moveDrag(e));
+        product.addEventListener('pointerup', e => this.endDrag(e));
+        product.addEventListener('pointercancel', e => this.endDrag(e));
+        window.addEventListener('resize', () => this.renderStage());
         $('simple-platform').addEventListener('change', e => {
             this.choice.platform = e.target.value;
             this.remember();
@@ -183,6 +230,7 @@ class SimpleMode {
             cards.push(this.card(template, template.example_image, template.id == this.choice.template, () => {
                 this.choice.template = template.id;
                 this.renderTemplates();
+                this.renderCutout();
                 this.update();
             }));
         }
@@ -225,8 +273,25 @@ class SimpleMode {
             return;
         }
         let reader = new FileReader();
-        reader.onload = () => {
-            this.product = { name: file.name, data: String(reader.result) };
+        reader.onload = async () => {
+            this.product = { name: file.name, data: String(reader.result), cutout: null, width: 0, height: 0 };
+            try {
+                let image = await this.loadImage(this.product.data);
+                this.product.width = image.naturalWidth;
+                this.product.height = image.naturalHeight;
+                let canvas = document.createElement('canvas');
+                canvas.width = Math.min(512, image.naturalWidth);
+                canvas.height = Math.max(1, Math.round(image.naturalHeight * canvas.width / Math.max(1, image.naturalWidth)));
+                let context = canvas.getContext('2d');
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                if (this.hasTransparency(context.getImageData(0, 0, canvas.width, canvas.height))) {
+                    this.product.cutout = this.product.data;
+                }
+            }
+            catch (error) {
+                // Without a readable preview the photo can still be used by templates that do not preserve the product.
+            }
+            this.renderCutout();
             let preview = this.api.$('simple-preview');
             preview.src = this.product.data;
             preview.hidden = false;
@@ -239,9 +304,113 @@ class SimpleMode {
         reader.readAsDataURL(file);
     }
 
+    /** Loads an image element from a data URL. */
+    static loadImage(source) {
+        return new Promise((resolve, reject) => {
+            let image = new Image();
+            image.onload = () => resolve(image);
+            image.onerror = () => reject(new Error('image'));
+            image.src = source;
+        });
+    }
+
+    /** Shows the cut-out panel only for templates that keep the original product pixels, and explains what is missing. */
+    static renderCutout() {
+        let tr = this.api.tr;
+        let template = this.currentTemplate();
+        let needed = Boolean(template && template.preserve_product && this.product);
+        this.api.$('simple-cutout').hidden = !needed;
+        if (!needed) {
+            return;
+        }
+        let status = this.cutting ? tr('正在抠图…')
+            : this.product.cutout ? tr('确认抠图结果，可拖动商品调整位置，或用滑块调整大小。不满意可以重新上传。')
+            : tr('这个图片类型会保留原商品的像素，需要先去掉商品图的背景。点“自动抠图”，或上传透明背景的 PNG。');
+        this.api.$('simple-cutout-status').textContent = status;
+        this.api.$('simple-cutout-run').hidden = Boolean(this.product.cutout);
+        this.api.$('simple-cutout-run').disabled = this.cutting;
+        this.renderStage();
+    }
+
+    /** Draws the cut-out on the square preview at the current placement. */
+    static renderStage() {
+        let image = this.api.$('simple-stage-product');
+        let stage = this.api.$('simple-stage');
+        if (!this.product || !this.product.cutout || this.api.$('simple-cutout').hidden) {
+            image.hidden = true;
+            return;
+        }
+        if (image.getAttribute('src') != this.product.cutout) {
+            image.src = this.product.cutout;
+        }
+        let size = stage.clientWidth || 300;
+        let rect = this.placementRect(size, size, this.product.width || 1, this.product.height || 1, this.placement);
+        image.style.left = `${rect.x}px`;
+        image.style.top = `${rect.y}px`;
+        image.style.width = `${rect.width}px`;
+        image.style.height = `${rect.height}px`;
+        image.hidden = false;
+    }
+
+    /** Starts dragging the product on the preview. */
+    static startDrag(event) {
+        event.preventDefault();
+        event.target.setPointerCapture(event.pointerId);
+        event.target.classList.add('is-dragging');
+        this.drag = { startX: event.clientX, startY: event.clientY, origin: { ...this.placement } };
+    }
+
+    /** Moves the product with the pointer; the center stays inside the picture. */
+    static moveDrag(event) {
+        if (!this.drag) {
+            return;
+        }
+        let size = this.api.$('simple-stage').clientWidth || 300;
+        this.placement = this.clampPlacement({
+            x: this.drag.origin.x + (event.clientX - this.drag.startX) / size,
+            y: this.drag.origin.y + (event.clientY - this.drag.startY) / size,
+            size: this.placement.size
+        });
+        this.renderStage();
+    }
+
+    /** Ends dragging. */
+    static endDrag(event) {
+        if (!this.drag) {
+            return;
+        }
+        event.target.classList.remove('is-dragging');
+        this.drag = null;
+    }
+
+    /** Asks the server to remove the background; the result keeps the original product pixels. */
+    static async runCutout() {
+        let tr = this.api.tr;
+        if (!this.product || this.cutting) {
+            return;
+        }
+        this.cutting = true;
+        this.renderCutout();
+        this.update();
+        try {
+            let result = await this.api.request('EcomCraftStudioCutout', { product_image: this.product.data });
+            this.product.cutout = result.cutout;
+            this.message('', false);
+        }
+        catch (error) {
+            this.message(error.message || tr('抠图没有完成，请稍后重试，或上传已经去掉背景的透明 PNG。'), true);
+        }
+        finally {
+            this.cutting = false;
+            this.renderCutout();
+            this.update();
+        }
+    }
+
     /** Forgets the product photo. */
     static clearProduct() {
         this.product = null;
+        this.api.$('simple-cutout').hidden = true;
         this.api.$('simple-file').value = '';
         this.api.$('simple-preview').hidden = true;
         this.api.$('simple-preview').removeAttribute('src');
@@ -261,6 +430,9 @@ class SimpleMode {
         }
         if (this.imageField(template) && !this.product) {
             return '请先上传商品图。';
+        }
+        if (template.preserve_product && !this.product.cutout) {
+            return this.cutting ? '正在抠图…' : '请先确认抠图结果。';
         }
         if (!this.choice.style) {
             return '请选择风格。';
@@ -292,7 +464,7 @@ class SimpleMode {
         let params = {};
         let field = this.imageField(template);
         if (field && this.product) {
-            params[field.id] = this.product.data;
+            params[field.id] = template.preserve_product ? this.product.cutout : this.product.data;
         }
         let payload = {
             source: 'local',
@@ -304,6 +476,9 @@ class SimpleMode {
             images: Number(this.api.$('simple-count').value) || 1,
             async: true
         };
+        if (template.preserve_product) {
+            payload.placement = this.clampPlacement(this.placement);
+        }
         this.submitting = true;
         this.update();
         try {

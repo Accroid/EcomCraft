@@ -143,6 +143,8 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行�
 
 提示词服务：`EcomCraftStudioStyles`（可选 `language`）返回可选的视觉风格（`id`、`name`、`description`）；`EcomCraftStudioComposePrompt`（`style_id`、`description`，可选 `product_image`）把风格和一句话描述（中文或英文）通过已配置的提示词优化模型变成英文提示词，返回 `prompt`、`source`（`model` 或 `template`），模型不可用或 45 秒内没有回应时退回风格默认描述并返回 `notice` 和 `notice_code`（`description_used` 表示直接用了英文描述，`description_unused` 表示中文描述这次没有用上）。按模板生成时也可以不填 `prompt`，改为提交 `description` 和 `style_id`，由服务端组成提示词，响应中带 `prompt_notice` / `prompt_notice_code`。模型的回答只会作为提示词文字：服务端去掉原生指令、通配符、引号和多余段落，不能影响工作流、参数或执行服务器。把商品图发给视觉模型描述商品的功能默认关闭，只有拥有服务器设置权限的管理员能通过 `EcomCraftPromptSettings`（`vision_enabled` 为 `true` / `false`）开启，接口同时返回图片会发送到的服务商（`vision_provider`）和模型。
 
+抠图：`EcomCraftStudioCutout`（`product_image` 为不超过 5 MB 的 PNG、JPEG 或 WebP 数据地址）在具备 SwarmUI 配套节点（`SwarmLoadImageB64`、`SwarmRemBg`、`MaskToImage`、`PreviewImage`）的已登记执行服务器上去掉背景，服务器按规则 1 选择；节点图由服务端固定生成，客户端不能提交。服务端只取回蒙版，再与用户上传的原图在本地合成透明背景的 PNG（`cutout`），商品像素就是原图本身。没有服务器具备这些节点时返回 `no_execution_server`，失败返回 `cutout_failed`；也可以直接上传透明背景的 PNG。简易模式在开启商品保真的模板下显示抠图确认：可自动抠图、拖动商品位置、调整大小，提交时带上 `placement`。
+
 原生导入项额外返回 `native: true` 和 `defaults`。`inputs[].form` 标记绑定到标准页面字段的参数（如 `width`、`seed`）；其余输入通过 `workflow_params` 提交。省略标准字段时使用相应已发布参数或保存的默认值，同时提供时以标准字段为准。原生项无需提交根级 `model`，模型修改通过 `inputs` 中模型下拉框的 ID 提交，服务端仅接受公布的选项；参数 ID 是不透明标识，客户端不要自行构造。
 
 ## 安全边界

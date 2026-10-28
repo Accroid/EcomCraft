@@ -34,6 +34,16 @@ window.EcomCraftLanguages.en = {
     "点击或拖入商品图": "Click or drop a product photo",
     "PNG、JPEG 或 WebP，最大 5 MB；只在提交时发送": "PNG, JPEG or WebP, up to 5 MB; sent only when you start",
     "换一张": "Use another photo",
+    "商品大小": "Product size",
+    "自动抠图": "Remove background",
+    "位置复原": "Reset position",
+    "商品位置预览，可拖动商品调整位置": "Product position preview; drag the product to move it",
+    "抠图结果": "Cut-out result",
+    "正在抠图…": "Removing the background…",
+    "确认抠图结果，可拖动商品调整位置，或用滑块调整大小。不满意可以重新上传。": "Check the cut-out. Drag the product to move it or use the slider to resize it. If you are not happy with it, upload another photo.",
+    "这个图片类型会保留原商品的像素，需要先去掉商品图的背景。点“自动抠图”，或上传透明背景的 PNG。": "This image type keeps the original product pixels, so the photo's background must be removed first. Click “Remove background”, or upload a PNG with a transparent background.",
+    "抠图没有完成，请稍后重试，或上传已经去掉背景的透明 PNG。": "Background removal did not finish. Try again later, or upload a PNG whose background is already transparent.",
+    "请先确认抠图结果。": "Confirm the cut-out first.",
     "已选择的商品图": "Selected product photo",
     "选平台和风格": "Pick platform and style",
     "平台": "Platform",
@@ -625,5 +635,6 @@ window.EcomCraftLanguages.en = {
     "error:invalid_storage_action": "There are no old works to migrate, or a migration is already running.",
     "error:invalid_template": "The template does not exist, is disabled or its configuration is invalid. Refresh the template list.",
     "error:template_image_failed": "The template was saved, but its example image could not be written to the server data folder.",
-    "error:prompt_settings_failed": "The prompt settings could not be saved in the server data folder."
+    "error:prompt_settings_failed": "The prompt settings could not be saved in the server data folder.",
+    "error:cutout_failed": "Background removal did not finish. Try again later, or upload a PNG whose background is already transparent."
 };
