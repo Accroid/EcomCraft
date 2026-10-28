@@ -3820,7 +3820,7 @@
                 if (review) {
                     main.append(el('span', 'own-workflow-state', review));
                 }
-                if (item.review_state == 'draft' || item.review_state == 'rejected') {
+                if ((item.review_state == 'draft' || item.review_state == 'rejected') && state.catalog?.can_submit_workflows) {
                     let submit = el('button', 'link-btn', tr('提交审核'));
                     submit.type = 'button';
                     submit.setAttribute('aria-label', tr('提交审核 {0}', item.name || item.id));
@@ -4497,6 +4497,10 @@
     /** One-way hand-off from the simple mode (F64): loads a candidate as the image-to-image start picture in professional mode
      * and fills in the prompt the engine received for it, read by the server from the work's own metadata. Nothing goes back to the simple mode. */
     async function refineInPro(url) {
+        if (state.busy || state.uncertain) {
+            SimpleMode.message(tr('专业模式里还有任务没有结束，结束后才能带入新的图。'), true);
+            return;
+        }
         let recipe = null;
         try {
             recipe = await request('EcomCraftStudioWorkRecipe', { image: url });
@@ -4693,8 +4697,6 @@
         $('review-reject').addEventListener('click', () => WorkflowReviewView.decide('reject'));
         $('review-unpublish').addEventListener('click', () => WorkflowReviewView.decide('unpublish'));
         $('submit-close').addEventListener('click', () => WorkflowReviewView.closeSubmit());
-        $('storage-open').addEventListener('click', () => StorageSettingsView.open($('storage-open')));
-        $('diagnostics-open').addEventListener('click', () => downloadDiagnostics($('diagnostics-open')));
         AdminMenu.bind();
         OwnWorkflows.bind();
         $('storage-close').addEventListener('click', () => StorageSettingsView.close());

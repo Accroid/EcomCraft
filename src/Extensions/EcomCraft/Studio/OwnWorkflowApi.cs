@@ -147,9 +147,9 @@ public static class OwnWorkflowApi
         + "Allowed while it was never submitted or after a rejection; note is optional (up to 500 characters).", "success: true, review_state: \"pending\"")]
     public static Task<JObject> EcomCraftStudioWorkflowSubmitOwn(Session session, string workflow_id, string note = "")
     {
-        if (!CanUse(session))
+        if (!CanUse(session) || !session.User.HasPermission(EcomCraft.PermSubmitWorkflows))
         {
-            return Task.FromResult(StudioApi.Error("此账号没有上传工作流的权限。", "bad_permissions"));
+            return Task.FromResult(StudioApi.Error("此账号没有提交工作流审核的权限。", "bad_permissions"));
         }
         note = (note ?? "").Trim();
         if (note.Length > WorkflowReview.MaxTextLength)

@@ -42,8 +42,8 @@ SwarmUI 账号系统的通用说明见 [Sharing Your Swarm（分享你的 SwarmU
 
 | 权限 | 作用 | 默认 |
 |---|---|---|
-| `ecomcraft_use_published_workflows` | 在工作台调用已发布的工作流 | 普通用户 |
-| `ecomcraft_submit_workflows` | 把自己在 ComfyUI 中保存的工作流提交审核 | 普通用户 |
+| `ecomcraft_use_published_workflows` | 在工作台调用已发布的工作流；配合出图权限可在专业模式上传自用工作流 | 普通用户 |
+| `ecomcraft_submit_workflows` | 把自己在 ComfyUI 中保存或在专业模式上传的工作流提交审核 | 普通用户 |
 | `ecomcraft_review_workflows` | 审核、发布、驳回、下架工作流，配置用户可见参数 | 管理员 |
 
 生成还需要 SwarmUI 自带的基础生成权限；`User` 角色默认已经具备。不要给普通成员 ComfyUI 原生工作流相关的权限，这类权限可以绕过 EcomCraft 的参数白名单。

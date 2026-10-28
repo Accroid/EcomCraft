@@ -42,8 +42,8 @@ With several users, account login must be enabled, with one account per person. 
 
 | Permission | Purpose | Default |
 |---|---|---|
-| `ecomcraft_use_published_workflows` | Run published workflows in the workspace | Ordinary users |
-| `ecomcraft_submit_workflows` | Submit workflows the user saved in ComfyUI for review | Ordinary users |
+| `ecomcraft_use_published_workflows` | Run published workflows in the workspace; with generation rights, upload own workflows in professional mode | Ordinary users |
+| `ecomcraft_submit_workflows` | Submit workflows the user saved in ComfyUI or uploaded in professional mode for review | Ordinary users |
 | `ecomcraft_review_workflows` | Review, publish, reject and unpublish workflows, and configure user-visible parameters | Administrators |
 
 Generating also needs SwarmUI's basic generation permission, which the `User` role has by default. Do not give ordinary members the native ComfyUI workflow permissions: they can bypass EcomCraft's parameter allowlist.
