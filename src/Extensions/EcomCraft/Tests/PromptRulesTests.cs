@@ -75,4 +75,14 @@ public class PromptRulesTests
         Assert.Equal("zh", PromptRules.PanelSource("  ", "红色马克杯"));
         Assert.Equal("", PromptRules.PanelSource(" ", null));
     }
+
+    [Fact]
+    public void OnlyChineseOrADescriptionWaitsForTheModel()
+    {
+        Assert.False(PromptRules.NeedsModel("放在木桌上", "a red mug", "红色马克杯"), "English panel text is sent as is");
+        Assert.True(PromptRules.NeedsModel("", "", "红色马克杯"), "Chinese panel text is translated");
+        Assert.False(PromptRules.NeedsModel("", "", "a red mug"), "ASCII text in the Chinese tab needs no translation");
+        Assert.True(PromptRules.NeedsModel("放在木桌上", "", ""), "an empty panel rewrites the description");
+        Assert.False(PromptRules.NeedsModel("  ", "", ""), "nothing to rewrite: template and product-type defaults only");
+    }
 }

@@ -73,7 +73,7 @@ cd EcomCraft
 - 一键套图与批量：多张商品图 × 平台套图中的每种图片类型展开成独立任务，分配到多台执行服务器并行；每人同时执行的任务数受限，失败项可单独重试，可取消剩余任务。接口为 `EcomCraftStudioGenerateSet`、`EcomCraftStudioBatchStatus`、`EcomCraftStudioBatchRetry` 和 `EcomCraftStudioBatchCancel`。
 - 内置 4 个电商场景模板：白底主图、场景图、细节图、模特或手持图；按约定名称引用专家制作的工作流（如 `ecomcraft/white-main`），工作流安装并审核通过前显示“缺少工作流”。
 - 商品保真：模板开启 `preserve_product` 后，平台在本地把透明背景的商品图按位置放到输入画布上，生成后再把原商品像素贴回成图，Logo、文字和形状不会被改动。简易模式中可一键抠图（在执行服务器上用 SwarmUI 的去背景节点，接口 `EcomCraftStudioCutout`），并拖动、缩放商品位置。
-- 提示词服务：用户选产品类型、可选风格并写一句描述（中文或英文），由已配置的提示词优化模型生成英文提示词，勾选“需要模特”时加入固定的模特描述片段；模型只能填写提示词文字；模型不可用时退回模板和风格的默认描述并说明。把商品图发给视觉模型默认关闭，只有管理员能开启。“AI 扩写”同时生成中英文提示词，修改过的中文提示词在提交时翻译成英文，翻译失败时按产品类型和风格的默认描述出图并说明，不阻塞出图。接口为 `EcomCraftStudioStyles`、`EcomCraftStudioProductTypes`、`EcomCraftStudioComposePrompt`、`EcomCraftStudioExpandPrompt` 和 `EcomCraftPromptSettings`。
+- 提示词服务：用户选产品类型、可选风格并写一句描述（中文或英文），由已配置的提示词优化模型生成英文提示词，勾选“需要模特”时加入固定的模特描述片段；模型只能填写提示词文字；模型不可用时退回模板和风格的默认描述并说明。把商品图发给视觉模型默认关闭，只有管理员能开启。“AI 扩写”同时生成中英文提示词，修改过的中文提示词在提交时翻译成英文，翻译失败时按产品类型和风格的默认描述出图并说明，不阻塞出图。需要模型写提示词或翻译时，提交立即返回、提示词在后台生成（上限仍为 45 秒），任务依次显示“正在生成提示词 → 排队中 / 执行中（含执行服务器名）→ 已完成”；已扩写未改或改的是英文时不调用模型，直接排队；一键出整套同样先返回再在后台组合提示词。接口为 `EcomCraftStudioStyles`、`EcomCraftStudioProductTypes`、`EcomCraftStudioComposePrompt`、`EcomCraftStudioExpandPrompt`、`EcomCraftStudioPrepareStatus` 和 `EcomCraftPromptSettings`。
 - 作品存储：管理员可把作品库设到本机目录、NAS 或共享文件夹（保存时检测可写、空间和速度）。作品先保存在平台服务器，再在后台复制，失败自动重试，画廊显示“待同步”；改位置后可迁移旧作品。接口为 `EcomCraftStorageSettings`、`EcomCraftStorageSave`、`EcomCraftStorageMigrate` 和 `EcomCraftStoragePending`。
 - 实时任务队列按执行服务器展示运行任务、排队任务（含平台已分配但尚未交给 ComfyUI 的任务）、空闲 / 忙碌 / 繁忙状态、当前节点和节点进度，并支持结束当前账号自己的活动生成任务。
 - 生成结果可直接下载、作为初始图继续创作，或跳到画廊查看；大图预览支持上一张 / 下一张和方向键切换，图片和视频均可放大缩小（滚轮、双击、双指或按钮、`+` / `-` / `0` 键），放大后可拖动查看细节。

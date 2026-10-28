@@ -98,6 +98,18 @@ test('a batch counts as finished only when no task is queued or running', () => 
     assert.strictEqual(SimpleMode.batchFinished([{ state: 'done' }, { state: 'running' }]), false);
     assert.strictEqual(SimpleMode.batchFinished([{ state: 'queued' }]), false);
     assert.strictEqual(SimpleMode.batchFinished([]), true);
+    assert.strictEqual(SimpleMode.batchFinished([{ state: 'prompt' }]), false, 'tasks waiting for the batch prompt are not finished (F56)');
+});
+
+test('task stages read: writing the prompt, queued or running on a server, done (F56)', () => {
+    let SimpleMode = loadSimpleMode();
+    SimpleMode.api = { tr: (text, ...args) => String(text).replace(/\{(\d+)\}/g, (match, index) => args[Number(index)]) };
+    assert.strictEqual(SimpleMode.stageText('prompt', ''), '正在生成提示词…');
+    assert.strictEqual(SimpleMode.stageText('queued', 'GPU-1'), '排队中（GPU-1）');
+    assert.strictEqual(SimpleMode.stageText('queued', ''), '排队中');
+    assert.strictEqual(SimpleMode.stageText('running', 'GPU-1'), '执行中（GPU-1）');
+    assert.strictEqual(SimpleMode.stageText('done', 'GPU-1'), '已完成（GPU-1）');
+    assert.strictEqual(SimpleMode.stageText('failed', 'GPU-1'), '失败');
 });
 
 test('the set button uses the standard set of the chosen platform', () => {

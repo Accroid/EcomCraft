@@ -58,7 +58,7 @@ public static class BatchService
         /// <summary>Template name in the batch's language.</summary>
         public string TemplateName;
 
-        /// <summary>"queued", "running", "done", "failed" or "cancelled".</summary>
+        /// <summary>"prompt" (waiting for the batch prompt, F56), "queued", "running", "done", "failed" or "cancelled".</summary>
         public string State = "queued";
 
         /// <summary>User-facing failure reason.</summary>
@@ -92,8 +92,11 @@ public static class BatchService
         /// <summary>Tasks.</summary>
         public List<Job> Jobs = [];
 
-        /// <summary>Prompt composed once for the whole batch.</summary>
+        /// <summary>Prompt composed once for the whole batch; null until the background composition finished (F56).</summary>
         public string Prompt;
+
+        /// <summary>The composition result for the owner's result card and notices (F54/F56); null until the prompt is ready.</summary>
+        public PromptService.Composed Composed;
 
         /// <summary>Optional user negative prompt.</summary>
         public string Negative;
@@ -120,8 +123,11 @@ public static class BatchService
     /// <summary>Per-person limit of running tasks (R9.4).</summary>
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> Slots = new();
 
-    [API.APIDescription("Start a one-click set or batch: products (1–20, each { image: data URL, placement?: { x, y, size } }) × the templates of set_id (default \"standard\") that suit platform. The prompt is composed once from style_id and description. Returns the batch ID and its tasks. rawInput is the root request JSON.", "batch_id: \"…\", jobs: []")]
-    public static async Task<JObject> EcomCraftStudioGenerateSet(Session session, JObject rawInput)
+    [API.APIDescription("Start a one-click set or batch: products (1–20, each { image: data URL, placement?: { x, y, size } }) × the templates of set_id (default \"standard\") that suit platform. Answers at once with the batch ID and its tasks in state \"prompt\"; the prompt is composed once in the background from the prompt panel (prompt_en / prompt_zh) or style_id and description, and the tasks then start (F56). rawInput is the root request JSON.", "batch_id: \"…\", jobs: []")]
+    public static Task<JObject> EcomCraftStudioGenerateSet(Session session, JObject rawInput) => Task.FromResult(StartSet(session, rawInput));
+
+    /// <summary>Validates a one-click set, registers it and starts composing its prompt in the background (F56).</summary>
+    private static JObject StartSet(Session session, JObject rawInput)
     {
         if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.BasicImageGeneration) || !session.User.HasPermission(EcomCraft.PermUsePublishedWorkflows))
         {
@@ -226,24 +232,34 @@ public static class BatchService
         {
             return StudioApi.Error($"提示词最多 {PromptRules.MaxPromptLength} 个字符。", "invalid_prompt");
         }
-        // The bilingual prompt panel (F54) decides the prompt when it holds text; otherwise the one-line description is composed as before.
-        PromptService.Composed composed = await PromptService.ComposePanelAsync(session, style, productTypeId, needModel, description, promptEn, promptZh);
-        batch.Prompt = composed.Prompt;
         batch.Negative = rawInput["negativeprompt"]?.Type == JTokenType.String ? rawInput.Value<string>("negativeprompt") : "";
-        Batches[batch.Id] = batch;
         foreach (Job job in batch.Jobs)
         {
-            _ = Utilities.RunCheckedTask(() => RunJobAsync(session, batch, job), "ecomcraft batch task");
+            job.State = "prompt";
         }
-        JObject response = Status(batch);
-        response["prompt_used"] = composed.Prompt;
-        if (composed.Translated is not null)
+        Batches[batch.Id] = batch;
+        // The batch is answered at once; the prompt is composed once in the background (F56) and the tasks start when it is ready.
+        // The bilingual prompt panel (F54) decides the prompt when it holds text; otherwise the one-line description is composed as before.
+        _ = Utilities.RunCheckedTask(async () =>
         {
-            response["prompt_translated"] = composed.Translated;
-        }
-        response["prompt_notice"] = composed.Notice;
-        response["prompt_notice_code"] = composed.NoticeCode;
-        return response;
+            PromptService.Composed composed = await PromptService.ComposePanelAsync(session, style, productTypeId, needModel, description, promptEn, promptZh);
+            List<Job> ready;
+            lock (batch.Lock)
+            {
+                batch.Prompt = composed.Prompt;
+                batch.Composed = composed;
+                ready = [.. batch.Jobs.Where(job => job.State == "prompt")];
+                foreach (Job job in ready)
+                {
+                    job.State = "queued";
+                }
+            }
+            foreach (Job job in ready)
+            {
+                _ = Utilities.RunCheckedTask(() => RunJobAsync(session, batch, job), "ecomcraft batch task");
+            }
+        }, "ecomcraft batch prompt");
+        return Status(batch);
     }
 
     /// <summary>Runs one task once a slot of its owner is free.</summary>
@@ -388,13 +404,15 @@ public static class BatchService
         }
     }
 
-    /// <summary>The batch as its owner sees it.</summary>
+    /// <summary>The batch as its owner sees it. Once the prompt is ready the owner's own answer also carries the prompt used and any fallback notice (F54/F56);
+    /// batches are only ever readable by their owner.</summary>
     private static JObject Status(Batch batch)
     {
         lock (batch.Lock)
         {
-            return new JObject()
+            JObject status = new()
             {
+                ["prompt_ready"] = batch.Composed is not null,
                 ["batch_id"] = batch.Id,
                 ["products"] = batch.Products.Count,
                 ["jobs"] = new JArray(batch.Jobs.Select(job => new JObject()
@@ -410,6 +428,17 @@ public static class BatchService
                     ["images"] = new JArray(job.Images)
                 }))
             };
+            if (batch.Composed is PromptService.Composed composed)
+            {
+                status["prompt_used"] = composed.Prompt;
+                if (composed.Translated is not null)
+                {
+                    status["prompt_translated"] = composed.Translated;
+                }
+                status["prompt_notice"] = composed.Notice;
+                status["prompt_notice_code"] = composed.NoticeCode;
+            }
+            return status;
         }
     }
 
@@ -454,7 +483,6 @@ public static class BatchService
                 batch.Cancel.Dispose();
                 batch.Cancel = new CancellationTokenSource();
             }
-            job.State = "queued";
             job.Error = null;
             job.ErrorId = null;
             Product product = batch.Products[job.Product];
@@ -462,6 +490,13 @@ public static class BatchService
             {
                 product.CutoutError = null;
             }
+            // Cancelled while the prompt was still being written (F56): the task starts with the others once the prompt is ready.
+            if (batch.Composed is null)
+            {
+                job.State = "prompt";
+                return Task.FromResult(Status(batch));
+            }
+            job.State = "queued";
         }
         _ = Utilities.RunCheckedTask(() => RunJobAsync(session, batch, job), "ecomcraft batch retry");
         return Task.FromResult(Status(batch));
@@ -478,7 +513,7 @@ public static class BatchService
         lock (batch.Lock)
         {
             batch.Cancel.Cancel();
-            foreach (Job job in batch.Jobs.Where(job => job.State == "queued"))
+            foreach (Job job in batch.Jobs.Where(job => job.State is "queued" or "prompt"))
             {
                 job.State = "cancelled";
             }

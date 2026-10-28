@@ -29,6 +29,11 @@ class SimpleMode {
     static loading = false;
     static submitting = false;
     static pending = new Set();
+    static preparing = new Map();
+    static tasks = [];
+    static polling = false;
+    static batchSent = null;
+    static batchPromptShown = false;
     static timer = null;
     static results = [];
     static selected = new Set();
@@ -255,6 +260,7 @@ class SimpleMode {
         }
         this.renderResults();
         this.renderPromptUsed();
+        this.renderTasks();
         this.update();
     }
 
@@ -1219,8 +1225,10 @@ class SimpleMode {
             this.renderBatch();
             this.trackBatch();
             this.api.$('simple-status').textContent = tr('已开始出整套图：共 {0} 个任务，会分配到空闲的执行服务器上并行完成。', (batch.jobs || []).length);
-            this.applyPromptResult(batch, sent);
-            this.promptNotice(batch.prompt_notice_code);
+            this.batchSent = sent;
+            this.batchPromptShown = false;
+            this.message('', false);
+            this.showBatchPrompt();
         }
         catch (error) {
             this.message(error.message || tr('提交失败，请稍后重试。'), true);
@@ -1248,7 +1256,8 @@ class SimpleMode {
                 return;
             }
             let jobs = this.batch.jobs || [];
-            let finished = jobs.filter(job => job.state != 'queued' && job.state != 'running').length;
+            this.showBatchPrompt();
+            let finished = jobs.filter(job => job.state != 'prompt' && job.state != 'queued' && job.state != 'running').length;
             if (finished > (this.batchDone || 0)) {
                 this.api.titleDone(finished - (this.batchDone || 0));
                 this.batchDone = finished;
@@ -1269,9 +1278,21 @@ class SimpleMode {
         }, 3000);
     }
 
+    /** Once the batch prompt is written (F56), shows the prompt used and any fallback notice, only once per batch. */
+    static showBatchPrompt() {
+        if (!this.batch || !this.batch.prompt_ready || this.batchPromptShown) {
+            return;
+        }
+        this.batchPromptShown = true;
+        this.applyPromptResult(this.batch, this.batchSent || { source: '', zh: '' });
+        if (this.batch.prompt_notice_code) {
+            this.promptNotice(this.batch.prompt_notice_code);
+        }
+    }
+
     /** Whether every task of a batch has ended (done, failed or cancelled). */
     static batchFinished(jobs) {
-        return !(jobs || []).some(job => job.state == 'queued' || job.state == 'running');
+        return !(jobs || []).some(job => job.state == 'prompt' || job.state == 'queued' || job.state == 'running');
     }
 
     /** Shows each task's state with a retry button for failed ones, and adds finished images to the candidates. */
@@ -1280,16 +1301,12 @@ class SimpleMode {
         let el = this.api.el;
         let jobs = this.batch?.jobs || [];
         this.api.$('simple-batch').hidden = !jobs.length;
-        let labels = { queued: '排队中', running: '执行中', done: '已完成', failed: '失败', cancelled: '已取消' };
         let items = [];
         let added = false;
         for (let job of jobs) {
             let item = el('li', `simple-job${job.state == 'failed' ? ' is-failed' : ''}`);
             let name = tr('商品 {0}｜{1}', job.product + 1, job.template_name || job.template);
-            let state = tr(labels[job.state] || job.state);
-            if (job.state == 'done' && job.execution_server) {
-                state = tr('已完成（{0}）', job.execution_server);
-            }
+            let state = this.stageText(job.state, job.state == 'done' ? job.execution_server : '');
             item.append(el('span', '', name), el('span', 'simple-job-state', state));
             if (job.state == 'failed' || job.state == 'cancelled') {
                 if (job.error) {
@@ -1310,7 +1327,7 @@ class SimpleMode {
             }
         }
         this.api.$('simple-jobs').replaceChildren(...items);
-        this.api.$('simple-batch-cancel').hidden = !jobs.some(job => job.state == 'queued');
+        this.api.$('simple-batch-cancel').hidden = !jobs.some(job => job.state == 'queued' || job.state == 'prompt');
         if (added) {
             this.renderResults();
         }
@@ -1378,30 +1395,22 @@ class SimpleMode {
         }
         this.submitting = true;
         this.update();
+        let entry = { product: this.product ? this.product.name : '', template: template.name || template.id, stage: 'prompt', server: '', taskId: null };
         try {
             let result = await this.api.request('EcomCraftStudioGenerate', payload);
-            if (result.images && result.images.length) {
-                // Fully cached generations can finish during the submit call and return their images inline,
-                // the same way the cut-out-only branch does; slower tasks deliver images through the queue poll.
-                for (let url of result.images) {
-                    this.results.unshift(url);
-                    this.resultGroups.set(url, this.product ? this.product.name : '');
-                }
-                this.renderResults();
-            }
-            if (result.task_id != null) {
-                this.pending.add(result.task_id);
-                this.taskProducts.set(result.task_id, this.product ? this.product.name : '');
+            if (result.prepare_id) {
+                // The language model is writing the prompt (F56): the task is shown at once and starts by itself when the prompt is ready.
+                this.preparing.set(result.prepare_id, { entry, sent });
+                this.addTask(entry);
                 this.api.titleAdd();
                 this.track();
+                this.api.$('simple-status').textContent = tr('已提交，正在生成提示词，完成后会自动开始出图。');
+                this.message('', false);
             }
-            let status = result.cutout_only ? tr('已按平台要求把商品抠图放到纯白背景上（不调用生成模型），结果在下方。') : tr('已开始出图，完成后候选图会出现在下方。');
-            if (result.execution_server && !result.cutout_only) {
-                status = tr('已开始出图（由“{0}”执行），完成后候选图会出现在下方。', result.execution_server);
+            else {
+                this.addTask(entry);
+                this.acceptSubmitted(result, entry, sent, false);
             }
-            this.api.$('simple-status').textContent = status;
-            this.applyPromptResult(result, sent);
-            this.promptNotice(result.prompt_notice_code);
         }
         catch (error) {
             this.message(error.message || tr('提交失败，请稍后重试。'), true);
@@ -1409,6 +1418,119 @@ class SimpleMode {
         finally {
             this.submitting = false;
             this.update();
+        }
+    }
+
+    /** Takes a submit answer, either straight from the submit call or once the prompt was written in the background (F56): shows inline images,
+     * starts tracking the task and shows the prompt used. <counted> says whether the tab-title progress already counts this task. */
+    static acceptSubmitted(result, entry, sent, counted) {
+        let tr = this.api.tr;
+        if (result.images && result.images.length) {
+            // Fully cached generations can finish during the submit call and return their images inline,
+            // the same way the cut-out-only branch does; slower tasks deliver images through the queue poll.
+            for (let url of result.images) {
+                this.results.unshift(url);
+                this.resultGroups.set(url, entry.product);
+            }
+            this.renderResults();
+        }
+        entry.server = result.cutout_only ? '' : String(result.execution_server || '');
+        if (result.task_id != null) {
+            entry.taskId = result.task_id;
+            entry.stage = 'queued';
+            this.pending.add(result.task_id);
+            this.taskProducts.set(result.task_id, entry.product);
+            if (!counted) {
+                this.api.titleAdd();
+            }
+            this.track();
+        }
+        else {
+            entry.stage = 'done';
+            if (counted) {
+                this.api.titleDone();
+            }
+        }
+        let status = result.cutout_only ? tr('已按平台要求把商品抠图放到纯白背景上（不调用生成模型），结果在下方。') : tr('已开始出图，完成后候选图会出现在下方。');
+        if (entry.server) {
+            status = tr('已开始出图（由“{0}”执行），完成后候选图会出现在下方。', entry.server);
+        }
+        this.api.$('simple-status').textContent = status;
+        this.applyPromptResult(result, sent);
+        this.promptNotice(result.prompt_notice_code);
+        this.renderTasks();
+    }
+
+    /** Adds a single submission to the task list (newest first, the last ten are shown). */
+    static addTask(entry) {
+        this.tasks.unshift(entry);
+        this.tasks = this.tasks.slice(0, 10);
+        this.renderTasks();
+    }
+
+    /** The plain-language stage of a task (F56): writing the prompt, queued or running on a named server, done or failed. */
+    static stageText(stage, server) {
+        let tr = this.api.tr;
+        if (stage == 'prompt') {
+            return tr('正在生成提示词…');
+        }
+        if (stage == 'queued') {
+            return server ? tr('排队中（{0}）', server) : tr('排队中');
+        }
+        if (stage == 'running') {
+            return server ? tr('执行中（{0}）', server) : tr('执行中');
+        }
+        if (stage == 'done') {
+            return server ? tr('已完成（{0}）', server) : tr('已完成');
+        }
+        return stage == 'cancelled' ? tr('已取消') : tr('失败');
+    }
+
+    /** Shows the single submissions of this page with their stage. */
+    static renderTasks() {
+        let el = this.api.el;
+        let items = [];
+        for (let entry of this.tasks) {
+            let item = el('li', `simple-job${entry.stage == 'failed' ? ' is-failed' : ''}`);
+            item.append(el('span', '', this.api.tr('{0}｜{1}', entry.product || this.api.tr('商品'), entry.template)), el('span', 'simple-job-state', this.stageText(entry.stage, entry.server)));
+            if (entry.error) {
+                item.title = entry.error;
+            }
+            items.push(item);
+        }
+        let list = this.api.$('simple-tasks');
+        list.replaceChildren(...items);
+        list.hidden = !items.length;
+    }
+
+    /** Asks how the submissions still waiting for their prompt are doing (F56) and takes over the ones that were submitted or failed. */
+    static async pollPreparing() {
+        let tr = this.api.tr;
+        for (let [id, item] of Array.from(this.preparing)) {
+            let result;
+            try {
+                result = await this.api.request('EcomCraftStudioPrepareStatus', { prepare_id: id });
+            }
+            catch (error) {
+                if (error.code != 'task_not_found') {
+                    continue;
+                }
+                result = { stage: 'failed', reason: tr('任务已过期，请重新出图。') };
+            }
+            if (result.stage == 'prompt') {
+                continue;
+            }
+            this.preparing.delete(id);
+            if (result.stage == 'failed') {
+                let reason = result.reason_id ? this.api.serverErrorText(result.reason_id, result.reason) : (result.reason || tr('执行服务器没有返回结果。'));
+                item.entry.stage = 'failed';
+                item.entry.error = reason;
+                this.api.titleDone();
+                this.message(tr('出图失败：{0}', reason), true);
+                this.renderTasks();
+                continue;
+            }
+            this.acceptSubmitted(result, item.entry, item.sent, true);
         }
     }
 
@@ -1426,45 +1548,75 @@ class SimpleMode {
             return;
         }
         this.timer = setInterval(async () => {
-            if (!this.pending.size) {
+            if (this.polling) {
                 return;
             }
-            let queue;
+            this.polling = true;
             try {
-                queue = await this.api.request('EcomCraftStudioQueue');
-            }
-            catch (error) {
-                return;
-            }
-            let running = new Set((queue.tasks || []).filter(task => task.mine && task.id != null).map(task => task.id));
-            let finished = new Map((queue.finished_tasks || []).map(task => [task.id, task]));
-            for (let id of Array.from(this.pending)) {
-                let outcome = finished.get(id);
-                if (running.has(id) || !outcome) {
-                    continue;
+                if (this.preparing.size) {
+                    await this.pollPreparing();
                 }
-                this.pending.delete(id);
-                this.api.titleDone();
-                if (outcome.state == 'failed') {
-                    let reason = outcome.error_id ? this.api.serverErrorText(outcome.error_id, outcome.error) : (outcome.error || this.api.tr('执行服务器没有返回结果。'));
-                    this.message(this.api.tr('出图失败：{0}', reason), true);
-                }
-                else {
-                    for (let url of outcome.images || []) {
-                        this.results.unshift(url);
-                        this.resultGroups.set(url, this.taskProducts.get(id) || '');
-                    }
-                    this.renderResults();
+                if (this.pending.size) {
+                    await this.pollQueue();
                 }
             }
-            if (!this.pending.size) {
+            finally {
+                this.polling = false;
+            }
+            if (!this.pending.size && !this.preparing.size && this.timer) {
                 clearInterval(this.timer);
                 this.timer = null;
                 this.api.$('simple-status').textContent = this.results.length
                     ? this.api.tr('点选满意的图片，再点“下载所选”。所有结果也保存在作品画廊。')
                     : this.api.tr('出图完成后，候选图会出现在这里。点选满意的图片后下载。');
             }
-        }, 4000);
+        }, 3000);
+    }
+
+    /** Reads the queue for this page's submitted tasks: marks running ones and collects the results of finished ones. */
+    static async pollQueue() {
+        let queue;
+        try {
+            queue = await this.api.request('EcomCraftStudioQueue');
+        }
+        catch (error) {
+            return;
+        }
+        let mine = (queue.tasks || []).filter(task => task.mine && task.id != null);
+        let running = new Set(mine.map(task => task.id));
+        let executing = new Set(mine.filter(task => task.state == 'running').map(task => task.id));
+        let finished = new Map((queue.finished_tasks || []).map(task => [task.id, task]));
+        for (let id of Array.from(this.pending)) {
+            let entry = this.tasks.find(task => task.taskId == id);
+            let outcome = finished.get(id);
+            if (running.has(id) || !outcome) {
+                if (entry && executing.has(id)) {
+                    entry.stage = 'running';
+                }
+                continue;
+            }
+            this.pending.delete(id);
+            this.api.titleDone();
+            if (entry) {
+                entry.server = outcome.execution_server || entry.server;
+                entry.stage = outcome.state == 'failed' ? 'failed' : 'done';
+            }
+            if (outcome.state == 'failed') {
+                let reason = outcome.error_id ? this.api.serverErrorText(outcome.error_id, outcome.error) : (outcome.error || this.api.tr('执行服务器没有返回结果。'));
+                if (entry) {
+                    entry.error = reason;
+                }
+                this.message(this.api.tr('出图失败：{0}', reason), true);
+            }
+            else {
+                for (let url of outcome.images || []) {
+                    this.results.unshift(url);
+                    this.resultGroups.set(url, this.taskProducts.get(id) || '');
+                }
+                this.renderResults();
+            }
+        }
+        this.renderTasks();
     }
 
     /** Address of a result as returned by the server ("View/user/..." or "Output/..."). */
