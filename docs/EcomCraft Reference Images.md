@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20参考图需求.zh-CN.md)
 >
-> **Status:** P1 implemented, pending acceptance (F59 / T61, code complete 2026-10-28); P2 depends on N10 · **Version:** v1.3 · **Date:** 2026-10-28
+> **Status:** P1 implemented, pending acceptance (F59 / T61, code complete 2026-10-28); P2 depends on N10 · **Version:** v1.4 · **Date:** 2026-10-29
 >
 > Related files: [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md) (decision A11, F59) and the [EcomCraft development tracker](EcomCraft%20开发总表.xlsx) (T61, T62; N10; Chinese spreadsheet). When this document changes, update it (Chinese and English together) first, then the code.
 
@@ -107,3 +107,4 @@ The reference image becomes the input of an image-to-image / image-edit workflow
 | 2026-10-28 | v1.1 | Revised the multi-reference semantics per the user's clarification: from "merge several references into one feel" to **one image per reference, never merged**; cap changed to 8 (matching storyboards), mutually exclusive with F25 storyboards, sets expand per reference; reserved the P3 direction "whole-set references → a whole set" |
 | 2026-10-28 | v1.2 | Upgraded to a **standalone reference mode** per the user's addition: after upload the image type, visual style, model checkbox, brand kit, one-line description, candidate count and storyboard are all disabled; per-reference editable prompts (English editable, Chinese read-only) with the new `EcomCraftStudioReferenceDescribe`; exactly one image per reference, fixed scene template; generation goes through "generate by reference" |
 | 2026-10-28 | v1.3 | P1 implemented pending acceptance (T61): upload with per-reference description, other options disabled, one image per reference per product (fixed scene template, mutually exclusive with storyboards, 20-image cap), reference thumbnails on task cards, reference mode unavailable with vision off; reference prompts are sent as shown (a new internal `raw_prompt` marker skips the template fragments); AGENTS.md gained the reference-image rule |
+| 2026-10-29 | v1.4 | UI redesign v4: reference mode is now entered through the "Follow a reference" task at the top of simple mode (F61, the default task), which shows only the platform and references, hiding rather than disabling other options; uploading references no longer clears the storyboard (storyboards only live in "Make a full set"); image description is on by default and the page explains how to fix a missing vision model (A5, F68) |

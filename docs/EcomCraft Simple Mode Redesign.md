@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20简易模式改版需求.zh-CN.md)
 >
-> **Status:** In development (F53 and F55 implemented and deployed, pending manual acceptance; F54 and F56 implemented, pending build and manual acceptance; F52 implemented, pending manual acceptance; F57 default model chosen, plan pending) · **Version:** v3.6 · **Date:** 2026-10-28
+> **Status:** In development (F52–F56 implemented, pending build and manual acceptance; F57 code complete, blueprint file `Templates/blueprints/text-to-image.json` still to be provided) · **Version:** v3.7 · **Date:** 2026-10-29
 >
 > This document holds the finalized requirements for the simple-mode (three-step) redesign. Development follows this document; when requirements change, update this document first (Chinese and English together), record the change in the change log, and only then change the code. For the overall architecture and MVP roadmap see [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md); for the interactive prototype see [EcomCraft Simple Mode Redesign Prototype](EcomCraft%20简易模式改版原型.html) (open directly in a browser; Chinese UI).
 

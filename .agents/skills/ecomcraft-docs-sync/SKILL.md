@@ -19,8 +19,8 @@ description: 修改 EcomCraft 功能、API、配置项或安全边界后同步�
 
 | 改了什么 | 要检查的文件 |
 |---|---|
-| 用户可见的功能或行为 | `README.md`（中文）和 `README.en.md`（英文）的功能列表，两边同时改 |
-| API 名称、请求或返回字段、错误码 | `docs/EcomCraft ComfyUI 工作流.zh-CN.md` 与英文版 `docs/EcomCraft ComfyUI Workflows.md` 的客户端调用部分，以及两个 README 中列出的接口名 |
+| 用户可见的功能或行为 | 功能细节写进对应功能文档和架构文档的状态表；`README.md`（中文）和 `README.en.md`（英文）只保留定位、痛点与核心能力、快速开始、安全边界和文档链接，只有改变这些内容时才两边同时改，不要把功能细节和接口名堆回 README |
+| API 名称、请求或返回字段、错误码 | `docs/EcomCraft ComfyUI 工作流.zh-CN.md` 与英文版 `docs/EcomCraft ComfyUI Workflows.md` 的客户端调用部分（接口名集中在这里，README 不再逐个列出） |
 | 工作流发现、导入、执行服务器、调度、局域网接入、作品存储 | `docs/EcomCraft ComfyUI 工作流.zh-CN.md` 与 `docs/EcomCraft ComfyUI Workflows.md`；涉及需求范围时先改 `docs/EcomCraft 局域网多服务器平台需求.zh-CN.md` 及其英文版 `docs/EcomCraft LAN Multi-Server Platform Requirements.md` |
 | 产品定位、架构、MVP 范围、功能或任务的增删 | `docs/EcomCraft Architecture.zh-CN.md` 与 `docs/EcomCraft Architecture.md`，再更新 `docs/EcomCraft 开发总表.xlsx`（F / T 编号保持一致，编号不复用） |
 | 完成开发总表中的某个任务 | 开发总表“开发任务”的状态由用户确认后填写；需求文档的“开发进度”节同步更新（中英文） |

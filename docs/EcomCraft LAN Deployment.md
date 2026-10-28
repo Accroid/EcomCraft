@@ -48,6 +48,8 @@ With several users, account login must be enabled, with one account per person. 
 
 Generating also needs SwarmUI's basic generation permission, which the `User` role has by default. Do not give ordinary members the native ComfyUI workflow permissions: they can bypass EcomCraft's parameter allowlist.
 
+Deleting works in the gallery needs SwarmUI's `user_delete_image` permission and asks for confirmation; with the recycle bin turned on in the server settings (`Paths.RecycleDeletedImages`) files go to the recycle bin, otherwise they are deleted for good.
+
 If you lock yourself out after enabling login, stop the service, open `Data/Settings.fds` in a text editor, set `AuthorizationRequired` back to `false`, and start the service again.
 
 ## 4. Per-person queue limit (R9.2)
