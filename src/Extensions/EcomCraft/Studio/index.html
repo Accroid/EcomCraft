@@ -8,19 +8,21 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.10.0">
-    <script src="/EcomCraft/lang/en.js?v=0.10.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.10.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.10.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.11.0">
+    <script src="/EcomCraft/lang/en.js?v=0.11.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.11.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.11.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.11.0" defer></script>
 </head>
 
 <body>
     <a class="skip-link" href="#studio-main">跳到主要内容</a>
 
     <header class="topbar">
-        <a class="brand" href="#create" translate="no">EcomCraft</a>
+        <a class="brand" href="#simple" translate="no">EcomCraft</a>
         <nav class="views" aria-label="工作台视图">
-            <a class="nav-item" data-view="create" href="#create">创作</a>
+            <a class="nav-item" data-view="simple" href="#simple">出图</a>
+            <a class="nav-item" data-view="create" href="#create" id="nav-create" hidden>专业模式</a>
             <a class="nav-item" data-view="gallery" href="#gallery">画廊<span class="nav-count" id="gallery-count" hidden></span></a>
             <a class="nav-item" data-view="queue" href="#queue">队列<span class="nav-count" id="queue-count" hidden></span></a>
             <a class="nav-item" data-view="workflows" href="#workflows" id="nav-workflows" hidden>工作流<span class="nav-count" id="workflows-count" hidden></span></a>
@@ -56,7 +58,66 @@
         </div>
 
         <!-- 创作视图 -->
-        <section class="view" id="view-create" aria-labelledby="page-title">
+        <section class="view" id="view-simple" aria-labelledby="simple-title">
+            <header class="page-head">
+                <h1 class="page-title" id="simple-title">商品出图</h1>
+                <p class="page-meta">三步完成：上传商品，选平台和风格，挑图下载。</p>
+            </header>
+            <div class="banner" id="simple-message" role="status" aria-live="polite" hidden></div>
+            <ol class="simple-steps">
+                <li class="simple-step">
+                    <h2 class="simple-step-title"><span class="simple-step-num" aria-hidden="true">1</span>上传商品图</h2>
+                    <label class="simple-drop" id="simple-drop">
+                        <input type="file" id="simple-file" accept="image/png,image/jpeg,image/webp" class="visually-hidden">
+                        <img class="simple-preview" id="simple-preview" alt="已选择的商品图" hidden>
+                        <span class="simple-drop-text" id="simple-drop-text">点击或拖入商品图</span>
+                        <span class="hint">PNG、JPEG 或 WebP，最大 5 MB；只在提交时发送</span>
+                    </label>
+                    <button type="button" class="link-btn" id="simple-clear" hidden>换一张</button>
+                </li>
+                <li class="simple-step">
+                    <h2 class="simple-step-title"><span class="simple-step-num" aria-hidden="true">2</span>选平台和风格</h2>
+                    <div class="fld">
+                        <label for="simple-platform">平台</label>
+                        <select id="simple-platform"></select>
+                    </div>
+                    <div class="fld">
+                        <span class="fld-label" id="simple-templates-label">图片类型</span>
+                        <div class="simple-cards" id="simple-templates" role="group" aria-labelledby="simple-templates-label"></div>
+                        <p class="hint" id="simple-templates-empty" hidden>这个平台暂时没有可用的图片类型。请管理员发布模板，或确认执行服务器在线。</p>
+                    </div>
+                    <div class="fld">
+                        <span class="fld-label" id="simple-styles-label">风格</span>
+                        <div class="simple-cards" id="simple-styles" role="group" aria-labelledby="simple-styles-label"></div>
+                    </div>
+                    <div class="fld">
+                        <label for="simple-description">一句话描述（可选）</label>
+                        <input id="simple-description" type="text" maxlength="500" autocomplete="off" placeholder="例如：放在木桌上，早晨的阳光">
+                    </div>
+                    <div class="inline-row">
+                        <label for="simple-count">候选张数</label>
+                        <select id="simple-count">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="4" selected>4</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-block" id="simple-generate" disabled>开始出图</button>
+                    <p class="hint" id="simple-hint" aria-live="polite"></p>
+                </li>
+                <li class="simple-step">
+                    <h2 class="simple-step-title"><span class="simple-step-num" aria-hidden="true">3</span>挑图下载</h2>
+                    <p class="hint" id="simple-status" aria-live="polite">出图完成后，候选图会出现在这里。点选满意的图片后下载。</p>
+                    <div class="simple-results" id="simple-results"></div>
+                    <div class="recover-actions">
+                        <button type="button" class="btn btn-primary" id="simple-download" disabled>下载所选</button>
+                        <a class="btn" href="#gallery">在画廊查看全部</a>
+                    </div>
+                </li>
+            </ol>
+        </section>
+
+        <section class="view" id="view-create" aria-labelledby="page-title" hidden>
             <div class="workspace">
                 <section class="composer">
                     <header class="composer-head">

@@ -41,6 +41,26 @@ public static class TemplateStore
         BuiltinDir = Path.Combine(extensionFolder, "Templates", "builtin");
     }
 
+    /// <summary>The built-in platform list (Templates/platforms.json): ID, Chinese and English names and region, as JSON objects. Unreadable files give an empty list.</summary>
+    public static List<JObject> Platforms()
+    {
+        try
+        {
+            string file = Path.Combine(Path.GetDirectoryName(BuiltinDir) ?? "", "platforms.json");
+            if (!File.Exists(file))
+            {
+                return [];
+            }
+            return [.. (JObject.Parse(File.ReadAllText(file))["platforms"] as JArray ?? new JArray()).OfType<JObject>()
+                .Where(platform => System.Text.RegularExpressions.Regex.IsMatch(platform["id"]?.ToString() ?? "", "^[a-z0-9][a-z0-9-]{0,47}$") && platform["name"] is JObject)];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            Logs.Error($"EcomCraft could not read the platform list: {ex.Message}");
+            return [];
+        }
+    }
+
     /// <summary>Folder holding a template's example image.</summary>
     public static string ImageDir(string source) => source == "builtin" ? BuiltinDir : CustomImageDir;
 

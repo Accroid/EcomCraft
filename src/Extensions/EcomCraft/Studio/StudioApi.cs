@@ -541,7 +541,8 @@ public static class StudioApi
                 ["state"] = outcome.Failed ? "failed" : "done",
                 ["error"] = outcome.Error,
                 ["error_id"] = outcome.ErrorId,
-                ["execution_server"] = outcome.Server
+                ["execution_server"] = outcome.Server,
+                ["images"] = new JArray(outcome.Images ?? [])
             });
         }
         return new JObject() { ["backends"] = backends, ["native_tasks"] = nativeTasks, ["tasks"] = tasks, ["finished_tasks"] = finished };
@@ -876,13 +877,17 @@ public static class StudioApi
             }
         }
 
-        /// <summary>Marks the generation ended with a sanitized error, or null on success.</summary>
-        public void Finish(JObject error)
+        /// <summary>Result URLs of a successful generation.</summary>
+        private List<string> Images = [];
+
+        /// <summary>Marks the generation ended with a sanitized error, or null on success with its result URLs.</summary>
+        public void Finish(JObject error, List<string> images)
         {
             lock (Lock)
             {
                 Done = true;
                 Error = error;
+                Images = images ?? [];
                 RecordIfReady();
             }
         }
@@ -896,7 +901,7 @@ public static class StudioApi
             }
             Recorded = true;
             TaskOutcomes.Record(new TaskOutcomes.Outcome(userId, TaskId, Error is not null, Error?["error"]?.ToString(), Error?["error_id"]?.ToString(),
-                server, Environment.TickCount64));
+                server, Environment.TickCount64, Images));
         }
     }
 
@@ -910,6 +915,7 @@ public static class StudioApi
         _ = Utilities.RunCheckedTask(async () =>
         {
             JObject failure = null;
+            List<string> outputs = [];
             try
             {
                 JObject result = await T2IAPI.GenerateText2Image(session, images, input);
@@ -920,6 +926,9 @@ public static class StudioApi
                 else
                 {
                     WorkSync.EnqueueResult(session.User, result);
+                    // Only saved files (View/... or Output/...), never inline data, are kept for the queue API.
+                    outputs = [.. (result["images"] as JArray ?? new JArray()).Select(image => image.Type == JTokenType.String ? image.ToString() : image["image"]?.ToString())
+                        .Where(url => url is not null && (url.StartsWith("View/", StringComparison.Ordinal) || url.StartsWith("Output/", StringComparison.Ordinal))).Take(16)];
                 }
             }
             catch (Exception ex)
@@ -931,7 +940,7 @@ public static class StudioApi
             finally
             {
                 assignment.Dispose();
-                task.Finish(failure);
+                task.Finish(failure, outputs);
             }
         }, "ecomcraft background generate");
         for (int i = 0; i < 30; i++)

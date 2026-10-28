@@ -66,6 +66,23 @@ public static class TemplateApi
         return Task.FromResult(new JObject() { ["templates"] = templates, ["hidden"] = hidden });
     }
 
+    [API.APIDescription("List the shop platforms templates can target, with names in the requested language (zh-CN or en).", "platforms: [{ id: \"amazon\", name: \"Amazon\", region: \"global\" }]")]
+    public static Task<JObject> EcomCraftStudioPlatforms(Session session, string language = "zh-CN")
+    {
+        if (!StudioApi.CanView(session))
+        {
+            return Task.FromResult(StudioApi.Error("无权访问创作工作台。", "bad_permissions"));
+        }
+        language = language == "en" ? "en" : "zh-CN";
+        JArray platforms = new();
+        foreach (JObject platform in TemplateStore.Platforms())
+        {
+            Dictionary<string, string> names = platform["name"].ToObject<Dictionary<string, string>>() ?? [];
+            platforms.Add(new JObject() { ["id"] = platform["id"]?.ToString(), ["name"] = EcomTemplate.Pick(names, language), ["region"] = platform["region"]?.ToString() ?? "" });
+        }
+        return Task.FromResult(new JObject() { ["platforms"] = platforms });
+    }
+
     /// <summary>One hidden template: ID, name, reason code, and details for reviewers only.</summary>
     private static JObject Hidden(string id, string name, string code, string detail) => new()
     {

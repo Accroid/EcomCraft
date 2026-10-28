@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "platforms": [
+    { "id": "taobao", "name": { "zh-CN": "淘宝 / 天猫", "en": "Taobao / Tmall" }, "region": "cn" },
+    { "id": "jd", "name": { "zh-CN": "京东", "en": "JD.com" }, "region": "cn" },
+    { "id": "pinduoduo", "name": { "zh-CN": "拼多多", "en": "Pinduoduo" }, "region": "cn" },
+    { "id": "douyin", "name": { "zh-CN": "抖音电商", "en": "Douyin Shop" }, "region": "cn" },
+    { "id": "xiaohongshu", "name": { "zh-CN": "小红书", "en": "Xiaohongshu" }, "region": "cn" },
+    { "id": "amazon", "name": { "zh-CN": "亚马逊", "en": "Amazon" }, "region": "global" },
+    { "id": "shopify", "name": { "zh-CN": "Shopify 独立站", "en": "Shopify" }, "region": "global" },
+    { "id": "tiktok-shop", "name": { "zh-CN": "TikTok Shop", "en": "TikTok Shop" }, "region": "global" },
+    { "id": "ebay", "name": { "zh-CN": "eBay", "en": "eBay" }, "region": "global" }
+  ]
+}

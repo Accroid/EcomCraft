@@ -203,6 +203,7 @@
         renderResults();
         updateControls();
         ExecutionServerPicker.load(true);
+        SimpleMode.refresh();
     }
 
     /** Switches between light and dark themes and remembers the choice in this browser. */
@@ -217,15 +218,16 @@
        ============================================================ */
     /** Shows one view, marks its navigation entry as current and loads its data. */
     function setView(view) {
-        if (!['create', 'gallery', 'queue', 'workflows'].includes(view)) {
-            view = 'create';
+        if (!['simple', 'create', 'gallery', 'queue', 'workflows'].includes(view)) {
+            view = 'simple';
         }
         state.view = view;
+        $('view-simple').hidden = view != 'simple';
         $('view-create').hidden = view != 'create';
         $('view-gallery').hidden = view != 'gallery';
         $('view-queue').hidden = view != 'queue';
         $('view-workflows').hidden = view != 'workflows';
-        let titles = { create: '创作', gallery: '作品画廊', queue: '任务队列', workflows: WorkflowReviewView.reviewer() ? '工作流审核' : '提交工作流审核' };
+        let titles = { simple: '出图', create: '专业模式', gallery: '作品画廊', queue: '任务队列', workflows: WorkflowReviewView.reviewer() ? '工作流审核' : '提交工作流审核' };
         document.title = tr('{0} - EcomCraft 创作工作台', tr(titles[view]));
         for (let item of document.querySelectorAll('.nav-item[data-view]')) {
             if (item.dataset.view == view) {
@@ -234,6 +236,9 @@
             else {
                 item.removeAttribute('aria-current');
             }
+        }
+        if (view == 'simple') {
+            SimpleMode.enter();
         }
         if (view == 'gallery') {
             loadGallery();
@@ -247,7 +252,7 @@
     }
     function route() {
         const hash = (location.hash || '').replace('#', '');
-        setView(['gallery', 'queue', 'workflows'].includes(hash) ? hash : 'create');
+        setView(['create', 'gallery', 'queue', 'workflows'].includes(hash) ? hash : 'simple');
     }
 
     /** Opens the setup guide and records that the first-visit prompt was dismissed. */
@@ -654,6 +659,15 @@
             $('avatar').textContent = String(catalog.user_name || 'E').slice(0, 1).toUpperCase();
             $('enhancer-settings').hidden = !catalog.can_manage_settings;
             $('storage-open').hidden = !catalog.can_manage_settings;
+            // The professional mode (sampler, LoRA, steps and other parameters) is for administrators only; everyone else uses the simple mode.
+            let access = SimpleMode.viewAccess(catalog);
+            $('nav-create').hidden = !access.pro;
+            if (state.view == 'create' && !access.pro) {
+                setView('simple');
+            }
+            else if (state.view == 'simple') {
+                SimpleMode.enter();
+            }
             WorkflowReviewView.updateAccess();
             if (state.view == 'workflows') {
                 WorkflowReviewView.load();
@@ -3927,6 +3941,7 @@
        ============================================================ */
     initTheme();
     bind();
+    SimpleMode.attach({ $, el, tr, request, readStorage, writeStorage, serverErrorText, state });
     updateControls();
     setType('image');
     setMode('text2img');
