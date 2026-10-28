@@ -136,12 +136,9 @@
                     </div>
                     <div class="inline-row">
                         <label for="simple-count">候选张数</label>
-                        <select id="simple-count">
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="4" selected>4</option>
-                        </select>
+                        <input type="number" id="simple-count" min="1" max="20" step="1" value="4" inputmode="numeric">
                     </div>
+                    <p class="hint" id="simple-count-hint">可输入 1–20 的正整数；单次出图和一键出整套最多共 20 张。</p>
                     <button type="button" class="btn btn-primary btn-block" id="simple-generate" disabled>开始出图</button>
                     <button type="button" class="btn btn-block" id="simple-generate-set" disabled>一键出整套</button>
                     <p class="hint" id="simple-set-hint"></p>

@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.13 · **Date:** 2026-10-28
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.14 · **Date:** 2026-10-28
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -177,8 +177,8 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Step 2 Visual style | Optional visual style (F53) | New | Cards, the first being "Auto" (unspecified); choice remembered |
 | Step 2 Needs a model | Adds a model fragment to the prompt when checked (F53) | New | Mutually exclusive with cut-out-only white main images: selecting that type disables and unchecks it; gender / hand-model attributes come later |
 | Step 2 One-line description | Optional, Chinese or English | New | Single-line input, not a prompt box; the server builds the English prompt with the product type and style |
-| Step 2 Candidate count / Start | 1, 2 or 4 images | New | Disabled with a reason while a photo, template or product type is missing |
-| Step 2 Whole set in one click | Every photo × every image type of the platform's set | New | Below, the set's types and total count; disabled without set templates |
+| Step 2 Candidate count / Start | Manual candidate count (F55) | New | Number input, positive integers 1–20 only with an immediate notice and disabled buttons on invalid input; single generations and one-click sets share the 20-image cap; the hint below "Start" names the current product × type × count; disabled with a reason while a photo, template or product type is missing |
+| Step 2 Whole set in one click | Every photo × every image type of the platform's set | New | Below, the estimated total of all photos × set types × per-type count (cap 20), disabling with the reason above the cap; disabled without set templates |
 | Step 3 Task list | State of each set / batch task | New | "Product n｜type: state", failed items retryable with the reason on hover; "Cancel remaining"; finished candidates join the list below; finishing shows a banner and the tab title counts progress in the background (F43) |
 | Step 3 Export for platform | Scale and pad to the platform preset, then zip or shared folder | New | Appears with candidates; platform dropdown carries the size; only picked images export, one folder per product; unverified presets warn; the folder option hides without an export location |
 | Step 3 Candidates | Pick the images you like | New | Chroma-key border and check when picked; "Download selected" one by one, "View all in gallery"; picking or downloading tells the server to keep the file forever (F39) |
@@ -382,3 +382,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-27 | v1.3 | Execution server choice (automatic or pinned) with the server that ran each job and busy hints; queue states computed server-side as idle / working / congested, "waiting" counting platform-assigned tasks |
 | 2026-10-28 | v1.12 | Usability and operations controls: camera upload and single-column narrow gallery (F42), upload quality notices (F38), keep-forever on pick (F39), administrator first-setup wizard (F40), storage dialog extended with disk thresholds and backup/restore (F45/F46), gallery "Download diagnostics" button (F44), batch completion banners and background title progress (F43); English version added |
 | 2026-10-28 | v1.13 | Simple-mode redesign v3, step one (F53/T55): "Style" became a two-level "Product type" (category chips + subtype cards, `Templates/product-types.json`), the visual style is now optional (first card "Auto"), and a "Needs a model" checkbox mutually exclusive with white main images was added; subtype and model fragments join the composed prompt; new `EcomCraftStudioProductTypes` API returning IDs and names only |
+| 2026-10-28 | v1.14 | Simple-mode redesign v3, step two (F55/T57): the candidate count became a number input (positive integers 1–20 with immediate notices and disabled buttons on invalid input); single generations and one-click sets share a 20-image cap (enforced server-side too; the workflow path widened to 1–20 per batch); the hints under "Start" and "Whole set" name the current product and the estimated totals respectively |
