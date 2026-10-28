@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "styles": [
+    {
+      "id": "studio-clean",
+      "name": { "zh-CN": "简洁棚拍", "en": "Clean studio" },
+      "description": { "zh-CN": "浅色背景、柔和布光，突出商品本身", "en": "Light backdrop and soft lighting that keep the focus on the product" },
+      "prompt": "clean seamless studio backdrop, soft diffused lighting, subtle shadow, high detail commercial product photography"
+    },
+    {
+      "id": "lifestyle-natural",
+      "name": { "zh-CN": "生活场景", "en": "Lifestyle" },
+      "description": { "zh-CN": "自然光下的家居或日常使用场景", "en": "Home or everyday scenes in natural light" },
+      "prompt": "lifestyle scene, natural window light, cozy home interior, shallow depth of field, realistic photography"
+    },
+    {
+      "id": "premium-dark",
+      "name": { "zh-CN": "高级质感", "en": "Premium" },
+      "description": { "zh-CN": "深色背景与轮廓光，适合高端商品", "en": "Dark backdrop and rim light for premium products" },
+      "prompt": "premium luxury product shot, dark elegant background, dramatic rim lighting, glossy reflections, high contrast"
+    },
+    {
+      "id": "minimal-pastel",
+      "name": { "zh-CN": "清新简约", "en": "Minimal pastel" },
+      "description": { "zh-CN": "马卡龙色背景与几何道具", "en": "Pastel backdrop with geometric props" },
+      "prompt": "minimalist composition, pastel color backdrop, geometric podium props, soft even lighting, modern clean aesthetic"
+    },
+    {
+      "id": "outdoor-sunlight",
+      "name": { "zh-CN": "户外阳光", "en": "Outdoor sunlight" },
+      "description": { "zh-CN": "户外自然环境与明亮阳光", "en": "Outdoor setting with bright sunlight" },
+      "prompt": "outdoor natural setting, bright warm sunlight, fresh greenery, vibrant colors, realistic photography"
+    },
+    {
+      "id": "festive",
+      "name": { "zh-CN": "节日氛围", "en": "Festive" },
+      "description": { "zh-CN": "节日装饰与暖色灯光，适合大促", "en": "Holiday decorations and warm lights for sales events" },
+      "prompt": "festive holiday atmosphere, warm bokeh lights, tasteful seasonal decorations, celebratory mood, product as the hero"
+    }
+  ]
+}
