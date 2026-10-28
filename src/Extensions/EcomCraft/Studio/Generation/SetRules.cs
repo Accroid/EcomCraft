@@ -15,13 +15,30 @@ public static class SetRules
     /// <summary>A template as the set expansion sees it.</summary>
     public sealed record class TemplateRef(string Id, IReadOnlyList<string> Platforms, IReadOnlyList<string> Sets);
 
-    /// <summary>One task: a product photo (by index) and a template.</summary>
-    public sealed record class Job(int Product, string Template);
+    /// <summary>One task: a product photo (by index), a template and, for storyboard sets (F25), the shot it makes (-1 otherwise).</summary>
+    public sealed record class Job(int Product, string Template, int Shot = -1);
+
+    /// <summary>Whether a template suits the platform (an empty platform means any; "*" in a template suits every platform).</summary>
+    public static bool SuitsPlatform(TemplateRef template, string platform) =>
+        string.IsNullOrEmpty(platform) || template.Platforms.Contains("*") || template.Platforms.Contains(platform);
+
+    /// <summary>Expands products × storyboard shots (F25) into tasks, product by product; each shot names its template.</summary>
+    public static List<Job> ExpandShots(int products, IReadOnlyList<string> shotTemplates)
+    {
+        List<Job> jobs = [];
+        for (int product = 0; product < products; product++)
+        {
+            for (int shot = 0; shot < shotTemplates.Count; shot++)
+            {
+                jobs.Add(new Job(product, shotTemplates[shot], shot));
+            }
+        }
+        return jobs;
+    }
 
     /// <summary>Templates of a set that suit the platform (an empty platform means any; "*" in a template suits every platform), in the given order.</summary>
     public static List<TemplateRef> SetTemplates(IEnumerable<TemplateRef> templates, string platform, string setId) =>
-        [.. templates.Where(template => template.Sets.Contains(setId)
-            && (string.IsNullOrEmpty(platform) || template.Platforms.Contains("*") || template.Platforms.Contains(platform)))];
+        [.. templates.Where(template => template.Sets.Contains(setId) && SuitsPlatform(template, platform))];
 
     /// <summary>Expands products × set templates into tasks, product by product, so the first product's set finishes first.</summary>
     public static List<Job> Expand(int products, IReadOnlyList<TemplateRef> setTemplates)

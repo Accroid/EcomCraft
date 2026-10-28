@@ -122,6 +122,22 @@ test('gallery images are drawn at most 16 megapixels before compressing (F52)', 
     assert.strictEqual(SimpleMode.compressionScale(0, 0), 1);
 });
 
+test('a storyboard only uses image types of the chosen platform (F25)', () => {
+    let simple = section('view-simple');
+    for (let id of ['simple-storyboard', 'simple-storyboard-run', 'simple-shots', 'simple-points']) {
+        assert.ok(simple.includes(`id="${id}"`), `${id} belongs to step 2`);
+    }
+    let SimpleMode = loadSimpleMode();
+    SimpleMode.data.templates = [{ id: 'scene', platforms: ['*'] }, { id: 'amazon-only', platforms: ['amazon'] }];
+    SimpleMode.choice.platform = 'amazon';
+    SimpleMode.storyboard.shots = [{ template: 'scene', purpose: '', prompt: '' }, { template: 'amazon-only', purpose: '', prompt: '' }];
+    assert.strictEqual(SimpleMode.storyboardProblem(), '');
+    SimpleMode.choice.platform = 'taobao';
+    assert.notStrictEqual(SimpleMode.storyboardProblem(), '', 'a shot whose type the platform lacks blocks the set');
+    SimpleMode.storyboard.shots = [];
+    assert.strictEqual(SimpleMode.storyboardProblem(), '');
+});
+
 test('task stages read: writing the prompt, queued or running on a server, done (F56)', () => {
     let SimpleMode = loadSimpleMode();
     SimpleMode.api = { tr: (text, ...args) => String(text).replace(/\{(\d+)\}/g, (match, index) => args[Number(index)]) };

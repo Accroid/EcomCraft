@@ -34,6 +34,16 @@ public class SetRulesTests
         Assert.Equal(new SetRules.Job(1, "white-main"), jobs[2]);
     }
 
+    [Fact]
+    public void StoryboardShotsExpandProductByProductAndMayRepeatTemplates()
+    {
+        List<SetRules.Job> jobs = SetRules.ExpandShots(2, ["scene", "scene", "detail"]);
+        Assert.Equal(6, jobs.Count);
+        Assert.Equal(new SetRules.Job(0, "scene", 0), jobs[0]);
+        Assert.Equal(new SetRules.Job(0, "scene", 1), jobs[1]);
+        Assert.Equal(new SetRules.Job(1, "detail", 2), jobs[5]);
+    }
+
     [Theory]
     [InlineData(0, 1)]
     [InlineData(1, 1)]

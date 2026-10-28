@@ -58,6 +58,12 @@ public static class BatchService
         /// <summary>Template name in the batch's language.</summary>
         public string TemplateName;
 
+        /// <summary>The storyboard shot this task makes (F25), or -1 for an ordinary set.</summary>
+        public int Shot = -1;
+
+        /// <summary>The shot's purpose as the user confirmed it (F25), shown instead of the template name; null for an ordinary set.</summary>
+        public string Purpose;
+
         /// <summary>"prompt" (waiting for the batch prompt, F56), "queued", "running", "done", "failed" or "cancelled".</summary>
         public string State = "queued";
 
@@ -97,6 +103,15 @@ public static class BatchService
 
         /// <summary>The composition result for the owner's result card and notices (F54/F56); null until the prompt is ready.</summary>
         public PromptService.Composed Composed;
+
+        /// <summary>English prompt fragment of each storyboard shot (F25), added to <see cref="Prompt"/> for that shot's tasks; Chinese fragments are translated with the prompt.</summary>
+        public List<string> ShotPrompts = [];
+
+        /// <summary>Purpose of each storyboard shot (F25).</summary>
+        public List<string> ShotPurposes = [];
+
+        /// <summary>Whether some shot fragment could not be translated and was left out (F25).</summary>
+        public bool ShotsUntranslated;
 
         /// <summary>Optional user negative prompt.</summary>
         public string Negative;
@@ -194,12 +209,49 @@ public static class BatchService
             batch.Server = pinned;
         }
         List<(EcomTemplate Template, string WorkflowId, string ImageField)> runnable = TemplateApi.RunnableTemplates(session);
-        List<SetRules.TemplateRef> setTemplates = SetRules.SetTemplates(runnable.Select(item => new SetRules.TemplateRef(item.Template.Id, item.Template.Platforms, item.Template.Sets)), platform, setId);
-        if (setTemplates.Count == 0)
+        List<SetRules.TemplateRef> references = [.. runnable.Select(item => new SetRules.TemplateRef(item.Template.Id, item.Template.Platforms, item.Template.Sets))];
+        List<SetRules.Job> expanded;
+        if (rawInput["shots"] is JArray shotItems && shotItems.Count > 0)
         {
-            return StudioApi.Error("这个平台暂时没有可用的套图模板。请管理员发布模板，或确认执行服务器在线。", "invalid_template");
+            // A confirmed storyboard (F25): every shot is checked again, since the page may have changed it; only template IDs and cleaned text are kept.
+            if (shotItems.Count > StoryboardRules.MaxShots)
+            {
+                return StudioApi.Error($"分镜最多 {StoryboardRules.MaxShots} 张。", "invalid_parameters");
+            }
+            List<string> shotTemplates = [];
+            foreach (JToken item in shotItems)
+            {
+                if (item is not JObject shot)
+                {
+                    return StudioApi.Error("分镜格式无效，请重新生成分镜。", "invalid_parameters");
+                }
+                string templateId = shot["template_id"]?.Type == JTokenType.String ? shot.Value<string>("template_id") : "";
+                SetRules.TemplateRef reference = references.FirstOrDefault(template => template.Id == templateId);
+                if (reference is null || !SetRules.SuitsPlatform(reference, platform))
+                {
+                    return StudioApi.Error("分镜里有当前平台不可用的图片类型，请重新选择后再出图。", "invalid_template");
+                }
+                string fragment = shot["prompt"]?.Type == JTokenType.String ? shot.Value<string>("prompt") : "";
+                string purpose = shot["purpose"]?.Type == JTokenType.String ? shot.Value<string>("purpose") : "";
+                if (fragment.Length > PromptRules.MaxPromptLength || purpose.Length > 500)
+                {
+                    return StudioApi.Error($"分镜的提示词最多 {StoryboardRules.MaxFragmentLength} 个字符。", "invalid_prompt");
+                }
+                shotTemplates.Add(templateId);
+                batch.ShotPrompts.Add(StoryboardRules.CleanFragment(fragment));
+                batch.ShotPurposes.Add(StoryboardRules.CleanText(purpose, StoryboardRules.MaxPurposeLength));
+            }
+            expanded = SetRules.ExpandShots(batch.Products.Count, shotTemplates);
         }
-        List<SetRules.Job> expanded = SetRules.Expand(batch.Products.Count, setTemplates);
+        else
+        {
+            List<SetRules.TemplateRef> setTemplates = SetRules.SetTemplates(references, platform, setId);
+            if (setTemplates.Count == 0)
+            {
+                return StudioApi.Error("这个平台暂时没有可用的套图模板。请管理员发布模板，或确认执行服务器在线。", "invalid_template");
+            }
+            expanded = SetRules.Expand(batch.Products.Count, setTemplates);
+        }
         if (expanded.Count > SetRules.MaxJobs)
         {
             return StudioApi.Error($"一次最多 {SetRules.MaxJobs} 个任务，请减少商品数量。", "invalid_parameters");
@@ -212,7 +264,11 @@ public static class BatchService
         foreach (SetRules.Job job in expanded)
         {
             EcomTemplate template = runnable.First(item => item.Template.Id == job.Template).Template;
-            batch.Jobs.Add(new Job() { Id = batch.Jobs.Count, Product = job.Product, Template = job.Template, TemplateName = EcomTemplate.Pick(template.Name, language) });
+            batch.Jobs.Add(new Job()
+            {
+                Id = batch.Jobs.Count, Product = job.Product, Template = job.Template, TemplateName = EcomTemplate.Pick(template.Name, language),
+                Shot = job.Shot, Purpose = job.Shot >= 0 && batch.ShotPurposes[job.Shot].Length > 0 ? batch.ShotPurposes[job.Shot] : null
+            });
         }
         string description = rawInput["description"]?.Type == JTokenType.String ? rawInput.Value<string>("description").Trim() : "";
         if (description.Length > PromptService.MaxDescriptionLength)
@@ -243,9 +299,14 @@ public static class BatchService
         _ = Utilities.RunCheckedTask(async () =>
         {
             PromptService.Composed composed = await PromptService.ComposePanelAsync(session, style, productTypeId, needModel, description, promptEn, promptZh);
+            // Storyboard fragments written in Chinese are translated too (F25); one that cannot be translated is left out rather than sent untranslated.
+            string[] shotPrompts = await Task.WhenAll(batch.ShotPrompts.Select(async fragment => fragment.Length == 0 || PromptRules.IsAscii(fragment)
+                ? fragment : StoryboardRules.CleanFragment(await PromptService.TranslateToEnglishAsync(session, fragment))));
             List<Job> ready;
             lock (batch.Lock)
             {
+                batch.ShotsUntranslated = shotPrompts.Where((fragment, index) => fragment.Length == 0 && batch.ShotPrompts[index].Length > 0).Any();
+                batch.ShotPrompts = [.. shotPrompts];
                 batch.Prompt = composed.Prompt;
                 batch.Composed = composed;
                 ready = [.. batch.Jobs.Where(job => job.State == "prompt")];
@@ -341,7 +402,9 @@ public static class BatchService
             ["source"] = "local",
             ["template_id"] = template.Template.Id,
             ["template_params"] = parameters,
-            ["prompt"] = batch.Prompt,
+            ["prompt"] = job.Shot >= 0 && job.Shot < batch.ShotPrompts.Count && batch.ShotPrompts[job.Shot].Length > 0
+                ? string.Join(", ", new[] { batch.Prompt, batch.ShotPrompts[job.Shot] }.Where(part => !string.IsNullOrEmpty(part)))
+                : batch.Prompt,
             ["negativeprompt"] = batch.Negative,
             ["images"] = batch.Candidates,
             ["placement"] = new JObject() { ["x"] = product.Placement.CenterX, ["y"] = product.Placement.CenterY, ["size"] = product.Placement.Size },
@@ -421,6 +484,7 @@ public static class BatchService
                     ["product"] = job.Product,
                     ["template"] = job.Template,
                     ["template_name"] = job.TemplateName,
+                    ["purpose"] = job.Purpose,
                     ["state"] = job.State,
                     ["error"] = job.Error,
                     ["error_id"] = job.ErrorId,
@@ -431,6 +495,7 @@ public static class BatchService
             if (batch.Composed is PromptService.Composed composed)
             {
                 status["prompt_used"] = composed.Prompt;
+                status["shots_untranslated"] = batch.ShotsUntranslated;
                 if (composed.Translated is not null)
                 {
                     status["prompt_translated"] = composed.Translated;

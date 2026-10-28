@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.30.0">
-    <script src="/EcomCraft/lang/en.js?v=0.30.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.30.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.30.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.30.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.31.0">
+    <script src="/EcomCraft/lang/en.js?v=0.31.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.31.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.31.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.31.0" defer></script>
 </head>
 
 <body>
@@ -160,6 +160,21 @@
                     <button type="button" class="btn btn-primary btn-block" id="simple-generate" disabled>开始出图</button>
                     <button type="button" class="btn btn-block" id="simple-generate-set" disabled>一键出整套</button>
                     <p class="hint" id="simple-set-hint"></p>
+                    <details class="simple-storyboard" id="simple-storyboard">
+                        <summary>卖点分析与分镜（可选）</summary>
+                        <p class="hint">根据商品描述和你填写的卖点，规划整套图每张的图片类型和用途；可以修改后按分镜出整套。</p>
+                        <span class="fld-label" id="simple-points-label">卖点<span class="fld-optional">可选，最多 5 条</span></span>
+                        <div class="simple-points" id="simple-points" role="group" aria-labelledby="simple-points-label"></div>
+                        <div class="recover-actions">
+                            <button type="button" class="btn btn-sm" id="simple-point-add">添加卖点</button>
+                            <button type="button" class="btn" id="simple-storyboard-run">生成分镜</button>
+                        </div>
+                        <ol class="simple-shots" id="simple-shots" aria-label="分镜"></ol>
+                        <div class="recover-actions" id="simple-shot-actions" hidden>
+                            <button type="button" class="btn btn-sm" id="simple-shot-add">添加一张</button>
+                            <button type="button" class="link-btn" id="simple-storyboard-clear">清空分镜</button>
+                        </div>
+                    </details>
                     <p class="hint" id="simple-hint" aria-live="polite"></p>
                 </li>
                 <li class="simple-step">
