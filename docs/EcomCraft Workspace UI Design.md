@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.16 · **Date:** 2026-10-28
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.17 · **Date:** 2026-10-28
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -169,8 +169,9 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Step 1 Camera upload | Opens the phone camera (F42) | New | Hidden file input with `capture`, works over `http://` LAN addresses; on desktop equals choosing a file |
 | Step 1 Upload quality notice | Resolution, sharpness or product share too low (F38) | New | Checked right after upload (Laplacian variance, cut-out share); amber left bar explains why and suggests what to do; the user can continue |
 | Step 1 Cut-out confirmation | Shown for product-preserving templates | New | Checkerboard preview; "Auto cut-out" runs on an execution server; drag anywhere (touch included), resize slider, "Reset placement"; generating is blocked until confirmed |
-| Step 1 Multiple photos | Pick or drop several (max 20) | New | Thumbnails appear above one; "Use another photo" removes the current one |
-| Step 1 Product library | Auto-save on upload; "Choose from the product library"; rename and delete of the current product | New | Thumbnail list (cut-out when present); name saves on blur; delete asks; placement saves about a second after dragging |
+| Step 1 Four ways to add a photo | From this computer, camera, product library, gallery (F52) | New | Four equal buttons under the upload area (two columns on narrow screens); the library and the gallery open the same picker dialog (Esc closes it, focus stays inside); the gallery lists this account's latest 60 generated images, and a picked image over 5 MB or in another format is compressed to JPEG in the browser; every entry goes through the upload quality notice (F38) and is saved to the library |
+| Step 1 Multiple photos | Pick or drop several (max 20) | New | Thumbnails appear as soon as there is a photo, labelled with their source (computer / camera / library / gallery) in the lower left; "Use another photo" removes the current one |
+| Step 1 Product library | Auto-save on upload; "Choose from the product library" dialog; rename and delete of the current product | New | Thumbnails in the dialog (cut-out when present), with an explanation when the library is empty; name saves on blur; delete asks; placement saves about a second after dragging |
 | Step 2 Platform | Filters the image types | New | "All platforms" lists every template; choice remembered in the browser; common platforms come first and the first is preselected (F40) |
 | Step 2 Image type | Pick a template | New | Cards with example images when available; reasons shown when none is usable |
 | Step 2 Product type | Two-level pick: category and subtype (F53, primary) | New | Category chips + subtype cards; data in `Templates/product-types.json`, subtypes contribute English prompt fragments; choice remembered; defaults to "General product｜Unspecified" |
@@ -388,3 +389,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-28 | v1.14 | Simple-mode redesign v3, step two (F55/T57): the candidate count became a number input (positive integers 1–20 with immediate notices and disabled buttons on invalid input); single generations and one-click sets share a 20-image cap (enforced server-side too; the workflow path widened to 1–20 per batch); the hints under "Start" and "Whole set" name the current product and the estimated totals respectively |
 | 2026-10-28 | v1.15 | Simple-mode redesign v3, step three (F54/T56): "AI expand" next to the one-line description; a Chinese / English tabbed prompt panel with a status chip (edited Chinese is translated by the server on submit, edited English is sent as is); step 3 gained a folded "Prompt sent to the engine" block; new `EcomCraftStudioExpandPrompt` API |
 | 2026-10-28 | v1.16 | Simple-mode redesign v3, step four (F56/T58): submissions return at once; step 3 gained a stage list for single generations (Writing the prompt → Queued / Running with the server's name → Done); set tasks gained a cancellable "Writing the prompt…" state |
+| 2026-10-28 | v1.17 | Simple-mode redesign v3, step five (F52/T54): step 1 offers four equal entries (this computer, camera, product library, gallery); the product library moved from a folded list into a picker dialog; gallery picks are compressed to within 5 MB in the browser; thumbnails show their source |

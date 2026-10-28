@@ -101,6 +101,27 @@ test('a batch counts as finished only when no task is queued or running', () => 
     assert.strictEqual(SimpleMode.batchFinished([{ state: 'prompt' }]), false, 'tasks waiting for the batch prompt are not finished (F56)');
 });
 
+test('step 1 offers four equal ways to add a product photo (F52)', () => {
+    let simple = section('view-simple');
+    for (let id of ['simple-file-btn', 'simple-camera-btn', 'simple-library-btn', 'simple-gallery-btn']) {
+        assert.match(simple, new RegExp(`<button type="button" class="btn" id="${id}">`), `${id} must be a real button`);
+    }
+    assert.ok(html.includes('id="simple-picker-modal"'), 'the library and the gallery open in a picker dialog');
+    let SimpleMode = loadSimpleMode();
+    SimpleMode.api = { tr: text => text };
+    assert.strictEqual(SimpleMode.originText('gallery'), '画廊');
+    assert.strictEqual(SimpleMode.originText('library'), '商品库');
+    assert.strictEqual(SimpleMode.originText('camera'), '拍照');
+    assert.strictEqual(SimpleMode.originText(undefined), '本机');
+});
+
+test('gallery images are drawn at most 16 megapixels before compressing (F52)', () => {
+    let SimpleMode = loadSimpleMode();
+    assert.strictEqual(SimpleMode.compressionScale(2000, 2000), 1);
+    assert.ok(Math.abs(SimpleMode.compressionScale(8000, 8000) - 0.5) < 1e-9);
+    assert.strictEqual(SimpleMode.compressionScale(0, 0), 1);
+});
+
 test('task stages read: writing the prompt, queued or running on a server, done (F56)', () => {
     let SimpleMode = loadSimpleMode();
     SimpleMode.api = { tr: (text, ...args) => String(text).replace(/\{(\d+)\}/g, (match, index) => args[Number(index)]) };
