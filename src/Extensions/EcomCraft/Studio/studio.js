@@ -254,13 +254,13 @@
     /** The plain title of the current view. */
     function currentViewTitle() {
         let titles = { simple: '出图', create: '专业模式', gallery: '作品画廊', queue: '任务队列', workflows: WorkflowReviewView.reviewer() ? '工作流审核' : '提交工作流审核' };
-        return tr('{0} - EcomCraft 创作工作台', tr(titles[state.view] || titles.simple));
+        return tr('{0} - EcomCraft 工作台', tr(titles[state.view] || titles.simple));
     }
 
     /** Applies the tab title: task progress while tasks run, the plain view title otherwise. */
     function applyDocumentTitle() {
         document.title = TitleProgress.active()
-            ? tr('（{0}/{1}）EcomCraft 创作工作台', TitleProgress.finished, TitleProgress.total)
+            ? tr('（{0}/{1}）EcomCraft 工作台', TitleProgress.finished, TitleProgress.total)
             : currentViewTitle();
     }
 
@@ -474,7 +474,7 @@
         let select = $('workflow-select');
         let previous = state.workflowId;
         let workflows = (state.catalog?.workflows || []).filter(workflow => !workflow.kind || workflow.kind == state.type);
-        select.replaceChildren(new Option('标准工作台（当前模式）', ''));
+        select.replaceChildren(new Option('标准参数（不用工作流）', ''));
         let groups = new Map();
         for (let workflow of workflows) {
             let name = workflow.name || workflow.id;
@@ -527,7 +527,7 @@
     /** The explanation under the workflow selector for the selected workflow, or for the standard workspace when none is selected. */
     function workflowDescriptionText(workflow) {
         if (workflow) {
-            return tr('{0} 创作方式由工作流决定；要用图生图、局部重绘，请切回标准工作台。', workflow.description || tr('管理员发布的工作流模板。'));
+            return tr('{0} 创作方式由工作流决定；要用图生图、局部重绘，请切回标准参数。', workflow.description || tr('管理员发布的工作流模板。'));
         }
         return (state.catalog?.workflows || []).length
             ? tr('按来源服务器分组。生成时平台会自动选择能运行它的服务器。')
@@ -676,7 +676,7 @@
     /** One plain sentence about execution servers and available models for the status line above the form. */
     function connectionText(status, modelCount) {
         if (status.local_backends_observed > 0) {
-            return tr('{0} 台执行服务器在线，标准工作台有 {1} 个模型可用。', status.local_backends_observed, modelCount);
+            return tr('{0} 台执行服务器在线，标准参数有 {1} 个模型可用。', status.local_backends_observed, modelCount);
         }
         if (status.local_backends_starting > 0) {
             return '执行服务器正在启动，启动完成后即可生成。';
@@ -713,8 +713,7 @@
             $('user-name').textContent = catalog.user_name;
             $('avatar').textContent = String(catalog.user_name || 'E').slice(0, 1).toUpperCase();
             $('enhancer-settings').hidden = !catalog.can_manage_settings;
-            $('storage-open').hidden = !catalog.can_manage_settings;
-            $('diagnostics-open').hidden = !catalog.can_manage_settings;
+            AdminMenu.updateAccess();
             // The professional mode (sampler, LoRA, steps and other parameters) is for administrators only; everyone else uses the simple mode.
             let access = SimpleMode.viewAccess(catalog);
             $('nav-create').hidden = !access.pro;
@@ -2212,7 +2211,7 @@
         if (!server && !extra.ecomcraft_execution_scope) {
             return null;
         }
-        let workflow = typeof extra.ecomcraft_published_workflow == 'string' && extra.ecomcraft_published_workflow ? extra.ecomcraft_published_workflow : tr('标准工作台');
+        let workflow = typeof extra.ecomcraft_published_workflow == 'string' && extra.ecomcraft_published_workflow ? extra.ecomcraft_published_workflow : tr('标准参数');
         return server ? tr('{0}｜{1}', workflow, server) : workflow;
     }
 
@@ -2365,7 +2364,7 @@
             empty.querySelector('h2').textContent = filtered ? '没有符合条件的作品' : '还没有作品';
             empty.querySelector('p').textContent = filtered
                 ? '换一个关键词，或清空搜索查看全部作品。'
-                : '去创作工作台生成第一张商品图。';
+                : '去“出图”生成第一张商品图。';
             $('gallery-gocreate').hidden = filtered;
             $('gallery-clear-filter').hidden = !filtered;
             return;
@@ -3175,11 +3174,13 @@
 
         /** Shows the navigation entry and page texts for the account's permission; leaves the view when access was removed. */
         static updateAccess() {
-            $('nav-workflows').hidden = !this.available();
+            // Reviewers reach the review from the "Manage" menu (F62); accounts that can only submit keep the navigation entry.
+            $('nav-workflows').hidden = !this.available() || this.reviewer();
+            AdminMenu.updateAccess();
             $('workflows-title').textContent = this.reviewer() ? '工作流审核' : '提交工作流审核';
             $('workflows-intro').textContent = this.reviewer()
                 ? '执行服务器上保存的 ComfyUI 工作流会自动出现在这里。通过审核时会保存一份快照，用户只能调用已发布的快照；来源文件修改后需要重新审核，通过前用户继续使用旧快照。'
-                : '在执行服务器的 ComfyUI 中保存工作流后，可以在这里提交审核。审核通过后，它会出现在创作页的工作流列表中。';
+                : '在执行服务器的 ComfyUI 中保存工作流后，可以在这里提交审核。审核通过后，它会出现在专业模式的工作流列表中。';
             if (state.catalog && !this.available() && state.view == 'workflows') {
                 location.hash = 'create';
             }
@@ -3256,6 +3257,10 @@
             let todo = this.items.filter(item => ['pending', 'rereview'].includes(item.state)).length;
             $('workflows-count').textContent = todo;
             $('workflows-count').hidden = !this.reviewer() || todo == 0;
+            for (let id of ['admin-menu-count', 'admin-menu-workflows-count']) {
+                $(id).textContent = todo;
+                $(id).hidden = !this.reviewer() || todo == 0;
+            }
             for (let button of $('workflows-filter').querySelectorAll('[data-filter]')) {
                 let selected = button.dataset.filter == this.filter;
                 button.classList.toggle('selected', selected);
@@ -3701,6 +3706,117 @@
 
     /* ---------- Dialog focus ---------- */
     /** Moves focus into an open dialog, keeps Tab inside it and returns focus to the opener when it closes. */
+    /** The administrators' "Manage" menu (F62): workflow review, setup wizard, prompt settings, storage and backup, diagnostics and the native engine. */
+    class AdminMenu {
+        /** Shows the menu and its entries for the account's permissions; reviewers see the review, server administrators everything else. */
+        static updateAccess() {
+            let manage = Boolean(state.catalog?.can_manage_settings);
+            let review = Boolean(state.catalog?.can_review_workflows);
+            $('admin-menu').hidden = !manage && !review;
+            $('admin-menu-workflows').hidden = !review;
+            for (let item of $('admin-menu-list').querySelectorAll('[data-admin-only]')) {
+                item.hidden = !manage;
+            }
+            if ($('admin-menu').hidden) {
+                this.close(false);
+            }
+        }
+
+        /** Whether the menu list is open. */
+        static isOpen() {
+            return !$('admin-menu-list').hidden;
+        }
+
+        /** Opens the menu and focuses its first entry. */
+        static open() {
+            $('admin-menu-list').hidden = false;
+            $('admin-menu-btn').setAttribute('aria-expanded', 'true');
+            let first = Array.from($('admin-menu-list').querySelectorAll('.admin-menu-item')).find(item => !item.hidden);
+            if (first) {
+                first.focus();
+            }
+        }
+
+        /** Closes the menu; focus goes back to the menu button when asked. */
+        static close(returnFocus) {
+            if (!this.isOpen()) {
+                return;
+            }
+            $('admin-menu-list').hidden = true;
+            $('admin-menu-btn').setAttribute('aria-expanded', 'false');
+            if (returnFocus) {
+                $('admin-menu-btn').focus();
+            }
+        }
+
+        /** Closes the menu on Escape; returns whether the key was handled. */
+        static keydown(event) {
+            if (event.key == 'Escape' && this.isOpen()) {
+                this.close(true);
+                return true;
+            }
+            return false;
+        }
+
+        /** Binds the menu button, its entries and closing on an outside click. Dialogs opened from it return focus to the menu button. */
+        static bind() {
+            $('admin-menu-btn').addEventListener('click', () => {
+                if (this.isOpen()) {
+                    this.close(false);
+                }
+                else {
+                    this.open();
+                }
+            });
+            document.addEventListener('click', e => {
+                if (this.isOpen() && !$('admin-menu').contains(e.target)) {
+                    this.close(false);
+                }
+            });
+            let actions = {
+                'admin-menu-wizard': () => SetupWizard.open($('admin-menu-btn')),
+                'admin-menu-prompt': () => openEnhancerSettings(),
+                'admin-menu-storage': () => StorageSettingsView.open($('admin-menu-btn')),
+                'admin-menu-diagnostics': () => downloadDiagnostics($('admin-menu-diagnostics'))
+            };
+            for (let [id, action] of Object.entries(actions)) {
+                $(id).addEventListener('click', () => {
+                    this.close(true);
+                    action();
+                });
+            }
+            for (let link of $('admin-menu-list').querySelectorAll('a.admin-menu-item')) {
+                link.addEventListener('click', () => this.close(false));
+            }
+        }
+    }
+
+    /** Builds and downloads the diagnostics bundle (administrators); a failure is shown on the gallery page. */
+    async function downloadDiagnostics(button) {
+        button.disabled = true;
+        try {
+            let result = await request('EcomCraftDiagnostics');
+            if (result.download) {
+                let link = document.createElement('a');
+                link.href = result.download;
+                link.download = result.file_name || 'ecomcraft-diagnostics.zip';
+                document.body.append(link);
+                link.click();
+                link.remove();
+            }
+        }
+        catch (error) {
+            let message = $('gallery-message');
+            message.textContent = error.message || tr('诊断包没有生成，请稍后重试。');
+            message.hidden = false;
+            // The message lives on the gallery page, where the button used to be.
+            location.hash = 'gallery';
+        }
+        finally {
+            button.disabled = false;
+        }
+    }
+
     class DialogFocus {
         static openers = new Map();
 
@@ -4285,7 +4401,7 @@
         $('gallery-select-cancel').addEventListener('click', () => GallerySelection.setActive(false));
         $('gallery-select-all').addEventListener('click', () => GallerySelection.selectAllVisible());
         $('gallery-delete-selected').addEventListener('click', () => GallerySelection.deleteSelected());
-        $('gallery-gocreate').addEventListener('click', () => { location.hash = 'create'; });
+        $('gallery-gocreate').addEventListener('click', () => { location.hash = 'simple'; });
         $('queue-refresh').addEventListener('click', loadQueue);
 
         // Workflow review
@@ -4301,29 +4417,8 @@
         $('review-unpublish').addEventListener('click', () => WorkflowReviewView.decide('unpublish'));
         $('submit-close').addEventListener('click', () => WorkflowReviewView.closeSubmit());
         $('storage-open').addEventListener('click', () => StorageSettingsView.open($('storage-open')));
-        $('diagnostics-open').addEventListener('click', async () => {
-            let button = $('diagnostics-open');
-            button.disabled = true;
-            try {
-                let result = await request('EcomCraftDiagnostics');
-                if (result.download) {
-                    let link = document.createElement('a');
-                    link.href = result.download;
-                    link.download = result.file_name || 'ecomcraft-diagnostics.zip';
-                    document.body.append(link);
-                    link.click();
-                    link.remove();
-                }
-            }
-            catch (error) {
-                let message = $('gallery-message');
-                message.textContent = error.message || tr('诊断包没有生成，请稍后重试。');
-                message.hidden = false;
-            }
-            finally {
-                button.disabled = false;
-            }
-        });
+        $('diagnostics-open').addEventListener('click', () => downloadDiagnostics($('diagnostics-open')));
+        AdminMenu.bind();
         $('storage-close').addEventListener('click', () => StorageSettingsView.close());
         $('storage-cancel').addEventListener('click', () => StorageSettingsView.close());
         $('storage-backdrop').addEventListener('click', () => StorageSettingsView.close());
@@ -4395,7 +4490,7 @@
             }
         });
         window.addEventListener('keydown', e => {
-            if (Lightbox.keydown(e)) {
+            if (Lightbox.keydown(e) || AdminMenu.keydown(e)) {
                 return;
             }
             if (!$('enhancer-modal').hidden) {

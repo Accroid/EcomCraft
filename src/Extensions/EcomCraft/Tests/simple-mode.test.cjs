@@ -258,3 +258,17 @@ test('reference mode follows the chosen task and needs at least one reference (F
     assert.strictEqual(SimpleMode.referenceMode(), false);
     assert.strictEqual(SimpleMode.referenceProblem(), '');
 });
+
+test('the top bar: create images, professional mode, gallery and queue; administration lives in the hidden "Manage" menu (F62)', () => {
+    let start = html.indexOf('<header class="topbar">');
+    let topbar = html.slice(start, html.indexOf('</header>', start));
+    let labels = [...topbar.matchAll(/<a class="nav-item" data-view="(simple|create|gallery|queue)"[^>]*>([^<]+)/g)].map(match => match[2]);
+    assert.deepStrictEqual(labels, ['出图', '专业模式', '画廊', '队列']);
+    assert.match(topbar, /<div class="admin-menu" id="admin-menu" hidden>/, 'the menu starts hidden and is shown to administrators only');
+    let native = [...topbar.matchAll(/<a [^>]*href="\/Text2Image"[^>]*>/g)].map(match => match[0]);
+    assert.strictEqual(native.length, 1, 'one native engine link');
+    assert.match(native[0], /data-admin-only/, 'the native engine link is for administrators only');
+    for (let id of ['admin-menu-workflows', 'admin-menu-wizard', 'admin-menu-prompt', 'admin-menu-storage', 'admin-menu-diagnostics']) {
+        assert.ok(topbar.includes(`id="${id}"`), `${id} is in the menu`);
+    }
+});

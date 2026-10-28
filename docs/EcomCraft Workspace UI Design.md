@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.21 · **Date:** 2026-10-29
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.22 · **Date:** 2026-10-29
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -151,13 +151,14 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Skip link | Keyboard users skip navigation | OK | "Skip to main content", shared by all views |
 | Brand | Return to the workspace start | Gradient block + monospace subline | Plain text "EcomCraft", returns to the creation view |
 | Create / Gallery / Queue navigation | Switch views, URL follows `#create` etc. | OK; gallery and queue carry counts | Top-bar tabs; the current item gets an underline and `aria-current="page"`; counts use tabular numerals and appear only after data loaded, never a wrong 0 |
-| Workflows navigation | Opens `#workflows` review / submission | New | Only for accounts with submit or review permission; reviewers see the pending count |
+| Workflows navigation | Opens `#workflows` submission | New | Only for accounts that can submit but not review; reviewers use the "Manage" menu (F62) |
+| "Manage" menu (administrators) | Holds administration (F62) | New | Button at the right of the top bar, visible to accounts with server-settings or review permission, with the pending review count; lists workflow review (reviewers), first-setup wizard, prompt enhancement settings, storage and backup, download diagnostics and the native engine (new tab; these five need server-settings permission); `aria-expanded` shows the state, Escape, an outside click or choosing an entry closes it, and dialogs opened from it return focus to the button |
 | Mobile menu button `rail-toggle` | Expand navigation on small screens | **Defect: clicking errors out** (`$('.rail')` is gone) | Removed; top-bar tabs stay directly clickable when narrow |
 | Server health `health` | Online execution server count | Dot + text; text hidden when narrow | Clickable, opens the task queue; narrow screens show the number |
 | Language toggle `lang-toggle` | Chinese / English | New | Shows the language it switches to ("EN" or "中文"), no page reload; choice remembered, first visit follows the browser; the button's own text is never translated (`data-i18n-skip`) |
 | Theme toggle `theme-toggle` | Light / dark | **Defect: sun and moon both show** | Only the target icon; `aria-label` follows state |
 | User name / avatar | Current account | Sidebar footer, fixed caption | Top-bar right, account name only |
-| Native engine link | Opens SwarmUI pages | Sidebar link, same tab | Next to the user, new tab, labeled "Native engine" |
+| Native engine link | Opens SwarmUI pages | Sidebar link, same tab | Only in the "Manage" menu, administrators only, new tab (F62) |
 | Footer | Version | Hardcoded 0.3.0, stale | The extension's real version |
 
 ### 3.1.1 Create (simple mode, default view)
@@ -256,8 +257,8 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Video works | Show videos | **Defect: `<img>` shows a broken thumb** | Muted `<video preload="metadata">` first frame, labeled "video" |
 | File name | Identify works | Hover-only | Permanently below the image, ellipsized with a `title` |
 | Pending-sync mark | Not yet copied to the work library (R11.5) | New | "Pending sync" (tally color) in the card info row, explained on hover; read when entering |
-| Storage settings (admin) | Work library and export locations, sync queue, migration; candidate retention and disk thresholds; backup and restore | New | Gallery header button for server-settings accounts; "Check and save" may take 30s with reasons on failure; migration polls every 2s and can stop; the status line carries disk-space notices (F46); backup download and restore both confirm (F45) |
-| Download diagnostics (admin) | Logs, server states and sanitized config (F44) | New | Gallery header button for server-settings accounts; builds a zip and starts the download |
+| Storage settings (admin) | Work library and export locations, sync queue, migration; candidate retention and disk thresholds; backup and restore | New | Opened from "Storage and backup" in the "Manage" menu (F62), server-settings accounts only; "Check and save" may take 30s with reasons on failure; migration polls every 2s and can stop; the status line carries disk-space notices (F46); backup download and restore both confirm (F45) |
+| Download diagnostics (admin) | Logs, server states and sanitized config (F44) | New | An entry of the "Manage" menu (F62), administrators only; builds a zip and starts the download, or shows the reason on the gallery page |
 | Workflow and execution server | Where a work came from (R7.2) | New | "workflow｜server" under the time from work metadata; standard-workspace works say so; older works show nothing; ellipsized with `title` |
 | Empty state | No works / no match | OK | "Nothing yet" (start creating) vs. "no matches" (clear search) |
 | Result banner | Delete and star outcomes | OK | Kept, `aria-live` |
@@ -401,3 +402,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-28 | v1.19 | Brand kits (F12/T17): step 2 gained the brand kit list and management dialog; new `EcomCraftStudioBrandKits` / `EcomCraftStudioBrandKitSave` / `EcomCraftStudioBrandKitDelete` APIs |
 | 2026-10-28 | v1.20 | Selling-point images (F47/T50): step 3 gained the "Make a selling-point image" section with three fixed layouts, the server draws the text with Noto Sans SC; new `EcomCraftStudioSellingImage` API |
 | 2026-10-29 | v1.21 | Task-first simple mode (F61/T64): three task cards at the top, step 2 fields by task, secondary options under "More options"; requirements in the EcomCraft UI and Workflow Redesign |
+| 2026-10-29 | v1.22 | Navigation and "Manage" menu (F62/T65): the top bar is Create images / Professional mode / Gallery / Queue, and administration plus the native engine moved into the administrators' "Manage" menu; consistent wording ("standard workspace" is now "standard parameters", the empty gallery points to "Create images") |

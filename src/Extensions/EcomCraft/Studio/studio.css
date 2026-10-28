@@ -198,8 +198,19 @@ input[type=range] { width: 100%; accent-color: var(--key); }
     background: var(--backdrop); border: 1px solid var(--line-strong); font-size: var(--fs-12); font-weight: 600;
 }
 .user-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.native-link { font-size: var(--fs-13); color: var(--ink-2); text-decoration: none; }
-.native-link:hover { color: var(--key); text-decoration: underline; text-underline-offset: 3px; }
+/* Administrators' "Manage" menu (F62): a disclosure button with a list of administration entries. */
+.admin-menu { position: relative; }
+.admin-menu-list {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; display: grid; min-width: 200px; padding: 6px;
+    background: var(--panel); border: 1px solid var(--line-strong); border-radius: 8px;
+}
+.admin-menu-list[hidden] { display: none; }
+.admin-menu-item {
+    display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 10px; border: 0; border-radius: var(--radius);
+    background: transparent; color: var(--ink); font: inherit; font-size: var(--fs-13); text-align: left; text-decoration: none; cursor: pointer;
+}
+.admin-menu-item:hover { background: var(--key-soft); }
+.admin-menu-item[hidden] { display: none; }
 
 /* ---------- 页面框架 ---------- */
 .page-title { font: 600 var(--fs-28)/1.25 var(--font-display); letter-spacing: .02em; text-wrap: balance; }
@@ -723,7 +734,7 @@ main:focus:not(:focus-visible) { outline: none; }
 }
 @media (max-width: 720px) {
     .topbar { gap: 12px; padding: 0 12px; }
-    .user, .native-link { display: none; }
+    .user { display: none; }
     .view { padding: 20px 12px 0; }
     .page-head { flex-wrap: wrap; }
     .contact-sheet { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
