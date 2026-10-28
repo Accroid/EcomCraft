@@ -2,8 +2,9 @@
 
 /**
  * Three-step simple mode (F07), the default view: 1. upload a product photo, 2. pick platform, image type (template), product type, an optional
- * visual style and whether a model is needed (F53), 3. pick and download candidates. There is no prompt box: the server turns the product type,
- * style and description into the prompt and fills the template's product image field. Professional parameters stay in the administrators' professional mode.
+ * visual style and whether a model is needed (F53), 3. pick and download candidates. The only prompt text is the optional bilingual prompt panel (F54):
+ * "AI expand" fills both languages, edited Chinese is translated by the server and edited English is sent as is; the server always adds the product type,
+ * model and style fragments and fills the template's product image field. Professional parameters stay in the administrators' professional mode.
  * studio.js hands over its helpers through SimpleMode.attach(); all text goes through the translation table.
  */
 class SimpleMode {
@@ -11,6 +12,8 @@ class SimpleMode {
     static data = { platforms: [], templates: [], styles: [], categories: [] };
     static choice = { platform: '', template: '', style: '', category: '', subtype: '' };
     static needModel = false;
+    static prompt = { zh: '', en: '', base: { zh: '', en: '' }, last: '', tab: 'zh', expanding: false };
+    static promptUsed = null;
     static product = null;
     static products = [];
     static library = [];
@@ -194,6 +197,16 @@ class SimpleMode {
             this.needModel = e.target.checked;
             this.update();
         });
+        $('simple-expand').addEventListener('click', () => this.expandPrompt());
+        $('simple-prompt-tab-zh').addEventListener('click', () => this.switchPromptTab('zh'));
+        $('simple-prompt-tab-en').addEventListener('click', () => this.switchPromptTab('en'));
+        for (let lang of ['zh', 'en']) {
+            $(`simple-prompt-${lang}`).addEventListener('input', e => {
+                this.prompt[lang] = e.target.value;
+                this.prompt.last = lang;
+                this.renderPromptState();
+            });
+        }
         $('simple-generate').addEventListener('click', () => this.generate());
         $('simple-generate-set').addEventListener('click', () => this.generateSet());
         $('simple-count').addEventListener('input', () => this.update());
@@ -241,7 +254,138 @@ class SimpleMode {
             await this.load();
         }
         this.renderResults();
+        this.renderPromptUsed();
         this.update();
+    }
+
+    /** Which panel text the server should use (F54): an edited language ('zh' is translated by the server, 'en' is sent as is; when both were edited the last one wins),
+     * the English text when the panel still matches the last expansion or translation, or '' when the panel is empty and the one-line description applies. */
+    static promptSource(prompt) {
+        let p = prompt || this.prompt;
+        let text = { zh: String(p.zh || '').trim(), en: String(p.en || '').trim() };
+        let zhDirty = text.zh != String(p.base.zh || '').trim();
+        let enDirty = text.en != String(p.base.en || '').trim();
+        let order = zhDirty && (!enDirty || p.last == 'zh') ? ['zh', 'en'] : ['en', 'zh'];
+        for (let lang of order) {
+            if (text[lang]) {
+                return lang;
+            }
+        }
+        return '';
+    }
+
+    /** Whether the panel text of a language differs from the last expansion or translation. */
+    static promptDirty(lang) {
+        return String(this.prompt[lang] || '').trim() != String(this.prompt.base[lang] || '').trim();
+    }
+
+    /** The prompt fields of a generation request and what to show afterwards: only the text the server should use is sent. */
+    static promptSnapshot() {
+        let source = this.promptSource();
+        let zh = String(this.prompt.zh || '').trim();
+        let en = String(this.prompt.en || '').trim();
+        if (source == 'zh') {
+            return { source, zh, fields: { prompt_zh: zh } };
+        }
+        if (source == 'en') {
+            return { source, zh: this.promptDirty('en') ? '' : zh, fields: { prompt_en: en } };
+        }
+        return { source, zh: '', fields: {} };
+    }
+
+    /** Fills both languages of the panel and marks them as in sync. */
+    static setPromptTexts(zh, en) {
+        this.prompt.zh = zh;
+        this.prompt.en = en;
+        this.prompt.base = { zh, en };
+        this.prompt.last = '';
+        this.api.$('simple-prompt-zh').value = zh;
+        this.api.$('simple-prompt-en').value = en;
+        this.renderPromptState();
+    }
+
+    /** Shows the Chinese or English text of the panel. */
+    static switchPromptTab(lang) {
+        this.prompt.tab = lang;
+        for (let item of ['zh', 'en']) {
+            this.api.$(`simple-prompt-tab-${item}`).setAttribute('aria-selected', item == lang ? 'true' : 'false');
+            this.api.$(`simple-prompt-${item}`).hidden = item != lang;
+        }
+    }
+
+    /** Shows whether the panel is empty, in sync, or which edited language will be used. */
+    static renderPromptState() {
+        let tr = this.api.tr;
+        let chip = this.api.$('simple-prompt-state');
+        let source = this.promptSource();
+        let dirty = source != '' && this.promptDirty(source);
+        chip.textContent = source == '' ? tr('未填写')
+            : !dirty ? tr('已同步')
+            : source == 'zh' ? tr('中文已修改，提交时自动翻译') : tr('英文已修改，将直接发送');
+        chip.classList.toggle('is-synced', source != '' && !dirty);
+        chip.classList.toggle('is-dirty', dirty);
+    }
+
+    /** AI expand (F54): asks the server to write the one-line description (or the product type) into a full prompt in both languages. */
+    static async expandPrompt() {
+        let tr = this.api.tr;
+        if (this.prompt.expanding || !this.loaded) {
+            return;
+        }
+        this.prompt.expanding = true;
+        this.update();
+        try {
+            let result = await this.api.request('EcomCraftStudioExpandPrompt', {
+                description: this.api.$('simple-description').value.trim(),
+                product_type_id: this.choice.subtype,
+                style_id: this.choice.style,
+                need_model: this.needModel
+            });
+            this.setPromptTexts(String(result.prompt_zh || ''), String(result.prompt_en || ''));
+            if (result.prompt_zh) {
+                this.message(tr('已生成提示词，可直接修改中文或英文。'), false);
+            }
+            else {
+                this.switchPromptTab('en');
+                this.message(tr('中文版本暂时没有生成，已填入英文提示词，可直接修改。'), false);
+            }
+        }
+        catch (error) {
+            this.message(error.message || tr('提示词服务暂时不可用，可直接用一句话出图。'), true);
+        }
+        finally {
+            this.prompt.expanding = false;
+            this.update();
+        }
+    }
+
+    /** After a submission: remembers the prompt the engine received for the result card and puts the server's translation of edited Chinese on the English tab. */
+    static applyPromptResult(result, sent) {
+        if (!result.prompt_used) {
+            return;
+        }
+        let zh = sent.zh;
+        if (result.prompt_translated && sent.source == 'zh' && String(this.prompt.zh || '').trim() == sent.zh) {
+            this.setPromptTexts(this.prompt.zh, String(result.prompt_translated));
+        }
+        this.promptUsed = { zh, en: String(result.prompt_used) };
+        this.renderPromptUsed();
+    }
+
+    /** Shows the prompt of the latest submission (Chinese shown, English actually sent), folded under the status line. */
+    static renderPromptUsed() {
+        let box = this.api.$('simple-prompt-used');
+        let used = this.promptUsed;
+        box.hidden = !used || !used.en;
+        if (box.hidden) {
+            return;
+        }
+        let lines = [];
+        if (used.zh) {
+            lines.push(this.api.el('p', '', this.api.tr('中文：{0}', used.zh)));
+        }
+        lines.push(this.api.el('p', '', this.api.tr('英文（实际发送）：{0}', used.en)));
+        this.api.$('simple-prompt-used-body').replaceChildren(...lines);
     }
 
     /** Reads platforms, templates and styles from the server. */
@@ -972,6 +1116,10 @@ class SimpleMode {
         this.api.$('simple-model-hint').textContent = cutoutOnly
             ? this.api.tr('白底主图为纯抠图，不支持模特。')
             : this.api.tr('勾选后提示词会加入模特描述（初版仅此一项，后续再扩展性别、手模等属性）。');
+        let expand = this.api.$('simple-expand');
+        expand.disabled = this.prompt.expanding || !this.loaded || !this.api.state.session;
+        expand.textContent = this.prompt.expanding ? this.api.tr('AI 扩写中…') : this.api.tr('AI 扩写');
+        this.renderPromptState();
         let blocker = this.blocker();
         this.api.$('simple-generate').disabled = Boolean(blocker);
         let countProblem = this.countProblem();
@@ -1045,6 +1193,7 @@ class SimpleMode {
         if (!this.products.length || this.submitting || this.countProblem() || this.products.length * set.length * this.countValue() > 20) {
             return;
         }
+        let sent = this.promptSnapshot();
         let payload = {
             language: I18n.current,
             platform: this.choice.platform,
@@ -1053,6 +1202,7 @@ class SimpleMode {
             product_type_id: this.choice.subtype,
             need_model: this.needModel,
             description: this.api.$('simple-description').value.trim(),
+            ...sent.fields,
             candidates: this.countValue(),
             products: this.products.map(product => product.id
                 ? { product_id: product.id, placement: this.clampPlacement(this.placement) }
@@ -1069,6 +1219,8 @@ class SimpleMode {
             this.renderBatch();
             this.trackBatch();
             this.api.$('simple-status').textContent = tr('已开始出整套图：共 {0} 个任务，会分配到空闲的执行服务器上并行完成。', (batch.jobs || []).length);
+            this.applyPromptResult(batch, sent);
+            this.promptNotice(batch.prompt_notice_code);
         }
         catch (error) {
             this.message(error.message || tr('提交失败，请稍后重试。'), true);
@@ -1199,6 +1351,7 @@ class SimpleMode {
             return;
         }
         let params = {};
+        let sent = this.promptSnapshot();
         let field = this.imageField(template);
         if (field && this.product && !this.product.id) {
             params[field.id] = template.preserve_product ? this.product.cutout : this.product.data;
@@ -1212,6 +1365,7 @@ class SimpleMode {
             product_type_id: this.choice.subtype,
             need_model: this.needModel,
             description: this.api.$('simple-description').value.trim(),
+            ...sent.fields,
             images: this.countValue(),
             platform: this.choice.platform,
             async: true
@@ -1246,8 +1400,8 @@ class SimpleMode {
                 status = tr('已开始出图（由“{0}”执行），完成后候选图会出现在下方。', result.execution_server);
             }
             this.api.$('simple-status').textContent = status;
-            this.message(result.prompt_notice_code == 'description_unused' ? tr('提示词优化服务暂时不可用，你的中文描述这次没有用上，已按所选风格出图。')
-                : result.prompt_notice_code == 'description_used' ? tr('提示词优化服务暂时不可用，已直接使用你的英文描述。') : '', false);
+            this.applyPromptResult(result, sent);
+            this.promptNotice(result.prompt_notice_code);
         }
         catch (error) {
             this.message(error.message || tr('提交失败，请稍后重试。'), true);
@@ -1256,6 +1410,14 @@ class SimpleMode {
             this.submitting = false;
             this.update();
         }
+    }
+
+    /** Explains a prompt fallback the server used (F37/F54); clears the banner when there was none. */
+    static promptNotice(code) {
+        let tr = this.api.tr;
+        this.message(code == 'description_unused' ? tr('提示词优化服务暂时不可用，你的中文描述这次没有用上，已按所选风格出图。')
+            : code == 'description_used' ? tr('提示词优化服务暂时不可用，已直接使用你的英文描述。')
+            : code == 'prompt_untranslated' ? tr('提示词服务暂时不可用，你修改的中文提示词这次没能翻译成英文，已按所选产品类型和风格出图。') : '', false);
     }
 
     /** Polls the queue for this page's tasks and collects their results; keeps polling in the background (F43). */

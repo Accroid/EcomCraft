@@ -220,7 +220,14 @@ public static class BatchService
         {
             return StudioApi.Error("未知的产品类型，请刷新页面后重选。", "invalid_product_type");
         }
-        PromptService.Composed composed = await PromptService.ComposeAsync(session, style, productTypeId, needModel, description, null);
+        string promptEn = rawInput["prompt_en"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt_en") : "";
+        string promptZh = rawInput["prompt_zh"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt_zh") : "";
+        if (promptEn.Length > PromptRules.MaxPromptLength || promptZh.Length > PromptRules.MaxPromptLength)
+        {
+            return StudioApi.Error($"提示词最多 {PromptRules.MaxPromptLength} 个字符。", "invalid_prompt");
+        }
+        // The bilingual prompt panel (F54) decides the prompt when it holds text; otherwise the one-line description is composed as before.
+        PromptService.Composed composed = await PromptService.ComposePanelAsync(session, style, productTypeId, needModel, description, promptEn, promptZh);
         batch.Prompt = composed.Prompt;
         batch.Negative = rawInput["negativeprompt"]?.Type == JTokenType.String ? rawInput.Value<string>("negativeprompt") : "";
         Batches[batch.Id] = batch;
@@ -229,6 +236,11 @@ public static class BatchService
             _ = Utilities.RunCheckedTask(() => RunJobAsync(session, batch, job), "ecomcraft batch task");
         }
         JObject response = Status(batch);
+        response["prompt_used"] = composed.Prompt;
+        if (composed.Translated is not null)
+        {
+            response["prompt_translated"] = composed.Translated;
+        }
         response["prompt_notice"] = composed.Notice;
         response["prompt_notice_code"] = composed.NoticeCode;
         return response;
