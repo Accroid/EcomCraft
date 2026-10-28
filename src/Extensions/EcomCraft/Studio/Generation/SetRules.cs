@@ -6,6 +6,9 @@ public static class SetRules
     /// <summary>Most product photos in one batch.</summary>
     public const int MaxProducts = 20;
 
+    /// <summary>Most reference images in reference mode (F59), matching the storyboard shot cap.</summary>
+    public const int MaxReferences = 8;
+
     /// <summary>Most tasks one batch may expand into.</summary>
     public const int MaxJobs = 80;
 
@@ -15,8 +18,8 @@ public static class SetRules
     /// <summary>A template as the set expansion sees it.</summary>
     public sealed record class TemplateRef(string Id, IReadOnlyList<string> Platforms, IReadOnlyList<string> Sets, string Kind = "");
 
-    /// <summary>One task: a product photo (by index), a template and, for storyboard sets (F25), the shot it makes (-1 otherwise).</summary>
-    public sealed record class Job(int Product, string Template, int Shot = -1);
+    /// <summary>One task: a product photo (by index), a template and, for storyboard sets (F25) or reference mode (F59), the shot or reference it makes (-1 otherwise).</summary>
+    public sealed record class Job(int Product, string Template, int Shot = -1, int Reference = -1);
 
     /// <summary>Whether a template suits the platform (an empty platform means any; "*" in a template suits every platform).</summary>
     public static bool SuitsPlatform(TemplateRef template, string platform) =>
@@ -61,6 +64,20 @@ public static class SetRules
             foreach (TemplateRef template in setTemplates)
             {
                 jobs.Add(new Job(product, template.Id));
+            }
+        }
+        return jobs;
+    }
+
+    /// <summary>Expands products × reference images into tasks (F59): one image per reference, all with the same template, product by product.</summary>
+    public static List<Job> ExpandReferences(int products, string templateId, int references)
+    {
+        List<Job> jobs = [];
+        for (int product = 0; product < products; product++)
+        {
+            for (int reference = 0; reference < references; reference++)
+            {
+                jobs.Add(new Job(product, templateId, -1, reference));
             }
         }
         return jobs;

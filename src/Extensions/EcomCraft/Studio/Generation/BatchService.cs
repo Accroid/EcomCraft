@@ -65,6 +65,9 @@ public static class BatchService
         /// <summary>The shot's purpose as the user confirmed it (F25), shown instead of the template name; null for an ordinary set.</summary>
         public string Purpose;
 
+        /// <summary>The reference image this task makes (F59), or -1 for an ordinary set; the page shows that reference's thumbnail.</summary>
+        public int Reference = -1;
+
         /// <summary>"prompt" (waiting for the batch prompt, F56), "queued", "running", "done", "failed" or "cancelled".</summary>
         public string State = "queued";
 
@@ -110,6 +113,12 @@ public static class BatchService
 
         /// <summary>Purpose of each storyboard shot (F25).</summary>
         public List<string> ShotPurposes = [];
+
+        /// <summary>English prompt of each reference image (F59), already final and user-edited: reference mode does no background composition.</summary>
+        public List<string> ReferencePrompts = [];
+
+        /// <summary>Reference images of reference mode (F59), kept in memory only for the batch's lifetime; never written under Data/.</summary>
+        public List<string> ReferenceImages = [];
 
         /// <summary>Whether some shot fragment could not be translated and was left out (F25).</summary>
         public bool ShotsUntranslated;
@@ -215,7 +224,61 @@ public static class BatchService
         List<(EcomTemplate Template, string WorkflowId, string ImageField)> runnable = TemplateApi.RunnableTemplates(session);
         List<SetRules.TemplateRef> references = [.. runnable.Select(item => new SetRules.TemplateRef(item.Template.Id, item.Template.Platforms, item.Template.Sets, item.Template.Kind))];
         List<SetRules.Job> expanded;
-        if (rawInput["shots"] is JArray shotItems && shotItems.Count > 0)
+        // Reference mode (F59): one image per reference, prompts already final and user-edited, a fixed scene template, and no other step-2 options.
+        List<string> referencePrompts = null;
+        if (rawInput["reference_prompts"] is JArray promptItems)
+        {
+            if (promptItems.Count == 0 || promptItems.Count > SetRules.MaxReferences)
+            {
+                return StudioApi.Error($"参考图须为 1–{SetRules.MaxReferences} 张。", "invalid_parameters");
+            }
+            if (rawInput["shots"] is JArray withShots && withShots.Count > 0)
+            {
+                return StudioApi.Error("分镜与参考图不能同时使用，请二选一。", "invalid_parameters");
+            }
+            referencePrompts = [];
+            foreach (JToken item in promptItems)
+            {
+                string rawPrompt = item?.Type == JTokenType.String ? item.ToString().Trim() : "";
+                if (rawPrompt.Length == 0 || rawPrompt.Length > PromptRules.MaxPromptLength)
+                {
+                    return StudioApi.Error($"每张参考图都需要 1–{PromptRules.MaxPromptLength} 个字符的英文提示词。", "invalid_prompt");
+                }
+                string cleaned = PromptRules.CleanUserPrompt(rawPrompt);
+                if (cleaned.Length == 0)
+                {
+                    return StudioApi.Error("参考提示词无效，请修改后重试。", "invalid_prompt");
+                }
+                referencePrompts.Add(cleaned);
+            }
+            // Optional images, kept in memory only for the batch's lifetime (F59); P1 sends prompts alone.
+            if (rawInput["reference_images"] is JArray imageItems)
+            {
+                if (imageItems.Count != promptItems.Count)
+                {
+                    return StudioApi.Error("参考图数量与提示词数量不一致。", "invalid_parameters");
+                }
+                foreach (JToken item in imageItems)
+                {
+                    string image = item?.Type == JTokenType.String ? item.ToString() : "";
+                    if (!image.StartsWith("data:image/", StringComparison.Ordinal) || image.Length > MaxImageDataLength)
+                    {
+                        return StudioApi.Error("参考图须为不超过 5 MB 的图片。", "invalid_reference");
+                    }
+                    batch.ReferenceImages.Add(image);
+                }
+            }
+            SetRules.TemplateRef scene = references.FirstOrDefault(template => template.Kind == "scene_main" && template.Sets.Contains(setId) && SetRules.SuitsPlatform(template, platform));
+            if (scene is null)
+            {
+                return StudioApi.Error("参考模式需要场景类模板：请管理员发布场景模板，或确认执行服务器在线。", "invalid_template");
+            }
+            batch.ReferencePrompts = referencePrompts;
+            batch.Candidates = 1;
+            candidates = 1;
+            expanded = SetRules.ExpandReferences(batch.Products.Count, scene.Id, referencePrompts.Count);
+        }
+        else if (rawInput["shots"] is JArray shotItems && shotItems.Count > 0)
         {
             // A confirmed storyboard (F25): every shot is checked again, since the page may have changed it; only template IDs and cleaned text are kept.
             if (shotItems.Count > StoryboardRules.MaxShots)
@@ -275,43 +338,64 @@ public static class BatchService
             batch.Jobs.Add(new Job()
             {
                 Id = batch.Jobs.Count, Product = job.Product, Template = job.Template, TemplateName = EcomTemplate.Pick(template.Name, language),
-                Shot = job.Shot, Purpose = job.Shot >= 0 && batch.ShotPurposes[job.Shot].Length > 0 ? batch.ShotPurposes[job.Shot] : null
+                Shot = job.Shot, Reference = job.Reference,
+                Purpose = job.Shot >= 0 && batch.ShotPurposes[job.Shot].Length > 0 ? batch.ShotPurposes[job.Shot] : null
             });
         }
-        string description = rawInput["description"]?.Type == JTokenType.String ? rawInput.Value<string>("description").Trim() : "";
-        if (description.Length > PromptService.MaxDescriptionLength)
+        string description = "";
+        string style = "";
+        string productTypeId = "";
+        bool needModel = false;
+        string promptEn = "";
+        string promptZh = "";
+        // In reference mode none of the other step-2 options apply (F59): no description, style, product type, prompt panel or brand kit.
+        if (referencePrompts is null)
         {
-            return StudioApi.Error($"描述最多 {PromptService.MaxDescriptionLength} 个字符。", "invalid_prompt");
-        }
-        string style = rawInput["style_id"]?.Type == JTokenType.String ? rawInput.Value<string>("style_id") : "";
-        string productTypeId = rawInput["product_type_id"]?.Type == JTokenType.String ? rawInput.Value<string>("product_type_id") : "";
-        bool needModel = rawInput["need_model"]?.Type == JTokenType.Boolean && rawInput.Value<bool>("need_model");
-        if (!PromptService.KnownProductType(productTypeId))
-        {
-            return StudioApi.Error("未知的产品类型，请刷新页面后重选。", "invalid_product_type");
-        }
-        string promptEn = rawInput["prompt_en"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt_en") : "";
-        string promptZh = rawInput["prompt_zh"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt_zh") : "";
-        if (promptEn.Length > PromptRules.MaxPromptLength || promptZh.Length > PromptRules.MaxPromptLength)
-        {
-            return StudioApi.Error($"提示词最多 {PromptRules.MaxPromptLength} 个字符。", "invalid_prompt");
-        }
-        if (rawInput["brand_kit_id"]?.Type == JTokenType.String && rawInput.Value<string>("brand_kit_id").Length > 0)
-        {
-            // Checked now so a missing kit fails at once; every task then sends the kit's ID through the normal template path (F12).
-            (_, string brandProblem) = Brand.BrandKitLibrary.FragmentFor(session.User.UserID, rawInput.Value<string>("brand_kit_id"));
-            if (brandProblem is not null)
+            description = rawInput["description"]?.Type == JTokenType.String ? rawInput.Value<string>("description").Trim() : "";
+            if (description.Length > PromptService.MaxDescriptionLength)
             {
-                return StudioApi.Error(brandProblem, "invalid_brand_kit");
+                return StudioApi.Error($"描述最多 {PromptService.MaxDescriptionLength} 个字符。", "invalid_prompt");
             }
-            batch.BrandKitId = rawInput.Value<string>("brand_kit_id");
+            style = rawInput["style_id"]?.Type == JTokenType.String ? rawInput.Value<string>("style_id") : "";
+            productTypeId = rawInput["product_type_id"]?.Type == JTokenType.String ? rawInput.Value<string>("product_type_id") : "";
+            needModel = rawInput["need_model"]?.Type == JTokenType.Boolean && rawInput.Value<bool>("need_model");
+            if (!PromptService.KnownProductType(productTypeId))
+            {
+                return StudioApi.Error("未知的产品类型，请刷新页面后重选。", "invalid_product_type");
+            }
+            promptEn = rawInput["prompt_en"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt_en") : "";
+            promptZh = rawInput["prompt_zh"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt_zh") : "";
+            if (promptEn.Length > PromptRules.MaxPromptLength || promptZh.Length > PromptRules.MaxPromptLength)
+            {
+                return StudioApi.Error($"提示词最多 {PromptRules.MaxPromptLength} 个字符。", "invalid_prompt");
+            }
+            if (rawInput["brand_kit_id"]?.Type == JTokenType.String && rawInput.Value<string>("brand_kit_id").Length > 0)
+            {
+                // Checked now so a missing kit fails at once; every task then sends the kit's ID through the normal template path (F12).
+                (_, string brandProblem) = Brand.BrandKitLibrary.FragmentFor(session.User.UserID, rawInput.Value<string>("brand_kit_id"));
+                if (brandProblem is not null)
+                {
+                    return StudioApi.Error(brandProblem, "invalid_brand_kit");
+                }
+                batch.BrandKitId = rawInput.Value<string>("brand_kit_id");
+            }
         }
         batch.Negative = rawInput["negativeprompt"]?.Type == JTokenType.String ? rawInput.Value<string>("negativeprompt") : "";
         foreach (Job job in batch.Jobs)
         {
-            job.State = "prompt";
+            job.State = referencePrompts is null ? "prompt" : "queued";
         }
         Batches[batch.Id] = batch;
+        if (referencePrompts is not null)
+        {
+            // Reference prompts are already final and user-edited (F59): no background composition, the tasks start at once.
+            batch.Composed = new PromptService.Composed("", "reference", null, null);
+            foreach (Job job in batch.Jobs)
+            {
+                _ = Utilities.RunCheckedTask(() => RunJobAsync(session, batch, job), "ecomcraft batch task");
+            }
+            return Status(batch);
+        }
         // The batch is answered at once; the prompt is composed once in the background (F56) and the tasks start when it is ready.
         // The bilingual prompt panel (F54) decides the prompt when it holds text; otherwise the one-line description is composed as before.
         _ = Utilities.RunCheckedTask(async () =>
@@ -445,7 +529,8 @@ public static class BatchService
             ["source"] = "local",
             ["template_id"] = template.Template.Id,
             ["template_params"] = parameters,
-            ["prompt"] = job.Shot >= 0 && job.Shot < batch.ShotPrompts.Count && batch.ShotPrompts[job.Shot].Length > 0
+            ["prompt"] = job.Reference >= 0 && job.Reference < batch.ReferencePrompts.Count ? batch.ReferencePrompts[job.Reference]
+                : job.Shot >= 0 && job.Shot < batch.ShotPrompts.Count && batch.ShotPrompts[job.Shot].Length > 0
                 ? string.Join(", ", new[] { batch.Prompt, batch.ShotPrompts[job.Shot] }.Where(part => !string.IsNullOrEmpty(part)))
                 : batch.Prompt,
             ["negativeprompt"] = batch.Negative,
@@ -453,6 +538,11 @@ public static class BatchService
             ["placement"] = new JObject() { ["x"] = product.Placement.CenterX, ["y"] = product.Placement.CenterY, ["size"] = product.Placement.Size },
             ["platform"] = batch.Platform
         };
+        if (job.Reference >= 0)
+        {
+            // A reference task's prompt is final and user-edited (F59): it is sent as is, without the template's own fragments.
+            payload["raw_prompt"] = true;
+        }
         if (batch.Server is int server)
         {
             payload["execution_server_id"] = server;
@@ -532,6 +622,7 @@ public static class BatchService
                     ["template"] = job.Template,
                     ["template_name"] = job.TemplateName,
                     ["purpose"] = job.Purpose,
+                    ["reference_index"] = job.Reference,
                     ["state"] = job.State,
                     ["error"] = job.Error,
                     ["error_id"] = job.ErrorId,

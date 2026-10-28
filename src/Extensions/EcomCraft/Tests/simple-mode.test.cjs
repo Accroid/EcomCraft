@@ -31,9 +31,21 @@ test('the simple view is the default and its only text boxes are the bilingual p
     assert.ok(!/<section class="view" id="view-simple"[^>]*\bhidden\b/.test(simple), 'simple view must be visible by default');
     let textareas = [...simple.matchAll(/<textarea\b[^>]*\bid="([^"]+)"/gi)].map(match => match[1]);
     assert.strictEqual((simple.match(/<textarea\b/gi) || []).length, textareas.length, 'every textarea in simple mode needs an id');
-    assert.deepStrictEqual(textareas, ['simple-prompt-zh', 'simple-prompt-en'], 'only the bilingual prompt panel (F54) in simple mode');
+    assert.deepStrictEqual(textareas, ['simple-prompt-zh', 'simple-prompt-en'], 'only the bilingual prompt panel (F54) in the static page; reference prompts (F59) are created per image in JS');
     assert.ok(!/id="prompt"|id="negative"/.test(simple));
     assert.match(section('view-create'), /<section class="view" id="view-create"[^>]*\bhidden\b/);
+});
+
+test('reference mode (F59): upload entry, standalone generate button and per-reference prompts created in JS', () => {
+    let simple = section('view-simple');
+    for (let id of ['simple-reference-add', 'simple-reference-file', 'simple-references', 'simple-reference-list-block', 'simple-generate-reference', 'simple-reference-hint']) {
+        assert.ok(simple.includes(`id="${id}"`), `step 2 needs the reference entry ${id}`);
+    }
+    let js = fs.readFileSync(path.join(studioDir, 'simple.js'), 'utf8');
+    assert.match(js, /createElement\('textarea'\)/, 'each reference gets its own prompt box at runtime');
+    assert.match(js, /EcomCraftStudioReferenceDescribe/, 'references are described by the server');
+    assert.match(js, /reference_prompts/, 'generation sends one prompt per reference');
+    assert.match(js, /reference_index/, 'task cards can show their reference');
 });
 
 test('professional parameters live only in the professional view', () => {

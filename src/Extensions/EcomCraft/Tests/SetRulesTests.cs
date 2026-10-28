@@ -46,6 +46,18 @@ public class SetRulesTests
     }
 
     [Fact]
+    public void ReferencesExpandOneImagePerReferenceProductByProduct()
+    {
+        List<SetRules.Job> jobs = SetRules.ExpandReferences(2, "scene", 3);
+        Assert.Equal(6, jobs.Count);
+        Assert.Equal(new SetRules.Job(0, "scene", -1, 0), jobs[0]);
+        Assert.Equal(new SetRules.Job(0, "scene", -1, 2), jobs[2]);
+        Assert.Equal(new SetRules.Job(1, "scene", -1, 0), jobs[3]);
+        Assert.Equal(new SetRules.Job(1, "scene", -1, 2), jobs[5]);
+        Assert.All(jobs, job => Assert.Equal(-1, job.Shot));
+    }
+
+    [Fact]
     public void ExpandsProductByProduct()
     {
         List<SetRules.Job> jobs = SetRules.Expand(2, SetRules.SetTemplates(Templates(), "taobao", "standard"));
