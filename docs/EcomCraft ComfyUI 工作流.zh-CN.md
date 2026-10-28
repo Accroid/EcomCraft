@@ -155,6 +155,14 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行�
 
 平台导出：平台预设在扩展目录的 `Templates/platforms.json`（管理员可在 `Data/EcomCraft/platforms.json` 放一份同格式的文件覆盖），包含国内外平台的中英文名称和导出规格（`width`、`height`、`background`、`format` 为 jpg 或 png、`quality`、`source` 来源说明、`verified` 是否已核对）。内置数值取自各平台公开的常见要求，均标为未核对，使用前须对照平台最新规范（N06）并改为 `verified: true`。`EcomCraftStudioExportOptions`（可选 `language`）列出有导出规格的平台和是否可以导出到共享文件夹；`EcomCraftStudioExport`（`platform`、`target` 为 `zip` 或 `folder`、`groups` 为 `[{ name, images }]`，`images` 是本人作品的画廊路径或生成结果地址，最多 200 张）把作品等比缩放到规格内、居中并用背景色补边（透明处也显示背景色），每组一个文件夹：`zip` 返回 `download` 下载地址（只有本人能下载，保留 1 小时），`folder` 写入管理员设置的导出位置 `<账号>/<时间-平台>/<商品>/`。错误码为 `invalid_export` 和 `export_failed`。导出时按作品来源写入 AI 标识元数据（XMP `Iptc4xmpExt:DigitalSourceType`、`xmp:CreatorTool`、`dc:description`，EXIF `Software`、`ImageDescription`）：普通生成图为 `trainedAlgorithmicMedia`，保真合成图（原商品像素 + 生成背景）为 `compositeWithTrainedAlgorithmicMedia`，纯抠图主图不写。规格带 `require_white_background`（亚马逊）时检查画面边缘一圈是否纯白，不是纯白的文件列在 `not_white` 中并在界面提示。
 
+候选图保留与清理：简易模式生成的候选图会登记到平台；未被选中、下载或导出的候选图超过管理员设置的保留天数（默认 14 天，填 0 关闭）后由后台删除，删除前校验路径在作品目录内且为图片或视频。客户端在用户选中或下载候选时调用 `EcomCraftStudioMarkKept`（`images` 为本人作品的画廊路径或生成结果地址，最多 500 个）把作品移出清理登记；平台导出在服务端自动标记。专业模式的生成结果不登记、不会被自动清理。
+
+上传质量阈值：`EcomCraftStudioPlatforms` 返回 `quality`（`min_side`、`blur_variance`、`min_cutout_ratio`），即 `platforms.json` 中 `upload_quality` 的阈值；客户端据此提示分辨率过低、模糊或商品占比过小，用户可以继续。
+
+运维接口（管理员）：`EcomCraftDiagnostics` 生成诊断包 zip（最近日志、执行服务器状态、版本和脱敏后的配置；密钥、密码、令牌、提示词、图片和会话信息自动去除），返回 `download` 地址（`/EcomCraft/diagnostics/<id>`，仅创建者可下载，保留 1 小时）。`EcomCraftBackupCreate` 把 `Data/EcomCraft` 与账号数据库打包为带 SHA-256 清单的 zip（`/EcomCraft/backup/<id>`，保留 1 天）；`EcomCraftBackupRestore`（`data` 为 base64 的备份内容，必须 `confirm: true`）逐文件校验后恢复，被占用的账号数据库文件放入暂存目录供停机后替换，响应返回 `restored`、`staged` 和 `restart_required`。错误码为 `backup_failed`、`backup_invalid` 和 `backup_confirm_required`。
+
+磁盘空间：后台定期检查平台服务器输出目录和作品库的剩余空间（阈值在存储设置中，警告默认 10 GB、严重不足默认 2 GB，填 0 关闭）。严重不足时 `EcomCraftStudioGenerate` 和 `EcomCraftStudioGenerateSet` 直接拒绝并返回 `disk_full`；`EcomCraftStudioQueue` 对管理员额外返回 `disk`（`level`、`output_free_gb`、`library_free_gb`）。
+
 原生导入项额外返回 `native: true` 和 `defaults`。`inputs[].form` 标记绑定到标准页面字段的参数（如 `width`、`seed`）；其余输入通过 `workflow_params` 提交。省略标准字段时使用相应已发布参数或保存的默认值，同时提供时以标准字段为准。原生项无需提交根级 `model`，模型修改通过 `inputs` 中模型下拉框的 ID 提交，服务端仅接受公布的选项；参数 ID 是不透明标识，客户端不要自行构造。
 
 ## 安全边界

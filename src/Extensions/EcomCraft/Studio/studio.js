@@ -2697,13 +2697,27 @@
             DialogFocus.leave($('wizard-modal'));
         }
 
-        /** Redraws the current step's title, body and footer buttons. */
+        /** Redraws the current step's title, body and footer buttons. Async steps (model check, platforms) first show a
+         * loading line and then swap in their content, because their render functions return a promise. */
         static render() {
             let step = this.steps[this.step];
             $('wizard-step-title').textContent = tr('第 {0} 步，共 {1} 步：{2}', this.step + 1, this.steps.length, tr(step.title));
             $('wizard-progress').textContent = tr('第 {0} / {1} 步', this.step + 1, this.steps.length);
             $('wizard-next').textContent = this.step == this.steps.length - 1 ? tr('完成') : tr('下一步');
-            $('wizard-body').replaceChildren(step.render());
+            let content = step.render();
+            if (content && typeof content.then == 'function') {
+                let holder = el('div');
+                holder.append(el('p', '', tr('正在读取…')));
+                $('wizard-body').replaceChildren(holder);
+                content.then(node => {
+                    if (this.steps[this.step] == step) {
+                        $('wizard-body').replaceChildren(node);
+                    }
+                });
+            }
+            else {
+                $('wizard-body').replaceChildren(content);
+            }
         }
 
         /** Goes to the next step, saving the last step's platform choice; the last step closes the wizard. */
