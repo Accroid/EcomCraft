@@ -186,20 +186,8 @@ public static class WorkSync
         List<Item> added = [];
         foreach (JToken image in images)
         {
-            string url = image.Type == JTokenType.String ? image.ToString() : image["image"]?.ToString();
-            string relative = url is null ? null
-                : url.StartsWith($"View/{user.UserID}/", StringComparison.Ordinal) ? url[$"View/{user.UserID}/".Length..]
-                : url.StartsWith("Output/", StringComparison.Ordinal) ? url["Output/".Length..] : null;
-            if (relative is null || !StorageRules.IsSafeRelative(relative))
-            {
-                continue;
-            }
-            string local;
-            try
-            {
-                local = Path.GetFullPath(UserImageHistoryHelper.GetRealPathFor(user, $"{user.OutputDirectory}/{relative}"));
-            }
-            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            string local = LocalPathFor(user, image.Type == JTokenType.String ? image.ToString() : image["image"]?.ToString(), out string relative);
+            if (local is null)
             {
                 continue;
             }
@@ -214,6 +202,29 @@ public static class WorkSync
             EnsureLoaded();
             Items.AddRange(added);
             Save();
+        }
+    }
+
+    /// <summary>The local file of a generation result URL ("View/&lt;user&gt;/path" or "Output/path") and its path relative to the user's output folder,
+    /// or null for anything else (data URLs, other users' paths, unsafe paths).</summary>
+    public static string LocalPathFor(User user, string url, out string relative)
+    {
+        relative = url is null ? null
+            : url.StartsWith($"View/{user.UserID}/", StringComparison.Ordinal) ? url[$"View/{user.UserID}/".Length..]
+            : url.StartsWith("Output/", StringComparison.Ordinal) ? url["Output/".Length..] : null;
+        if (relative is null || !StorageRules.IsSafeRelative(relative))
+        {
+            relative = null;
+            return null;
+        }
+        try
+        {
+            return Path.GetFullPath(UserImageHistoryHelper.GetRealPathFor(user, $"{user.OutputDirectory}/{relative}"));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            relative = null;
+            return null;
         }
     }
 

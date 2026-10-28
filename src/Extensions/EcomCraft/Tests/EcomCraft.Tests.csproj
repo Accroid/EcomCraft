@@ -12,11 +12,14 @@
     <Compile Include="../Studio/Storage/StorageRules.cs" Link="StorageRules.cs" />
     <Compile Include="../Studio/Templates/EcomTemplate.cs" Link="EcomTemplate.cs" />
     <Compile Include="../Studio/Prompting/PromptRules.cs" Link="PromptRules.cs" />
+    <Compile Include="../Studio/PostProcess/Placement.cs" Link="Placement.cs" />
+    <Compile Include="../Studio/PostProcess/ProductComposite.cs" Link="ProductComposite.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
 </Project>

@@ -47,6 +47,10 @@ public sealed class EcomTemplate
     /// <summary>Whether users can see and run it.</summary>
     public bool Enabled = true;
 
+    /// <summary>Product preservation (F02): the product photo, which must have a transparent background, is placed on the input canvas and its original
+    /// pixels are pasted back onto every result, so logos, text and shapes stay unchanged.</summary>
+    public bool PreserveProduct;
+
     /// <summary>"builtin" or "custom"; set by the store, never read from the file.</summary>
     public string Source;
 
@@ -96,7 +100,7 @@ public static class TemplateValidator
     private static readonly Regex IdPattern = new("^[a-z0-9][a-z0-9-]{0,47}$", RegexOptions.CultureInvariant);
 
     /// <summary>Keys a template file may contain; anything else is rejected so typos do not silently disable a setting.</summary>
-    private static readonly HashSet<string> TemplateKeys = ["id", "name", "description", "example_image", "platforms", "sets", "prompt", "categories", "brand_kit", "execution_plans", "enabled"];
+    private static readonly HashSet<string> TemplateKeys = ["id", "name", "description", "example_image", "platforms", "sets", "prompt", "categories", "brand_kit", "execution_plans", "enabled", "preserve_product"];
 
     /// <summary>Keys an execution plan may contain.</summary>
     private static readonly HashSet<string> PlanKeys = ["kind", "workflow", "presets", "user_fields"];
@@ -173,6 +177,17 @@ public static class TemplateValidator
             else
             {
                 template.Enabled = enabled.Value<bool>();
+            }
+        }
+        if (json["preserve_product"] is JToken preserve && preserve.Type != JTokenType.Null)
+        {
+            if (preserve.Type != JTokenType.Boolean)
+            {
+                errors.Add("preserve_product 须为 true 或 false。");
+            }
+            else
+            {
+                template.PreserveProduct = preserve.Value<bool>();
             }
         }
         if (json["execution_plans"] is not JArray plans || plans.Count == 0)
@@ -254,7 +269,7 @@ public static class TemplateValidator
 
     /// <summary>Checks a plan against the published snapshot's parameter definitions (parameter ID to definition), or null when the snapshot is not published.
     /// Presets must name whitelisted parameters with valid values and may not set the prompt or an image; user fields must be visible, unfixed parameters.</summary>
-    public static List<string> CheckPlan(ExecutionPlan plan, JObject parameters)
+    public static List<string> CheckPlan(ExecutionPlan plan, JObject parameters, bool requireImageField = false)
     {
         List<string> errors = [];
         if (parameters is null)
@@ -283,6 +298,10 @@ public static class TemplateValidator
             {
                 errors.Add($"预设参数“{preset.Name}”的值无效：{problem}");
             }
+        }
+        if (requireImageField && !plan.UserFields.Any(field => parameters[field]?["type"]?.ToString() == "image"))
+        {
+            errors.Add("开启商品保真的模板必须把一个图片参数开放给用户（user_fields），用来接收商品图。");
         }
         foreach (string field in plan.UserFields)
         {

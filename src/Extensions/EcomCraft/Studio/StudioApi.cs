@@ -324,7 +324,7 @@ public static class StudioApi
     /// <summary>Plans the executor with Rule 1, pins the request to it and submits, counting the batch as assigned until it ends.
     /// Responses name the server but never its address.</summary>
     private static async Task<JObject> ScheduleAndSubmit(Session session, int images, JObject input, int? pinnedId, bool workflow, bool background,
-        Func<BackendHandler.T2IBackendData, List<string>> capability)
+        Func<BackendHandler.T2IBackendData, List<string>> capability, Func<JObject, Task> postProcess = null)
     {
         SchedulerRules.Decision decision = await ExecutionScheduler.PlanAsync(capability, pinnedId);
         if (!decision.Success)
@@ -339,7 +339,7 @@ public static class StudioApi
         JObject response;
         if (background)
         {
-            response = await SubmitBackgroundGeneration(session, images, input, assignment, workflow, decision.ChosenName);
+            response = await SubmitBackgroundGeneration(session, images, input, assignment, workflow, decision.ChosenName, postProcess);
         }
         else
         {
@@ -349,6 +349,10 @@ public static class StudioApi
                 response = result.ContainsKey("error") ? GenerationError(result, workflow) : result;
                 if (!result.ContainsKey("error"))
                 {
+                    if (postProcess is not null)
+                    {
+                        await postProcess(result);
+                    }
                     WorkSync.EnqueueResult(session.User, result);
                 }
             }
@@ -664,12 +668,25 @@ public static class StudioApi
                 templateInput["prompt"] = composed.Prompt;
             }
             // The template decides the workflow and presets; the client's own workflow_id and workflow_params are replaced.
-            JObject resolved = TemplateApi.Resolve(session, templateInput, requestedTemplate, out JObject templateError);
+            JObject resolved = TemplateApi.Resolve(session, templateInput, requestedTemplate, out JObject templateError, out string preserveToken);
             if (resolved is null)
             {
                 return templateError;
             }
-            JObject templateResult = await GeneratePublishedWorkflow(session, resolved, resolved.Value<string>("workflow_id"), pinnedServer, requestedTemplate);
+            // Local postprocessing (R10.3): paste the original product pixels back before the works are synced or shown.
+            Func<JObject, Task> postProcess = preserveToken is null ? null : async result =>
+            {
+                int failed = await PostProcess.ProductPreserve.ApplyAsync(preserveToken, session.User, result);
+                if (failed > 0)
+                {
+                    result["preserve_failed"] = failed;
+                }
+            };
+            JObject templateResult = await GeneratePublishedWorkflow(session, resolved, resolved.Value<string>("workflow_id"), pinnedServer, requestedTemplate, postProcess);
+            if (templateResult.ContainsKey("error"))
+            {
+                PostProcess.ProductPreserve.Discard(preserveToken);
+            }
             if (composed?.NoticeCode is not null && !templateResult.ContainsKey("error"))
             {
                 templateResult["prompt_notice"] = composed.Notice;
@@ -908,7 +925,8 @@ public static class StudioApi
     /// <summary>Runs one studio generation in the background so the submitting browser stays usable; finished images are saved to the user's gallery as usual. The claim is watched for a few seconds so the caller can track the task id.
     /// The scheduler assignment is released when the generation ends. The result, success or a sanitized failure (R6.3), is kept briefly for the queue API;
     /// a failure that happens before the caller gets the task ID is returned directly.</summary>
-    private static async Task<JObject> SubmitBackgroundGeneration(Session session, int images, JObject input, IDisposable assignment, bool workflow, string server)
+    private static async Task<JObject> SubmitBackgroundGeneration(Session session, int images, JObject input, IDisposable assignment, bool workflow, string server,
+        Func<JObject, Task> postProcess)
     {
         HashSet<long> claimsBefore = [.. session.Claims.Keys];
         BackgroundTask task = new(session.User.UserID, server);
@@ -925,6 +943,10 @@ public static class StudioApi
                 }
                 else
                 {
+                    if (postProcess is not null)
+                    {
+                        await postProcess(result);
+                    }
                     WorkSync.EnqueueResult(session.User, result);
                     // Only saved files (View/... or Output/...), never inline data, are kept for the queue API.
                     outputs = [.. (result["images"] as JArray ?? new JArray()).Select(image => image.Type == JTokenType.String ? image.ToString() : image["image"]?.ToString())
@@ -1229,7 +1251,8 @@ public static class StudioApi
         }
     }
 
-    private static async Task<JObject> GeneratePublishedWorkflow(Session session, JObject rawInput, string workflowId, int? pinnedServer, string templateId = null)
+    private static async Task<JObject> GeneratePublishedWorkflow(Session session, JObject rawInput, string workflowId, int? pinnedServer, string templateId = null,
+        Func<JObject, Task> postProcess = null)
     {
         if (!session.User.HasPermission(EcomCraft.PermUsePublishedWorkflows))
         {
@@ -1459,7 +1482,7 @@ public static class StudioApi
             }
             return problems.Count > 0 ? problems : ["缺少所需节点或模型"];
         }
-        return await ScheduleAndSubmit(session, images, input, pinnedServer, true, rawInput.Value<bool?>("async") is true, capability);
+        return await ScheduleAndSubmit(session, images, input, pinnedServer, true, rawInput.Value<bool?>("async") is true, capability, postProcess);
     }
 
     internal static bool ValidatePublishedWorkflowInput(Session session, string id, JToken value, JObject definition, out string error)

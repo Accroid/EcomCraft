@@ -94,7 +94,7 @@ public static class TemplateStore
             return entry.Errors;
         }
         ExecutionPlan plan = entry.Template.LocalPlan;
-        return TemplateValidator.CheckPlan(plan, SnapshotParameters(plan.Workflow));
+        return TemplateValidator.CheckPlan(plan, SnapshotParameters(plan.Workflow), entry.Template.PreserveProduct);
     }
 
     /// <summary>Parameter definitions of a published snapshot, or null when the ID is not a published EcomCraft snapshot.</summary>
@@ -107,6 +107,17 @@ public static class TemplateStore
             return null;
         }
         return StudioApi.ParseWorkflowObject(workflow.CustomParams);
+    }
+
+    /// <summary>Page-field defaults of a published snapshot (for example "width" and "height"), or an empty object.</summary>
+    public static JObject SnapshotFormDefaults(string workflowId)
+    {
+        JObject parameters = SnapshotParameters(workflowId);
+        if (parameters is null || !ComfyUIBackendExtension.CustomWorkflows.TryGetValue(workflowId, out ComfyUIBackendExtension.ComfyCustomWorkflow workflow) || workflow is null)
+        {
+            return new JObject();
+        }
+        return NativeWorkflowParameters.FormDefaults(parameters, StudioApi.ParseWorkflowObject(workflow.ParamValues) ?? new JObject());
     }
 
     /// <summary>Names and times of the template files, to notice changes cheaply.</summary>
@@ -207,7 +218,7 @@ public static class TemplateStore
         {
             return string.Join(" ", errors);
         }
-        List<string> problems = TemplateValidator.CheckPlan(template.LocalPlan, SnapshotParameters(template.LocalPlan.Workflow));
+        List<string> problems = TemplateValidator.CheckPlan(template.LocalPlan, SnapshotParameters(template.LocalPlan.Workflow), template.PreserveProduct);
         if (problems.Count > 0)
         {
             return string.Join(" ", problems);

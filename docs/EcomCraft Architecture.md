@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20Architecture.zh-CN.md)
 >
-> **Status:** Planning (this document describes the target architecture; most modules are not implemented yet, and implemented parts are marked) · **Version:** v1.1 · **Date:** 2026-10-28
+> **Status:** Planning (this document describes the target architecture; most modules are not implemented yet, and implemented parts are marked) · **Version:** v1.2 · **Date:** 2026-10-28
 >
 > Related files:
 > - [EcomCraft LAN Multi-Server Platform Requirements](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md): detailed requirements for the platform foundation (execution servers, review, scheduling, storage); it takes precedence.
@@ -70,7 +70,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 | | Prompt service | One-sentence description + style → MagicPrompt → English prompt; its output may only fill prompt text fields | Implemented (`Studio/Prompting/`), wraps the existing MagicPrompt |
 | | Generation orchestration | Expands image sets and batches into tasks; per-user limits; tracks the status of each image | Planned |
 | | Scheduling | Rule 1: choose the runnable executor with the shortest queue; the executor abstraction reserves cloud types | Requirements step 4; `ExecutionServers` provides the base |
-| | Post-processing | Product-preserving compositing (paste the original product back using the product mask); candidate scoring later | Planned |
+| | Post-processing | Product-preserving compositing (paste the original product back, using the local cut-out as the mask); candidate scoring later | Product preservation implemented (`Studio/PostProcess/`) |
 | | Product library | Caches original product images and background-removal results for reuse | Planned |
 | | Export | Chinese and international platform size presets, padding, zip or export to a shared folder, AI metadata, Amazon pure-white check | Planned |
 | | Storage | Work library and export locations, write locally then sync, migration, cleanup | Planned, see requirement R11 |
@@ -89,8 +89,8 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 5. Each task is validated item by item against the snapshot whitelist → the user's queue limit is checked
 6. Scheduling: dispatched to the execution servers with the shortest queues that have the required
    nodes and models (several run in parallel)
-7. ComfyUI outputs "generated image + product mask" → returned to the platform server
-8. Post-processing: the original product pixels are pasted back using the mask → saved locally
+7. ComfyUI outputs the generated image → returned to the platform server (the input canvas is built locally by the platform from the cut-out and product placement)
+8. Post-processing: the original product pixels are pasted back at the same placement, using the local cut-out as the mask → saved locally
    first, then synced to the work library → gallery
 9. The operator picks images → export: platform sizes, pure-white check, AI metadata → download
    zip or export to the shared folder
@@ -171,7 +171,7 @@ MVP acceptance: **an operator without design experience can, on their own, use a
 | F01 | E-commerce scene templates | Built on published snapshots; 4 built in: white-background main image, scene, detail, model or hand-held |
 | F37 | Prompt service | One-sentence description + style → MagicPrompt enhancement; image description off by default |
 | F07 | Three-step simple mode | The default interface; no prompt box, styles are options with sample images |
-| F02 | Product preservation | Composite the original product pixels back into the generated image using the product mask |
+| F02 | Product preservation | Composite the original product pixels back into the generated image, using the local cut-out as the mask (workflows need not output a mask) |
 | F35 | Background-removal confirmation and product positioning | Confirm the cut-out before generating; drag or scale the product |
 | F03 | One-click image sets and batches | Full image set per platform; several GPUs in parallel; per-user limits |
 | F36 | Product library (basic) | Upload once; cache the original and cut-out for reuse |
@@ -249,4 +249,5 @@ For each task's files, dependencies, acceptance criteria and Claude Code prompt,
 | Date | Version | Description |
 |---|---|---|
 | 2026-10-27 | v1.0 | First version: positioning, deployment topology, layered architecture, data flow, design conventions, MVP scope and later features |
+| 2026-10-28 | v1.2 | Product preservation now uses the local cut-out as the mask: the platform builds the input canvas at the same placement and pastes the original product back after generation, so workflows need not output a product mask |
 | 2026-10-28 | v1.1 | The Chinese / English workspace interface (F24 / T22) is implemented; noted how it works and that server messages are not localized yet |
