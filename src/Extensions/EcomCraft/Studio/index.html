@@ -748,7 +748,28 @@
                     <input type="checkbox" id="enh-cfg-vision">
                     <label for="enh-cfg-vision">允许看图描述（把图片发送给视觉模型，用于参考图借鉴构图）</label>
                     <p class="hint" id="enh-cfg-vision-status" role="status"></p>
-                    <p class="hint">关闭时参考图模式不可用；开启前请确认视觉模型已安装并运行（默认 Ollama 的 llama3.2-vision）。</p>
+                    <div class="fld">
+                        <label for="enh-cfg-vision-backend">视觉模型服务</label>
+                        <select id="enh-cfg-vision-backend" name="enh-vision-backend">
+                            <option value="ollama">Ollama（本地，免费）</option>
+                            <option value="openaiapi">OpenAI 兼容服务（本地 / 远程）</option>
+                        </select>
+                        <p class="hint">看图描述会把上传的图片发送到所选择的视觉服务，请优先使用本机或局域网内的服务。</p>
+                    </div>
+                    <div class="fld" id="enh-cfg-vision-url-fld" hidden>
+                        <label for="enh-cfg-vision-endpoint">视觉服务地址（Base URL）</label>
+                        <input id="enh-cfg-vision-endpoint" name="enh-vision-endpoint" type="url" inputmode="url" spellcheck="false" autocomplete="off">
+                    </div>
+                    <p class="hint" id="enh-cfg-vision-url-note" hidden>与上方“模型服务”一致，共用其“服务地址”。</p>
+                    <div class="fld">
+                        <label for="enh-cfg-vision-model">视觉模型</label>
+                        <div class="input-row">
+                            <input id="enh-cfg-vision-model" name="enh-vision-model" type="text" list="enh-cfg-vision-model-options" autocomplete="off" spellcheck="false" placeholder="拉取后在此选择，或手动填写…">
+                            <button class="btn btn-sm" type="button" id="enh-cfg-fetch-vision-models">拉取</button>
+                        </div>
+                        <datalist id="enh-cfg-vision-model-options"></datalist>
+                    </div>
+                    <p class="hint">关闭时参考图模式不可用；视觉服务与提示词服务独立保存，互不影响。推荐视觉模型 Qwen3-VL。</p>
                 </div>
                 <p class="notice" id="enh-cfg-message" hidden role="status"></p>
             </div>

@@ -279,6 +279,7 @@ main:focus:not(:focus-visible) { outline: none; }
 .composer > .seg-wide { margin-bottom: 4px; }
 .fld { padding: 16px 0; border-bottom: 1px solid var(--line); }
 .fld:last-child { border-bottom: 0; }
+.fld .fld { padding: 12px 0 0; border-bottom: 0; }
 .fld-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 .fld-head label, .fld-label, .fld > label { display: block; font-size: var(--fs-13); font-weight: 600; }
 .fld > .fld-label, .fld > label { margin-bottom: 8px; }

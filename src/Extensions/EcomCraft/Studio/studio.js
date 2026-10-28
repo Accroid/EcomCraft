@@ -1283,6 +1283,7 @@
             this.controller?.abort();
             this.controller = null;
             $('enh-cfg-model-options').replaceChildren();
+            $('enh-cfg-vision-model-options').replaceChildren();
             $('enh-cfg-message').hidden = true;
             this.updateControls();
         }
@@ -1290,11 +1291,14 @@
         /** Prevents overlapping saves and edits while loading or persisting the form. */
         static updateControls() {
             let busy = this.loading || this.saving;
-            for (let id of ['enh-cfg-backend', 'enh-cfg-endpoint', 'enh-cfg-model', 'enh-cfg-key', 'enh-cfg-save']) {
+            for (let id of ['enh-cfg-backend', 'enh-cfg-endpoint', 'enh-cfg-model', 'enh-cfg-key', 'enh-cfg-save',
+                'enh-cfg-vision-backend', 'enh-cfg-vision-endpoint', 'enh-cfg-vision-model']) {
                 $(id).disabled = busy;
             }
             $('enh-cfg-fetch-models').disabled = busy || !!this.controller;
             $('enh-cfg-fetch-models').textContent = this.controller ? '拉取中…' : '拉取';
+            $('enh-cfg-fetch-vision-models').disabled = busy || !!this.controller;
+            $('enh-cfg-fetch-vision-models').textContent = this.controller ? '拉取中…' : '拉取';
             $('enh-cfg-save').textContent = this.saving ? '保存中…' : '保存设置';
         }
     }
@@ -1390,6 +1394,7 @@
         PromptSettingsRequests.invalidate();
         let revision = PromptSettingsRequests.revision;
         applyBackendFields();
+        applyVisionFields();
         const backend = $('enh-cfg-backend').value;
         const meta = MP_BACKENDS[backend];
         $('enh-cfg-endpoint').value = mpSettings?.backends?.[backend]?.baseurl || meta.url;
@@ -1410,6 +1415,39 @@
         } else {
             $('enh-cfg-key-status').textContent = '';
         }
+    }
+
+    /** Shows the vision address field only when the vision service differs from the prompt service above
+        and actually has an editable address; a shared or fixed-URL service needs no separate entry. */
+    function applyVisionFields() {
+        let backend = $('enh-cfg-vision-backend').value;
+        let shared = backend == $('enh-cfg-backend').value;
+        let showUrl = !shared && MP_BACKENDS[backend]?.editableUrl;
+        $('enh-cfg-vision-url-fld').hidden = !showUrl;
+        $('enh-cfg-vision-url-note').hidden = !shared;
+    }
+
+    /** Keeps an out-of-list saved vision service visible so saving never silently replaces it. */
+    function ensureVisionBackendOption(value) {
+        let select = $('enh-cfg-vision-backend');
+        for (let option of select.options) {
+            if (option.value == value) {
+                return;
+            }
+        }
+        if (MP_BACKENDS[value]) {
+            select.append(new Option(value, value));
+        }
+    }
+
+    /** Loads the selected vision service's saved address and model into the form. */
+    function onVisionBackendChange() {
+        PromptSettingsRequests.invalidate();
+        let backend = $('enh-cfg-vision-backend').value;
+        let meta = MP_BACKENDS[backend];
+        $('enh-cfg-vision-endpoint').value = mpSettings?.backends?.[backend]?.baseurl || meta.url;
+        $('enh-cfg-vision-model').value = mpSettings?.visionbackend == backend ? mpSettings.visionmodel || '' : '';
+        applyVisionFields();
     }
 
     /** Loads persisted settings before allowing edits and discards responses for a closed modal. */
@@ -1460,6 +1498,12 @@
                     $('enh-cfg-vision-status').textContent = vs.vision_model
                         ? tr('视觉模型：{0} / {1}', vs.vision_provider || '', vs.vision_model)
                         : '';
+                    let visionBackend = mpSettings?.visionbackend || vs.vision_provider || 'ollama';
+                    ensureVisionBackendOption(visionBackend);
+                    $('enh-cfg-vision-backend').value = visionBackend;
+                    $('enh-cfg-vision-model').value = mpSettings?.visionmodel || vs.vision_model || '';
+                    $('enh-cfg-vision-endpoint').value = mpSettings?.backends?.[visionBackend]?.baseurl || MP_BACKENDS[visionBackend]?.url || '';
+                    applyVisionFields();
                     $('enh-cfg-vision-fld').hidden = false;
                 }
             } catch (visionErr) {
@@ -1489,6 +1533,13 @@
         };
         if (meta.editableUrl && partial.baseurl) {
             settings.baseurl = partial.baseurl;
+        }
+        if (partial.vision) {
+            settings.visionbackend = partial.vision.backend;
+            settings.visionmodel = partial.vision.model;
+            if (partial.vision.baseurl) {
+                settings.backends = { [partial.vision.backend]: { baseurl: partial.vision.baseurl } };
+            }
         }
         let result = await request('SaveMagicPromptSettings', { settings });
         if (!result.success) {
@@ -1548,6 +1599,60 @@
         }
     }
 
+    /** Previews vision models with the unsaved form; shares the preview slot with the prompt-model fetch. */
+    async function fetchVisionModels() {
+        if (PromptSettingsRequests.loading || PromptSettingsRequests.saving || PromptSettingsRequests.controller) {
+            return;
+        }
+        PromptSettingsRequests.invalidate();
+        let revision = PromptSettingsRequests.revision;
+        let controller = new AbortController();
+        PromptSettingsRequests.controller = controller;
+        PromptSettingsRequests.updateControls();
+        let timeout = setTimeout(() => controller.abort(), 25000);
+        try {
+            let backend = $('enh-cfg-vision-backend').value;
+            let meta = MP_BACKENDS[backend];
+            // A shared service uses the address field above; a separate editable or fixed one uses its own.
+            let baseurl;
+            if (!$('enh-cfg-vision-url-fld').hidden) {
+                baseurl = $('enh-cfg-vision-endpoint').value.trim();
+            } else if ($('enh-cfg-backend').value == backend) {
+                baseurl = $('enh-cfg-endpoint').value.trim() || meta.url;
+            } else {
+                baseurl = mpSettings?.backends?.[backend]?.baseurl || meta.url;
+            }
+            if (!baseurl) {
+                showEnhCfgMessage('请先填写视觉服务地址。', true);
+                return;
+            }
+            let res = await request('PreviewMagicPromptModels', { backend, baseurl, api_key: '' }, controller.signal);
+            if (revision != PromptSettingsRequests.revision) {
+                return;
+            }
+            let list = $('enh-cfg-vision-model-options');
+            list.replaceChildren();
+            for (let model of res.models || []) {
+                list.append(new Option(model.name || model.model, model.model));
+            }
+            if (!res.models || res.models.length === 0) {
+                showEnhCfgMessage('未拉取到模型，请确认服务已启动、地址正确。', true);
+            } else {
+                showEnhCfgMessage(tr('已拉取 {0} 个模型。请在“视觉模型”框中选择或输入，点击“保存”才会应用配置。', res.models.length), false);
+            }
+        } catch (err) {
+            if (revision == PromptSettingsRequests.revision) {
+                showEnhCfgMessage(controller.signal.aborted ? '拉取模型超时，请检查服务后重试。' : err.message, true);
+            }
+        } finally {
+            clearTimeout(timeout);
+            if (PromptSettingsRequests.controller == controller) {
+                PromptSettingsRequests.controller = null;
+                PromptSettingsRequests.updateControls();
+            }
+        }
+    }
+
     /** Cancels preview requests and clears the unsaved credential when closing the form. */
     function closeEnhancerSettings() {
         if (PromptSettingsRequests.saving) {
@@ -1583,6 +1688,25 @@
                 showEnhCfgMessage('请填写服务地址。', true);
                 return;
             }
+            // The vision model config (F59/F68) is saved with the same request when its section is visible.
+            let vision = null;
+            if (!$('enh-cfg-vision-fld').hidden) {
+                let visionBackend = $('enh-cfg-vision-backend').value;
+                let visionModel = $('enh-cfg-vision-model').value.trim();
+                if (!visionModel) {
+                    showEnhCfgMessage('请选择或填写视觉模型。', true);
+                    return;
+                }
+                vision = { backend: visionBackend, model: visionModel };
+                if (!$('enh-cfg-vision-url-fld').hidden) {
+                    let visionUrl = $('enh-cfg-vision-endpoint').value.trim();
+                    if (!visionUrl) {
+                        showEnhCfgMessage('请填写视觉服务地址。', true);
+                        return;
+                    }
+                    vision.baseurl = visionUrl;
+                }
+            }
             // 1) Save the key if provided.
             const key = $('enh-cfg-key').value.trim();
             if (meta.keyType && key) {
@@ -1590,11 +1714,14 @@
                 if (!kr.success) { throw new ApiError('Key 保存失败。', 'magicprompt_key'); }
             }
             // 2) Save backend/model/url settings.
-            await saveMpCore({ backend, model, baseurl });
+            await saveMpCore({ backend, model, baseurl, vision });
             // 3) Save the vision toggle (F59) when it is visible and changed.
             if (!$('enh-cfg-vision-fld').hidden && $('enh-cfg-vision').checked != mpVisionEnabled) {
                 await request('EcomCraftPromptSettings', { vision_enabled: $('enh-cfg-vision').checked ? 'true' : 'false' });
                 mpVisionEnabled = $('enh-cfg-vision').checked;
+            }
+            if (mpSettings?.visionmodel) {
+                $('enh-cfg-vision-status').textContent = tr('视觉模型：{0} / {1}', mpSettings.visionbackend || '', mpSettings.visionmodel);
             }
             // 4) Report status.
             if (meta.keyType) {
@@ -4715,9 +4842,13 @@
         $('enh-cfg-cancel').addEventListener('click', closeEnhancerSettings);
         $('enh-cfg-save').addEventListener('click', saveEnhancerSettings);
         $('enh-cfg-backend').addEventListener('change', onBackendChange);
+        $('enh-cfg-vision-backend').addEventListener('change', onVisionBackendChange);
+        $('enh-cfg-fetch-models').addEventListener('click', fetchMpModels);
+        $('enh-cfg-fetch-vision-models').addEventListener('click', fetchVisionModels);
         $('enh-cfg-endpoint').addEventListener('input', () => PromptSettingsRequests.invalidate());
         $('enh-cfg-key').addEventListener('input', () => PromptSettingsRequests.invalidate());
-        $('enh-cfg-fetch-models').addEventListener('click', fetchMpModels);
+        $('enh-cfg-vision-endpoint').addEventListener('input', () => PromptSettingsRequests.invalidate());
+        $('enh-cfg-vision-model').addEventListener('input', () => PromptSettingsRequests.invalidate());
 
         $('creation-form').addEventListener('submit', generate);
 
