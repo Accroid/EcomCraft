@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20简易模式改版需求.zh-CN.md)
 >
-> **Status:** In development (F53 and F55 implemented and deployed, pending manual acceptance; F54 and F56 implemented, pending build and manual acceptance; F52 and F57 pending) · **Version:** v3.3 · **Date:** 2026-10-28
+> **Status:** In development (F53 and F55 implemented and deployed, pending manual acceptance; F54 and F56 implemented, pending build and manual acceptance; F52 implemented, pending manual acceptance; F57 pending) · **Version:** v3.4 · **Date:** 2026-10-28
 >
 > This document holds the finalized requirements for the simple-mode (three-step) redesign. Development follows this document; when requirements change, update this document first (Chinese and English together), record the change in the change log, and only then change the code. For the overall architecture and MVP roadmap see [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md); for the interactive prototype see [EcomCraft Simple Mode Redesign Prototype](EcomCraft%20简易模式改版原型.html) (open directly in a browser; Chinese UI).
 
@@ -183,13 +183,13 @@ Development order: **T55 → T57 → T56 → T58 → T59 → T54** (controls fir
 | F54 bilingual prompts and AI expansion | T56 | **Implemented**, not yet built, pending deployment and manual acceptance | 8124a752 | New `EcomCraftStudioExpandPrompt` API; the generate and set APIs accept `prompt_en` / `prompt_zh` and answer with `prompt_used` / `prompt_translated`; translation fallback code `prompt_untranslated`; the server still adds the product-type, model and style fragments; `simple-mode.test.cjs` now allows only the two panel text boxes; UI design doc v1.15. Translation currently runs inside the submit request; T58 moves it to the background |
 | F56 faster generation path | T58 | **Implemented**, not yet built, pending deployment and manual acceptance | aee5a0bd | When the model is needed the submission returns `prepare_id` at once and the new `EcomCraftStudioPrepareStatus` API reports the stage; at most 5 submissions per account wait for their prompt; set tasks start in state `prompt` (cancellable); step 3 gained a task list for single generations; UI design doc v1.16 |
 | F57 automatic workflow creation | T59 | Pending | — | See section 7; depends on N01 (an administrator must set the default checkpoint first) |
-| F52 four upload sources | T54 | Pending | — | See section 2; gallery picks are compressed to 5 MB client-side |
+| F52 four upload sources | T54 | **Implemented** (front end only), pending manual acceptance | 01c120e7 | Four equal buttons; the library and the gallery share a picker dialog; the gallery lists the latest 60 generated images and compresses picks over 5 MB to JPEG in the browser; thumbnails show their source; UI design doc v1.17 |
 
 Service state: T56 (8124a752) and T58 (aee5a0bd) were written on a development machine without the .NET SDK and have not been built or restarted yet; rebuild the extension as in step 2 before deploying.
 
 ### 11.2 How to continue
 
-1. Work through **T59 → T54**, one task at a time. Each task's files, dependencies, acceptance criteria, test method and a ready-to-paste Claude Code prompt are in the "开发任务" sheet (column K) of the [development sheet](EcomCraft%20开发总表.xlsx).
+1. **T59** remains (it depends on non-development item N01: an administrator first picks a commercially usable default model); one task at a time. Each task's files, dependencies, acceptance criteria, test method and a ready-to-paste Claude Code prompt are in the "开发任务" sheet (column K) of the [development sheet](EcomCraft%20开发总表.xlsx).
 2. Required verification after every task:
    - `node --check src/Extensions/EcomCraft/Studio/simple.js` (and any other changed js)
    - `node --test src/Extensions/EcomCraft/Tests/studio-i18n.test.cjs src/Extensions/EcomCraft/Tests/error-codes.test.cjs src/Extensions/EcomCraft/Tests/simple-mode.test.cjs`
@@ -210,3 +210,4 @@ Interactive prototype (confirmed; this document governs): [EcomCraft Simple Mode
 | 2026-10-28 | v3.1 | Handover release: F53 (T55, 467c036d) and F55 (T57, 0e7c6b3e) implemented and deployed; section 11 rewritten as progress and handover notes (verification steps and the T56 test-assertion caveat included) |
 | 2026-10-28 | v3.2 | F54 (T56, 8124a752) implemented: AI expand, the bilingual prompt panel and its sending rules, and "Prompt sent to the engine"; pending build and manual acceptance |
 | 2026-10-28 | v3.3 | F56 (T58, aee5a0bd) implemented: submissions return at once, the prompt is written in the background, three-stage task status, sets reworked the same way; pending build and manual acceptance |
+| 2026-10-28 | v3.4 | F52 (T54, 01c120e7) implemented: four upload entries, picker dialog for the library and the gallery, gallery compression and source labels; pending manual acceptance |
