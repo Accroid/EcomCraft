@@ -63,6 +63,38 @@ On each submission the platform chooses one execution server by the following ru
 
 Scheduling only happens among registered execution servers and never moves to unregistered addresses, remote SwarmUI instances or cloud services. The scheduling layer is built on an "executor" abstraction that reserves two types, cloud ComfyUI and cloud model APIs; they are not implemented in this phase and no request is ever sent to them.
 
+## E-commerce scene templates
+
+A template wraps a published workflow snapshot as an e-commerce scene that shop staff can use directly, such as "White background main image" or "Lifestyle scene". A template has no node graph of its own; it references a published snapshot and uses that snapshot's parameter allowlist:
+
+```json
+{
+  "id": "white-main",
+  "name": { "zh-CN": "白底主图", "en": "White background main image" },
+  "description": { "zh-CN": "纯白背景，适合平台主图", "en": "Pure white background for main images" },
+  "example_image": "white-main.webp",
+  "platforms": ["amazon", "taobao"],
+  "sets": ["main-set"],
+  "prompt": { "prefix": "product photo,", "suffix": "soft studio light", "negative": "text, watermark" },
+  "categories": [],
+  "brand_kit": null,
+  "execution_plans": [
+    { "kind": "local", "workflow": "B/white-main", "presets": { "parameterId": 30 }, "user_fields": ["parameterId"] }
+  ],
+  "enabled": true
+}
+```
+
+- `id`: lowercase letters, digits and hyphens; `name` needs both Chinese and English, `description` is optional.
+- `platforms`: IDs of the platforms the template suits, or `"*"` for any; `sets`: IDs of the image sets it belongs to, used by one-click sets.
+- `prompt`: prompt fragments added before and after the user's description, and a negative prompt; `<…>` directives and `__wildcards__` are not allowed.
+- `execution_plans`: in this phase every template needs exactly one local plan (`kind` is `local`), whose `workflow` is the ID of a published snapshot. `presets` fixes snapshot parameter values and cannot preset the prompt or an image; `user_fields` are the parameters users may change, which must be visible after review and not preset. Cloud plans (`cloud_comfy`, `cloud_model_api`) are reserved and rejected in this phase.
+- `categories` (category presets) and `brand_kit` (brand kits) are reserved; `brand_kit` must be `null` in this phase.
+
+Built-in templates ship with each release in the extension folder `Templates/builtin/` (one template per file, example images in the same folder); administrator templates are stored in `Data/EcomCraft/templates.json` with example images in `Data/EcomCraft/template-images/`. The two are kept apart, so upgrades never overwrite custom templates, and a custom template cannot reuse a built-in ID.
+
+Invalid templates are never offered to users; the reasons are written to the server log and returned by the management APIs. A template also shows as unavailable when its snapshot is unpublished, a parameter is hidden, or a preset is out of range. The management APIs require the review permission (`ecomcraft_review_workflows`): `EcomCraftTemplateAdminList` lists every template with the reasons it cannot run, `EcomCraftTemplateSave` adds or replaces an administrator template (`template` is the template JSON; optional `example_image_data` is a PNG, JPEG or WebP image of at most 2 MB), and `EcomCraftTemplateDelete` removes an administrator template.
+
 ## LAN execution servers
 
 A LAN device with only ComfyUI installed can be registered as an execution server and called by the platform server. For account login, firewalls and shared storage when several people use the platform, see the [LAN Deployment Guide](EcomCraft%20LAN%20Deployment.md). For the development plan and upcoming features, see [LAN Multi-Server Platform Requirements](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md).

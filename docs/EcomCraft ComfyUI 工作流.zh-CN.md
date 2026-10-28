@@ -63,6 +63,38 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行�
 
 调度只在已登记的执行服务器之间进行，不会转到未登记地址、远程 SwarmUI 或云端服务。调度层按“执行方”抽象实现，预留了云端 ComfyUI 和云端模型 API 两种类型，本期不实现，也不会向它们发送任何请求。
 
+## 电商场景模板
+
+模板把一个已发布的工作流快照包装成运营能直接使用的电商场景，例如“白底主图”“场景图”。模板不包含自己的节点图，只引用已发布快照，并使用快照的参数白名单：
+
+```json
+{
+  "id": "white-main",
+  "name": { "zh-CN": "白底主图", "en": "White background main image" },
+  "description": { "zh-CN": "纯白背景，适合平台主图", "en": "Pure white background for main images" },
+  "example_image": "white-main.webp",
+  "platforms": ["amazon", "taobao"],
+  "sets": ["main-set"],
+  "prompt": { "prefix": "product photo,", "suffix": "soft studio light", "negative": "text, watermark" },
+  "categories": [],
+  "brand_kit": null,
+  "execution_plans": [
+    { "kind": "local", "workflow": "B/白底主图", "presets": { "参数ID": 30 }, "user_fields": ["参数ID"] }
+  ],
+  "enabled": true
+}
+```
+
+- `id`：小写字母、数字和连字符；`name` 必须同时有中文和英文，`description` 可选。
+- `platforms`：适用平台 ID，任何平台都适用时填 `"*"`；`sets`：所属套图 ID，供一键套图使用。
+- `prompt`：加在用户描述前后的提示词片段和排除内容；不能包含 `<…>` 指令或 `__通配符__`。
+- `execution_plans`：本期每个模板必须有且只有一个本地方案（`kind` 为 `local`），`workflow` 是已发布快照的 ID。`presets` 固定快照参数的值，不能预设提示词或图片；`user_fields` 是允许用户修改的参数，必须是审核时未隐藏、且没有预设的参数。云端方案（`cloud_comfy`、`cloud_model_api`）是预留类型，本期会被拒绝。
+- `categories`（品类预设）和 `brand_kit`（品牌资料包）是预留字段，`brand_kit` 本期须为 `null`。
+
+内置模板随版本发布，放在扩展目录 `Templates/builtin/`（每个文件一个模板，示例图放在同一目录）；管理员自定义的模板保存在 `Data/EcomCraft/templates.json`，示例图在 `Data/EcomCraft/template-images/`，两者分开存放，升级不会覆盖自定义模板。自定义模板不能使用内置模板的 ID。
+
+不合格的模板不会提供给用户，原因记录在服务器日志中，并通过管理接口返回。引用的快照被下架、参数被隐藏或预设值超出范围时，模板也会显示为不可用。管理接口需要审核权限（`ecomcraft_review_workflows`）：`EcomCraftTemplateAdminList` 列出所有模板及不可用原因，`EcomCraftTemplateSave` 新增或替换自定义模板（`template` 为模板 JSON，可选 `example_image_data` 为不超过 2 MB 的 PNG、JPEG 或 WebP 图片），`EcomCraftTemplateDelete` 删除自定义模板。
+
 ## 局域网执行服务器
 
 局域网内只安装了 ComfyUI 的设备可以登记为执行服务器，由平台服务器统一调用。多人使用时的账号登录、防火墙和共享存储设置见[局域网部署指南](EcomCraft%20局域网部署指南.zh-CN.md)。开发计划和后续功能见 [局域网多服务器平台需求](EcomCraft%20局域网多服务器平台需求.zh-CN.md)。
