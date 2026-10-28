@@ -14,6 +14,8 @@ public static class StudioRoutes
     private static readonly (string Route, string File, string ContentType)[] Assets =
     [
         ("/EcomCraft/studio.js", "studio.js", "text/javascript; charset=utf-8"),
+        ("/EcomCraft/i18n.js", "i18n.js", "text/javascript; charset=utf-8"),
+        ("/EcomCraft/lang/en.js", "lang/en.js", "text/javascript; charset=utf-8"),
         ("/EcomCraft/studio.css", "studio.css", "text/css; charset=utf-8")
     ];
 
@@ -54,7 +56,8 @@ public static class StudioRoutes
                 || !user.HasPermission(Permissions.FundamentalModelAccess))
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await context.Response.WriteAsync("此账号没有创作工作台访问权限。请联系管理员。");
+                context.Response.ContentType = "text/plain; charset=utf-8";
+                await context.Response.WriteAsync("此账号没有创作工作台访问权限。请联系管理员。\nThis account cannot access the EcomCraft workspace. Contact your administrator.");
                 return;
             }
             context.Response.ContentType = "text/html; charset=utf-8";

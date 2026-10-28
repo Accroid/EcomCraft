@@ -8,8 +8,10 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.8.1">
-    <script src="/EcomCraft/studio.js?v=0.8.1" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.9.0">
+    <script src="/EcomCraft/lang/en.js?v=0.9.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.9.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.9.0" defer></script>
 </head>
 
 <body>
@@ -27,6 +29,7 @@
             <a class="health" id="health" href="#queue" title="查看执行服务器和任务队列">
                 <span class="health-dot" id="health-dot" aria-hidden="true"></span><span id="health-text">连接中…</span>
             </a>
+            <button type="button" class="icon-btn lang-toggle" id="lang-toggle" data-i18n-skip lang="en" aria-label="Switch to English" title="Switch to English">EN</button>
             <button type="button" class="icon-btn theme-toggle" id="theme-toggle" aria-label="切换到深色主题" title="切换到深色主题">
                 <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
                     stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -598,7 +601,8 @@
     </div>
 
     <noscript>
-        <div class="noscript">工作台需要 JavaScript 才能读取模型和提交生成。请启用后刷新页面。</div>
+        <div class="noscript" lang="zh-CN">工作台需要 JavaScript 才能读取模型和提交生成。请启用后刷新页面。</div>
+        <div class="noscript" lang="en">The workspace needs JavaScript to read models and submit generations. Enable it and reload the page.</div>
     </noscript>
 </body>
 
