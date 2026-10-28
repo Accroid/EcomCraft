@@ -179,6 +179,25 @@ public static class TemplateApi
         {
             workflowParams[property.Name] = property.Value.DeepClone();
         }
+        Placement productPlacement = null;
+        if (rawInput["product_id"]?.Type == JTokenType.String)
+        {
+            // A saved product (F36): the server reads its photo or confirmed cut-out and placement; the client only sends the ID.
+            string imageField = userFields.FirstOrDefault(id => parameters[id]?["type"]?.ToString() == "image");
+            if (imageField is null)
+            {
+                error = StudioApi.Error("这个模板不使用商品图。", "invalid_reference");
+                return null;
+            }
+            (string image, Placement saved, string problem) = Products.ProductLibrary.ForGeneration(session.User.UserID, rawInput.Value<string>("product_id"), template.PreserveProduct);
+            if (image is null)
+            {
+                error = StudioApi.Error(problem, "invalid_reference");
+                return null;
+            }
+            workflowParams[imageField] = image;
+            productPlacement = saved;
+        }
         if (template.PreserveProduct)
         {
             // Local preprocessing (R10.3): the cut-out product is placed on the input canvas; the same placement pastes it back after generation.
@@ -188,7 +207,7 @@ public static class TemplateApi
                 error = StudioApi.Error("这个模板需要商品图。", "invalid_reference");
                 return null;
             }
-            Placement placement = Placement.Default;
+            Placement placement = productPlacement ?? Placement.Default;
             if (rawInput["placement"] is JObject requested
                 && !Placement.TryCreate(requested.Value<double?>("x"), requested.Value<double?>("y"), requested.Value<double?>("size"), out placement))
             {

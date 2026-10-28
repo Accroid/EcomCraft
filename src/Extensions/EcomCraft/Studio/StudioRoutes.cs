@@ -70,6 +70,22 @@ public static class StudioRoutes
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
             }
         });
+        // Product library images (F36): only the owner can read them.
+        WebServer.WebApp.MapGet("/EcomCraft/product-image/{id}/{kind}", async (HttpContext context, string id, string kind) =>
+        {
+            User user = WebServer.GetUserFor(context);
+            (byte[] bytes, string extension) = user is null || !user.HasPermission(Permissions.FundamentalGenerateTabAccess) || kind is not ("original" or "cutout")
+                ? (null, null) : Products.ProductLibrary.FileFor(user.UserID, id, kind);
+            if (bytes is null)
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+            context.Response.Headers.CacheControl = "private, no-cache";
+            context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            context.Response.ContentType = extension switch { "png" => "image/png", "webp" => "image/webp", _ => "image/jpeg" };
+            await context.Response.Body.WriteAsync(bytes, context.RequestAborted);
+        });
         WebServer.WebApp.MapGet("/EcomCraft", async (HttpContext context) =>
         {
             User user = WebServer.GetUserFor(context);

@@ -149,6 +149,8 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行�
 
 一键套图与批量：`EcomCraftStudioGenerateSet`（`products` 为 1–20 张商品图，每项 `{ image, placement? }`；`platform`；`set_id` 默认 `standard`；`style_id`、`description`；`candidates` 为每种图片的候选张数 1–4；可选 `execution_server_id`、`language`）把每张商品图 × 套图中适合该平台的每种图片类型展开成独立任务，最多 80 个。提示词整批只生成一次；保真模板需要的抠图由服务端自动完成（已是透明背景的图直接使用）。每个任务走普通的按模板生成，因此同样经过快照白名单校验，并各自按规则 1 调度到服务器、可多台并行；每人同时执行的任务数不超过角色 `MaxT2ISimultaneous` 与 4 中的较小值（需求 R9.4），其余在平台内排队。返回 `batch_id` 和 `jobs[]`（`id`、`product`、`template`、`template_name`、`state` 为 `queued` / `running` / `done` / `failed` / `cancelled`、`error`、`error_id`、`execution_server`、`images`）。`EcomCraftStudioBatchStatus` 读取进度，`EcomCraftStudioBatchRetry`（`batch_id`、`job_id`）重试失败或已取消的任务，`EcomCraftStudioBatchCancel` 取消还在排队的任务（正在执行的会完成）。批次只保存在内存中 6 小时，只有发起人能查看。
 
+商品库：`EcomCraftStudioProducts` 列出当前账号保存的商品（`id`、`name`、`created`、`has_cutout`、`placement`、`image` / `cutout_image` 图片地址，不含文件位置）；`EcomCraftStudioProductSave`（`image`、可选 `name`、`cutout`）保存商品；`EcomCraftStudioProductUpdate`（`product_id`，可选 `name`、`cutout`、`placement`）重命名、保存确认过的抠图和位置；`EcomCraftStudioProductDelete` 删除商品及其文件。商品文件放在作品库位置的 `products/<账号>/<商品ID>/` 下，未设置作品库时放在平台服务器的 `Data/EcomCraft/product-files/`，不进入画廊；索引在 `Data/EcomCraft/products.json`。平台内按账号隔离，图片地址 `/EcomCraft/product-image/<ID>/original|cutout` 也只对本人开放。按模板生成和一键套图可以用 `product_id` 代替图片：服务端读取商品原图或已确认的抠图和位置，客户端不提交文件或路径。简易模式上传的商品自动入库，抠图和位置确认后同步更新，下次可从“从商品库选择”直接使用。
+
 原生导入项额外返回 `native: true` 和 `defaults`。`inputs[].form` 标记绑定到标准页面字段的参数（如 `width`、`seed`）；其余输入通过 `workflow_params` 提交。省略标准字段时使用相应已发布参数或保存的默认值，同时提供时以标准字段为准。原生项无需提交根级 `model`，模型修改通过 `inputs` 中模型下拉框的 ID 提交，服务端仅接受公布的选项；参数 ID 是不透明标识，客户端不要自行构造。
 
 ## 安全边界
