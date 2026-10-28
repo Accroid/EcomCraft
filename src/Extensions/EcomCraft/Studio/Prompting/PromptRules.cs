@@ -70,6 +70,22 @@ public static class PromptRules
         return CleanUserPrompt(promptZh).Length > 0 ? "zh" : "";
     }
 
+    /// <summary>Whether composing the prompt has to wait for the language model (F56): Chinese panel text to translate, or with an empty panel a one-line
+    /// description to rewrite. Edited English, an expanded prompt left unchanged (sent as English) and plain ASCII panel text skip the model.</summary>
+    public static bool NeedsModel(string description, string promptEn, string promptZh)
+    {
+        string source = PanelSource(promptEn, promptZh);
+        if (source == "en")
+        {
+            return false;
+        }
+        if (source == "zh")
+        {
+            return !IsAscii(CleanUserPrompt(promptZh));
+        }
+        return !string.IsNullOrWhiteSpace(description);
+    }
+
     /// <summary>The instruction for "AI expand" (F54): turn the one-line description (or, without one, the product type) into a fuller English description
     /// of the product photo. The product-type, model and style fragments are still added by the server, so the answer only has to describe the picture.</summary>
     public static string ExpandInstruction(string styleName, string productTypeName, bool needModel) =>

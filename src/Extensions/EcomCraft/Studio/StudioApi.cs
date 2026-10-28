@@ -697,14 +697,22 @@ public static class StudioApi
             {
                 return cutoutOnly;
             }
-            if (string.IsNullOrWhiteSpace(rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : null)
-                && (description.Length > 0 || styleId.Length > 0 || productTypeId.Length > 0 || needModel || PromptRules.PanelSource(promptEn, promptZh).Length > 0))
+            bool compose = string.IsNullOrWhiteSpace(rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : null)
+                && (description.Length > 0 || styleId.Length > 0 || productTypeId.Length > 0 || needModel || PromptRules.PanelSource(promptEn, promptZh).Length > 0);
+            // When the language model has to write or translate the prompt, the submission is answered at once and the prompt is written in the background (F56).
+            bool background = compose && PromptRules.NeedsModel(description, promptEn, promptZh);
+            if (background && PreparingCount(session.User.UserID) >= MaxPreparingPerUser)
+            {
+                return Error("还有几个任务正在生成提示词，请等它们开始执行后再提交。", "queue_limit");
+            }
+            if (compose && !background)
             {
                 composed = await PromptService.ComposePanelAsync(session, styleId, productTypeId, needModel, description, promptEn, promptZh);
                 templateInput = (JObject)rawInput.DeepClone();
                 templateInput["prompt"] = composed.Prompt;
             }
             // The template decides the workflow and presets; the client's own workflow_id and workflow_params are replaced.
+            // A background submission is resolved now with an empty subject, so invalid requests still fail at once; the prompt is filled in later.
             JObject resolved = TemplateApi.Resolve(session, templateInput, requestedTemplate, out JObject templateError, out string preserveToken);
             if (resolved is null)
             {
@@ -719,24 +727,19 @@ public static class StudioApi
                     result["preserve_failed"] = failed;
                 }
             };
+            if (background)
+            {
+                return StartPreparing(session, resolved, requestedTemplate, pinnedServer, preserveToken, postProcess,
+                    () => PromptService.ComposePanelAsync(session, styleId, productTypeId, needModel, description, promptEn, promptZh));
+            }
             JObject templateResult = await GeneratePublishedWorkflow(session, resolved, resolved.Value<string>("workflow_id"), pinnedServer, requestedTemplate, postProcess);
             if (templateResult.ContainsKey("error"))
             {
                 PostProcess.ProductPreserve.Discard(preserveToken);
             }
-            if (composed is not null && !templateResult.ContainsKey("error"))
+            else
             {
-                // The prompt this account's own task was sent with (F54), so the result card can show it; never part of queue or status answers.
-                templateResult["prompt_used"] = composed.Prompt;
-                if (composed.Translated is not null)
-                {
-                    templateResult["prompt_translated"] = composed.Translated;
-                }
-                if (composed.NoticeCode is not null)
-                {
-                    templateResult["prompt_notice"] = composed.Notice;
-                    templateResult["prompt_notice_code"] = composed.NoticeCode;
-                }
+                AddPromptFields(templateResult, composed);
             }
             return templateResult;
         }
@@ -904,6 +907,157 @@ public static class StudioApi
             }
         }
         return await ScheduleAndSubmit(session, images, input, pinnedServer, false, rawInput.Value<bool?>("async") is true, StandardModeProblems);
+    }
+
+    /// <summary>Adds the prompt this account's own submission was sent with (F54) to its response, so the result card can show it, plus any fallback notice.
+    /// Only the submitter's own answers carry it; the shared queue never does.</summary>
+    private static void AddPromptFields(JObject result, PromptService.Composed composed)
+    {
+        if (composed is null)
+        {
+            return;
+        }
+        result["prompt_used"] = composed.Prompt;
+        if (composed.Translated is not null)
+        {
+            result["prompt_translated"] = composed.Translated;
+        }
+        if (composed.NoticeCode is not null)
+        {
+            result["prompt_notice"] = composed.Notice;
+            result["prompt_notice_code"] = composed.NoticeCode;
+        }
+    }
+
+    /// <summary>Most submissions one account may have waiting for their prompt at the same time (F56).</summary>
+    private const int MaxPreparingPerUser = 5;
+
+    /// <summary>How long a submission waiting for its prompt, or its answer, is kept for its owner (F56).</summary>
+    private const long PreparingKeepMs = 10 * 60 * 1000;
+
+    /// <summary>Submissions whose prompt is written in the background (F56), by preparation ID.</summary>
+    private static readonly ConcurrentDictionary<string, PreparingTask> Preparing = new();
+
+    /// <summary>One submission waiting for its prompt (F56): its owner and, once the prompt is written and the generation submitted, the submit answer.
+    /// Nothing but that answer for the owner is kept, and it is dropped after <see cref="PreparingKeepMs"/>.</summary>
+    private sealed class PreparingTask(string userId)
+    {
+        /// <summary>Owner account.</summary>
+        public readonly string UserId = userId;
+
+        /// <summary>Protects the fields below.</summary>
+        private readonly object Lock = new();
+
+        /// <summary>When the task started or ended, <see cref="Environment.TickCount64"/>.</summary>
+        private long Changed = Environment.TickCount64;
+
+        /// <summary>The submit answer (task ID, execution server, prompt fields, or a sanitized error); null while the prompt is written.</summary>
+        private JObject Answer;
+
+        /// <summary>The submit answer, or null while the prompt is still being written.</summary>
+        public JObject Result { get { lock (Lock) { return Answer; } } }
+
+        /// <summary>Stores the submit answer.</summary>
+        public void Finish(JObject answer)
+        {
+            lock (Lock)
+            {
+                Answer = answer;
+                Changed = Environment.TickCount64;
+            }
+        }
+
+        /// <summary>Whether the entry has been kept long enough.</summary>
+        public bool Expired(long now)
+        {
+            lock (Lock)
+            {
+                return now - Changed > PreparingKeepMs;
+            }
+        }
+    }
+
+    /// <summary>Drops expired preparation entries.</summary>
+    private static void PrunePreparing()
+    {
+        long now = Environment.TickCount64;
+        foreach (KeyValuePair<string, PreparingTask> pair in Preparing.Where(pair => pair.Value.Expired(now)).ToArray())
+        {
+            Preparing.TryRemove(pair.Key, out _);
+        }
+    }
+
+    /// <summary>How many of an account's submissions are still waiting for their prompt.</summary>
+    private static int PreparingCount(string userId)
+    {
+        PrunePreparing();
+        return Preparing.Values.Count(task => task.UserId == userId && task.Result is null);
+    }
+
+    /// <summary>Answers a template submission at once and writes its prompt in the background (F56); when the prompt is ready the already resolved request
+    /// is completed with it and submitted to the scheduler as usual. The language model keeps its own 45-second limit and falls back to the defaults,
+    /// so generation is never blocked by it. The owner reads the outcome through <see cref="EcomCraftStudioPrepareStatus"/>.</summary>
+    private static JObject StartPreparing(Session session, JObject resolved, string templateId, int? pinnedServer, string preserveToken, Func<JObject, Task> postProcess,
+        Func<Task<PromptService.Composed>> compose)
+    {
+        string id = Guid.NewGuid().ToString("N");
+        PreparingTask task = new(session.User.UserID);
+        Preparing[id] = task;
+        _ = Utilities.RunCheckedTask(async () =>
+        {
+            JObject answer = null;
+            try
+            {
+                PromptService.Composed composed = await compose();
+                resolved["prompt"] = TemplateApi.WithTemplatePrompt(templateId, composed.Prompt);
+                answer = await GeneratePublishedWorkflow(session, resolved, resolved.Value<string>("workflow_id"), pinnedServer, templateId, postProcess);
+                if (!answer.ContainsKey("error"))
+                {
+                    AddPromptFields(answer, composed);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logs.Warning($"EcomCraft background prompt task failed: {ex.GetType().Name}");
+                answer = Error("无法确认任务是否已提交。请在队列和作品画廊核对后再重试。", "generation_uncertain");
+            }
+            finally
+            {
+                if (answer is null || answer.ContainsKey("error"))
+                {
+                    PostProcess.ProductPreserve.Discard(preserveToken);
+                }
+                task.Finish(answer ?? Error("无法确认任务是否已提交。请在队列和作品画廊核对后再重试。", "generation_uncertain"));
+            }
+        }, "ecomcraft prompt preparation");
+        return new JObject() { ["queued"] = true, ["task_id"] = null, ["prepare_id"] = id, ["stage"] = "prompt" };
+    }
+
+    [API.APIDescription("Stage of one of the current account's submissions whose prompt is written in the background (F56): stage \"prompt\" while the prompt is written, then \"submitted\" with the usual submit answer (task_id, execution_server, images, prompt_used, prompt_notice_code…) or \"failed\" with reason and reason_id (the error text and code).", "stage: \"prompt\"")]
+    public static Task<JObject> EcomCraftStudioPrepareStatus(Session session, string prepare_id = "")
+    {
+        if (!CanView(session))
+        {
+            return Task.FromResult(Error("无权查看任务。", "bad_permissions"));
+        }
+        PrunePreparing();
+        if (string.IsNullOrEmpty(prepare_id) || !Preparing.TryGetValue(prepare_id, out PreparingTask task) || task.UserId != session.User.UserID)
+        {
+            return Task.FromResult(Error("任务不存在或不属于当前账号。", "task_not_found"));
+        }
+        JObject answer = task.Result;
+        if (answer is null)
+        {
+            return Task.FromResult(new JObject() { ["stage"] = "prompt" });
+        }
+        if (answer.ContainsKey("error"))
+        {
+            // The failure is described in its own fields, so the status call itself still succeeds for the client.
+            return Task.FromResult(new JObject() { ["stage"] = "failed", ["reason"] = answer["error"]?.ToString(), ["reason_id"] = answer["error_id"]?.ToString() });
+        }
+        JObject result = (JObject)answer.DeepClone();
+        result["stage"] = "submitted";
+        return Task.FromResult(result);
     }
 
     /// <summary>Tracks one background generation: its claim ID once seen, and its sanitized result once finished. The outcome is recorded when both are known.</summary>

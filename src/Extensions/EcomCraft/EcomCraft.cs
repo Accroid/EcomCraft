@@ -63,6 +63,7 @@ public class EcomCraft : Extension
         API.RegisterAPICall(StudioApi.EcomCraftStudioQueue, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(StudioApi.EcomCraftStudioCancelTask, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(StudioApi.EcomCraftStudioGenerate, true, Permissions.BasicImageGeneration);
+        API.RegisterAPICall(StudioApi.EcomCraftStudioPrepareStatus, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(WorkflowReviewApi.EcomCraftStudioReviewList, false, PermReviewWorkflows);
         API.RegisterAPICall(WorkflowReviewApi.EcomCraftStudioReviewDetail, false, PermReviewWorkflows);
         API.RegisterAPICall(WorkflowReviewApi.EcomCraftStudioReviewDecide, true, PermReviewWorkflows);

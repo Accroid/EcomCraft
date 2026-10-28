@@ -332,6 +332,14 @@ public static class TemplateApi
         return (read("width"), read("height"));
     }
 
+    /// <summary>The full prompt of a resolved template request once its subject is known (F56): the template's prefix, the subject and its suffix,
+    /// joined the same way <see cref="Resolve"/> does, so a request resolved before the prompt was written can be completed later.</summary>
+    public static string WithTemplatePrompt(string templateId, string subject)
+    {
+        EcomTemplate template = TemplateStore.Find(templateId)?.Template;
+        return Join(" ", template?.PromptPrefix, subject, template?.PromptSuffix);
+    }
+
     /// <summary>Joins the non-empty parts.</summary>
     private static string Join(string separator, params string[] parts) => string.Join(separator, parts.Select(part => part?.Trim()).Where(part => !string.IsNullOrEmpty(part)));
 }
