@@ -45,7 +45,7 @@ public static class WorkflowReviewApi
     }
 
     /// <summary>Which execution servers can run a configured version, with up to three missing nodes or models each. Names only, no addresses.</summary>
-    private static JArray Runnability(JObject prompt, JObject metadata, JObject values)
+    internal static JArray Runnability(JObject prompt, JObject metadata, JObject values)
     {
         JArray result = new();
         foreach (BackendHandler.T2IBackendData data in ExecutionServers.All)
@@ -117,7 +117,7 @@ public static class WorkflowReviewApi
         foreach (KeyValuePair<string, WorkflowReview.Record> pair in records.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase))
         {
             // A published snapshot outlives its source; other records without a source have nothing left to review.
-            if (!seen.Contains(pair.Key) && pair.Value.Snapshot is not null)
+            if (!seen.Contains(pair.Key) && pair.Value.Snapshot is not null && pair.Value.Status != WorkflowReview.Own)
             {
                 items.Add(ReviewItem(pair.Key, null, pair.Value));
             }
@@ -134,6 +134,11 @@ public static class WorkflowReviewApi
         }
         WorkflowDiscovery.Entry entry = WorkflowDiscovery.Find(workflow_id);
         WorkflowReview.Record record = WorkflowReview.Get(workflow_id);
+        // Own uploads are private to their owner (F60) until submitted through a later review step.
+        if (record?.Status == WorkflowReview.Own)
+        {
+            return Task.FromResult(StudioApi.Error("这是账号自用的工作流，不在审核范围内。", "invalid_workflow"));
+        }
         ReviewVersion version = VersionFor(entry, record);
         if (version?.Prompt is null || version.BaseParams is null)
         {
@@ -265,6 +270,10 @@ public static class WorkflowReviewApi
         if (string.IsNullOrEmpty(id) || action is not ("approve" or "reject" or "unpublish"))
         {
             return Task.FromResult(StudioApi.Error("未知的审核操作。", "invalid_review"));
+        }
+        if (WorkflowReview.OwnerOf(id) is not null)
+        {
+            return Task.FromResult(StudioApi.Error("这是账号自用的工作流，不在审核范围内。", "invalid_workflow"));
         }
         WorkflowDiscovery.Entry entry = WorkflowDiscovery.Find(id);
         string reviewer = session.User.UserID;

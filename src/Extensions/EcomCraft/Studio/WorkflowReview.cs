@@ -30,6 +30,9 @@ public static class WorkflowReview
     /// <summary>The source file failed validation and cannot be submitted or published.</summary>
     public const string Invalid = "invalid";
 
+    /// <summary>Uploaded by an account for its own use (F60, decision U6): only the owner sees and runs it; it never appears in the review list.</summary>
+    public const string Own = "own";
+
     /// <summary>Returned by <see cref="Update"/> when the file cannot be written.</summary>
     public const string SaveFailedMessage = "审核记录无法保存到服务器数据目录，请联系管理员检查磁盘空间和文件权限。";
 
@@ -105,6 +108,15 @@ public static class WorkflowReview
 
         /// <summary>Time of the last submission, Unix milliseconds.</summary>
         public long SubmittedAt;
+
+        /// <summary>User ID of the account that uploaded an <see cref="Own"/> workflow; null for discovered workflows.</summary>
+        public string Owner;
+
+        /// <summary>Display name the owner gave an <see cref="Own"/> workflow.</summary>
+        public string Name;
+
+        /// <summary>Upload time of an <see cref="Own"/> workflow, Unix milliseconds.</summary>
+        public long UploadedAt;
     }
 
     /// <summary>Records by workflow ID.</summary>
@@ -227,9 +239,103 @@ public static class WorkflowReview
         }
     }
 
-    /// <summary>Whether the named registry entry is a published EcomCraft snapshot (a native ComfyUI workflow), rather than a stored SwarmUI workflow.</summary>
-    public static bool IsPublished(string name) => name is not null
+    /// <summary>Whether the named registry entry is a published EcomCraft snapshot (a native ComfyUI workflow) for every account,
+    /// rather than a stored SwarmUI workflow or one account's own upload.</summary>
+    public static bool IsPublished(string name) => IsRegisteredSnapshot(name) && OwnerOf(name) is null;
+
+    /// <summary>Whether the named registry entry is a snapshot of this store, published or own.</summary>
+    private static bool IsRegisteredSnapshot(string name) => name is not null
         && ComfyUIBackendExtension.CustomWorkflows.TryGetValue(name, out ComfyUIBackendExtension.ComfyCustomWorkflow workflow) && IsSnapshot(name, workflow);
+
+    /// <summary>The owner's user ID when the ID is an account's own workflow, otherwise null.</summary>
+    public static string OwnerOf(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return null;
+        }
+        lock (Lock)
+        {
+            EnsureLoaded();
+            return Records.TryGetValue(id, out Record record) && record.Status == Own ? record.Owner : null;
+        }
+    }
+
+    /// <summary>Whether the named registry entry is this user's own uploaded workflow (F60).</summary>
+    public static bool IsOwnBy(string name, string userId) => !string.IsNullOrEmpty(userId) && IsRegisteredSnapshot(name) && OwnerOf(name) == userId;
+
+    /// <summary>Whether the named registry entry is an EcomCraft snapshot this user may run: published for everyone, or the user's own upload.</summary>
+    public static bool IsUsableBy(string name, string userId) => IsPublished(name) || IsOwnBy(name, userId);
+
+    /// <summary>Whether a registry entry may be used by this user: anything that is not someone else's own workflow.</summary>
+    public static bool NotOthersOwn(string name, string userId)
+    {
+        string owner = OwnerOf(name);
+        return owner is null || owner == userId;
+    }
+
+    /// <summary>Copies of this user's own workflow records by ID, newest first.</summary>
+    public static List<KeyValuePair<string, Record>> OwnBy(string userId)
+    {
+        lock (Lock)
+        {
+            EnsureLoaded();
+            return [.. Records.Where(pair => pair.Value.Status == Own && pair.Value.Owner == userId)
+                .OrderByDescending(pair => pair.Value.UploadedAt).Select(pair => new KeyValuePair<string, Record>(pair.Key, Copy(pair.Value)))];
+        }
+    }
+
+    /// <summary>Adds one own workflow for its owner (F60), refusing a taken ID or more than <paramref name="maxPerOwner"/> per account.
+    /// Returns null on success, "limit" when the account is full, "taken" for an ID in use, or the save failure message.</summary>
+    public static string AddOwn(string id, Record record, int maxPerOwner)
+    {
+        lock (Lock)
+        {
+            EnsureLoaded();
+            if (Records.ContainsKey(id) || ComfyUIBackendExtension.CustomWorkflows.ContainsKey(id))
+            {
+                return "taken";
+            }
+            if (Records.Values.Count(existing => existing.Status == Own && existing.Owner == record.Owner) >= maxPerOwner)
+            {
+                return "limit";
+            }
+            return Update(id, stored =>
+            {
+                stored.Status = Own;
+                stored.Owner = record.Owner;
+                stored.Name = record.Name;
+                stored.UploadedAt = record.UploadedAt;
+                stored.Snapshot = record.Snapshot;
+                return null;
+            });
+        }
+    }
+
+    /// <summary>Deletes one own workflow of this owner and removes it from the registry. Returns null on success, "not_found" when the ID is not
+    /// this owner's own workflow, or the save failure message.</summary>
+    public static string DeleteOwn(string id, string userId)
+    {
+        lock (Lock)
+        {
+            EnsureLoaded();
+            if (string.IsNullOrWhiteSpace(id) || !Records.TryGetValue(id, out Record existing) || existing.Status != Own || existing.Owner != userId)
+            {
+                return "not_found";
+            }
+            Records.Remove(id);
+            if (!Save())
+            {
+                Records[id] = existing;
+                return SaveFailedMessage;
+            }
+            if (Registered.Remove(id, out ComfyUIBackendExtension.ComfyCustomWorkflow old))
+            {
+                ComfyUIBackendExtension.CustomWorkflows.TryRemove(new KeyValuePair<string, ComfyUIBackendExtension.ComfyCustomWorkflow>(id, old));
+            }
+            return null;
+        }
+    }
 
     /// <summary>A copy of the record for this ID, or null. Copies keep callers from changing shared state outside the lock.</summary>
     public static Record Get(string id)

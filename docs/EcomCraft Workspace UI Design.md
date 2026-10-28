@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.22 · **Date:** 2026-10-29
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.23 · **Date:** 2026-10-29
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -165,7 +165,8 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 
 | Control | Purpose | Current | After |
 |---|---|---|---|
-| Navigation "Create" / "Professional mode" | Switch views | New | Everyone starts in "Create"; "Professional mode" is the former creation view, visible only to administrators; other accounts bounce from `#create` |
+| Navigation "Create" / "Professional mode" | Switch views | New | Everyone starts in "Create"; "Professional mode" is the former creation view, open to every account (A2, F60) |
+| Professional mode Upload workflow / My workflows | Upload a workflow saved with ComfyUI's Save for one's own use (F60) | New | "Upload workflow" button and list under the workflow picker; each entry shows the name, how many execution servers can run it or which nodes and models are missing, and "Delete" (with confirmation); a refused upload lists the disallowed nodes and inputs; own workflows form their own "My workflows" group in the picker; hidden for accounts without generation rights |
 | Task cards: Follow a reference / Make one image / Make a full set | Choose what to make, then fill it in (F61) | New | Three cards at the top; "Follow a reference" comes first and is the first-visit default; the chosen card has the green-screen border and `aria-pressed`; remembered in the browser; step 2 shows only that task's fields (marked with `data-tasks` in HTML, hidden by CSS from `data-simple-task`), and its title becomes "Pick platform and references / image type / product type"; switching tasks keeps product photos and references |
 | Step 2 References (Follow a reference) | Upload 1–8 references with an editable prompt each (F59) | New | Shown and required only in "Follow a reference"; the main button "Generate by reference" makes one image per reference for every product photo |
 | Step 2 Image description notice (Follow a reference) | Says what is missing when image description cannot work (F68) | New | Calls `EcomCraftStudioVisionStatus` when the page opens; when it is off, no model is set, the vision service cannot be reached or the model is missing, a yellow-edged note under the references lists the reason and steps: administrators see the fix (the one-click install script command first, then installing Ollama by hand or `ollama pull <model>`) and a "Check again" button, other accounts are asked to contact one; a failed description checks again automatically |
@@ -403,3 +404,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-28 | v1.20 | Selling-point images (F47/T50): step 3 gained the "Make a selling-point image" section with three fixed layouts, the server draws the text with Noto Sans SC; new `EcomCraftStudioSellingImage` API |
 | 2026-10-29 | v1.21 | Task-first simple mode (F61/T64): three task cards at the top, step 2 fields by task, secondary options under "More options"; requirements in the EcomCraft UI and Workflow Redesign |
 | 2026-10-29 | v1.22 | Navigation and "Manage" menu (F62/T65): the top bar is Create images / Professional mode / Gallery / Queue, and administration plus the native engine moved into the administrators' "Manage" menu; consistent wording ("standard workspace" is now "standard parameters", the empty gallery points to "Create images") |
+| 2026-10-29 | v1.23 | Professional mode open to every account, with workflow upload and "My workflows" (F60/T63) |

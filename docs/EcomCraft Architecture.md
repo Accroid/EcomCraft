@@ -248,7 +248,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F57 | Automatic standard workflow creation | Simple mode redesign v3 (default model chosen in N01, plan pending; text-to-image first, image-to-image waits for N10) |
 | F58 | Platform presets by slot (per-slot size and ratio, subject fill, size caps, forbidden content, AI labelling) | Enhancement (implemented, pending acceptance, T60; design in [EcomCraft Platform Preset Slots](EcomCraft%20Platform%20Preset%20Slots.md), values pending the N06 check) |
 | F59 | Reference images (one image per reference: borrow the composition and scene reference) | Enhancement (P1 implemented, pending acceptance, T61; P2 scene reference depends on N10, T62; requirements in [EcomCraft Reference Images](EcomCraft%20Reference%20Images.md)) |
-| F60 | Professional mode open to every account (A2), with ComfyUI workflow upload (usable by the uploader at once, by others after review) | UI redesign v4 (T63, to do) |
+| F60 | Professional mode open to every account (A2), with ComfyUI workflow upload (usable by the uploader at once, by others after review) | UI redesign v4 (T63 opening and own uploads; T73 review and publishing, to do) |
 | F61 | Task-first simple mode (follow a reference / make one image / make a full set) | UI redesign v4 (T64) |
 | F62 | Navigation, "Admin" menu and consistent wording | UI redesign v4 (T65, to do) |
 | F63 | Phones get simple mode only | UI redesign v4 (T66, to do) |

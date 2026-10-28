@@ -28,6 +28,7 @@
     <Compile Include="../Studio/Projects/ProjectIndex.cs" Link="ProjectIndex.cs" />
     <Compile Include="../Studio/PostProcess/Placement.cs" Link="Placement.cs" />
     <Compile Include="../Studio/PostProcess/ProductComposite.cs" Link="ProductComposite.cs" />
+    <Compile Include="../Studio/OwnWorkflowRules.cs" Link="OwnWorkflowRules.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="../Templates/builtin/*.json" LinkBase="builtin" CopyToOutputDirectory="PreserveNewest" />

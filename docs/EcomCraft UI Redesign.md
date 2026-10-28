@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20界面改版需求.zh-CN.md)
 >
-> **Status:** Confirmed (2026-10-29), built task by task · **Version:** v1.1 · **Date:** 2026-10-29
+> **Status:** Confirmed (2026-10-29), built task by task · **Version:** v1.2 · **Date:** 2026-10-29
 >
 > Related: [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md) (decisions A2, A12), [EcomCraft Workspace UI Design](EcomCraft%20Workspace%20UI%20Design.md) (control list), [EcomCraft development table](EcomCraft%20开发总表.xlsx) (F60–F69 / T63–T72).
 
@@ -65,6 +65,14 @@ Three task cards sit at the top; the chosen task is remembered in the browser an
 - Switching tasks keeps uploaded product photos and references; references only apply in "Follow a reference".
 - Step 3: candidates can be starred (U5), downloaded, exported to a platform, turned into a selling-point image, or refined in professional mode (U7).
 
+## 5.1 Own Workflows (F60, T63)
+
+- The entry sits under the workflow picker in professional mode: "Upload workflow" takes a `.json` saved with ComfyUI's Save menu, named after the file; "My workflows" below lists them with how many execution servers can run them or which nodes and models are missing, and each can be deleted. In the picker own workflows form their own "My workflows" group.
+- Only the Save format is accepted; the API export is refused with a hint to use Save. Unsupported structures, files over 2 MB and more than 20 per account are refused with the reason.
+- Deny rules (three layers): node types whose words include `python`, `exec`, `execute`, `eval`, `script`, `shell`, `command`, `cmd`, `code` or `subprocess` are refused; text inputs that look like file paths (drive letters, network shares, absolute paths starting with `/`, or `..`) are refused; administrators can add node types in the server setting `EcomCraft.DeniedWorkflowNodes`. A refusal lists the nodes and input names.
+- Own workflows are visible to the uploader only: the catalog, generation, parameter provider and execution server check all verify the owner; they never appear in the review list, review calls refuse them, and templates cannot reference them. The workflow JSON stays on the server and is never returned to clients.
+- Submitting for review and publishing to everyone is left to T73.
+
 ## 6. Stars and Personal Analysis (F67, draft to-do)
 
 This section is a direction only; confirm it again before development, and add data rules to AGENTS.md first.
@@ -88,6 +96,7 @@ This section is a direction only; confirm it again before development, and add d
 | T71 | F68 | Image description on by default, with setup guidance | 1.5 (right after T64) |
 | T72 | F69 | One-click vision model install script (installs Ollama and pulls the default vision model) | 2.5 (right after T71) |
 | T70 | F67 | Star preference analysis and prompt feedback | Deferred, design pending |
+| T73 | F60 | Submit an own workflow for review and publish it to everyone once approved | Right after T63 |
 
 ## 8. Change Log
 
@@ -95,3 +104,4 @@ This section is a direction only; confirm it again before development, and add d
 |---|---|---|
 | 2026-10-29 | v1.0 | First version: decisions U1–U11, wording, navigation and administration, simple mode by task, stars and personal analysis draft, task list |
 | 2026-10-29 | v1.1 | U6 now lets the uploader use a workflow at once (other accounts still need review and publishing); new U12 image description on by default with setup guidance, F68/T71, and the one-click install script F69/T72 |
+| 2026-10-29 | v1.2 | New 5.1 own workflow rules (Save format only, three-layer deny rules, 20 per account, 2 MB); submitting for review and publishing split into T73 |

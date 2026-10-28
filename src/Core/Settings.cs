@@ -80,6 +80,10 @@ public class Settings : AutoConfiguration
         /// <summary>Optional directories to scan for native ComfyUI canvas workflow files.</summary>
         [ConfigComment("Additional directories containing native ComfyUI workflow JSON files. EcomCraft also discovers workflows and blueprints in configured local backends and verified local ComfyUI installations, respecting configured --user-directory arguments.")]
         public List<string> ComfyWorkflowSearchPaths = [];
+
+        /// <summary>Extra ComfyUI node types refused in workflows that accounts upload for their own use.</summary>
+        [ConfigComment("ComfyUI node types (class names) refused in workflows that accounts upload for their own use, in addition to nodes whose names mark code or shell execution. Uploads with path-like inputs are always refused.")]
+        public List<string> DeniedWorkflowNodes = [];
     }
 
     /// <summary>Settings related to Swarm server maintenance..</summary>

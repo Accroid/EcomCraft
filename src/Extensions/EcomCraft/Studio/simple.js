@@ -165,9 +165,9 @@ class SimpleMode {
         return ratio < min ? [{ code: 'ratio', ratio, min }] : [];
     }
 
-    /** Which views an account sees: everyone gets the simple mode; only administrators get the professional mode with sampler, LoRA and step settings. */
+    /** Which views an account sees (decision A2, F60): every signed-in account gets the simple mode and the professional mode for designers. */
     static viewAccess(catalog) {
-        return { simple: true, pro: Boolean(catalog && catalog.can_manage_settings) };
+        return { simple: true, pro: Boolean(catalog) };
     }
 
     /** Receives the helpers of studio.js and binds the controls. */

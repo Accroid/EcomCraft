@@ -1,4 +1,4 @@
-// Simple mode (F07): the default view has no prompt box and no professional parameters; the professional mode is offered to administrators only.
+// Simple mode (F07): the default view has no prompt box and no professional parameters; the professional mode is offered to every account (A2).
 // Run: node --test src/Extensions/EcomCraft/Tests/simple-mode.test.cjs
 'use strict';
 
@@ -62,10 +62,10 @@ test('the professional mode navigation starts hidden', () => {
     assert.match(html, /<a class="nav-item" data-view="simple" href="#simple">/);
 });
 
-test('only administrators get the professional mode', () => {
+test('every signed-in account gets the professional mode (A2, F60)', () => {
     let SimpleMode = loadSimpleMode();
-    assert.deepStrictEqual({ ...SimpleMode.viewAccess(null) }, { simple: true, pro: false });
-    assert.deepStrictEqual({ ...SimpleMode.viewAccess({ can_manage_settings: false }) }, { simple: true, pro: false });
+    assert.deepStrictEqual({ ...SimpleMode.viewAccess(null) }, { simple: true, pro: false }, 'not before the account is known');
+    assert.deepStrictEqual({ ...SimpleMode.viewAccess({ can_manage_settings: false }) }, { simple: true, pro: true });
     assert.deepStrictEqual({ ...SimpleMode.viewAccess({ can_manage_settings: true }) }, { simple: true, pro: true });
 });
 
@@ -271,4 +271,11 @@ test('the top bar: create images, professional mode, gallery and queue; administ
     for (let id of ['admin-menu-workflows', 'admin-menu-wizard', 'admin-menu-prompt', 'admin-menu-storage', 'admin-menu-diagnostics']) {
         assert.ok(topbar.includes(`id="${id}"`), `${id} is in the menu`);
     }
+});
+
+test('own workflows are uploaded in professional mode only, as a name and the file text (F60)', () => {
+    assert.ok(section('view-create').includes('id="own-workflow-upload"'));
+    assert.ok(!section('view-simple').includes('own-workflow'), 'operators never see the upload');
+    let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    assert.match(studio, /request\('EcomCraftStudioWorkflowUpload', \{ name: file\.name, workflow: text \}\)/);
 });

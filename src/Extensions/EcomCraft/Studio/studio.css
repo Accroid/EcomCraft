@@ -198,6 +198,17 @@ input[type=range] { width: 100%; accent-color: var(--key); }
     background: var(--backdrop); border: 1px solid var(--line-strong); font-size: var(--fs-12); font-weight: 600;
 }
 .user-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Own uploaded workflows in professional mode (F60). */
+.own-workflows { display: grid; gap: 6px; margin-top: 8px; }
+.own-workflow-message { padding: 6px 10px; border-left: 3px solid var(--tally); background: var(--backdrop); border-radius: 0 6px 6px 0; font-size: var(--fs-13); overflow-wrap: anywhere; }
+.own-workflow-message.is-ok { border-left-color: var(--key); }
+.own-workflow-message ul { margin: 4px 0 0; padding-left: 18px; }
+.own-workflow-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.own-workflow-list li { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--field); font-size: var(--fs-13); }
+.own-workflow-main { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.own-workflow-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.own-workflow-state { font-size: var(--fs-12); color: var(--ink-2); overflow-wrap: anywhere; }
+
 /* Administrators' "Manage" menu (F62): a disclosure button with a list of administration entries. */
 .admin-menu { position: relative; }
 .admin-menu-list {

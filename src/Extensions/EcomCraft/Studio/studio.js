@@ -53,6 +53,7 @@
         'invalid_storage_path','storage_check_failed','storage_save_failed','invalid_storage_action',
         'invalid_template','template_image_failed','prompt_settings_failed','cutout_failed','product_save_failed','invalid_export','export_failed','diagnostics_failed',
         'backup_failed','backup_invalid','backup_confirm_required','disk_full','invalid_product_type','prompt_service_unavailable','invalid_brand_kit','brand_kit_save_failed','invalid_selling_text','selling_font_missing','project_save_failed','vision_disabled',
+        'workflow_too_large','workflow_api_format','workflow_unsupported','workflow_denied','workflow_limit',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
     const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
 
@@ -476,12 +477,14 @@
         let workflows = (state.catalog?.workflows || []).filter(workflow => !workflow.kind || workflow.kind == state.type);
         select.replaceChildren(new Option('标准参数（不用工作流）', ''));
         let groups = new Map();
+        // The account's own uploads (F60) come first, under their own group.
+        groups.set(tr('我的工作流'), null);
         for (let workflow of workflows) {
             let name = workflow.name || workflow.id;
             let split = name.indexOf('/');
-            let groupName = workflow.native && split > 0 ? name.slice(0, split) : '管理员发布';
-            let label = workflow.native && split > 0 ? name.slice(split + 1) : name;
-            if (!groups.has(groupName)) {
+            let groupName = workflow.own ? tr('我的工作流') : (workflow.native && split > 0 ? name.slice(0, split) : '管理员发布');
+            let label = !workflow.own && workflow.native && split > 0 ? name.slice(split + 1) : name;
+            if (!groups.get(groupName)) {
                 let group = document.createElement('optgroup');
                 group.label = groupName;
                 groups.set(groupName, group);
@@ -489,7 +492,9 @@
             groups.get(groupName).append(new Option(label, workflow.id));
         }
         for (let group of groups.values()) {
-            select.append(group);
+            if (group) {
+                select.append(group);
+            }
         }
         state.workflowId = workflows.some(workflow => workflow.id === previous) ? previous : '';
         select.value = state.workflowId;
@@ -717,6 +722,9 @@
             // The professional mode (sampler, LoRA, steps and other parameters) is for administrators only; everyone else uses the simple mode.
             let access = SimpleMode.viewAccess(catalog);
             $('nav-create').hidden = !access.pro;
+            if (!OwnWorkflows.loaded) {
+                OwnWorkflows.load();
+            }
             if (state.view == 'create' && !access.pro) {
                 setView('simple');
             }
@@ -3706,6 +3714,152 @@
 
     /* ---------- Dialog focus ---------- */
     /** Moves focus into an open dialog, keeps Tab inside it and returns focus to the opener when it closes. */
+    /** The account's own uploaded workflows in professional mode (F60): upload a ComfyUI "Save" file, see where it can run, delete it.
+     * The server checks every upload; the page only ever sends the file text once and never receives the graph back. */
+    class OwnWorkflows {
+        static items = [];
+        static loaded = false;
+        static busy = false;
+
+        /** Reads the account's own workflows; failures only show a message, the rest of the page keeps working. */
+        static async load() {
+            try {
+                let result = await request('EcomCraftStudioMyWorkflows');
+                this.items = Array.isArray(result.workflows) ? result.workflows : [];
+                this.loaded = true;
+            }
+            catch (error) {
+                // Accounts without generation rights simply do not get the upload.
+                $('own-workflows').hidden = error.code == 'bad_permissions';
+                if (error.code != 'bad_permissions') {
+                    this.message(error.message || tr('没有读到你的工作流，请稍后刷新。'), false);
+                }
+            }
+            this.render();
+        }
+
+        /** Shows a message under the upload button: ok messages with the green edge, problems with the warning edge, with an optional list of details. */
+        static message(text, ok, details = []) {
+            let box = $('own-workflow-message');
+            box.replaceChildren(document.createTextNode(text || ''));
+            if (details.length) {
+                let list = el('ul');
+                for (let line of details) {
+                    list.append(el('li', null, line));
+                }
+                box.append(list);
+            }
+            box.classList.toggle('is-ok', Boolean(ok));
+            box.hidden = !text;
+        }
+
+        /** Where a workflow can run, in plain words: the number of ready servers, or the first missing dependencies. */
+        static stateText(item) {
+            let runnable = Array.isArray(item.runnable) ? item.runnable : [];
+            let ready = runnable.filter(server => server.ok).length;
+            if (ready > 0) {
+                return tr('可在 {0} 台执行服务器上运行', ready);
+            }
+            let problems = [];
+            for (let server of runnable) {
+                for (let problem of server.problems || []) {
+                    if (!problems.includes(problem)) {
+                        problems.push(problem);
+                    }
+                }
+            }
+            return problems.length ? tr('暂时不能运行，缺少：{0}', problems.slice(0, 3).join(tr('、'))) : tr('暂时没有在线的执行服务器');
+        }
+
+        /** Lists the own workflows with their state and a delete button. */
+        static render() {
+            let rows = [];
+            for (let item of this.items) {
+                let row = el('li');
+                let main = el('div', 'own-workflow-main');
+                let name = el('span', 'own-workflow-name', item.name || item.id);
+                name.setAttribute('data-i18n-skip', '');
+                main.append(name, el('span', 'own-workflow-state', this.stateText(item)));
+                let remove = el('button', 'link-btn', tr('删除'));
+                remove.type = 'button';
+                remove.setAttribute('aria-label', tr('删除工作流 {0}', item.name || item.id));
+                remove.disabled = this.busy;
+                remove.addEventListener('click', () => this.remove(item));
+                row.append(main, remove);
+                rows.push(row);
+            }
+            $('own-workflow-list').replaceChildren(...rows);
+            $('own-workflow-upload').disabled = this.busy;
+        }
+
+        /** The plain-language line for one refused node or input of an upload. */
+        static problemText(problem) {
+            if (problem.code == 'path_value') {
+                return tr('节点 {0} 的参数 {1} 像是文件路径', problem.node || '', problem.input || '');
+            }
+            return tr('节点 {0} 不允许使用', problem.node || '');
+        }
+
+        /** Uploads one chosen file; the name is the file name without ".json". */
+        static async upload(file) {
+            if (!file || this.busy) {
+                return;
+            }
+            if (file.size > 2 * 1024 * 1024) {
+                this.message(tr('工作流文件超过 2 MB，请在 ComfyUI 中精简后重新保存。'), false);
+                return;
+            }
+            this.busy = true;
+            this.render();
+            this.message(tr('正在上传并检查工作流…'), true);
+            try {
+                let text = await file.text();
+                let result = await request('EcomCraftStudioWorkflowUpload', { name: file.name, workflow: text });
+                this.message(tr('已上传“{0}”，只有你自己能用。{1}。', result.name || file.name, this.stateText(result)), true);
+                await refreshCatalog();
+            }
+            catch (error) {
+                let details = Array.isArray(error.problems) ? error.problems.map(problem => this.problemText(problem)) : [];
+                this.message(error.message || tr('上传失败，请稍后重试。'), false, details);
+            }
+            finally {
+                this.busy = false;
+                await this.load();
+            }
+        }
+
+        /** Deletes one own workflow after confirmation. */
+        static async remove(item) {
+            if (this.busy || !window.confirm(tr('确定删除工作流“{0}”？删除后不能恢复。', item.name || item.id))) {
+                return;
+            }
+            this.busy = true;
+            this.render();
+            try {
+                await request('EcomCraftStudioWorkflowDelete', { workflow_id: item.id });
+                this.message(tr('已删除“{0}”。', item.name || item.id), true);
+                await refreshCatalog();
+            }
+            catch (error) {
+                this.message(error.message || tr('删除失败，请稍后重试。'), false);
+            }
+            finally {
+                this.busy = false;
+                await this.load();
+            }
+        }
+
+        /** Binds the upload button and file input. */
+        static bind() {
+            $('own-workflow-upload').addEventListener('click', () => $('own-workflow-file').click());
+            $('own-workflow-file').addEventListener('change', e => {
+                let file = (e.target.files || [])[0];
+                e.target.value = '';
+                this.upload(file);
+            });
+        }
+    }
+
     /** The administrators' "Manage" menu (F62): workflow review, setup wizard, prompt settings, storage and backup, diagnostics and the native engine. */
     class AdminMenu {
         /** Shows the menu and its entries for the account's permissions; reviewers see the review, server administrators everything else. */
@@ -4419,6 +4573,7 @@
         $('storage-open').addEventListener('click', () => StorageSettingsView.open($('storage-open')));
         $('diagnostics-open').addEventListener('click', () => downloadDiagnostics($('diagnostics-open')));
         AdminMenu.bind();
+        OwnWorkflows.bind();
         $('storage-close').addEventListener('click', () => StorageSettingsView.close());
         $('storage-cancel').addEventListener('click', () => StorageSettingsView.close());
         $('storage-backdrop').addEventListener('click', () => StorageSettingsView.close());
