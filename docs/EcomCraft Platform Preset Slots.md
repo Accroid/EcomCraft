@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20平台预设槽位设计.zh-CN.md)
 >
-> **Status:** Confirmed (F58 / T60, not yet developed), ready to implement as T60; every platform rule value in this document must still be checked against the platform's current official rules under N06 · **Version:** v1.1 · **Date:** 2026-10-28
+> **Status:** Implemented, pending acceptance (F58 / T60, code complete 2026-10-28); every platform rule value must still be checked against the platform's current official rules under N06 · **Version:** v1.2 · **Date:** 2026-10-28
 >
 > Related files: [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md) (6.3 platform presets, F58) and the [EcomCraft development tracker](EcomCraft%20开发总表.xlsx) (F05, F22, F58, T60; N06; Chinese spreadsheet). When this design changes, update this document (Chinese and English together) first, then the code.
 
@@ -164,3 +164,4 @@ The four questions below were open until 2026-10-28, when they were decided (the
 |---|---|---|
 | 2026-10-28 | v1.0 | First draft: background and problem, ten difference dimensions, the v3 slot schema, slot-to-template mapping, export behaviour, compatibility, the N06 checklist, involved changes and open questions |
 | 2026-10-28 | v1.1 | The four open questions in section 6 became confirmed design decisions (the user delegated them to the agent): subject fill hints at export only, export anyway when still over the size cap with a notice, video covers record their spec only, category rules wait for N09; status changed to confirmed |
+| 2026-10-28 | v1.2 | Implemented pending acceptance (T60): platforms.json upgraded to v3, slot parsing with v2 compatibility, image sets composed by slot kind (same-kind slots deduplicated), exports follow slot specs with automatic size-cap compression, pure-white and subject-fill hints, forbidden-content and AI-declaration notices. One addition: same-kind optional slots (Taobao's 3:4 wireless image) do not generate twice; they are extra export targets only, so the page offers checkboxes only for kinds absent from the default composition |

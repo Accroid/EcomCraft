@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20Architecture.zh-CN.md)
 >
-> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); this document describes the target architecture and marks implemented parts · **Version:** v1.6 · **Date:** 2026-10-28
+> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); this document describes the target architecture and marks implemented parts · **Version:** v1.7 · **Date:** 2026-10-28
 >
 > Related files:
 > - [EcomCraft LAN Multi-Server Platform Requirements](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md): detailed requirements for the platform foundation (execution servers, review, scheduling, storage); it takes precedence.
@@ -75,7 +75,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 | | Product library | Caches original product images and background-removal results for reuse | Simple version implemented (`Studio/Products/`) |
 | | Brand kits | Brand colors, preferred background, logo and style references, per account | Implemented, pending acceptance (F12, `Studio/Brand/`); the prompt fragment applies to every template, images only fill a template's `brand_kit` slot |
 | | Project archive | Files works by customer or product batch with a recipe (template, seed, prompt, execution server) read from the work's metadata | Server side implemented, pending acceptance (F04/T09, `Studio/Projects/`); workspace interface T10 not started |
-| | Export | Chinese and international platform size presets, padding, zip or export to a shared folder, AI metadata, Amazon pure-white check | Implemented (`Studio/Export/`); also selling-point images (F47: the server draws the text with the bundled Noto Sans SC; no AI writes it) |
+| | Export | Chinese and international slot-based platform presets (F58), padding, zip or export to a shared folder, AI metadata, Amazon pure-white check | Implemented (`Studio/Export/`); also selling-point images (F47: the server draws the text with the bundled Noto Sans SC; no AI writes it) |
 | | Storage | Work library and export locations, write locally then sync, migration, cleanup, disk monitoring | Implemented (requirement R11, `Studio/Storage/`) |
 | Infrastructure | Reused from SwarmUI | Accounts and permissions, T2IEngine, `ComfyUIAPIBackend`, image processing | Existing |
 
@@ -121,7 +121,7 @@ When cloud services are added later, only the executor in steps 6–7 changes; b
 
 An editable configuration file lists Chinese and international platforms. Each platform records its Chinese and English names, image sizes, padding colour, compliance rules (for example, Amazon main images use no generative model and require a pure white background) and whether AI metadata is written. Exact values are checked against each platform's official rules during development and confirmed by the administrator.
 
-Today each platform has a single export preset; a later upgrade organizes presets by "slots" (F58): each platform consists of several image slots (white main image, scene main image, 3:4 wireless image, video cover and so on), each with its own size and ratio, minimum subject fill, per-file size cap, forbidden-content and AI labelling rules, and image sets combine templates by slot. See [EcomCraft Platform Preset Slots](EcomCraft%20Platform%20Preset%20Slots.md) (not yet developed).
+Today each platform is organized by "slots" (F58, implemented pending acceptance): each platform consists of several image slots (white main image, scene main image, 3:4 wireless image, video cover and so on), each with its own size and ratio, minimum subject fill, per-file size cap, forbidden-content and AI labelling rules, and image sets combine templates by slot. See [EcomCraft Platform Preset Slots](EcomCraft%20Platform%20Preset%20Slots.md); values await the N06 check.
 
 ### 6.4 Storage
 
@@ -238,7 +238,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F55 | Manual candidate count with a 20-image cap | Simple mode redesign v3 (implemented, pending acceptance) |
 | F56 | Faster generation path (queue on submit) | Simple mode redesign v3 (implemented, pending acceptance) |
 | F57 | Automatic standard workflow creation | Simple mode redesign v3 (default model chosen in N01, plan pending; text-to-image first, image-to-image waits for N10) |
-| F58 | Platform presets by slot (per-slot size and ratio, subject fill, size caps, forbidden content, AI labelling) | Enhancement (design in [EcomCraft Platform Preset Slots](EcomCraft%20Platform%20Preset%20Slots.md); enhances F05 / F22, values pending the N06 check) |
+| F58 | Platform presets by slot (per-slot size and ratio, subject fill, size caps, forbidden content, AI labelling) | Enhancement (implemented, pending acceptance, T60; design in [EcomCraft Platform Preset Slots](EcomCraft%20Platform%20Preset%20Slots.md), values pending the N06 check) |
 | F16 | Paid feature licensing | Team and commercial |
 | F18 | Cloud generation | Reserved (change the rules first) |
 | F17 | Brand-specific model training | Reserved (custom service) |
@@ -270,3 +270,4 @@ For each task's files, dependencies, acceptance criteria and Claude Code prompt,
 | 2026-10-28 | v1.4 | Simple mode redesign v3 added (F52–F57 / T54–T59, confirmed, development pending): four upload sources, two-level product type, bilingual prompts with AI expansion, a 20-image candidate cap, a faster generation path, and automatic standard workflow creation; requirements in "EcomCraft Simple Mode Redesign" |
 | 2026-10-28 | v1.5 | First two redesign tasks done and deployed: F53 (T55, 467c036d) and F55 (T57, 0e7c6b3e); handover notes and remaining tasks in "EcomCraft Simple Mode Redesign" section 11 |
 | 2026-10-28 | v1.6 | Decision A10: single server first; multi-server support stays in the architecture and code, multi-machine testing (F28 / T33) and N08 deferred until a customer asks; F28 moved from MVP-A to later features; F58 platform presets by slot added (design draft, including the N06 checklist) |
+| 2026-10-28 | v1.7 | F58 platform presets by slot implemented pending acceptance (T60): platforms.json upgraded to v3 slots, image sets composed by slot kind, exports follow slot specs with automatic size-cap compression, pure-white and subject-fill hints, forbidden-content and AI-declaration notices; values still await the N06 check |
