@@ -465,6 +465,13 @@ main:focus:not(:focus-visible) { outline: none; }
 .simple-result { position: relative; padding: 0; border: 2px solid transparent; border-radius: 6px; background: var(--backdrop); cursor: pointer; }
 .simple-result[aria-pressed="true"] { border-color: var(--key); }
 .simple-result img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 4px; }
+.simple-result-tile { position: relative; min-width: 0; }
+.simple-result-tile .simple-result { width: 100%; }
+.simple-result-star {
+    position: absolute; top: 6px; left: 6px; width: 32px; height: 32px; display: grid; place-items: center; padding: 0;
+    border-radius: 50%; background: var(--panel); border: 1px solid var(--line-strong); color: var(--ink-2); font-size: 16px; cursor: pointer;
+}
+.simple-result-star[aria-pressed="true"] { color: var(--key); border-color: var(--key); }
 .simple-result-check { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--panel); border: 1px solid var(--line-strong); font-size: 13px; }
 .simple-result[aria-pressed="true"] .simple-result-check { background: var(--key); color: var(--on-key); border-color: var(--key); }
 .sheet-kind.is-pending { color: var(--tally); }

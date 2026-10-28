@@ -253,7 +253,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F62 | Navigation, "Admin" menu and consistent wording | UI redesign v4 (T65, to do) |
 | F63 | Phones get simple mode only | UI redesign v4 (T66, to do) |
 | F64 | One-way hand-off from simple to professional mode | UI redesign v4 (T67) |
-| F65 | Star candidates (first filter) | UI redesign v4 (T68, to do) |
+| F65 | Star candidates (first filter) | UI redesign v4 (T68) |
 | F66 | Gallery and queue cleanup | UI redesign v4 (T69, to do) |
 | F67 | Star preference analysis and prompt feedback | UI redesign v4 (T70, deferred, design pending) |
 | F68 | Image description on by default, with setup guidance | UI redesign v4 (T71) |

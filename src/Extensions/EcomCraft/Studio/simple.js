@@ -63,6 +63,12 @@ class SimpleMode {
     static timer = null;
     static results = [];
     static selected = new Set();
+
+    /** Candidates starred on this page (F65); the star is the gallery's own, so they also show under "Starred" there. */
+    static starred = new Set();
+
+    /** Candidates whose star request is still running, so a second click waits. */
+    static starring = new Set();
     static maxProductBytes = 5 * 1024 * 1024;
     static placement = { x: 0.5, y: 0.5, size: 0.7 };
     static cutting = false;
@@ -2920,11 +2926,50 @@ class SimpleMode {
         return '/' + String(url).split('/').map(part => encodeURIComponent(part)).join('/');
     }
 
-    /** Shows the candidates as selectable tiles. */
+    /** The gallery path of a result URL ("View/<user>/a/b.png" or "Output/a/b.png" → "a/b.png"), as the star API expects. */
+    static galleryPath(url) {
+        return String(url).replace(/^\/?View\/[^/]+\//, '').replace(/^\/?Output\//, '');
+    }
+
+    /** Stars or unstars one candidate with the gallery's star (F65). A starred candidate is also marked kept, so cleanup never removes its original. */
+    static async toggleStar(url) {
+        let tr = this.api.tr;
+        if (this.starring.has(url)) {
+            return;
+        }
+        this.starring.add(url);
+        this.renderResults();
+        try {
+            let result = await this.api.request('ToggleImageStarred', { path: this.galleryPath(url) });
+            if (result.error) {
+                throw new Error(result.error);
+            }
+            if (result.new_state) {
+                this.starred.add(url);
+                this.api.request('EcomCraftStudioMarkKept', { images: [url] }).catch(() => {
+                    // The starred copy stays either way; picking or downloading marks it again.
+                });
+            }
+            else {
+                this.starred.delete(url);
+            }
+        }
+        catch (error) {
+            this.message(tr('收藏没有成功：{0}', error.message || tr('请刷新后重试')), true);
+        }
+        finally {
+            this.starring.delete(url);
+            this.renderResults();
+        }
+    }
+
+    /** Shows the candidates as selectable tiles, each with a star to weed out weak results (F65). */
     static renderResults() {
         let el = this.api.el;
+        let tr = this.api.tr;
         let tiles = [];
         for (let url of this.results) {
+            let tile = el('div', 'simple-result-tile');
             let button = el('button', 'simple-result');
             button.type = 'button';
             let picked = this.selected.has(url);
@@ -2956,7 +3001,16 @@ class SimpleMode {
                 this.renderResults();
                 this.update();
             });
-            tiles.push(button);
+            let name = url.split('/').pop();
+            let starred = this.starred.has(url);
+            let star = el('button', 'simple-result-star', starred ? '★' : '☆');
+            star.type = 'button';
+            star.disabled = this.starring.has(url);
+            star.setAttribute('aria-pressed', String(starred));
+            star.setAttribute('aria-label', starred ? tr('取消收藏 {0}', name) : tr('收藏 {0}', name));
+            star.addEventListener('click', () => this.toggleStar(url));
+            tile.append(button, star);
+            tiles.push(tile);
         }
         this.api.$('simple-results').replaceChildren(...tiles);
         this.renderExport();

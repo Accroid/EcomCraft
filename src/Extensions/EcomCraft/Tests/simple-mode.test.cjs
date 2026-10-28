@@ -287,3 +287,12 @@ test('one picked candidate can be refined in professional mode, with the prompt 
     let css = fs.readFileSync(path.join(studioDir, 'studio.css'), 'utf8');
     assert.match(css, /@media \(max-width: 720px\) \{\s*\.simple-refine \{ display: none; \}/, 'phones keep to the simple mode');
 });
+
+test('candidates are starred with the gallery star, by their gallery path (F65)', () => {
+    let SimpleMode = loadSimpleMode();
+    assert.strictEqual(SimpleMode.galleryPath('View/alice/raw/2026-10-29/a.png'), 'raw/2026-10-29/a.png');
+    assert.strictEqual(SimpleMode.galleryPath('/Output/raw/a.png'), 'raw/a.png');
+    let js = fs.readFileSync(path.join(studioDir, 'simple.js'), 'utf8');
+    assert.match(js, /request\('ToggleImageStarred', \{ path: this\.galleryPath\(url\) \}\)/);
+    assert.match(js, /new_state\) \{\s*this\.starred\.add\(url\);\s*this\.api\.request\('EcomCraftStudioMarkKept'/, 'a starred candidate is kept from cleanup');
+});
