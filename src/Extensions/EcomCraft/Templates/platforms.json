@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "note": "Export presets come from commonly published platform guidelines and must be checked against the platforms' current official rules before use (N06). Set verified to true after checking. Administrators can override this file with Data/EcomCraft/platforms.json.",
+  "version": 3,
+  "note": "Export presets come from commonly published platform guidelines and must be checked against the platforms' current official rules before use (N06). Set verified to true after checking. Administrators can override this file with Data/EcomCraft/platforms.json. Each platform lists image slots (F58): sizes, per-file caps, subject fill, forbidden content and AI labelling; values without a check are marked in each platform's source.",
   "upload_quality": {
     "note": "Upload quality checks (F38): photos below min_side pixels, under blur_variance (Laplacian variance) or cut-outs with less than min_cutout_ratio opaque pixels get a plain warning with a suggestion; the user can still continue.",
     "min_side": 512,
@@ -15,15 +15,50 @@
         "en": "Taobao / Tmall"
       },
       "region": "cn",
-      "export": {
-        "width": 800,
-        "height": 800,
-        "background": "#FFFFFF",
-        "format": "jpg",
-        "quality": 92,
-        "verified": false,
-        "source": "淘宝 / 天猫主图规范：正方形，700 px 以上支持放大"
-      }
+      "slots": [
+        {
+          "id": "white_main",
+          "kind": "white_main",
+          "name": { "zh-CN": "白底主图", "en": "White main image" },
+          "width": 800,
+          "height": 800,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 92,
+          "max_bytes": 307200,
+          "subject_ratio_min": 0.8,
+          "position": 5
+        },
+        {
+          "id": "scene_main",
+          "kind": "scene_main",
+          "name": { "zh-CN": "场景主图", "en": "Scene main image" },
+          "width": 800,
+          "height": 800,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 92,
+          "max_bytes": 3145728
+        },
+        {
+          "id": "wireless_3_4",
+          "kind": "scene_main",
+          "name": { "zh-CN": "3:4 无线主图", "en": "3:4 wireless main image" },
+          "width": 800,
+          "height": 1200,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 92,
+          "max_bytes": 3145728,
+          "optional": true
+        }
+      ],
+      "main_image_count": 5,
+      "video": { "ratios": ["1:1", "3:4"], "max_seconds": 60, "note": "视频属 F48，本期只记录规格" },
+      "forbidden": ["watermark", "promo_text", "price", "qr_code", "border", "collage"],
+      "ai_label": { "implicit_metadata": true, "platform_declaration": true },
+      "verified": false,
+      "source": "待 N06 核对：1:1 主图 800×800 起支持放大；第 5 张白底图纯白约 300KB；单张约 3MB；无线端可选 3:4"
     },
     {
       "id": "jd",
@@ -32,15 +67,38 @@
         "en": "JD.com"
       },
       "region": "cn",
-      "export": {
-        "width": 800,
-        "height": 800,
-        "background": "#FFFFFF",
-        "format": "jpg",
-        "quality": 92,
-        "verified": false,
-        "source": "京东商品主图规范：正方形"
-      }
+      "slots": [
+        {
+          "id": "white_main",
+          "kind": "white_main",
+          "name": { "zh-CN": "白底主图", "en": "White main image" },
+          "width": 800,
+          "height": 800,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 90,
+          "max_bytes": 1048576,
+          "subject_ratio_min": 0.67,
+          "position": 1
+        },
+        {
+          "id": "scene_main",
+          "kind": "scene_main",
+          "name": { "zh-CN": "场景主图", "en": "Scene main image" },
+          "width": 800,
+          "height": 800,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 90,
+          "max_bytes": 1048576
+        }
+      ],
+      "main_image_count": 6,
+      "video": { "ratios": ["1:1", "16:9"], "max_seconds": 60, "note": "视频属 F48，本期只记录规格" },
+      "forbidden": ["watermark", "promo_text", "price", "qr_code", "border", "collage"],
+      "ai_label": { "implicit_metadata": true, "platform_declaration": true },
+      "verified": false,
+      "source": "待 N06 核对：第 1 张必须纯白白底（无阴影倒影）；主体占比约 2/3 以上；单张约 1MB"
     },
     {
       "id": "pinduoduo",
@@ -49,15 +107,35 @@
         "en": "Pinduoduo"
       },
       "region": "cn",
-      "export": {
-        "width": 750,
-        "height": 750,
-        "background": "#FFFFFF",
-        "format": "jpg",
-        "quality": 92,
-        "verified": false,
-        "source": "拼多多商品轮播图规范：正方形 750 px"
-      }
+      "slots": [
+        {
+          "id": "white_main",
+          "kind": "white_main",
+          "name": { "zh-CN": "白底主图", "en": "White main image" },
+          "width": 750,
+          "height": 750,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 90,
+          "max_bytes": 1048576
+        },
+        {
+          "id": "scene_main",
+          "kind": "scene_main",
+          "name": { "zh-CN": "场景主图", "en": "Scene main image" },
+          "width": 750,
+          "height": 750,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 90,
+          "max_bytes": 1048576
+        }
+      ],
+      "main_image_count": 10,
+      "forbidden": ["watermark", "promo_text", "price", "qr_code", "border", "collage"],
+      "ai_label": { "implicit_metadata": true, "platform_declaration": true },
+      "verified": false,
+      "source": "待 N06 核对：1:1 主图 750×750 起；单张约 1MB"
     },
     {
       "id": "douyin",
@@ -66,15 +144,38 @@
         "en": "Douyin Shop"
       },
       "region": "cn",
-      "export": {
-        "width": 800,
-        "height": 800,
-        "background": "#FFFFFF",
-        "format": "jpg",
-        "quality": 92,
-        "verified": false,
-        "source": "抖店商品主图规范：1:1"
-      }
+      "slots": [
+        {
+          "id": "scene_main",
+          "kind": "scene_main",
+          "name": { "zh-CN": "场景主图", "en": "Scene main image" },
+          "width": 800,
+          "height": 800,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 92,
+          "max_bytes": 5242880,
+          "subject_ratio_min": 0.6
+        },
+        {
+          "id": "white_main",
+          "kind": "white_main",
+          "name": { "zh-CN": "白底主图", "en": "White main image" },
+          "width": 800,
+          "height": 800,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 92,
+          "max_bytes": 5242880,
+          "optional": true
+        }
+      ],
+      "main_image_count": 5,
+      "video": { "ratios": ["9:16", "3:4", "1:1"], "max_seconds": 60, "note": "视频属 F48，本期只记录规格" },
+      "forbidden": ["watermark", "promo_text", "price", "qr_code", "border", "collage"],
+      "ai_label": { "implicit_metadata": true, "platform_declaration": true },
+      "verified": false,
+      "source": "待 N06 核对：1:1 主图不小于 600×600（建议 800×800）；主体占比约 60%；单张约 5MB；无强制白底"
     },
     {
       "id": "xiaohongshu",
@@ -83,15 +184,22 @@
         "en": "Xiaohongshu"
       },
       "region": "cn",
-      "export": {
-        "width": 1080,
-        "height": 1440,
-        "background": "#FFFFFF",
-        "format": "jpg",
-        "quality": 92,
-        "verified": false,
-        "source": "小红书笔记图常用 3:4"
-      }
+      "slots": [
+        {
+          "id": "scene_main",
+          "kind": "scene_main",
+          "name": { "zh-CN": "场景图", "en": "Scene image" },
+          "width": 1080,
+          "height": 1440,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 92
+        }
+      ],
+      "forbidden": ["watermark", "promo_text", "price", "qr_code"],
+      "ai_label": { "implicit_metadata": true, "platform_declaration": true },
+      "verified": false,
+      "source": "待 N06 核对：笔记图常用 3:4 1080×1440"
     },
     {
       "id": "amazon",
@@ -100,16 +208,37 @@
         "en": "Amazon"
       },
       "region": "global",
-      "export": {
-        "width": 2000,
-        "height": 2000,
-        "background": "#FFFFFF",
-        "format": "jpg",
-        "quality": 92,
-        "verified": false,
-        "source": "Amazon Seller Central product image requirements: main image on pure white (RGB 255, 255, 255); longest side 1000 px or more enables zoom",
-        "require_white_background": true
-      }
+      "slots": [
+        {
+          "id": "white_main",
+          "kind": "white_main",
+          "name": { "zh-CN": "白底主图", "en": "White main image" },
+          "width": 2000,
+          "height": 2000,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 92,
+          "max_bytes": 10485760,
+          "subject_ratio_min": 0.85,
+          "position": 1
+        },
+        {
+          "id": "scene_gallery",
+          "kind": "scene_main",
+          "name": { "zh-CN": "场景附图", "en": "Scene gallery image" },
+          "width": 2000,
+          "height": 2000,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 92,
+          "max_bytes": 10485760
+        }
+      ],
+      "main_image_count": 9,
+      "forbidden": ["watermark", "promo_text", "price", "qr_code", "border", "collage"],
+      "ai_label": { "implicit_metadata": true, "platform_declaration": true },
+      "verified": false,
+      "source": "待 N06 核对：Amazon Seller Central — main image on pure white (RGB 255, 255, 255), subject fill 85%+, longest side 1000 px or more enables zoom, files up to 10MB"
     },
     {
       "id": "shopify",
@@ -118,15 +247,21 @@
         "en": "Shopify"
       },
       "region": "global",
-      "export": {
-        "width": 2048,
-        "height": 2048,
-        "background": "#FFFFFF",
-        "format": "jpg",
-        "quality": 92,
-        "verified": false,
-        "source": "Shopify Help Center: 2048 x 2048 px square images recommended"
-      }
+      "slots": [
+        {
+          "id": "scene_main",
+          "kind": "scene_main",
+          "name": { "zh-CN": "商品图", "en": "Product image" },
+          "width": 2048,
+          "height": 2048,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 92
+        }
+      ],
+      "ai_label": { "implicit_metadata": true },
+      "verified": false,
+      "source": "待 N06 核对：Shopify Help Center — 2048 x 2048 px square images recommended"
     },
     {
       "id": "tiktok-shop",
@@ -135,15 +270,23 @@
         "en": "TikTok Shop"
       },
       "region": "global",
-      "export": {
-        "width": 1000,
-        "height": 1000,
-        "background": "#FFFFFF",
-        "format": "jpg",
-        "quality": 92,
-        "verified": false,
-        "source": "TikTok Shop product image guidelines: 1:1, at least 600 px"
-      }
+      "slots": [
+        {
+          "id": "scene_main",
+          "kind": "scene_main",
+          "name": { "zh-CN": "商品主图", "en": "Product main image" },
+          "width": 1000,
+          "height": 1000,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 92
+        }
+      ],
+      "main_image_count": 5,
+      "forbidden": ["watermark", "promo_text", "price", "qr_code", "border", "collage"],
+      "ai_label": { "implicit_metadata": true, "platform_declaration": true },
+      "verified": false,
+      "source": "待 N06 核对：TikTok Shop product image guidelines — 1:1, at least 600 px"
     },
     {
       "id": "ebay",
@@ -152,15 +295,21 @@
         "en": "eBay"
       },
       "region": "global",
-      "export": {
-        "width": 1600,
-        "height": 1600,
-        "background": "#FFFFFF",
-        "format": "jpg",
-        "quality": 92,
-        "verified": false,
-        "source": "eBay picture requirements: at least 500 px, 1600 px recommended"
-      }
+      "slots": [
+        {
+          "id": "scene_main",
+          "kind": "scene_main",
+          "name": { "zh-CN": "商品图", "en": "Product image" },
+          "width": 1600,
+          "height": 1600,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 92
+        }
+      ],
+      "ai_label": { "implicit_metadata": true },
+      "verified": false,
+      "source": "待 N06 核对：eBay picture requirements — at least 500 px, 1600 px recommended"
     }
   ]
 }

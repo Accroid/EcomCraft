@@ -1,4 +1,5 @@
 using System.Security;
+using Newtonsoft.Json.Linq;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -92,5 +93,36 @@ public static class ComplianceRules
             }
         });
         return total == 0 ? 0 : (double)nonWhite / total;
+    }
+
+    /// <summary>Fraction of the whole picture that is not pure white (255, 255, 255) — an estimate of how much of a white-background slot the product fills (F58).
+    /// A hint only: scene pictures embed the product in scenery, so the check is used for white slots.</summary>
+    public static double SubjectFillFraction(Image<Rgb24> image)
+    {
+        long total = 0;
+        long nonWhite = 0;
+        image.ProcessPixelRows(rows =>
+        {
+            for (int y = 0; y < rows.Height; y++)
+            {
+                Span<Rgb24> row = rows.GetRowSpan(y);
+                for (int x = 0; x < row.Length; x++)
+                {
+                    total++;
+                    Rgb24 pixel = row[x];
+                    if (pixel.R != 255 || pixel.G != 255 || pixel.B != 255)
+                    {
+                        nonWhite++;
+                    }
+                }
+            }
+        });
+        return total == 0 ? 0 : (double)nonWhite / total;
+    }
+
+    /// <summary>Whether a platform's rules forbid promotional text, so images carrying drawn text (selling-point images, F47) get an export hint (F58).</summary>
+    public static bool ForbidsPromoText(JObject platform)
+    {
+        return (platform?["forbidden"] as JArray)?.Any(item => item?.Type == JTokenType.String && item.ToString() == "promo_text") == true;
     }
 }

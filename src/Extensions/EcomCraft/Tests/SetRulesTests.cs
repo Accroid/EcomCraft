@@ -25,6 +25,27 @@ public class SetRulesTests
     }
 
     [Fact]
+    public void SlotsComposeTheSetInSlotKindOrder()
+    {
+        List<SetRules.TemplateRef> templates =
+        [
+            new("white-main", ["*"], ["standard"], "white_main"),
+            new("scene", ["*"], ["standard"], "scene_main"),
+            new("hand", ["*"], ["standard"], "model"),
+            new("kindless", ["*"], ["standard"]),
+            new("video", ["*"], ["video-set"], "scene_main")
+        ];
+        // JD-style slots: white first, then scene — the model and kindless templates stay out.
+        Assert.Equal(new List<string> { "white-main", "scene" }, SetRules.SlotTemplates(templates, "jd", "standard", ["white_main", "scene_main"]).Select(template => template.Id).ToList());
+        // Douyin-style: scene first and no white slot, so the white template stays out even though it suits every platform.
+        Assert.Equal(new List<string> { "scene" }, SetRules.SlotTemplates(templates, "douyin", "standard", ["scene_main"]).Select(template => template.Id).ToList());
+        // A ticked optional slot brings its kind in, and other sets are ignored.
+        Assert.Equal(new List<string> { "scene", "white-main", "hand" }, SetRules.SlotTemplates(templates, "douyin", "standard", ["scene_main", "white_main", "model"]).Select(template => template.Id).ToList());
+        // Kinds with no template in the set are skipped.
+        Assert.Equal(new List<string> { "scene" }, SetRules.SlotTemplates(templates, "jd", "standard", ["scene_main", "detail"]).Select(template => template.Id).ToList());
+    }
+
+    [Fact]
     public void ExpandsProductByProduct()
     {
         List<SetRules.Job> jobs = SetRules.Expand(2, SetRules.SetTemplates(Templates(), "taobao", "standard"));

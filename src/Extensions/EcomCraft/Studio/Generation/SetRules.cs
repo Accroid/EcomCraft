@@ -13,7 +13,7 @@ public static class SetRules
     public const int MaxConcurrent = 4;
 
     /// <summary>A template as the set expansion sees it.</summary>
-    public sealed record class TemplateRef(string Id, IReadOnlyList<string> Platforms, IReadOnlyList<string> Sets);
+    public sealed record class TemplateRef(string Id, IReadOnlyList<string> Platforms, IReadOnlyList<string> Sets, string Kind = "");
 
     /// <summary>One task: a product photo (by index), a template and, for storyboard sets (F25), the shot it makes (-1 otherwise).</summary>
     public sealed record class Job(int Product, string Template, int Shot = -1);
@@ -39,6 +39,18 @@ public static class SetRules
     /// <summary>Templates of a set that suit the platform (an empty platform means any; "*" in a template suits every platform), in the given order.</summary>
     public static List<TemplateRef> SetTemplates(IEnumerable<TemplateRef> templates, string platform, string setId) =>
         [.. templates.Where(template => template.Sets.Contains(setId) && SuitsPlatform(template, platform))];
+
+    /// <summary>Templates of a set as a platform's slots compose them (F58): in slot order, every template whose kind matches a slot. Slot kinds the set has
+    /// no template for are skipped; templates without a kind do not join slot-composed sets (they are meant for the old, set-only platforms).</summary>
+    public static List<TemplateRef> SlotTemplates(IEnumerable<TemplateRef> templates, string platform, string setId, IReadOnlyList<string> slotKinds)
+    {
+        List<TemplateRef> result = [];
+        foreach (string kind in slotKinds)
+        {
+            result.AddRange(templates.Where(template => template.Sets.Contains(setId) && SuitsPlatform(template, platform) && template.Kind == kind));
+        }
+        return result;
+    }
 
     /// <summary>Expands products × set templates into tasks, product by product, so the first product's set finishes first.</summary>
     public static List<Job> Expand(int products, IReadOnlyList<TemplateRef> setTemplates)

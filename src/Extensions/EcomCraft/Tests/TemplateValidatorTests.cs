@@ -58,6 +58,21 @@ public class TemplateValidatorTests
     }
 
     [Fact]
+    public void KindIsOptionalButMustBeASlotKind()
+    {
+        Assert.Equal("", TemplateValidator.Parse(Valid(), []).Kind);
+        JObject scene = Valid();
+        scene["id"] = "scene";
+        scene["kind"] = "scene_main";
+        Assert.Equal("scene_main", TemplateValidator.Parse(scene, []).Kind);
+        JObject bad = Valid();
+        bad["kind"] = "hero";
+        List<string> errors = [];
+        Assert.Null(TemplateValidator.Parse(bad, errors));
+        Assert.Contains(errors, error => error.StartsWith("kind "));
+    }
+
+    [Fact]
     public void RejectsBadIdMissingEnglishNameAndUnknownField()
     {
         JObject json = Valid();

@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using EcomCraftStudio.Studio.Export;
 using EcomCraftStudio.Studio.PostProcess;
 using EcomCraftStudio.Studio.Prompting;
 using EcomCraftStudio.Studio.Templates;
@@ -212,7 +213,7 @@ public static class BatchService
             batch.Server = pinned;
         }
         List<(EcomTemplate Template, string WorkflowId, string ImageField)> runnable = TemplateApi.RunnableTemplates(session);
-        List<SetRules.TemplateRef> references = [.. runnable.Select(item => new SetRules.TemplateRef(item.Template.Id, item.Template.Platforms, item.Template.Sets))];
+        List<SetRules.TemplateRef> references = [.. runnable.Select(item => new SetRules.TemplateRef(item.Template.Id, item.Template.Platforms, item.Template.Sets, item.Template.Kind))];
         List<SetRules.Job> expanded;
         if (rawInput["shots"] is JArray shotItems && shotItems.Count > 0)
         {
@@ -248,7 +249,11 @@ public static class BatchService
         }
         else
         {
-            List<SetRules.TemplateRef> setTemplates = SetRules.SetTemplates(references, platform, setId);
+            (List<SetRules.TemplateRef> setTemplates, string slotError) = SlotTemplates(rawInput, references, platform, setId);
+            if (slotError is not null)
+            {
+                return StudioApi.Error(slotError, "invalid_parameters");
+            }
             if (setTemplates.Count == 0)
             {
                 return StudioApi.Error("这个平台暂时没有可用的套图模板。请管理员发布模板，或确认执行服务器在线。", "invalid_template");
@@ -337,6 +342,31 @@ public static class BatchService
     }
 
     /// <summary>Runs one task once a slot of its owner is free.</summary>
+    /// <summary>Templates of a set for one platform (F58): when the platform defines slots, composed by slot kind — every non-optional slot plus the
+    /// optional slots the request ticked, kinds deduplicated because same-kind optional slots only add export targets, not extra generations. Platforms
+    /// without slots keep the old composition by set membership. The error is set when a ticked slot does not belong to the platform.</summary>
+    private static (List<SetRules.TemplateRef> Templates, string Error) SlotTemplates(JObject rawInput, List<SetRules.TemplateRef> references, string platform, string setId)
+    {
+        JObject platformData = string.IsNullOrEmpty(platform) ? null : TemplateStore.Platforms().FirstOrDefault(item => item["id"]?.ToString() == platform);
+        List<ExportSlot> slots = platformData is null ? null : ExportRules.ParseSlots(platformData, out _);
+        if (slots is null)
+        {
+            return (SetRules.SetTemplates(references, platform, setId), null);
+        }
+        HashSet<string> ticked = [];
+        foreach (JToken token in rawInput["optional_slots"] as JArray ?? new JArray())
+        {
+            string id = token?.Type == JTokenType.String ? token.ToString() : "";
+            if (!slots.Any(slot => slot.Id == id && slot.Optional))
+            {
+                return (null, "所选的可选槽位不存在，请刷新后重新选择。");
+            }
+            ticked.Add(id);
+        }
+        List<string> kinds = [.. slots.Where(slot => !slot.Optional || ticked.Contains(slot.Id)).Select(slot => slot.Kind).Distinct()];
+        return (SetRules.SlotTemplates(references, platform, setId, kinds), null);
+    }
+
     private static async Task RunJobAsync(Session session, Batch batch, Job job)
     {
         SemaphoreSlim slot = Slots.GetOrAdd(batch.UserId, _ => new SemaphoreSlim(SetRules.Concurrency(session.User.CalcMaxT2ISimultaneous)));

@@ -17,10 +17,55 @@ public class ExportTests
         Assert.True(platforms.Count >= 9);
         foreach (JObject platform in platforms.OfType<JObject>())
         {
-            ExportPreset preset = ExportRules.Parse(platform["export"] as JObject, out string error);
-            Assert.True(preset is not null, $"{platform["id"]}: {error}");
-            Assert.False(string.IsNullOrWhiteSpace(preset.Source));
+            List<ExportSlot> slots = ExportRules.ParseSlots(platform, out string error);
+            Assert.True(slots is not null && slots.Count > 0, $"{platform["id"]}: {error}");
+            Assert.Contains(slots, slot => slot.Kind == "white_main" || slot.Kind == "scene_main");
+            Assert.All(slots, slot => Assert.InRange(slot.Preset.Width, 64, 8192));
         }
+    }
+
+    [Fact]
+    public void V2ExportBecomesOneSlot()
+    {
+        JObject platform = JObject.Parse("""{ "id": "old", "export": { "width": 800, "height": 800, "background": "#FFFFFF", "format": "jpg", "require_white_background": true } }""");
+        List<ExportSlot> slots = ExportRules.ParseSlots(platform, out string error);
+        Assert.Null(error);
+        ExportSlot slot = Assert.Single(slots);
+        Assert.Equal("white_main", slot.Kind);
+        Assert.True(slot.RequireWhite);
+        Assert.False(slot.Optional);
+        Assert.Equal(0, slot.MaxBytes);
+        JObject scene = JObject.Parse("""{ "id": "old2", "export": { "width": 800, "height": 800 } }""");
+        Assert.Equal("scene_main", Assert.Single(ExportRules.ParseSlots(scene, out _)).Kind);
+    }
+
+    [Theory]
+    [InlineData("""{ "slots": [{ "id": "a", "kind": "nope", "width": 800, "height": 800 }] }""")]
+    [InlineData("""{ "slots": [{ "id": "Bad Id", "kind": "scene_main", "width": 800, "height": 800 }] }""")]
+    [InlineData("""{ "slots": [{ "id": "a", "kind": "scene_main", "width": 800, "height": 800, "subject_ratio_min": 2 }] }""")]
+    [InlineData("""{ "slots": [{ "id": "a", "kind": "scene_main", "width": 800, "height": 800 }, { "id": "a", "kind": "detail", "width": 800, "height": 800 }] }""")]
+    public void InvalidSlotsAreRejected(string json)
+    {
+        Assert.Null(ExportRules.ParseSlots(JObject.Parse(json), out string error));
+        Assert.NotEmpty(error);
+    }
+
+    [Fact]
+    public void SlotWithBadSizeIsSkippedAndOthersSurvive()
+    {
+        JObject platform = JObject.Parse("""{ "slots": [{ "id": "a", "kind": "scene_main", "width": 10, "height": 800 }, { "id": "b", "kind": "detail", "width": 800, "height": 800 }] }""");
+        List<ExportSlot> slots = ExportRules.ParseSlots(platform, out _);
+        Assert.Equal(["b"], slots.Select(slot => slot.Id).ToList());
+    }
+
+    [Theory]
+    [InlineData(92, new[] { 92, 71, 50 })]
+    [InlineData(60, new[] { 60, 55, 50 })]
+    [InlineData(51, new[] { 51, 50 })]
+    [InlineData(50, new[] { 50 })]
+    public void QualityLadderDescendsToTheFloor(int quality, int[] expected)
+    {
+        Assert.Equal(expected, ExportRules.QualityLadder(quality));
     }
 
     [Fact]

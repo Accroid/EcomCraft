@@ -15,6 +15,7 @@
   "sets": [
     "standard"
   ],
+  "kind": "detail",
   "prompt": {
     "prefix": "macro close-up product photography highlighting texture and craftsmanship,",
     "suffix": "crisp focus, soft studio lighting, clean background",

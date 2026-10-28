@@ -1,4 +1,5 @@
 using System.IO;
+using EcomCraftStudio.Studio.Export;
 using EcomCraftStudio.Studio.Templates;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -28,6 +29,7 @@ public class BuiltinTemplateTests
             Assert.False(string.IsNullOrWhiteSpace(template.Name.GetValueOrDefault("zh-CN")));
             Assert.False(string.IsNullOrWhiteSpace(template.Description.GetValueOrDefault("en")));
             Assert.StartsWith(TemplateValidator.AnyServerPrefix, template.LocalPlan.Workflow);
+            Assert.Contains(template.Kind, ExportSlot.Kinds);
         }
     }
 
