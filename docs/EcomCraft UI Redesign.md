@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20界面改版需求.zh-CN.md)
 >
-> **Status:** Confirmed (2026-10-29), built task by task · **Version:** v1.3 · **Date:** 2026-10-29
+> **Status:** Confirmed (2026-10-29); code complete pending acceptance, T70 deferred · **Version:** v1.3 · **Date:** 2026-10-29
 >
 > Related: [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md) (decisions A2, A12), [EcomCraft Workspace UI Design](EcomCraft%20Workspace%20UI%20Design.md) (control list), [EcomCraft development table](EcomCraft%20开发总表.xlsx) (F60–F69 / T63–T72).
 
@@ -26,7 +26,7 @@ After the simple mode redesign v3, step 2 holds more than a dozen controls (plat
 | U8 | The "Native engine" link is shown to administrators only. |
 | U9 | Phones get simple mode only (plus gallery viewing and the queue); narrow screens hide the professional mode entry and ask the user to switch to a computer. |
 | U10 | Consistent wording (section 3). |
-| U11 | Administration moves into an "Admin" menu at the right of the top bar, visible to administrators only (section 4). |
+| U11 | Administration moves into an "Manage" menu at the right of the top bar, visible to administrators only (section 4). |
 | U12 | Image description is on by default (used to borrow compositions from references); administrators can turn it off in the prompt enhancement settings. When no vision model is available, the page says what is missing and how to fix it: administrators see the concrete steps (run the one-click install script, or install Ollama and pull a vision model, or switch to another vision service in the prompt enhancement settings) and other accounts see "ask your administrator". Sending product photos to the vision model to describe products stays off by default (A5). |
 
 ## 3. Wording
@@ -44,8 +44,8 @@ After the simple mode redesign v3, step 2 holds more than a dozen controls (plat
 ## 4. Navigation and Administration
 
 - Top bar: **Create images**, **Professional mode** (every account, hidden on narrow screens), **Gallery**, **Queue**.
-- Right side: server status, language, theme, account name; administrators also get an "Admin" menu: workflow review, first-setup wizard, prompt enhancement settings, storage and backup, native engine (new tab).
-- Workflow upload lives in professional mode (U6) and the uploader can use it at once; review and publishing for everyone lives in the "Admin" menu.
+- Right side: server status, language, theme, account name; administrators also get an "Manage" menu: workflow review, first-setup wizard, prompt enhancement settings, storage and backup, native engine (new tab).
+- Workflow upload lives in professional mode (U6) and the uploader can use it at once; review and publishing for everyone lives in the "Manage" menu.
 
 ## 5. Simple Mode
 
@@ -87,7 +87,7 @@ This section is a direction only; confirm it again before development, and add d
 | Task | Feature | Content | Order |
 |---|---|---|---|
 | T64 | F61 | Simple mode task-first: three task cards, step 2 by task, "More options" fold | 1 |
-| T65 | F62 | Navigation, "Admin" menu and wording; native engine for administrators only | 2 |
+| T65 | F62 | Navigation, "Manage" menu and wording; native engine for administrators only | 2 |
 | T63 | F60 | Professional mode for every account; ComfyUI workflow upload, usable by the uploader at once | 3 |
 | T67 | F64 | One-way hand-off from simple to professional mode | 4 |
 | T68 | F65 | Star candidates (first filter) | 5 |

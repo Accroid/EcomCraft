@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20Architecture.zh-CN.md)
 >
-> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); this document describes the target architecture and marks implemented parts · **Version:** v2.2 · **Date:** 2026-10-29
+> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); this document describes the target architecture and marks implemented parts · **Version:** v2.3 · **Date:** 2026-10-29
 >
 > Related files:
 > - [EcomCraft LAN Multi-Server Platform Requirements](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md): detailed requirements for the platform foundation (execution servers, review, scheduling, storage); it takes precedence.
@@ -40,7 +40,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators,
 | A10 | Single server first: the MVP is deployed and accepted as "one platform server that is also the execution server". The architecture and code for multi-server access, scheduling and storage remain in place; multi-machine testing (F28 / T33, N08) is deferred until a customer asks for it or the test environment is ready. |
 | A11 | Both reference-image paths are open (F59): "borrow the composition" (prompt reference) and "scene reference" (image-to-image) are both offered, the latter needing the administrator to install an image-to-image model (N10); the goal is restoring the feel of layout and light, never a 1:1 copy. Reference mode is standalone: once references are uploaded the other step-2 options stop applying, per-reference prompts are shown and editable, and each reference makes exactly one image (cap 8, mutually exclusive with storyboards); references are temporary and never stored. |
 | A12 | Revenue model: sold as software, priced per account. No complex roles or permissions: accounts are either administrators or regular accounts, and licensing limits only the number of accounts, never tiers features. |
-| A13 | UI and workflow redesign v4 (F60–F67): simple mode starts by choosing a task (follow a reference / make one image / make a full set, defaulting to follow a reference) with secondary options under "More options"; administration moves into an administrators' "Admin" menu and the native engine is for administrators only; phones get simple mode only; designers may upload ComfyUI workflows, usable by the uploader at once and by other accounts after review and publishing; image description is on by default with setup guidance when no vision model is available; candidates can be starred, personal analysis is deferred. See the EcomCraft UI and Workflow Redesign. |
+| A13 | UI and workflow redesign v4 (F60–F67): simple mode starts by choosing a task (follow a reference / make one image / make a full set, defaulting to follow a reference) with secondary options under "More options"; administration moves into an administrators' "Manage" menu and the native engine is for administrators only; phones get simple mode only; designers may upload ComfyUI workflows, usable by the uploader at once and by other accounts after review and publishing; image description is on by default with setup guidance when no vision model is available; candidates can be starred, personal analysis is deferred. See the EcomCraft UI and Workflow Redesign. |
 
 ## 3. Deployment Topology
 
@@ -250,7 +250,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F59 | Reference images (one image per reference: borrow the composition and scene reference) | Enhancement (P1 implemented, pending acceptance, T61; P2 scene reference depends on N10, T62; requirements in [EcomCraft Reference Images](EcomCraft%20Reference%20Images.md)) |
 | F60 | Professional mode open to every account (A2), with ComfyUI workflow upload (usable by the uploader at once, by others after review) | UI redesign v4 (T63 opening and own uploads; T73 review and publishing) |
 | F61 | Task-first simple mode (follow a reference / make one image / make a full set) | UI redesign v4 (T64) |
-| F62 | Navigation, "Admin" menu and consistent wording | UI redesign v4 (T65, to do) |
+| F62 | Navigation, "Manage" menu and consistent wording | UI redesign v4 (T65) |
 | F63 | Phones get simple mode only | UI redesign v4 (T66) |
 | F64 | One-way hand-off from simple to professional mode | UI redesign v4 (T67) |
 | F65 | Star candidates (first filter) | UI redesign v4 (T68) |
@@ -296,3 +296,4 @@ For each task's files, dependencies, acceptance criteria and Claude Code prompt,
 | 2026-10-29 | v2.0 | Graphic designers added to the target users (simple mode for operators and owners, professional mode for designers); A2 now lets any account switch to professional mode; new A12 revenue model: sold as software, priced per account, no complex roles or permissions (F11 now not planned, F16 now per-account licensing); new F60 / T63 opens professional mode (to do) |
 | 2026-10-29 | v2.1 | New decision A13, UI and workflow redesign v4 (F60–F67 / T63–T70), requirements in the EcomCraft UI and Workflow Redesign; F60 adds ComfyUI workflow upload in professional mode (published after review) |
 | 2026-10-29 | v2.2 | A5 revised: image description on by default (references only; product photo description still off by default); A13 revised: uploaded ComfyUI workflows are usable by the uploader at once; new F68/T71 setup guidance and F69/T72 one-click install script; AGENTS.md gained the own-workflow rule |
+| 2026-10-29 | v2.3 | UI redesign v4 code complete pending acceptance: F60 (T63, T73), F61–F66, F68, F69 (T64–T69, T71, T72); F67 (T70) deferred |

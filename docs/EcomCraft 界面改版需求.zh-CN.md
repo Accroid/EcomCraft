@@ -2,7 +2,7 @@
 
 > **语言：** 简体中文 · [English](EcomCraft%20UI%20Redesign.md)
 >
-> **状态：** 已确认（2026-10-29），按任务逐个开发 · **版本：** v1.3 · **日期：** 2026-10-29
+> **状态：** 已确认（2026-10-29）；代码已完成待验收，T70 暂缓 · **版本：** v1.3 · **日期：** 2026-10-29
 >
 > 相关文件：[EcomCraft 架构与路线图](EcomCraft%20Architecture.zh-CN.md)（决策 A2、A12）、[EcomCraft 工作台界面设计](EcomCraft%20工作台界面设计.zh-CN.md)（控件清单）、[EcomCraft 开发总表](EcomCraft%20开发总表.xlsx)（F60–F69 / T63–T72）。
 
