@@ -16,6 +16,9 @@
     <Compile Include="../Studio/PostProcess/ProductComposite.cs" Link="ProductComposite.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="../Templates/builtin/*.json" LinkBase="builtin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />

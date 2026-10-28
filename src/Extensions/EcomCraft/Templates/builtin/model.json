@@ -1,0 +1,37 @@
+{
+  "id": "model",
+  "name": {
+    "zh-CN": "模特或手持图",
+    "en": "Model or hand-held"
+  },
+  "description": {
+    "zh-CN": "模特使用或手持商品的展示图；姿态和角度会变化，因此不贴回原商品像素。",
+    "en": "Shows a model using or holding the product; poses and angles change, so the original product pixels are not pasted back."
+  },
+  "example_image": null,
+  "platforms": [
+    "*"
+  ],
+  "sets": [
+    "standard"
+  ],
+  "prompt": {
+    "prefix": "lifestyle photo of a person naturally using or holding the product,",
+    "suffix": "natural pose, realistic skin and hands, soft flattering light",
+    "negative": "text, watermark, extra fingers, deformed hands, distorted face, distorted product"
+  },
+  "preserve_product": false,
+  "categories": [],
+  "brand_kit": null,
+  "execution_plans": [
+    {
+      "kind": "local",
+      "workflow": "*/ecomcraft/model",
+      "presets": {},
+      "user_fields": [
+        "@image"
+      ]
+    }
+  ],
+  "enabled": true
+}

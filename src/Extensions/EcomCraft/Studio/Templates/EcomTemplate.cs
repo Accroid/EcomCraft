@@ -267,6 +267,28 @@ public static class TemplateValidator
         return plan;
     }
 
+    /// <summary>Placeholder in user_fields for the snapshot's first visible image parameter, so templates can be written before the workflow exists.</summary>
+    public const string ImageFieldToken = "@image";
+
+    /// <summary>Prefix of a placeholder workflow name: "*/path" means the published snapshot at that path on any execution server.</summary>
+    public const string AnyServerPrefix = "*/";
+
+    /// <summary>User fields with <see cref="ImageFieldToken"/> replaced by the snapshot's first visible image parameter; the token is dropped when there is none.</summary>
+    public static List<string> ExpandFields(IEnumerable<string> fields, JObject parameters)
+    {
+        string image = parameters?.Properties().FirstOrDefault(property => property.Value["type"]?.ToString() == "image" && property.Value.Value<bool?>("visible") != false)?.Name;
+        List<string> result = [];
+        foreach (string field in fields)
+        {
+            string id = field == ImageFieldToken ? image : field;
+            if (id is not null && !result.Contains(id))
+            {
+                result.Add(id);
+            }
+        }
+        return result;
+    }
+
     /// <summary>Checks a plan against the published snapshot's parameter definitions (parameter ID to definition), or null when the snapshot is not published.
     /// Presets must name whitelisted parameters with valid values and may not set the prompt or an image; user fields must be visible, unfixed parameters.</summary>
     public static List<string> CheckPlan(ExecutionPlan plan, JObject parameters, bool requireImageField = false)
@@ -274,9 +296,16 @@ public static class TemplateValidator
         List<string> errors = [];
         if (parameters is null)
         {
-            errors.Add($"工作流“{plan.Workflow}”没有发布，或已被下架。");
+            errors.Add(plan.Workflow.StartsWith(AnyServerPrefix, StringComparison.Ordinal)
+                ? $"缺少工作流：请在执行服务器的 ComfyUI 中按约定名称“{plan.Workflow[AnyServerPrefix.Length..]}”保存工作流并通过审核。"
+                : $"工作流“{plan.Workflow}”没有发布，或已被下架。");
             return errors;
         }
+        if (plan.UserFields.Contains(ImageFieldToken) && !ExpandFields([ImageFieldToken], parameters).Any())
+        {
+            errors.Add("user_fields 中的 @image 找不到可用的图片参数：工作流没有可见的图片输入。");
+        }
+        List<string> userFields = ExpandFields(plan.UserFields, parameters);
         foreach (JProperty preset in plan.Presets.Properties())
         {
             if (parameters[preset.Name] is not JObject definition)
@@ -299,11 +328,11 @@ public static class TemplateValidator
                 errors.Add($"预设参数“{preset.Name}”的值无效：{problem}");
             }
         }
-        if (requireImageField && !plan.UserFields.Any(field => parameters[field]?["type"]?.ToString() == "image"))
+        if (requireImageField && !userFields.Any(field => parameters[field]?["type"]?.ToString() == "image"))
         {
             errors.Add("开启商品保真的模板必须把一个图片参数开放给用户（user_fields），用来接收商品图。");
         }
-        foreach (string field in plan.UserFields)
+        foreach (string field in userFields)
         {
             if (parameters[field] is not JObject definition)
             {

@@ -1,0 +1,37 @@
+{
+  "id": "scene",
+  "name": {
+    "zh-CN": "场景图",
+    "en": "Lifestyle scene"
+  },
+  "description": {
+    "zh-CN": "把商品放进贴合用途的生活或使用场景；保留原商品像素。",
+    "en": "Places the product in a lifestyle or usage scene that fits it; keeps the original product pixels."
+  },
+  "example_image": null,
+  "platforms": [
+    "*"
+  ],
+  "sets": [
+    "standard"
+  ],
+  "prompt": {
+    "prefix": "commercial product photography, the product placed naturally in a realistic scene,",
+    "suffix": "photorealistic lighting that matches the scene, shallow depth of field",
+    "negative": "text, watermark, distorted product, extra products, cluttered composition"
+  },
+  "preserve_product": true,
+  "categories": [],
+  "brand_kit": null,
+  "execution_plans": [
+    {
+      "kind": "local",
+      "workflow": "*/ecomcraft/scene",
+      "presets": {},
+      "user_fields": [
+        "@image"
+      ]
+    }
+  ],
+  "enabled": true
+}

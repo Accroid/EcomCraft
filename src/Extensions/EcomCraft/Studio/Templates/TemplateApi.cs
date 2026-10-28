@@ -46,12 +46,13 @@ public static class TemplateApi
                 continue;
             }
             EcomTemplate template = entry.Template;
-            if (!runnable.TryGetValue(template.LocalPlan.Workflow, out JObject workflow))
+            string workflowId = TemplateStore.WorkflowIdFor(template.LocalPlan);
+            if (workflowId is null || !runnable.TryGetValue(workflowId, out JObject workflow))
             {
                 hidden.Add(Hidden(entry.Id, name, ReasonUnavailable, reviewer ? "没有在线的执行服务器具备该工作流所需的模型和节点，或当前账号无权使用其中的模型。" : null));
                 continue;
             }
-            HashSet<string> userFields = new(template.LocalPlan.UserFields, StringComparer.Ordinal);
+            HashSet<string> userFields = new(TemplateValidator.ExpandFields(template.LocalPlan.UserFields, TemplateStore.SnapshotParameters(workflowId)), StringComparer.Ordinal);
             templates.Add(new JObject()
             {
                 ["id"] = template.Id,
@@ -120,12 +121,13 @@ public static class TemplateApi
         }
         EcomTemplate template = entry.Template;
         ExecutionPlan plan = template.LocalPlan;
-        if (!Runnable(session).TryGetValue(plan.Workflow, out JObject workflow))
+        string workflowId = TemplateStore.WorkflowIdFor(plan);
+        if (workflowId is null || !Runnable(session).TryGetValue(workflowId, out JObject workflow))
         {
             error = StudioApi.Error("暂时没有执行服务器能运行此模板，或当前账号无权使用其中的模型。", "no_execution_server");
             return null;
         }
-        JObject parameters = TemplateStore.SnapshotParameters(plan.Workflow);
+        JObject parameters = TemplateStore.SnapshotParameters(workflowId);
         JToken rawParams = rawInput["template_params"];
         if (rawParams is not null && rawParams.Type is not (JTokenType.Object or JTokenType.Null))
         {
@@ -133,7 +135,8 @@ public static class TemplateApi
             return null;
         }
         JObject userParams = rawParams as JObject ?? new JObject();
-        HashSet<string> allowed = new(plan.UserFields, StringComparer.Ordinal);
+        List<string> userFields = TemplateValidator.ExpandFields(plan.UserFields, parameters);
+        HashSet<string> allowed = new(userFields, StringComparer.Ordinal);
         foreach (JProperty property in userParams.Properties())
         {
             if (!allowed.Contains(property.Name))
@@ -145,7 +148,7 @@ public static class TemplateApi
         JObject request = (JObject)rawInput.DeepClone();
         request.Remove("template_id");
         request.Remove("template_params");
-        request["workflow_id"] = plan.Workflow;
+        request["workflow_id"] = workflowId;
         request["kind"] = workflow["kind"]?.DeepClone();
         JObject workflowParams = (JObject)plan.Presets.DeepClone();
         foreach (JProperty property in userParams.Properties())
@@ -155,7 +158,7 @@ public static class TemplateApi
         if (template.PreserveProduct)
         {
             // Local preprocessing (R10.3): the cut-out product is placed on the input canvas; the same placement pastes it back after generation.
-            string field = plan.UserFields.FirstOrDefault(id => parameters[id]?["type"]?.ToString() == "image" && workflowParams[id]?.Type == JTokenType.String);
+            string field = userFields.FirstOrDefault(id => parameters[id]?["type"]?.ToString() == "image" && workflowParams[id]?.Type == JTokenType.String);
             if (field is null)
             {
                 error = StudioApi.Error("这个模板需要商品图。", "invalid_reference");
@@ -168,7 +171,7 @@ public static class TemplateApi
                 error = StudioApi.Error("商品位置无效：中心须在画面内，大小在 0.1–1.5 之间。", "invalid_parameters");
                 return null;
             }
-            (int width, int height) = TargetSize(parameters, workflowParams, plan.Workflow);
+            (int width, int height) = TargetSize(parameters, workflowParams, workflowId);
             string problem = ProductPreserve.Prepare(session.User.UserID, workflowParams.Value<string>(field), width, height, placement, out string canvas, out preserveToken);
             if (problem is not null)
             {

@@ -92,6 +92,8 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行�
 - `preserve_product`（可选，默认 `false`）：商品保真。开启后，用户上传的商品图必须是去掉背景的透明 PNG 或 WebP；平台在本地把商品按位置放到输出尺寸的白色画布上，作为模板的商品图参数；生成完成后再按同一位置把原商品像素贴回每张结果（边缘向内羽化 2 像素），覆写已保存的作品并保留其中的元数据，因此商品的 Logo、文字和形状不会被生成改动。开启时模板必须把一个图片参数开放给用户。位置可由请求中的 `placement`（`x`、`y` 为商品中心占画面宽高的比例，0–1；`size` 为商品长边占画面短边的比例，0.1–1.5）指定，默认居中、0.7。工作流不需要输出商品蒙版；抠图结果只保存在内存中，最多两小时。
 - `categories`（品类预设）和 `brand_kit`（品牌资料包）是预留字段，`brand_kit` 本期须为 `null`。
 
+内置 4 个模板：白底主图（`white-main`）、场景图（`scene`）、细节图（`detail`）、模特或手持图（`model`），适用所有平台，同属套图 `standard`；前三个开启商品保真，模特图因姿态和角度会变化而不开启。它们引用约定名称的工作流：`workflow` 写成 `*/ecomcraft/white-main` 这样的形式，表示任意执行服务器上路径为 `ecomcraft/white-main` 且已审核发布的工作流（有多个时取 ID 排序靠前的一个）；`user_fields` 中的 `@image` 表示该工作流第一个可见的图片参数，用来接收商品图。工作流由外部专家制作，按约定名称保存在执行服务器的 ComfyUI 中并通过审核后，模板自动可用；在此之前模板隐藏，管理接口显示“缺少工作流”。示例图放在同一目录，文件名为 `<模板 ID>.webp` 并写入 `example_image`。
+
 内置模板随版本发布，放在扩展目录 `Templates/builtin/`（每个文件一个模板，示例图放在同一目录）；管理员自定义的模板保存在 `Data/EcomCraft/templates.json`，示例图在 `Data/EcomCraft/template-images/`，两者分开存放，升级不会覆盖自定义模板。自定义模板不能使用内置模板的 ID。
 
 不合格的模板不会提供给用户，原因记录在服务器日志中，并通过管理接口返回。引用的快照被下架、参数被隐藏或预设值超出范围时，模板也会显示为不可用。管理接口需要审核权限（`ecomcraft_review_workflows`）：`EcomCraftTemplateAdminList` 列出所有模板及不可用原因，`EcomCraftTemplateSave` 新增或替换自定义模板（`template` 为模板 JSON，可选 `example_image_data` 为不超过 2 MB 的 PNG、JPEG 或 WebP 图片），`EcomCraftTemplateDelete` 删除自定义模板。
