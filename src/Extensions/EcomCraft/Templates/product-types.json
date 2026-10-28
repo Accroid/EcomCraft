@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "care",
+      "name": { "zh-CN": "个护美妆", "en": "Personal care & beauty" },
+      "subtypes": [
+        { "id": "shampoo", "name": { "zh-CN": "洗发水", "en": "Shampoo" }, "prompt": "glossy shampoo bottle, clean minimal label, water droplets" },
+        { "id": "hand-cream", "name": { "zh-CN": "护手霜", "en": "Hand cream" }, "prompt": "hand cream tube, soft pastel packaging" },
+        { "id": "body-lotion", "name": { "zh-CN": "身体乳", "en": "Body lotion" }, "prompt": "body lotion bottle, clean cosmetic look" },
+        { "id": "lipstick", "name": { "zh-CN": "口红", "en": "Lipstick" }, "prompt": "luxurious lipstick, makeup product photography" },
+        { "id": "perfume", "name": { "zh-CN": "香水", "en": "Perfume" }, "prompt": "glass perfume bottle with light refraction" }
+      ]
+    },
+    {
+      "id": "appliance",
+      "name": { "zh-CN": "家用电器", "en": "Home appliances" },
+      "subtypes": [
+        { "id": "air-conditioner", "name": { "zh-CN": "空调", "en": "Air conditioner" }, "prompt": "split air conditioner unit" },
+        { "id": "refrigerator", "name": { "zh-CN": "冰箱", "en": "Refrigerator" }, "prompt": "modern refrigerator" },
+        { "id": "washing-machine", "name": { "zh-CN": "洗衣机", "en": "Washing machine" }, "prompt": "front-load washing machine" },
+        { "id": "rice-cooker", "name": { "zh-CN": "电饭煲", "en": "Rice cooker" }, "prompt": "electric rice cooker" }
+      ]
+    },
+    {
+      "id": "home",
+      "name": { "zh-CN": "家居日用", "en": "Home & daily use" },
+      "subtypes": [
+        { "id": "drinkware", "name": { "zh-CN": "水杯餐具", "en": "Drinkware & tableware" }, "prompt": "glassware and tableware set" },
+        { "id": "storage", "name": { "zh-CN": "收纳用品", "en": "Storage" }, "prompt": "neat storage organizer boxes" },
+        { "id": "table-lamp", "name": { "zh-CN": "台灯", "en": "Table lamp" }, "prompt": "modern table lamp, warm glow" },
+        { "id": "bedding", "name": { "zh-CN": "床上用品", "en": "Bedding" }, "prompt": "soft bedding set, cozy textile" }
+      ]
+    },
+    {
+      "id": "general",
+      "name": { "zh-CN": "通用商品", "en": "General product" },
+      "subtypes": [
+        { "id": "unspecified", "name": { "zh-CN": "不指定", "en": "Unspecified" }, "prompt": "" }
+      ]
+    }
+  ]
+}

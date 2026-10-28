@@ -674,13 +674,20 @@ public static class StudioApi
             PromptService.Composed composed = null;
             string description = rawInput["description"]?.Type == JTokenType.String ? rawInput.Value<string>("description").Trim() : "";
             string styleId = rawInput["style_id"]?.Type == JTokenType.String ? rawInput.Value<string>("style_id") : "";
-            if (string.IsNullOrWhiteSpace(rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : null) && (description.Length > 0 || styleId.Length > 0))
+            string productTypeId = rawInput["product_type_id"]?.Type == JTokenType.String ? rawInput.Value<string>("product_type_id") : "";
+            bool needModel = rawInput["need_model"]?.Type == JTokenType.Boolean && rawInput.Value<bool>("need_model");
+            if (!PromptService.KnownProductType(productTypeId))
+            {
+                return Error("未知的产品类型，请刷新页面后重选。", "invalid_product_type");
+            }
+            if (string.IsNullOrWhiteSpace(rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : null)
+                && (description.Length > 0 || styleId.Length > 0 || productTypeId.Length > 0 || needModel))
             {
                 if (description.Length > PromptService.MaxDescriptionLength)
                 {
                     return Error($"描述最多 {PromptService.MaxDescriptionLength} 个字符。", "invalid_prompt");
                 }
-                composed = await PromptService.ComposeAsync(session, styleId, description, null);
+                composed = await PromptService.ComposeAsync(session, styleId, productTypeId, needModel, description, null);
                 templateInput = (JObject)rawInput.DeepClone();
                 templateInput["prompt"] = composed.Prompt;
             }

@@ -209,7 +209,13 @@ public static class BatchService
             return StudioApi.Error($"描述最多 {PromptService.MaxDescriptionLength} 个字符。", "invalid_prompt");
         }
         string style = rawInput["style_id"]?.Type == JTokenType.String ? rawInput.Value<string>("style_id") : "";
-        PromptService.Composed composed = await PromptService.ComposeAsync(session, style, description, null);
+        string productTypeId = rawInput["product_type_id"]?.Type == JTokenType.String ? rawInput.Value<string>("product_type_id") : "";
+        bool needModel = rawInput["need_model"]?.Type == JTokenType.Boolean && rawInput.Value<bool>("need_model");
+        if (!PromptService.KnownProductType(productTypeId))
+        {
+            return StudioApi.Error("未知的产品类型，请刷新页面后重选。", "invalid_product_type");
+        }
+        PromptService.Composed composed = await PromptService.ComposeAsync(session, style, productTypeId, needModel, description, null);
         batch.Prompt = composed.Prompt;
         batch.Negative = rawInput["negativeprompt"]?.Type == JTokenType.String ? rawInput.Value<string>("negativeprompt") : "";
         Batches[batch.Id] = batch;
