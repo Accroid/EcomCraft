@@ -1,8 +1,10 @@
 using System.IO;
 using System.Text.RegularExpressions;
 using EcomCraftStudio.MagicPrompt.WebAPI;
+using EcomCraftStudio.MagicPrompt.WebAPI.Models;
 using EcomCraftStudio.Studio.Generation;
 using EcomCraftStudio.Studio.Templates;
+using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
@@ -14,7 +16,7 @@ namespace EcomCraftStudio.Studio.Prompting;
 
 /// <summary>Prompt service (F37): a style plus an optional one-line description (Chinese or English) becomes an English prompt through MagicPrompt.
 /// The model's answer only ever becomes prompt text: it cannot choose a workflow, parameter or execution server. When the model is unavailable or slow,
-/// the template and style defaults are used with a plain notice. Sending product photos to a vision model is off by default and only administrators can turn it on.</summary>
+/// the template and style defaults are used with a plain notice. Describing reference images is on by default; sending product photos to a vision model is off by default and only administrators can turn it on (A5).</summary>
 [API.APIClass("EcomCraft prompt service: styles and one-line description to English prompt.")]
 public static class PromptService
 {
@@ -167,32 +169,127 @@ public static class PromptService
     /// <summary>Whether a product type ID is known (or empty, meaning unspecified), so client-submitted IDs stay whitelisted (F53).</summary>
     public static bool KnownProductType(string id) => string.IsNullOrWhiteSpace(id) || ProductTypeById(id) is not null;
 
-    /// <summary>Whether administrators allowed sending product photos to the vision model.</summary>
-    public static bool VisionEnabled()
+    /// <summary>The administrator's prompt settings file, or null when there is none or it cannot be read.</summary>
+    private static JObject ReadPromptSettings()
     {
         lock (SettingsLock)
         {
             try
             {
-                return File.Exists(SettingsFile) && JObject.Parse(File.ReadAllText(SettingsFile)).Value<bool?>("vision_enabled") == true;
+                return File.Exists(SettingsFile) ? JObject.Parse(File.ReadAllText(SettingsFile)) : null;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
-                return false;
+                return null;
             }
         }
     }
 
+    /// <summary>Whether reference images may be described by the vision model (A5, F68): on unless an administrator turned it off.
+    /// An unreadable settings file counts as off, so a damaged file never sends images.</summary>
+    public static bool VisionEnabled()
+    {
+        lock (SettingsLock)
+        {
+            JObject settings = ReadPromptSettings();
+            return (settings is not null || !File.Exists(SettingsFile)) && PromptRules.VisionOn(settings);
+        }
+    }
+
+    /// <summary>Whether administrators explicitly allowed sending product photos to the vision model (A5); off by default.</summary>
+    public static bool ProductVisionEnabled() => PromptRules.ProductVisionOn(ReadPromptSettings());
+
+    /// <summary>How long a vision status answer is reused, so opening the page does not probe the vision service every time.</summary>
+    private static readonly TimeSpan VisionStatusTtl = TimeSpan.FromSeconds(15);
+
+    /// <summary>The last vision status (state, provider, model) and when it was checked.</summary>
+    private static (DateTime Checked, string State, string Provider, string Model) LastVisionStatus;
+
+    /// <summary>Protects <see cref="LastVisionStatus"/>.</summary>
+    private static readonly object VisionStatusLock = new();
+
+    /// <summary>Checks whether image description can work (F68): the switch, the configured vision model and whether the vision service lists it.</summary>
+    private static async Task<(string State, string Provider, string Model)> CheckVisionAsync(Session session)
+    {
+        lock (VisionStatusLock)
+        {
+            if (DateTime.UtcNow - LastVisionStatus.Checked < VisionStatusTtl)
+            {
+                return (LastVisionStatus.State, LastVisionStatus.Provider, LastVisionStatus.Model);
+            }
+        }
+        string state, provider = "", model = "";
+        try
+        {
+            JObject settings = (await SessionSettings.GetMagicPromptSettings())["settings"] as JObject;
+            provider = (settings?["visionbackend"]?.ToString() ?? settings?["backend"]?.ToString() ?? "").ToLowerFast();
+            model = settings?["visionmodel"]?.ToString() ?? "";
+            List<string> available = null;
+            if (VisionEnabled() && !string.IsNullOrWhiteSpace(model) && settings is not null && await LLMAPICalls.IsServerReachable(provider, settings))
+            {
+                Task<List<ModelData>> listing = LLMAPICalls.GetModelsForBackend(provider, settings, true, session);
+                if (await Task.WhenAny(listing, Task.Delay(TimeSpan.FromSeconds(10))) == listing)
+                {
+                    List<ModelData> models = await listing ?? [];
+                    // A local service that answers with no models has none installed; an empty answer from a cloud service means it could not be used (address or key).
+                    if (models.Count > 0 || provider is "ollama" or "openaiapi")
+                    {
+                        available = [.. models.SelectMany(item => new[] { item.Model, item.Name, item.Id })];
+                    }
+                }
+            }
+            state = PromptRules.VisionState(VisionEnabled(), model, available);
+        }
+        catch (Exception ex)
+        {
+            Logs.Warning($"EcomCraft could not check the vision model: {ex.GetType().Name}");
+            state = VisionEnabled() ? "unreachable" : "off";
+        }
+        lock (VisionStatusLock)
+        {
+            LastVisionStatus = (DateTime.UtcNow, state, provider, model);
+        }
+        return (state, provider, model);
+    }
+
+    /// <summary>Forgets the cached vision status, after the administrator changed the switch.</summary>
+    private static void ForgetVisionStatus()
+    {
+        lock (VisionStatusLock)
+        {
+            LastVisionStatus = default;
+        }
+    }
+
+    [API.APIDescription("Whether image description for reference images (F59) can work now (F68), so the page can explain what is missing. "
+        + "state is ready, off, no_model, unreachable or model_missing; provider and model name the configured vision service type and model (never its address or key); "
+        + "can_manage tells whether this account may change the settings.", "state: \"ready\", provider: \"ollama\", model: \"llama3.2-vision:latest\", can_manage: false")]
+    public static async Task<JObject> EcomCraftStudioVisionStatus(Session session)
+    {
+        if (!StudioApi.CanView(session))
+        {
+            return StudioApi.Error("无权访问创作工作台。", "bad_permissions");
+        }
+        (string state, string provider, string model) = await CheckVisionAsync(session);
+        return new JObject()
+        {
+            ["state"] = state,
+            ["provider"] = provider,
+            ["model"] = model,
+            ["can_manage"] = session.User.HasPermission(Permissions.EditServerSettings)
+        };
+    }
+
     /// <summary>Composes the prompt subject for a product type, an optional style, the optional model flag and a description (F37/F53).
     /// The template's own prefix and suffix are added by the template request.
-    /// <paramref name="productImage"/> (a data URL) is used only when administrators enabled vision.</summary>
+    /// <paramref name="productImage"/> (a data URL) is used only when administrators explicitly allowed product photo description (A5).</summary>
     public static async Task<Composed> ComposeAsync(Session session, string styleId, string productTypeId, bool needModel, string description, string productImage)
     {
         Style style = FindStyle(styleId);
         string fragment = Fragment(style, productTypeId, needModel);
         description = description?.Trim() ?? "";
         string productHint = "";
-        if (!string.IsNullOrEmpty(productImage) && VisionEnabled())
+        if (!string.IsNullOrEmpty(productImage) && ProductVisionEnabled())
         {
             productHint = await AskModelAsync(session, "Describe the main product in this photo in one short English phrase (type, color, material). Reply with the phrase only.",
                 "Describe the product.", productImage);
@@ -281,7 +378,7 @@ public static class PromptService
         + "camera angle, framing, lighting, background and props. Describe the setup and style only, never any product or brand. Reply with one English sentence.";
 
     [API.APIDescription("Describe reference images for reference mode (F59): one English composition prompt and its Chinese translation per image (1–8), "
-        + "for the page to show and the user to edit. Requires the administrator to have enabled vision.", "items: [{ index: 0, prompt_en: \"\", prompt_zh: \"\" }], failed: 0")]
+        + "for the page to show and the user to edit. Image description is on unless the administrator turned it off.", "items: [{ index: 0, prompt_en: \"\", prompt_zh: \"\" }], failed: 0")]
     public static async Task<JObject> EcomCraftStudioReferenceDescribe(Session session, JObject rawInput)
     {
         if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.BasicImageGeneration))
@@ -290,7 +387,7 @@ public static class PromptService
         }
         if (!VisionEnabled())
         {
-            return StudioApi.Error("借鉴构图需要管理员开启看图描述，当前未开启。", "vision_disabled");
+            return StudioApi.Error("看图描述已被管理员关闭，无法描述参考图。", "vision_disabled");
         }
         if (rawInput["reference_images"] is not JArray images || images.Count == 0 || images.Count > Generation.SetRules.MaxReferences)
         {
@@ -429,7 +526,7 @@ public static class PromptService
         });
     }
 
-    [API.APIDescription("Turn a style and an optional one-line description (Chinese or English) into an English prompt. The answer is prompt text only; when the language model is unavailable the style and template defaults are used and notice explains it. product_image is used only when administrators enabled vision.", "prompt: \"\", source: \"model\", notice: null")]
+    [API.APIDescription("Turn a style and an optional one-line description (Chinese or English) into an English prompt. The answer is prompt text only; when the language model is unavailable the style and template defaults are used and notice explains it. product_image is used only when administrators explicitly allowed product photo description.", "prompt: \"\", source: \"model\", notice: null")]
     public static async Task<JObject> EcomCraftStudioComposePrompt(Session session, string style_id = "", string description = "", string product_image = "")
     {
         if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.BasicImageGeneration))
@@ -534,23 +631,39 @@ public static class PromptService
         };
     }
 
-    [API.APIDescription("Read or change whether product photos may be sent to the configured vision model to describe the product (off by default). Returns the provider photos would be sent to. Requires the server-settings permission.", "vision_enabled: false, vision_provider: \"ollama\"")]
-    public static async Task<JObject> EcomCraftPromptSettings(Session session, string vision_enabled = "")
+    [API.APIDescription("Read or change whether reference images may be described by the configured vision model (on by default) and whether product photos may be sent to it "
+        + "to describe the product (off by default). Returns the provider images would be sent to. Requires the server-settings permission.",
+        "vision_enabled: true, product_vision_enabled: false, vision_provider: \"ollama\"")]
+    public static async Task<JObject> EcomCraftPromptSettings(Session session, string vision_enabled = "", string product_vision_enabled = "")
     {
         if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.EditServerSettings))
         {
             return StudioApi.Error("此账号没有管理提示词服务的权限。", "bad_permissions");
         }
-        if (bool.TryParse(vision_enabled, out bool enable))
+        bool changeVision = bool.TryParse(vision_enabled, out bool enable);
+        bool changeProduct = bool.TryParse(product_vision_enabled, out bool enableProduct);
+        if (changeVision || changeProduct)
         {
             lock (SettingsLock)
             {
                 try
                 {
+                    // Keep the other switch: an unreadable file is replaced only with the defaults plus this change.
+                    JObject saved = ReadPromptSettings() ?? new JObject();
+                    if (changeVision)
+                    {
+                        saved["vision_enabled"] = enable;
+                    }
+                    if (changeProduct)
+                    {
+                        saved["product_vision_enabled"] = enableProduct;
+                    }
+                    saved["changed_by"] = session.User.UserID;
                     Directory.CreateDirectory(Path.GetDirectoryName(SettingsFile));
                     string temp = $"{SettingsFile}.tmp";
-                    File.WriteAllText(temp, new JObject() { ["vision_enabled"] = enable, ["changed_by"] = session.User.UserID }.ToString(Formatting.Indented));
+                    File.WriteAllText(temp, saved.ToString(Formatting.Indented));
                     File.Move(temp, SettingsFile, true);
+                    ForgetVisionStatus();
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
@@ -563,6 +676,7 @@ public static class PromptService
         return new JObject()
         {
             ["vision_enabled"] = VisionEnabled(),
+            ["product_vision_enabled"] = ProductVisionEnabled(),
             ["vision_provider"] = settings?["visionbackend"]?.ToString() ?? settings?["backend"]?.ToString() ?? "",
             ["vision_model"] = settings?["visionmodel"]?.ToString() ?? ""
         };

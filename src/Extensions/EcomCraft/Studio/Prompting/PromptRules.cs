@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Newtonsoft.Json.Linq;
 
 namespace EcomCraftStudio.Studio.Prompting;
 
@@ -101,6 +102,40 @@ public static class PromptRules
     public static string TranslateInstruction(string targetLanguage) =>
         $"Translate the user's e-commerce product photo prompt into {targetLanguage}. Keep every detail and do not add new ones. "
         + "Reply with the translation only, on one line, without quotes, labels or explanations.";
+
+    /// <summary>Whether image description for reference images is on (decision A5, F68): on unless the administrator explicitly turned it off.</summary>
+    public static bool VisionOn(JObject settings) => settings?.Value<bool?>("vision_enabled") != false;
+
+    /// <summary>Whether product photos may be sent to the vision model to describe the product (decision A5): only after an administrator explicitly allowed it.</summary>
+    public static bool ProductVisionOn(JObject settings) => settings?.Value<bool?>("product_vision_enabled") == true;
+
+    /// <summary>The state of image description shown to users (F68): "off" (turned off), "no_model" (no vision model set), "unreachable"
+    /// (the vision service cannot be reached; <paramref name="available"/> is null), "model_missing" (reachable but the model is not installed) or "ready".
+    /// Ollama names without a tag mean ":latest".</summary>
+    public static string VisionState(bool enabled, string model, IEnumerable<string> available)
+    {
+        if (!enabled)
+        {
+            return "off";
+        }
+        if (string.IsNullOrWhiteSpace(model))
+        {
+            return "no_model";
+        }
+        if (available is null)
+        {
+            return "unreachable";
+        }
+        string wanted = WithTag(model);
+        return available.Any(name => !string.IsNullOrWhiteSpace(name) && WithTag(name) == wanted) ? "ready" : "model_missing";
+    }
+
+    /// <summary>A model name in lower case with Ollama's default ":latest" tag added when it has none.</summary>
+    private static string WithTag(string name)
+    {
+        string lower = name.Trim().ToLowerInvariant();
+        return lower.Contains(':') ? lower : lower + ":latest";
+    }
 
     /// <summary>The instruction sent with the user's description: write a short English product-photo prompt and nothing else.</summary>
     public static string Instruction(string styleName) =>
