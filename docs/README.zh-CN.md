@@ -34,6 +34,7 @@
 - [EcomCraft 架构与路线图（中文）](EcomCraft%20Architecture.zh-CN.md) · [English](EcomCraft%20Architecture.md)：开发规划文档，涵盖产品定位、部署拓扑、分层架构、一键套图数据流、设计约定、MVP 范围和后续功能；功能和任务进度见 [EcomCraft 开发总表](EcomCraft%20开发总表.xlsx)。
 - [EcomCraft 局域网多服务器平台需求（中文）](EcomCraft%20局域网多服务器平台需求.zh-CN.md) · [English](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md)：开发需求文档，涵盖多服务器接入、工作流审核与快照、负载调度、多人使用、画廊共享、作品存储及云端预留。
 - [EcomCraft 简易模式改版需求（中文）](EcomCraft%20简易模式改版需求.zh-CN.md) · [English](EcomCraft%20Simple%20Mode%20Redesign.md)：开发需求文档（F53、F55 已实现待验收，F52、F54、F56、F57 待开发；含面向继续开发代理的交接章节），涵盖上传四入口、产品类型两级选择、双语提示词与 AI 扩写、候选张数总上限、出图链路提速与标准工作流自动生成；附[交互原型](EcomCraft%20简易模式改版原型.html)。
+- [EcomCraft 平台预设槽位设计（中文）](EcomCraft%20平台预设槽位设计.zh-CN.md) · [English](EcomCraft%20Platform%20Preset%20Slots.md)：开发设计文档（F58，未开发）：按槽位定义各平台图片规格（尺寸比例、白底位置、主体占比、大小上限、禁用内容、AI 标识），套图按槽位组合模板；含 N06 规范核对清单。
 - [SwarmUI 设计动机（中文）](Motivations.zh-CN.md) · [English](Motivations.md)
 
 ## 模型与功能专题

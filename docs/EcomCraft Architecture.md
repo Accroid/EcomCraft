@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20Architecture.zh-CN.md)
 >
-> **Status:** MVP code complete, pending real-environment acceptance (multi-machine testing and seed-team trials not done); this document describes the target architecture and marks implemented parts · **Version:** v1.4 · **Date:** 2026-10-28
+> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); this document describes the target architecture and marks implemented parts · **Version:** v1.6 · **Date:** 2026-10-28
 >
 > Related files:
 > - [EcomCraft LAN Multi-Server Platform Requirements](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md): detailed requirements for the platform foundation (execution servers, review, scheduling, storage); it takes precedence.
@@ -32,6 +32,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 | A7 | Works are stored on the platform server by default; the administrator can switch to a NAS or a shared folder on another computer; system data always stays local. See D12 and R11 in the requirements. |
 | A8 | Within the platform, works are visible only to their owner; the storage layer is not isolated. See D9 in the requirements. |
 | A9 | We will not take image orders ourselves to validate demand; instead, 3–5 seed teams will try the MVP after release. |
+| A10 | Single server first: the MVP is deployed and accepted as "one platform server that is also the execution server". The architecture and code for multi-server access, scheduling and storage remain in place; multi-machine testing (F28 / T33, N08) is deferred until a customer asks for it or the test environment is ready. |
 
 ## 3. Deployment Topology
 
@@ -120,6 +121,8 @@ When cloud services are added later, only the executor in steps 6–7 changes; b
 
 An editable configuration file lists Chinese and international platforms. Each platform records its Chinese and English names, image sizes, padding colour, compliance rules (for example, Amazon main images use no generative model and require a pure white background) and whether AI metadata is written. Exact values are checked against each platform's official rules during development and confirmed by the administrator.
 
+Today each platform has a single export preset; a later upgrade organizes presets by "slots" (F58): each platform consists of several image slots (white main image, scene main image, 3:4 wireless image, video cover and so on), each with its own size and ratio, minimum subject fill, per-file size cap, forbidden-content and AI labelling rules, and image sets combine templates by slot. See [EcomCraft Platform Preset Slots](EcomCraft%20Platform%20Preset%20Slots.md) (not yet developed).
+
 ### 6.4 Storage
 
 | Data | Location |
@@ -155,13 +158,12 @@ src/Extensions/EcomCraft/
 
 MVP acceptance: **an operator without design experience can, on their own, use a browser on the LAN to go from "upload product image → full image set → export for a platform", and the results can be listed for sale directly.**
 
-Current status: the code for every MVP feature is complete (including the usability and operations items below); multi-machine testing (N08) and seed-team trials (N07) are still pending, and the four expert-made workflows templates depend on (N02) are still conventional-name placeholders.
+Current status: the code for every MVP feature is complete (including the usability and operations items below), deployed and accepted in single-server form (A10); multi-machine testing is deferred with F28 and seed-team trials (N07) are still pending; the four expert-made workflows templates depend on (N02) are still conventional-name placeholders.
 
 ### MVP-A: Platform foundation
 
 | ID | Feature | Description |
 |---|---|---|
-| F28 | LAN multi-server real-world testing | Build and verify the completed steps 1–3 against real ComfyUI (requirements V1–V3) |
 | F29 | Calling and automatic scheduling | Rule 1 dispatch; the executor abstraction reserves cloud types (requirements step 4) |
 | F30 | Queue, failure reassignment and gallery | Requirements step 5 |
 | F31 | Multi-user login and LAN deployment | Accounts, queue limits, firewall, shared storage and LAN HTTPS guidance (requirements step 6) |
@@ -211,6 +213,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 
 | ID | Feature | Category |
 |---|---|---|
+| F28 | LAN multi-server real-world testing | Platform foundation (deferred: A10 single-server first, until a customer asks or N08 is ready; steps 1–7 are implemented and verified on one machine) |
 | F25 | Selling-point analysis and image-set storyboards | Enhancement (implemented, pending acceptance, T30) |
 | F19 | Category presets | Enhancement |
 | F12 | Brand kits | Enhancement (implemented, pending acceptance, T17) |
@@ -235,6 +238,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F55 | Manual candidate count with a 20-image cap | Simple mode redesign v3 (implemented, pending acceptance) |
 | F56 | Faster generation path (queue on submit) | Simple mode redesign v3 (implemented, pending acceptance) |
 | F57 | Automatic standard workflow creation | Simple mode redesign v3 (default model chosen in N01, plan pending; text-to-image first, image-to-image waits for N10) |
+| F58 | Platform presets by slot (per-slot size and ratio, subject fill, size caps, forbidden content, AI labelling) | Enhancement (design in [EcomCraft Platform Preset Slots](EcomCraft%20Platform%20Preset%20Slots.md); enhances F05 / F22, values pending the N06 check) |
 | F16 | Paid feature licensing | Team and commercial |
 | F18 | Cloud generation | Reserved (change the rules first) |
 | F17 | Brand-specific model training | Reserved (custom service) |
@@ -248,7 +252,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 
 ## 10. Development Order
 
-1. **Platform foundation**: F28 testing → F29 scheduling → F30 gallery and reassignment → F31 multi-user deployment → F32 storage; finish the F24 internationalization framework early so every new feature is built bilingual.
+1. **Platform foundation**: F28 testing (deferred, A10) → F29 scheduling → F30 gallery and reassignment → F31 multi-user deployment → F32 storage; finish the F24 internationalization framework early so every new feature is built bilingual.
 2. **E-commerce images**: F01 templates → F37 prompt service → F07 simple mode → F02 preservation (depends on N02) → F35 cut-out confirmation → F20 test bench → F03 image sets and batches → F36 product library → F05 export → F22 compliance → F08 model checklist.
 3. **Usability and operations**: F38–F46, then finally F10 README and demo.
 
@@ -265,3 +269,4 @@ For each task's files, dependencies, acceptance criteria and Claude Code prompt,
 | 2026-10-28 | v1.4 | Code complete for simple mode redesign v3 F52, F54 and F56 and for the enhancements F25 (storyboards), F12 (brand kits) and F47 (selling-point images); F04 project archive server side complete (T09, AGENTS.md gained the project archive rule); status table adds brand kits and the project archive; F57 deferred (waiting for N01); all pending build and manual acceptance |
 | 2026-10-28 | v1.4 | Simple mode redesign v3 added (F52–F57 / T54–T59, confirmed, development pending): four upload sources, two-level product type, bilingual prompts with AI expansion, a 20-image candidate cap, a faster generation path, and automatic standard workflow creation; requirements in "EcomCraft Simple Mode Redesign" |
 | 2026-10-28 | v1.5 | First two redesign tasks done and deployed: F53 (T55, 467c036d) and F55 (T57, 0e7c6b3e); handover notes and remaining tasks in "EcomCraft Simple Mode Redesign" section 11 |
+| 2026-10-28 | v1.6 | Decision A10: single server first; multi-server support stays in the architecture and code, multi-machine testing (F28 / T33) and N08 deferred until a customer asks; F28 moved from MVP-A to later features; F58 platform presets by slot added (design draft, including the N06 checklist) |

@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20局域网多服务器平台需求.zh-CN.md)
 >
-> **Status:** In development (phase 1 steps 1–7 built and verified on one machine; multi-machine tests pending) · **Version:** v1.11 · **Date:** 2026-10-28
+> **Status:** In development (phase 1 steps 1–7 built and verified on one machine; per architecture decision A10 the MVP runs single-server first, multi-machine tests deferred until a customer asks or N08 is ready) · **Version:** v1.12 · **Date:** 2026-10-28
 >
 > This document is the reference for further development. When requirements change, update this document first (Chinese and English together), record the change in the change log at the end, and only then change the code. For the e-commerce image layer, the overall architecture and the MVP roadmap, see [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md).
 
@@ -265,13 +265,13 @@ AGENTS.md, the READMEs and the workflow documentation have been updated accordin
 | Step | Status | Notes |
 |---|---|---|
 | 0 Technical validation | Partially done | No ComfyUI in the development environment yet, so static analysis was done first (see V1); real tests pending |
-| 1 Server registration and execution limits | Built and verified on one machine; multi-machine tests pending | Added `Studio/ExecutionServers.cs`; renamed `ValidateLocalBackend` to `ValidateExecutionBackend`; updated AGENTS.md, the READMEs and the workflow documentation |
-| 2 Workflow discovery | Built and verified on one machine; multi-machine tests pending | Added `Studio/WorkflowDiscovery.cs`; local directories and LAN HTTP reads both run in the background |
-| 3 Review and snapshots | Built and verified on one machine; multi-machine tests pending | Added `Studio/WorkflowReview.cs` (review records and snapshots), `Studio/WorkflowReviewApi.cs` (review API) and the workspace "Workflows" view |
-| 4 Calling and scheduling | Built and verified on one machine; multi-machine tests pending | Added `Studio/Generation/` (executor abstraction, Rule 1 selection logic, scheduler) and unit tests in `src/Extensions/EcomCraft/Tests/`; the workspace gained an "Execution server" choice |
-| 5 Queue, failures, gallery | Built and verified on one machine; multi-machine tests pending | Added `Studio/Generation/TaskOutcomes.cs` (background task results); the workspace shows failures with "Reassign to another server", and the gallery shows the workflow and execution server |
+| 1 Server registration and execution limits | Built and verified on one machine; multi-machine tests deferred (A10) | Added `Studio/ExecutionServers.cs`; renamed `ValidateLocalBackend` to `ValidateExecutionBackend`; updated AGENTS.md, the READMEs and the workflow documentation |
+| 2 Workflow discovery | Built and verified on one machine; multi-machine tests deferred (A10) | Added `Studio/WorkflowDiscovery.cs`; local directories and LAN HTTP reads both run in the background |
+| 3 Review and snapshots | Built and verified on one machine; multi-machine tests deferred (A10) | Added `Studio/WorkflowReview.cs` (review records and snapshots), `Studio/WorkflowReviewApi.cs` (review API) and the workspace "Workflows" view |
+| 4 Calling and scheduling | Built and verified on one machine; multi-machine tests deferred (A10) | Added `Studio/Generation/` (executor abstraction, Rule 1 selection logic, scheduler) and unit tests in `src/Extensions/EcomCraft/Tests/`; the workspace gained an "Execution server" choice |
+| 5 Queue, failures, gallery | Built and verified on one machine; multi-machine tests deferred (A10) | Added `Studio/Generation/TaskOutcomes.cs` (background task results); the workspace shows failures with "Reassign to another server", and the gallery shows the workflow and execution server |
 | 6 Multi-user configuration and documentation | Documentation complete, awaiting a deployment test following it | Added the [LAN Deployment Guide](EcomCraft%20LAN%20Deployment.md) (Chinese and English); the workspace shows a clear message when `MaxQueued` is exceeded (`queue_limit`) |
-| 7 Work storage | Built and verified on one machine; multi-machine tests pending | Added `Studio/Storage/` (location rules and checks, settings, background sync queue, migration, APIs) and unit tests; the gallery gained "Storage settings" and a "Pending sync" mark |
+| 7 Work storage | Built and verified on one machine; multi-machine tests deferred (A10) | Added `Studio/Storage/` (location rules and checks, settings, background sync queue, migration, APIs) and unit tests; the gallery gained "Storage settings" and a "Pending sync" mark |
 
 Implementation notes for steps 1–2:
 
@@ -341,3 +341,4 @@ Implementation notes for step 7:
 | 2026-10-28 | v1.10 | Added R5.7 scheduling rules for sets and batches and R9.4 per-person limit (T08) |
 | 2026-10-28 | v1.11 | All MVP code complete: the extension builds again and was verified on one machine (real generation on local ComfyUI, template-bench small sample, backup/restore, diagnostics, disk monitoring, wizard data sources on a fresh data directory); instantly finished tasks now return their results inline; two-machine testing (N08) is still pending |
 | 2026-10-27 | v1.5 | Static review of steps 1–3 (T33): workflow discovery now refreshes on a background timer started by the extension instead of only when a page is opened; added notes on server names and workflow IDs, and on re-review after conversion logic upgrades |
+| 2026-10-28 | v1.12 | Per architecture decision A10 the MVP runs single-server first: multi-machine testing of steps 1–7 (F28 / T33) and N08 are deferred until a customer asks; the multi-server architecture described here and the implemented code are unchanged |
