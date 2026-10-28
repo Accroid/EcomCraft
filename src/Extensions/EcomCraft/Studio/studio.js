@@ -4357,11 +4357,11 @@
         Lightbox.close();
     }
 
-    // Load a gallery image into the image-to-image composer.
+    // Load a gallery image into the image-to-image composer; returns whether it was loaded.
     async function editFromGallery(item) {
         if (state.busy || state.uncertain) {
             setStatus('当前任务还没有结束，结束后才能载入新的初始图。', true);
-            return;
+            return false;
         }
         try {
             const response = await fetch(item.url, { cache: 'no-store' });
@@ -4394,12 +4394,40 @@
             }
             setStatus('已载入为初始图，可以直接图生图，或切换到局部重绘、扩图、放大。');
             $('prompt').focus();
+            return true;
         } catch (error) {
             closeLightbox();
             if (state.view != 'create') {
                 location.hash = 'create';
             }
             setStatus(tr('无法载入这张图：{0}。', error.message || tr('请刷新后重试')), true);
+            return false;
+        }
+    }
+
+    /** One-way hand-off from the simple mode (F64): loads a candidate as the image-to-image start picture in professional mode
+     * and fills in the prompt the engine received for it, read by the server from the work's own metadata. Nothing goes back to the simple mode. */
+    async function refineInPro(url) {
+        let recipe = null;
+        try {
+            recipe = await request('EcomCraftStudioWorkRecipe', { image: url });
+        }
+        catch (error) {
+            // Without a recipe the picture still comes over; the user writes the prompt.
+            recipe = null;
+        }
+        let loaded = await editFromGallery({ url: '/' + String(url).split('/').map(part => encodeURIComponent(part)).join('/'), name: String(url).split('/').pop() });
+        if (!loaded) {
+            return;
+        }
+        let prompt = String(recipe?.prompt || '').slice(0, 12000);
+        if (prompt) {
+            $('prompt').value = prompt;
+            updateControls();
+            setStatus('已带入这张图和它的提示词，可以在专业模式里继续精修。');
+        }
+        else {
+            setStatus('已带入这张图，但没读到它的提示词，请自己填写创作描述。');
         }
     }
 
@@ -4731,7 +4759,7 @@
        ============================================================ */
     initTheme();
     bind();
-    SimpleMode.attach({ $, el, tr, request, readStorage, writeStorage, serverErrorText, state, viewUrl,
+    SimpleMode.attach({ $, el, tr, request, readStorage, writeStorage, serverErrorText, state, viewUrl, refineInPro,
         dialogEnter: (dialog, opener, initial) => DialogFocus.enter(dialog, opener, initial), dialogLeave: dialog => DialogFocus.leave(dialog),
         titleAdd: count => TitleProgress.add(count), titleDone: count => TitleProgress.done(count) });
     updateControls();

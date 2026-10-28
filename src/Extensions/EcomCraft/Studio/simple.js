@@ -351,6 +351,13 @@ class SimpleMode {
         $('simple-product-delete').addEventListener('click', () => this.deleteProduct());
         $('simple-size').addEventListener('change', () => this.savePlacement());
         $('simple-download').addEventListener('click', () => this.download());
+        // One-way hand-off to the professional mode (F64): exactly one picked image.
+        $('simple-refine').addEventListener('click', () => {
+            let url = Array.from(this.selected)[0];
+            if (this.selected.size == 1 && url) {
+                this.api.refineInPro(url);
+            }
+        });
         let saved = api.readStorage(this.storageKey);
         if (saved) {
             try {
@@ -1657,6 +1664,8 @@ class SimpleMode {
         this.api.$('simple-storyboard-run').disabled = this.storyboard.running || !this.loaded || !this.api.state.session;
         this.api.$('simple-storyboard-run').textContent = this.storyboard.running ? this.api.tr('正在生成分镜…') : this.api.tr('生成分镜');
         this.api.$('simple-download').disabled = this.selected.size == 0;
+        let picked = Array.from(this.selected)[0] || '';
+        this.api.$('simple-refine').hidden = this.selected.size != 1 || /\.(mp4|webm)$/i.test(picked) || !this.api.$('nav-create') || this.api.$('nav-create').hidden;
     }
 
     /** What a whole set still needs before it can start (F61): product photos and a product type; empty when only the count or the cap is left, which the set hint explains. */

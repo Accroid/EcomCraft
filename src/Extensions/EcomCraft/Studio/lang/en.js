@@ -5,6 +5,9 @@ window.EcomCraftLanguages.en = {
     // Page shell and navigation
     "EcomCraft 工作台": "EcomCraft Studio",
     "管理": "Manage",
+    "在专业模式里精修": "Refine in professional mode",
+    "已带入这张图和它的提示词，可以在专业模式里继续精修。": "This image and its prompt are loaded; keep refining in professional mode.",
+    "已带入这张图，但没读到它的提示词，请自己填写创作描述。": "This image is loaded, but its prompt could not be read; write the description yourself.",
     "上传工作流": "Upload workflow",
     "上传 ComfyUI 菜单“保存”得到的工作流文件（不超过 2 MB），上传后只有你自己能用。": "Upload a workflow file saved with ComfyUI's Save menu (up to 2 MB); once uploaded only you can use it.",
     "我的工作流": "My workflows",

@@ -306,6 +306,41 @@ public static class ProjectLibrary
         return answer;
     }
 
+    [API.APIDescription("Read the prompt and size of one of the current account's works from its own metadata (F64), so the professional mode can refine it. "
+        + "image is a gallery path or result URL of the account's own work; the prompt is the full prompt sent to the engine, or empty when the work carries none.",
+        "prompt: \"\", width: 1024, height: 1024")]
+    public static async Task<JObject> EcomCraftStudioWorkRecipe(Session session, string image)
+    {
+        if (!StudioApi.CanView(session))
+        {
+            return StudioApi.Error("无权访问创作工作台。", "bad_permissions");
+        }
+        string path = WorkFile(session.User, image, out _);
+        if (path is null)
+        {
+            return StudioApi.Error("作品不存在或不属于当前账号，请刷新后重新选择。", "invalid_reference");
+        }
+        return await Task.Run(() =>
+        {
+            try
+            {
+                (string text, int width, int height) = ReadMetadata(path);
+                // No template trimming: the professional mode gets the whole prompt the engine received.
+                ProjectRecipe recipe = ProjectIndex.ParseMetadata(text, _ => ("", ""));
+                return new JObject()
+                {
+                    ["prompt"] = recipe.Prompt ?? "",
+                    ["width"] = recipe.Width > 0 ? recipe.Width : width,
+                    ["height"] = recipe.Height > 0 ? recipe.Height : height
+                };
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or UnknownImageFormatException or InvalidImageContentException or NotSupportedException)
+            {
+                return new JObject() { ["prompt"] = "", ["width"] = 0, ["height"] = 0 };
+            }
+        });
+    }
+
     /// <summary>A template's own prompt prefix and suffix, so recipes keep only the subject.</summary>
     private static (string Prefix, string Suffix) TemplatePrompt(string templateId)
     {

@@ -91,6 +91,7 @@ cd EcomCraft
 - 手机支持：上传步骤可拍照上传（带 `capture` 属性的输入在 `http://` 局域网地址下也可调起相机），画廊在窄屏下改为单列，不使用需要 HTTPS 的浏览器功能。
 - 完成通知：批量任务完成或失败时页面内提示；页面在后台时标签页标题显示“（已完成/总数）”进度，全部结束后恢复。
 - 自用工作流（专业模式）：上传 ComfyUI 菜单“保存”得到的工作流文件（不超过 2 MB，每个账号最多 20 个），经服务端结构校验和禁用规则检查后上传者自己马上能用，其他账号看不到；含可执行代码的节点或像文件路径的参数会被拒绝，管理员可在服务器设置 `EcomCraft.DeniedWorkflowNodes` 追加禁用节点。接口为 `EcomCraftStudioWorkflowUpload`、`EcomCraftStudioMyWorkflows`、`EcomCraftStudioWorkflowDelete`。
+- 简易模式到专业模式的单向衔接：第 3 步只选中一张候选图时出现“在专业模式里精修”，把这张图载入为专业模式的图生图初始图，并填入出图时实际发送的提示词（服务端从作品自带的元数据读取，只限本人作品，接口 `EcomCraftStudioWorkRecipe`）；专业模式的修改不回写简易模式，手机上不显示。
 - 管理功能（工作流审核、首次设置向导、提示词优化设置、存储与备份、诊断包和原生引擎）集中在顶栏右侧只有管理员可见的“管理”菜单中。
 - 一键诊断包（管理员）：打包最近的日志、执行服务器状态、版本信息和脱敏后的配置，密钥、密码、提示词、图片和会话信息自动去除。接口为 `EcomCraftDiagnostics`。
 - 系统数据备份与恢复（管理员）：把 `Data/EcomCraft` 与账号数据库打包为带 SHA-256 清单的 zip，恢复前逐文件校验并要求确认；升级时数据如何保留见[升级与数据说明](docs/EcomCraft%20Upgrade.zh-CN.md)。接口为 `EcomCraftBackupCreate` 和 `EcomCraftBackupRestore`。
