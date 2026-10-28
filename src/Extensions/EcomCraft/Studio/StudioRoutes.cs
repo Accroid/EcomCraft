@@ -86,6 +86,22 @@ public static class StudioRoutes
             context.Response.ContentType = extension switch { "png" => "image/png", "webp" => "image/webp", _ => "image/jpeg" };
             await context.Response.Body.WriteAsync(bytes, context.RequestAborted);
         });
+        // Brand kit images (F12): only the owner can read them, and only file names the kit lists.
+        WebServer.WebApp.MapGet("/EcomCraft/brand-image/{id}/{file}", async (HttpContext context, string id, string file) =>
+        {
+            User user = WebServer.GetUserFor(context);
+            (byte[] bytes, string extension) = user is null || !user.HasPermission(Permissions.FundamentalGenerateTabAccess)
+                ? (null, null) : Brand.BrandKitLibrary.FileFor(user.UserID, id, file);
+            if (bytes is null)
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+            context.Response.Headers.CacheControl = "private, no-cache";
+            context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            context.Response.ContentType = extension switch { "png" => "image/png", "webp" => "image/webp", _ => "image/jpeg" };
+            await context.Response.Body.WriteAsync(bytes, context.RequestAborted);
+        });
         // Prepared export zips (F05): only the account that made them can download them.
         WebServer.WebApp.MapGet("/EcomCraft/export/{id}", async (HttpContext context, string id) =>
         {

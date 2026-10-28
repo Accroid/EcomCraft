@@ -186,6 +186,26 @@ public static class TemplateApi
         {
             workflowParams[property.Name] = property.Value.DeepClone();
         }
+        string brandKitId = rawInput["brand_kit_id"]?.Type == JTokenType.String ? rawInput.Value<string>("brand_kit_id") : "";
+        request.Remove("brand_kit_id");
+        if (brandKitId.Length > 0 && template.BrandImageParams.Any())
+        {
+            // Brand kit images (F12) only go to the image parameters the template's brand_kit slot declares; the server reads them for this account.
+            (_, string logo, string reference, string problem) = Brand.BrandKitLibrary.ForGeneration(session.User.UserID, brandKitId);
+            if (problem is not null)
+            {
+                error = StudioApi.Error(problem, "invalid_brand_kit");
+                return null;
+            }
+            if (template.BrandReferenceParam is string referenceParam && reference is not null)
+            {
+                workflowParams[referenceParam] = reference;
+            }
+            if (template.BrandLogoParam is string logoParam && logo is not null)
+            {
+                workflowParams[logoParam] = logo;
+            }
+        }
         Placement productPlacement = null;
         if (rawInput["product_id"]?.Type == JTokenType.String)
         {

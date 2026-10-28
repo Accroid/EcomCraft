@@ -81,10 +81,10 @@ public class TemplateValidatorTests
     }
 
     [Fact]
-    public void RejectsBrandKitAndNativePromptSyntax()
+    public void RejectsBadBrandKitSlotAndNativePromptSyntax()
     {
         JObject json = Valid();
-        json["brand_kit"] = new JObject();
+        json["brand_kit"] = JObject.Parse("""{ "workflow": "x" }""");
         json["prompt"]["prefix"] = "<lora:x>";
         List<string> errors = Errors(json);
         Assert.Contains(errors, error => error.Contains("brand_kit"));
@@ -124,5 +124,23 @@ public class TemplateValidatorTests
         };
         List<string> errors = TemplateValidator.CheckPlan(plan, Snapshot());
         Assert.Equal(3, errors.Count);
+    }
+
+    [Fact]
+    public void BrandKitSlotMustNameUnopenedImageParameters()
+    {
+        JObject json = Valid();
+        json["brand_kit"] = JObject.Parse("""{ "reference_image": "product", "logo_image": null }""");
+        List<string> errors = [];
+        EcomTemplate template = TemplateValidator.Parse(json, errors);
+        Assert.Empty(errors);
+        Assert.Equal("product", template.BrandReferenceParam);
+        Assert.Null(template.BrandLogoParam);
+        Assert.Empty(TemplateValidator.CheckPlan(template.LocalPlan, Snapshot(), false, template.BrandImageParams));
+        Assert.Single(TemplateValidator.CheckPlan(template.LocalPlan, Snapshot(), false, ["steps"]));
+        template.LocalPlan.UserFields = ["product"];
+        Assert.Single(TemplateValidator.CheckPlan(template.LocalPlan, Snapshot(), false, template.BrandImageParams));
+        json["brand_kit"] = JObject.Parse("""{ "reference_image": "product", "logo_image": "product" }""");
+        Assert.Contains(Errors(json), error => error.Contains("brand_kit"));
     }
 }

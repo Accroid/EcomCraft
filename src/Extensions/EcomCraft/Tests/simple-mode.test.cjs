@@ -138,6 +138,16 @@ test('a storyboard only uses image types of the chosen platform (F25)', () => {
     assert.strictEqual(SimpleMode.storyboardProblem(), '');
 });
 
+test('generation only sends the brand kit ID (F12)', () => {
+    assert.ok(section('view-simple').includes('id="simple-brand"'), 'step 2 offers a brand kit list');
+    assert.ok(html.includes('id="brand-modal"'), 'brand kits are managed in a dialog');
+    let SimpleMode = loadSimpleMode();
+    SimpleMode.choice.brandKit = '';
+    assert.deepStrictEqual({ ...SimpleMode.brandFields() }, {});
+    SimpleMode.choice.brandKit = 'k1';
+    assert.deepStrictEqual({ ...SimpleMode.brandFields() }, { brand_kit_id: 'k1' });
+});
+
 test('task stages read: writing the prompt, queued or running on a server, done (F56)', () => {
     let SimpleMode = loadSimpleMode();
     SimpleMode.api = { tr: (text, ...args) => String(text).replace(/\{(\d+)\}/g, (match, index) => args[Number(index)]) };

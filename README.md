@@ -70,6 +70,7 @@ cd EcomCraft
 - 合规：亚马逊白底主图走纯抠图分支，只把抠图居中放到纯白背景上，不调用生成模型；导出时检查主图背景是否纯白，并为 AI 生成或合成的图片写入 IPTC 数字来源类型等元数据。
 - 平台导出：选择平台后按预设等比缩放并补边，每个商品一个文件夹，打包下载 zip 或导出到管理员设置的共享文件夹；预设覆盖国内外平台、可在配置中修改，内置数值标为待核对。接口为 `EcomCraftStudioExportOptions` 和 `EcomCraftStudioExport`。
 - 商品库（简版）：上传的商品自动入库，保存原图、抠图和确认过的位置，下次出图直接选择；按账号隔离，可重命名和删除。接口为 `EcomCraftStudioProducts`、`EcomCraftStudioProductSave`、`EcomCraftStudioProductUpdate` 和 `EcomCraftStudioProductDelete`。
+- 品牌资料包：每个账号可保存最多 20 个资料包（名称、最多 5 个品牌色、偏好背景描述、Logo、最多 4 张风格参考图），只有自己能看到和使用。出图时选中资料包，品牌色（换算成英文颜色词）和偏好背景（中文在保存时翻译一次）加入提示词；Logo 和第一张参考图只传给模板 `brand_kit` 槽位声明的图片参数，不由 AI 生成 Logo。客户端只提交资料包 ID。接口为 `EcomCraftStudioBrandKits`、`EcomCraftStudioBrandKitSave` 和 `EcomCraftStudioBrandKitDelete`。
 - 一键套图与批量：多张商品图 × 平台套图中的每种图片类型展开成独立任务，分配到多台执行服务器并行；每人同时执行的任务数受限，失败项可单独重试，可取消剩余任务。
 - 卖点分析与套图分镜：根据商品描述（或提示词面板）、可选卖点、产品类型和风格，由提示词服务列出最多 5 条卖点，并规划最多 8 张图的分镜（每张 = 当前平台可用的图片类型 + 画面描述 + 用途）；用户可增删改后“按分镜出整套”。服务端只接受已登记模板 ID 和清理后的文字，提交时逐张重新校验；模型不可用时按平台套图类型列出可编辑的分镜。分镜只保存在当前页面。接口为 `EcomCraftStudioStoryboard`；套图接口为 `EcomCraftStudioGenerateSet`、`EcomCraftStudioBatchStatus`、`EcomCraftStudioBatchRetry` 和 `EcomCraftStudioBatchCancel`。
 - 内置 4 个电商场景模板：白底主图、场景图、细节图、模特或手持图；按约定名称引用专家制作的工作流（如 `ecomcraft/white-main`），工作流安装并审核通过前显示“缺少工作流”。
