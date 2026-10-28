@@ -272,6 +272,62 @@ public static class PromptService
     private static async Task<string> AskModelAsync(Session session, string instructions, string text, string imageDataUrl) =>
         PromptRules.Sanitize(await AskModelRawAsync(session, instructions, text, imageDataUrl));
 
+    /// <summary>What a reference image may be at most, as a data URL — the same cap as product photos.</summary>
+    private const int MaxReferenceImageLength = (5 * 1024 * 1024 + 2) / 3 * 4 + 40;
+
+    /// <summary>The instruction for describing one reference image (F59): the setup and style only, never the product, so the description can steer a
+    /// different product into a similar frame without copying it.</summary>
+    private const string ReferenceInstruction = "Describe how this product photo is set up so a similar one can be made with a different product: "
+        + "camera angle, framing, lighting, background and props. Describe the setup and style only, never any product or brand. Reply with one English sentence.";
+
+    [API.APIDescription("Describe reference images for reference mode (F59): one English composition prompt and its Chinese translation per image (1–8), "
+        + "for the page to show and the user to edit. Requires the administrator to have enabled vision.", "items: [{ index: 0, prompt_en: \"\", prompt_zh: \"\" }], failed: 0")]
+    public static async Task<JObject> EcomCraftStudioReferenceDescribe(Session session, JObject rawInput)
+    {
+        if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.BasicImageGeneration))
+        {
+            return StudioApi.Error("此账号没有生成权限。", "bad_permissions");
+        }
+        if (!VisionEnabled())
+        {
+            return StudioApi.Error("借鉴构图需要管理员开启看图描述，当前未开启。", "vision_disabled");
+        }
+        if (rawInput["reference_images"] is not JArray images || images.Count == 0 || images.Count > Generation.SetRules.MaxReferences)
+        {
+            return StudioApi.Error($"参考图须为 1–{Generation.SetRules.MaxReferences} 张。", "invalid_reference");
+        }
+        foreach (JToken image in images)
+        {
+            string data = image?.Type == JTokenType.String ? image.ToString() : "";
+            if (!data.StartsWith("data:image/", StringComparison.Ordinal) || data.Length > MaxReferenceImageLength)
+            {
+                return StudioApi.Error("参考图须为不超过 5 MB 的图片。", "invalid_reference");
+            }
+        }
+        // One description per image, in parallel; a failed one comes back empty so the page can retry it alone.
+        (string english, string chinese)[] answers = await Task.WhenAll(images.Select(async (image, index) =>
+        {
+            string described = await AskModelAsync(session, ReferenceInstruction, "", image.ToString());
+            if (described.Length == 0)
+            {
+                return ("", "");
+            }
+            string translated = await AskModelAsync(session, PromptRules.TranslateInstruction("Simplified Chinese"), described, null);
+            return (described, translated);
+        }));
+        JArray items = new();
+        int failed = 0;
+        for (int index = 0; index < answers.Length; index++)
+        {
+            if (answers[index].english.Length == 0)
+            {
+                failed++;
+            }
+            items.Add(new JObject() { ["index"] = index, ["prompt_en"] = answers[index].english, ["prompt_zh"] = answers[index].chinese });
+        }
+        return new JObject() { ["items"] = items, ["failed"] = failed };
+    }
+
     /// <summary>Translates a user's prompt text into English (F25/F54); an empty string when the model is unavailable.</summary>
     public static Task<string> TranslateToEnglishAsync(Session session, string text) =>
         AskModelAsync(session, PromptRules.TranslateInstruction("English"), text, null);

@@ -292,7 +292,12 @@ public static class TemplateApi
                 request.Remove(form);
             }
         }
-        request["prompt"] = Join(" ", template.PromptPrefix, rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : "", template.PromptSuffix);
+        // A raw prompt (F59 reference mode) is sent as is: what the user saw and edited is exactly what the engine gets, with no template fragments.
+        bool rawPrompt = rawInput["raw_prompt"]?.Type == JTokenType.Boolean && rawInput.Value<bool>("raw_prompt");
+        request.Remove("raw_prompt");
+        request["prompt"] = rawPrompt
+            ? (rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : "")
+            : Join(" ", template.PromptPrefix, rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : "", template.PromptSuffix);
         request["negativeprompt"] = Join(", ", template.Negative, rawInput["negativeprompt"]?.Type == JTokenType.String ? rawInput.Value<string>("negativeprompt") : "");
         return request;
     }

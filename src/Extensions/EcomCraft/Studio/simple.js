@@ -28,6 +28,12 @@ class SimpleMode {
     /** The optional image slots ticked for the chosen platform (F58); same-kind optional slots only add export targets, so only kinds not already in the default set are offered. */
     static optionalSlots = new Set();
 
+    /** Reference images of reference mode (F59): each { image, promptEn, promptZh, edited, describing, failed }; one image is made per reference. */
+    static references = [];
+
+    /** Set when the server reports vision is off, so reference mode cannot describe references (F59). */
+    static referenceVisionOff = false;
+
     static exportOptions = { platforms: [], folder_available: false };
     static resultGroups = new Map();
     static taskProducts = new Map();
@@ -311,6 +317,12 @@ class SimpleMode {
         });
         $('simple-generate').addEventListener('click', () => this.generate());
         $('simple-generate-set').addEventListener('click', () => this.generateSet());
+        $('simple-reference-add').addEventListener('click', () => this.api.$('simple-reference-file').click());
+        $('simple-reference-file').addEventListener('change', e => {
+            this.addReferenceFiles(Array.from(e.target.files || []));
+            e.target.value = '';
+        });
+        $('simple-generate-reference').addEventListener('click', () => this.generateReference());
         $('simple-count').addEventListener('input', () => this.update());
         $('simple-count').addEventListener('change', () => this.update());
         $('simple-batch-cancel').addEventListener('click', () => this.cancelBatch());
@@ -1532,6 +1544,14 @@ class SimpleMode {
             return;
         }
         this.renderQuality();
+        // Reference mode (F59): the other step-2 options stop applying and a single "generate by reference" button takes over.
+        this.setReferenceOptions();
+        let refMode = this.referenceMode();
+        let refProblem = this.referenceProblem();
+        this.api.$('simple-generate').hidden = refMode;
+        this.api.$('simple-generate-set').hidden = refMode;
+        this.api.$('simple-generate-reference').hidden = !refMode;
+        this.api.$('simple-generate-reference').disabled = Boolean(refProblem);
         // Cut-out-only platforms (white main images) never generate, so the model flag does not apply to them (F53).
         let template = this.currentTemplate();
         let cutoutOnly = Boolean(template && this.choice.platform && (template.cutout_only_platforms || []).includes(this.choice.platform));
@@ -1555,7 +1575,9 @@ class SimpleMode {
         countHint.textContent = countProblem || this.api.tr('可输入 1–20 的正整数；单次出图和一键出整套最多共 20 张。');
         countHint.classList.toggle('simple-hint-error', Boolean(countProblem));
         let count = countProblem ? 0 : this.countValue();
-        this.api.$('simple-hint').textContent = blocker
+        this.api.$('simple-hint').textContent = refMode
+            ? (refProblem ? this.api.tr(refProblem) : '')
+            : blocker
             ? this.api.tr(blocker)
             : (cutoutOnly
                 ? this.api.tr('为当前商品生成白底主图 1 张（不调用生成模型）。')
@@ -1570,7 +1592,9 @@ class SimpleMode {
         let setButton = this.api.$('simple-generate-set');
         setButton.disabled = !setReady;
         setButton.textContent = shots ? this.api.tr('按分镜出整套') : this.api.tr('一键出整套');
-        this.api.$('simple-set-hint').textContent = storyboardProblem
+        this.api.$('simple-set-hint').textContent = refMode
+            ? this.api.tr(refProblem || '为 {0} 张商品图 × {1} 张参考图各出 1 张，预计共 {2} 张（上限 20）。', this.products.length, this.references.length, this.products.length * this.references.length)
+            : storyboardProblem
             ? this.api.tr(storyboardProblem)
             : !types
             ? this.api.tr('这个平台还没有可用的套图模板。')
@@ -1995,6 +2019,236 @@ class SimpleMode {
         }
     }
 
+    /** Adds reference image files (F59): at most 8 in total, each compressed like a product photo; every new one is described in the background.
+     * Uploading the first reference enters reference mode and clears any storyboard, which is mutually exclusive with references. */
+    static async addReferenceFiles(files) {
+        let tr = this.api.tr;
+        for (let file of files) {
+            if (this.references.length >= 8) {
+                this.message(tr('参考图最多 8 张，后面的没有添加。'), true);
+                break;
+            }
+            if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+                this.message(tr('参考图请选择 PNG、JPEG 或 WebP 图片。'), true);
+                continue;
+            }
+            try {
+                let data = await this.blobToDataUrl(file);
+                if (file.size > this.maxProductBytes) {
+                    data = await this.compressImage(data, this.maxProductBytes);
+                }
+                this.references.push({ image: data, promptEn: '', promptZh: '', edited: false, describing: false, failed: false });
+            }
+            catch (error) {
+                this.message(tr('有参考图无法读取，请重新选择。'), true);
+            }
+        }
+        if (this.references.length && this.storyboard.shots.length) {
+            this.storyboard.shots = [];
+            this.renderStoryboard();
+        }
+        this.renderReferences();
+        this.update();
+        for (let item of this.references) {
+            if (!item.describing && !item.promptEn && !item.failed) {
+                this.describeReference(this.references.indexOf(item), item);
+            }
+        }
+    }
+
+    /** Asks the server to describe one reference image (F59); fills the item's prompt unless the user edited it first. */
+    static async describeReference(index, item) {
+        item.describing = true;
+        item.failed = false;
+        this.renderReferences();
+        try {
+            let result = await this.api.request('EcomCraftStudioReferenceDescribe', { reference_images: [item.image] });
+            let answer = (result.items || [])[0] || {};
+            if (answer.prompt_en) {
+                if (!item.edited) {
+                    item.promptEn = String(answer.prompt_en);
+                    item.promptZh = String(answer.prompt_zh || '');
+                }
+            }
+            else {
+                item.failed = true;
+            }
+        }
+        catch (error) {
+            if (error.error_id == 'vision_disabled') {
+                this.referenceVisionOff = true;
+            }
+            item.failed = true;
+        }
+        finally {
+            item.describing = false;
+            this.renderReferences();
+            this.update();
+        }
+    }
+
+    /** Whether reference mode is on: at least one reference image is uploaded (F59). */
+    static referenceMode() {
+        return this.references.length > 0;
+    }
+
+    /** Shows the reference thumbnails and the per-reference prompt list (F59): the English prompt is editable, the Chinese translation read-only. */
+    static renderReferences() {
+        if (!this.api) {
+            return;
+        }
+        let tr = this.api.tr;
+        let el = this.api.el;
+        let thumbs = [];
+        for (let [index, item] of this.references.entries()) {
+            let wrap = el('span', 'simple-ref-thumb');
+            let img = el('img');
+            img.src = item.image;
+            img.alt = tr('参考图 {0}', index + 1);
+            let remove = el('button', 'link-btn');
+            remove.type = 'button';
+            remove.textContent = tr('删除');
+            remove.setAttribute('aria-label', tr('删除参考图 {0}', index + 1));
+            remove.addEventListener('click', () => {
+                this.references.splice(index, 1);
+                this.renderReferences();
+                this.update();
+            });
+            wrap.append(img, remove);
+            thumbs.push(wrap);
+        }
+        this.api.$('simple-references').replaceChildren(...thumbs);
+        let block = this.api.$('simple-reference-list-block');
+        block.hidden = !this.references.length;
+        let rows = [];
+        for (let [index, item] of this.references.entries()) {
+            let row = el('div', 'simple-ref-item');
+            let img = el('img', 'simple-ref-item-img');
+            img.src = item.image;
+            img.alt = '';
+            let mid = el('div', 'simple-ref-item-main');
+            let input = document.createElement('textarea');
+            input.className = 'simple-ref-prompt';
+            input.rows = 2;
+            input.maxLength = 1500;
+            input.spellcheck = false;
+            input.value = item.promptEn;
+            input.setAttribute('aria-label', tr('参考图 {0} 的提示词', index + 1));
+            input.addEventListener('input', () => {
+                item.promptEn = input.value;
+                item.edited = true;
+                this.update();
+            });
+            let zh = el('p', 'hint simple-ref-zh');
+            zh.textContent = item.describing ? tr('描述中…') : (item.failed ? tr('没有描述成功，可点“重试”。') : (item.promptZh || ''));
+            mid.append(input, zh);
+            let retry = el('button', 'link-btn');
+            retry.type = 'button';
+            retry.textContent = tr('重试');
+            retry.hidden = !(item.failed && !item.describing);
+            retry.addEventListener('click', () => this.describeReference(index, item));
+            row.append(img, mid, retry);
+            rows.push(row);
+        }
+        this.api.$('simple-reference-list').replaceChildren(...rows);
+        this.api.$('simple-reference-add').hidden = this.references.length >= 8;
+        this.api.$('simple-reference-hint').textContent = this.referenceVisionOff && this.references.length
+            ? tr('借鉴构图需要管理员开启看图描述，当前未开启，参考模式暂不可用。')
+            : tr('参考图只用于借鉴构图与光线，请使用有权使用的图片（自己拍摄、已授权或无版权限制）；生成结果请勿与参考图雷同。');
+    }
+
+    /** Turns the other step-2 options on or off (F59): in reference mode they do not apply and the reference note explains it. */
+    static setReferenceOptions() {
+        let off = this.referenceMode();
+        let ids = ['simple-templates', 'simple-categories', 'simple-subtypes', 'simple-styles', 'simple-model',
+            'simple-brand', 'simple-brand-manage', 'simple-description', 'simple-expand', 'simple-prompt-zh', 'simple-prompt-en',
+            'simple-count', 'simple-optional-slots', 'simple-storyboard', 'simple-storyboard-run', 'simple-shot-add'];
+        for (let id of ids) {
+            let node = this.api.$(id);
+            if (!node) {
+                continue;
+            }
+            if (node.tagName != 'DETAILS') {
+                node.disabled = off;
+            }
+            else if (off) {
+                node.open = false;
+            }
+            for (let control of Array.from(node.querySelectorAll('button, input, select, textarea'))) {
+                control.disabled = off;
+            }
+            let field = node.closest('.fld') || node;
+            field.classList.toggle('simple-mode-off', off);
+        }
+        this.api.$('simple-reference-off-note').hidden = !off;
+    }
+
+    /** Why "generate by reference" cannot run yet (F59); empty when it can. */
+    static referenceProblem() {
+        let tr = this.api.tr;
+        if (!this.referenceMode()) {
+            return '';
+        }
+        if (this.referenceVisionOff) {
+            return '借鉴构图需要管理员开启看图描述，当前未开启。';
+        }
+        if (!this.products.length) {
+            return '请先在第 1 步上传商品图。';
+        }
+        if (this.references.some(item => item.describing)) {
+            return '还在描述参考图…';
+        }
+        if (this.references.some(item => !item.promptEn.trim())) {
+            return '还有参考图没有提示词，请等待描述完成、重试或手动填写。';
+        }
+        let total = this.products.length * this.references.length;
+        if (total > 20) {
+            return tr('预计 {0} 张，超过 20 张总上限，请减少商品图或参考图。', total);
+        }
+        if (this.submitting) {
+            return '提交中…';
+        }
+        return '';
+    }
+
+    /** Starts reference mode: one image per reference for every product, each with the prompt shown to the user (F59). */
+    static async generateReference() {
+        let tr = this.api.tr;
+        if (!this.products.length || this.submitting || this.referenceProblem()) {
+            return;
+        }
+        let payload = {
+            language: I18n.current,
+            platform: this.choice.platform,
+            reference_prompts: this.references.map(item => item.promptEn.trim()),
+            products: this.products.map(product => product.id
+                ? { product_id: product.id, placement: this.clampPlacement(this.placement) }
+                : { image: product.cutout || product.data, placement: this.clampPlacement(this.placement) })
+        };
+        this.submitting = true;
+        this.update();
+        this.batchProducts = this.products.map(product => product.name || '');
+        try {
+            let batch = await this.api.request('EcomCraftStudioGenerateSet', payload);
+            this.batch = batch;
+            this.batchDone = 0;
+            this.api.titleAdd((batch.jobs || []).length);
+            this.renderBatch();
+            this.trackBatch();
+            this.api.$('simple-status').textContent = tr('已按参考图开始出图：共 {0} 个任务，会分配到空闲的执行服务器上并行完成。', (batch.jobs || []).length);
+            this.batchSent = this.promptSnapshot();
+            this.batchPromptShown = true;
+            this.message('', false);
+        }
+        catch (error) {
+            this.message(error.message || tr('提交失败，请稍后重试。'), true);
+        }
+        finally {
+            this.submitting = false;
+            this.update();
+        }
+    }
+
     /** The plain-language source of a product photo (F52): this computer, the camera, the product library or the gallery. */
     static originText(origin) {
         let names = { local: '本机', camera: '拍照', library: '商品库', gallery: '画廊' };
@@ -2192,7 +2446,18 @@ class SimpleMode {
         let added = false;
         for (let job of jobs) {
             let item = el('li', `simple-job${job.state == 'failed' ? ' is-failed' : ''}`);
-            let name = tr('商品 {0}｜{1}', job.product + 1, job.purpose || job.template_name || job.template);
+            let name;
+            if (job.reference_index >= 0) {
+                name = tr('商品 {0}｜参考图 {1}', job.product + 1, job.reference_index + 1);
+                let thumb = el('img', 'simple-job-ref');
+                let reference = this.references[job.reference_index];
+                thumb.src = reference ? reference.image : '';
+                thumb.alt = '';
+                item.append(thumb);
+            }
+            else {
+                name = tr('商品 {0}｜{1}', job.product + 1, job.purpose || job.template_name || job.template);
+            }
             let state = this.stageText(job.state, job.state == 'done' ? job.execution_server : '');
             item.append(el('span', '', name), el('span', 'simple-job-state', state));
             if (job.state == 'failed' || job.state == 'cancelled') {
