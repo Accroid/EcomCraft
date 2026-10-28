@@ -35,6 +35,7 @@
 - [EcomCraft 局域网多服务器平台需求（中文）](EcomCraft%20局域网多服务器平台需求.zh-CN.md) · [English](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md)：开发需求文档，涵盖多服务器接入、工作流审核与快照、负载调度、多人使用、画廊共享、作品存储及云端预留。
 - [EcomCraft 简易模式改版需求（中文）](EcomCraft%20简易模式改版需求.zh-CN.md) · [English](EcomCraft%20Simple%20Mode%20Redesign.md)：开发需求文档（F53、F55 已实现待验收，F52、F54、F56、F57 待开发；含面向继续开发代理的交接章节），涵盖上传四入口、产品类型两级选择、双语提示词与 AI 扩写、候选张数总上限、出图链路提速与标准工作流自动生成；附[交互原型](EcomCraft%20简易模式改版原型.html)。
 - [EcomCraft 平台预设槽位设计（中文）](EcomCraft%20平台预设槽位设计.zh-CN.md) · [English](EcomCraft%20Platform%20Preset%20Slots.md)：开发设计文档（F58，已实现待验收）：按槽位定义各平台图片规格（尺寸比例、白底位置、主体占比、大小上限、禁用内容、AI 标识），套图按槽位组合模板；含 N06 规范核对清单。
+- [EcomCraft 参考图需求（中文）](EcomCraft%20参考图需求.zh-CN.md) · [English](EcomCraft%20Reference%20Images.md)：开发需求文档（F59，已确认待开发）：上传参考图（如竞品成品图）一张参考出一张图；“借鉴构图”（视觉模型读图并入提示词）与“画面参考”（图生图，需另装模型）双路径；版权边界与临时存储；T61 待开发，T62 依赖 N10。
 - [SwarmUI 设计动机（中文）](Motivations.zh-CN.md) · [English](Motivations.md)
 
 ## 模型与功能专题
