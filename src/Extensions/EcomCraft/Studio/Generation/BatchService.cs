@@ -131,12 +131,29 @@ public static class BatchService
         Batch batch = new() { Id = Guid.NewGuid().ToString("N"), UserId = session.User.UserID, Created = Environment.TickCount64 };
         foreach (JToken item in products)
         {
-            string image = item?["image"]?.Type == JTokenType.String ? item.Value<string>("image") : null;
-            if (image is null || image.Length > MaxImageDataLength || !Regex.IsMatch(image[..Math.Min(image.Length, 30)], "^data:image/(png|jpeg|webp);base64,"))
+            Product product = new();
+            if (item?["product_id"]?.Type == JTokenType.String)
             {
-                return StudioApi.Error("商品图须为不超过 5 MB 的 PNG、JPEG 或 WebP 图片。", "invalid_reference");
+                // A saved product: its cut-out (when confirmed) is used for every template; otherwise the original photo.
+                (string saved, Placement placementSaved, string problem) = Products.ProductLibrary.ForGeneration(session.User.UserID, item.Value<string>("product_id"), false);
+                if (saved is null)
+                {
+                    return StudioApi.Error(problem, "invalid_reference");
+                }
+                (string cutout, _, _) = Products.ProductLibrary.ForGeneration(session.User.UserID, item.Value<string>("product_id"), true);
+                product.Image = saved;
+                product.Cutout = cutout;
+                product.Placement = placementSaved;
             }
-            Product product = new() { Image = image };
+            else
+            {
+                string image = item?["image"]?.Type == JTokenType.String ? item.Value<string>("image") : null;
+                if (image is null || image.Length > MaxImageDataLength || !Regex.IsMatch(image[..Math.Min(image.Length, 30)], "^data:image/(png|jpeg|webp);base64,"))
+                {
+                    return StudioApi.Error("商品图须为不超过 5 MB 的 PNG、JPEG 或 WebP 图片。", "invalid_reference");
+                }
+                product.Image = image;
+            }
             if (item["placement"] is JObject placement)
             {
                 if (!Placement.TryCreate(placement.Value<double?>("x"), placement.Value<double?>("y"), placement.Value<double?>("size"), out Placement parsed))

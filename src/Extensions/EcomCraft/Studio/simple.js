@@ -12,6 +12,8 @@ class SimpleMode {
     static choice = { platform: '', template: '', style: '' };
     static product = null;
     static products = [];
+    static library = [];
+    static placementTimer = null;
     static batch = null;
     static batchTimer = null;
     static loaded = false;
@@ -110,6 +112,9 @@ class SimpleMode {
         $('simple-generate-set').addEventListener('click', () => this.generateSet());
         $('simple-count').addEventListener('change', () => this.update());
         $('simple-batch-cancel').addEventListener('click', () => this.cancelBatch());
+        $('simple-product-name').addEventListener('change', e => this.renameProduct(e.target.value));
+        $('simple-product-delete').addEventListener('click', () => this.deleteProduct());
+        $('simple-size').addEventListener('change', () => this.savePlacement());
         $('simple-download').addEventListener('click', () => this.download());
         let saved = api.readStorage(this.storageKey);
         if (saved) {
@@ -178,6 +183,158 @@ class SimpleMode {
         this.renderPlatforms();
         this.renderTemplates();
         this.renderStyles();
+        await this.loadLibrary();
+    }
+
+    /** Reads the account's saved products for the "from the product library" list. */
+    static async loadLibrary() {
+        try {
+            let result = await this.api.request('EcomCraftStudioProducts');
+            this.library = result.products || [];
+        }
+        catch (error) {
+            this.library = [];
+        }
+        this.renderLibrary();
+    }
+
+    /** Shows saved products as thumbnails; choosing one skips uploading and cutting out again. */
+    static renderLibrary() {
+        let el = this.api.el;
+        let items = [];
+        for (let saved of this.library) {
+            let button = el('button', 'simple-product');
+            button.type = 'button';
+            button.title = saved.name;
+            button.setAttribute('aria-label', this.api.tr('选择商品 {0}', saved.name));
+            let image = el('img');
+            image.src = saved.cutout_image || saved.image;
+            image.alt = '';
+            image.loading = 'lazy';
+            button.append(image);
+            button.addEventListener('click', () => this.useSaved(saved));
+            items.push(button);
+        }
+        this.api.$('simple-library-list').replaceChildren(...items);
+        this.api.$('simple-library').hidden = items.length == 0;
+    }
+
+    /** Makes a saved product the current one, with its confirmed cut-out and placement. */
+    static async useSaved(saved) {
+        let existing = this.products.find(product => product.id == saved.id);
+        if (existing) {
+            this.selectProduct(existing);
+            return;
+        }
+        if (this.products.length >= 20) {
+            this.message(this.api.tr('一次最多 20 张商品图。'), true);
+            return;
+        }
+        let product = { id: saved.id, name: saved.name, data: null, source: saved.image, cutout: saved.cutout_image || null, width: 0, height: 0 };
+        try {
+            let image = await this.loadImage(product.cutout || product.source);
+            product.width = image.naturalWidth;
+            product.height = image.naturalHeight;
+        }
+        catch (error) {
+            this.message(this.api.tr('商品图暂时无法读取：作品库位置可能离线，请稍后重试。'), true);
+            return;
+        }
+        if (saved.placement) {
+            this.placement = this.clampPlacement(saved.placement);
+            this.api.$('simple-size').value = String(Math.round(this.placement.size * 100));
+        }
+        this.products.push(product);
+        this.selectProduct(product);
+    }
+
+    /** Saves a newly uploaded photo to the product library; generation keeps working when saving fails. */
+    static async saveToLibrary(product) {
+        try {
+            let name = String(product.name || '').replace(/\.[^.]+$/, '').slice(0, 60);
+            let result = await this.api.request('EcomCraftStudioProductSave', { image: product.data, name, cutout: product.cutout && product.cutout.startsWith('data:') ? product.cutout : '' });
+            product.id = result.product.id;
+            product.name = result.product.name;
+            await this.loadLibrary();
+            if (product == this.product) {
+                this.renderProductMeta();
+            }
+        }
+        catch (error) {
+            this.message(error.message || this.api.tr('商品没有存入商品库，但仍可以继续出图。'), true);
+        }
+    }
+
+    /** Shows the name field and delete button for a saved current product. */
+    static renderProductMeta() {
+        let saved = Boolean(this.product && this.product.id);
+        this.api.$('simple-product-meta').hidden = !saved;
+        if (saved) {
+            this.api.$('simple-product-name').value = this.product.name || '';
+        }
+    }
+
+    /** Renames the current saved product. */
+    static async renameProduct(name) {
+        if (!this.product || !this.product.id) {
+            return;
+        }
+        try {
+            let result = await this.api.request('EcomCraftStudioProductUpdate', { product_id: this.product.id, name });
+            this.product.name = result.product.name;
+            await this.loadLibrary();
+        }
+        catch (error) {
+            this.message(error.message || this.api.tr('操作失败，请稍后重试。'), true);
+        }
+    }
+
+    /** Deletes the current product from the library and from this page. */
+    static async deleteProduct() {
+        if (!this.product || !this.product.id || !window.confirm(this.api.tr('从商品库删除“{0}”？已生成的作品不受影响。', this.product.name))) {
+            return;
+        }
+        try {
+            await this.api.request('EcomCraftStudioProductDelete', { product_id: this.product.id });
+            this.clearProduct();
+            await this.loadLibrary();
+        }
+        catch (error) {
+            this.message(error.message || this.api.tr('操作失败，请稍后重试。'), true);
+        }
+    }
+
+    /** Remembers the confirmed placement of the current saved product, shortly after the user stops adjusting it. */
+    static savePlacement() {
+        if (!this.product || !this.product.id) {
+            return;
+        }
+        clearTimeout(this.placementTimer);
+        let id = this.product.id;
+        let placement = this.clampPlacement(this.placement);
+        this.placementTimer = setTimeout(() => {
+            this.api.request('EcomCraftStudioProductUpdate', { product_id: id, placement }).catch(() => {
+                // The placement is still sent with each generation; saving it is only a convenience.
+            });
+        }, 800);
+    }
+
+    /** A data URL for a product image that may only be available as a server URL. */
+    static async toDataUrl(source) {
+        if (String(source).startsWith('data:')) {
+            return source;
+        }
+        let response = await fetch(source, { credentials: 'same-origin' });
+        if (!response.ok) {
+            throw new Error(this.api.tr('商品图暂时无法读取：作品库位置可能离线，请稍后重试。'));
+        }
+        let blob = await response.blob();
+        return await new Promise((resolve, reject) => {
+            let reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(new Error('read'));
+            reader.readAsDataURL(blob);
+        });
     }
 
     /** Shows or hides the message banner. */
@@ -289,7 +446,7 @@ class SimpleMode {
                 this.message(this.api.tr('一次最多 20 张商品图。'), true);
                 return;
             }
-            this.product = { name: file.name, data: String(reader.result), cutout: null, width: 0, height: 0 };
+            this.product = { id: null, name: file.name, data: String(reader.result), source: String(reader.result), cutout: null, width: 0, height: 0 };
             this.products.push(this.product);
             try {
                 let image = await this.loadImage(this.product.data);
@@ -315,7 +472,9 @@ class SimpleMode {
             this.api.$('simple-clear').hidden = false;
             this.message('', false);
             this.renderProducts();
+            this.renderProductMeta();
             this.update();
+            this.saveToLibrary(this.product);
         };
         reader.onerror = () => this.message(tr('无法读取文件，请重新选择。'), true);
         reader.readAsDataURL(file);
@@ -398,6 +557,7 @@ class SimpleMode {
         }
         event.target.classList.remove('is-dragging');
         this.drag = null;
+        this.savePlacement();
     }
 
     /** Asks the server to remove the background; the result keeps the original product pixels. */
@@ -410,8 +570,15 @@ class SimpleMode {
         this.renderCutout();
         this.update();
         try {
-            let result = await this.api.request('EcomCraftStudioCutout', { product_image: this.product.data });
-            this.product.cutout = result.cutout;
+            let product = this.product;
+            let source = product.data || await this.toDataUrl(product.source);
+            let result = await this.api.request('EcomCraftStudioCutout', { product_image: source });
+            product.cutout = result.cutout;
+            if (product.id) {
+                this.api.request('EcomCraftStudioProductUpdate', { product_id: product.id, cutout: result.cutout }).then(() => this.loadLibrary()).catch(() => {
+                    // The cut-out is still used on this page; it just is not remembered for next time.
+                });
+            }
             this.message('', false);
         }
         catch (error) {
@@ -494,7 +661,7 @@ class SimpleMode {
             button.setAttribute('aria-pressed', product == this.product ? 'true' : 'false');
             button.setAttribute('aria-label', this.api.tr('商品图 {0}', index + 1));
             let image = el('img');
-            image.src = product.cutout || product.data;
+            image.src = product.cutout || product.source || product.data;
             image.alt = '';
             button.append(image);
             button.addEventListener('click', () => this.selectProduct(product));
@@ -508,11 +675,12 @@ class SimpleMode {
     static selectProduct(product) {
         this.product = product;
         let preview = this.api.$('simple-preview');
-        preview.src = product.data;
+        preview.src = product.source || product.data;
         preview.hidden = false;
         this.api.$('simple-drop-text').textContent = product.name;
         this.api.$('simple-clear').hidden = false;
         this.renderProducts();
+        this.renderProductMeta();
         this.renderCutout();
         this.update();
     }
@@ -535,7 +703,9 @@ class SimpleMode {
             style_id: this.choice.style,
             description: this.api.$('simple-description').value.trim(),
             candidates: Number(this.api.$('simple-count').value) || 1,
-            products: this.products.map(product => ({ image: product.cutout || product.data, placement: this.clampPlacement(this.placement) }))
+            products: this.products.map(product => product.id
+                ? { product_id: product.id, placement: this.clampPlacement(this.placement) }
+                : { image: product.cutout || product.data, placement: this.clampPlacement(this.placement) })
         };
         this.submitting = true;
         this.update();
@@ -660,7 +830,7 @@ class SimpleMode {
         }
         let params = {};
         let field = this.imageField(template);
-        if (field && this.product) {
+        if (field && this.product && !this.product.id) {
             params[field.id] = template.preserve_product ? this.product.cutout : this.product.data;
         }
         let payload = {
@@ -673,6 +843,9 @@ class SimpleMode {
             images: Number(this.api.$('simple-count').value) || 1,
             async: true
         };
+        if (field && this.product && this.product.id) {
+            payload.product_id = this.product.id;
+        }
         if (template.preserve_product) {
             payload.placement = this.clampPlacement(this.placement);
         }

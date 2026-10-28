@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.13.0">
-    <script src="/EcomCraft/lang/en.js?v=0.13.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.13.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.13.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.13.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.14.0">
+    <script src="/EcomCraft/lang/en.js?v=0.14.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.14.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.14.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.14.0" defer></script>
 </head>
 
 <body>
@@ -75,6 +75,15 @@
                     </label>
                     <button type="button" class="link-btn" id="simple-clear" hidden>换一张</button>
                     <div class="simple-products" id="simple-products" hidden></div>
+                    <div class="simple-product-meta" id="simple-product-meta" hidden>
+                        <label for="simple-product-name">商品名称</label>
+                        <input id="simple-product-name" type="text" maxlength="60" autocomplete="off">
+                        <button type="button" class="link-btn" id="simple-product-delete">从商品库删除</button>
+                    </div>
+                    <details class="simple-library" id="simple-library" hidden>
+                        <summary>从商品库选择</summary>
+                        <div class="simple-products" id="simple-library-list"></div>
+                    </details>
                     <div class="simple-cutout" id="simple-cutout" hidden>
                         <p class="hint" id="simple-cutout-status"></p>
                         <div class="simple-stage" id="simple-stage" aria-label="商品位置预览，可拖动商品调整位置">

@@ -34,6 +34,13 @@ window.EcomCraftLanguages.en = {
     "点击或拖入商品图": "Click or drop a product photo",
     "PNG、JPEG 或 WebP，最大 5 MB；只在提交时发送": "PNG, JPEG or WebP, up to 5 MB; sent only when you start",
     "换一张": "Use another photo",
+    "商品名称": "Product name",
+    "从商品库删除": "Delete from product library",
+    "从商品库选择": "Choose from the product library",
+    "选择商品 {0}": "Choose product {0}",
+    "商品图暂时无法读取：作品库位置可能离线，请稍后重试。": "The product photo cannot be read right now: the work library location may be offline. Try again later.",
+    "商品没有存入商品库，但仍可以继续出图。": "The product was not saved to the product library, but you can still create images.",
+    "从商品库删除“{0}”？已生成的作品不受影响。": "Delete “{0}” from the product library? Works already generated are not affected.",
     "一键出整套": "Create the whole set",
     "取消剩余任务": "Cancel remaining tasks",
     "一次最多 20 张商品图。": "At most 20 product photos at a time.",
@@ -648,5 +655,6 @@ window.EcomCraftLanguages.en = {
     "error:invalid_template": "The template does not exist, is disabled or its configuration is invalid. Refresh the template list.",
     "error:template_image_failed": "The template was saved, but its example image could not be written to the server data folder.",
     "error:prompt_settings_failed": "The prompt settings could not be saved in the server data folder.",
+    "error:product_save_failed": "The product could not be saved: the work library location may be offline or full. Try again later.",
     "error:cutout_failed": "Background removal did not finish. Try again later, or upload a PNG whose background is already transparent."
 };

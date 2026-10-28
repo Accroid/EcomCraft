@@ -51,7 +51,7 @@
         'no_execution_server','execution_server_unavailable','invalid_execution_server','queue_limit',
         'workflow_state','invalid_review','review_save_failed',
         'invalid_storage_path','storage_check_failed','storage_save_failed','invalid_storage_action',
-        'invalid_template','template_image_failed','prompt_settings_failed','cutout_failed',
+        'invalid_template','template_image_failed','prompt_settings_failed','cutout_failed','product_save_failed',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
     const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
 
