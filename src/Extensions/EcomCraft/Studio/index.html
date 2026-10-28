@@ -6,13 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#E8E8E6">
-    <title>EcomCraft 创作工作台</title>
+    <title>EcomCraft 工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.40.0">
-    <script src="/EcomCraft/lang/en.js?v=0.40.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.40.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.40.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.40.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.41.0">
+    <script src="/EcomCraft/lang/en.js?v=0.41.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.41.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.41.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.41.0" defer></script>
 </head>
 
 <body>
@@ -47,7 +47,17 @@
                 <span class="avatar" id="avatar" aria-hidden="true">·</span>
                 <span class="user-name" id="user-name">正在连接…</span>
             </span>
-            <a class="native-link" href="/Text2Image" target="_blank" rel="noopener">原生引擎</a>
+            <div class="admin-menu" id="admin-menu" hidden>
+                <button type="button" class="btn btn-sm" id="admin-menu-btn" aria-haspopup="true" aria-expanded="false" aria-controls="admin-menu-list">管理<span class="nav-count" id="admin-menu-count" hidden></span></button>
+                <div class="admin-menu-list" id="admin-menu-list" hidden>
+                    <a class="admin-menu-item" href="#workflows" id="admin-menu-workflows" hidden>工作流审核<span class="nav-count" id="admin-menu-workflows-count" hidden></span></a>
+                    <button type="button" class="admin-menu-item" id="admin-menu-wizard" data-admin-only>首次设置向导</button>
+                    <button type="button" class="admin-menu-item" id="admin-menu-prompt" data-admin-only>提示词优化设置</button>
+                    <button type="button" class="admin-menu-item" id="admin-menu-storage" data-admin-only>存储与备份</button>
+                    <button type="button" class="admin-menu-item" id="admin-menu-diagnostics" data-admin-only>下载诊断包</button>
+                    <a class="admin-menu-item" href="/Text2Image" target="_blank" rel="noopener" data-admin-only>原生引擎</a>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -318,7 +328,7 @@
                                     <button type="button" class="link-btn" id="refresh-workflows">刷新列表</button>
                                 </div>
                                 <select id="workflow-select" name="workflow">
-                                    <option value="">标准工作台（当前模式）</option>
+                                    <option value="">标准参数（不用工作流）</option>
                                 </select>
                                 <p class="hint" id="workflow-description">可选择管理员发布到简单工作台的 ComfyUI 工作流。</p>
                             </div>
@@ -585,9 +595,9 @@
             <div class="empty-block" id="gallery-empty" hidden>
                 <span class="viewfinder viewfinder-sm" aria-hidden="true"></span>
                 <h2 class="stage-title">还没有作品</h2>
-                <p>去创作工作台生成第一张商品图。</p>
+                <p>去“出图”生成第一张商品图。</p>
                 <div class="empty-actions">
-                    <button type="button" class="btn btn-primary" id="gallery-gocreate">开始创作</button>
+                    <button type="button" class="btn btn-primary" id="gallery-gocreate">开始出图</button>
                     <button type="button" class="btn" id="gallery-clear-filter" hidden>清空搜索并显示全部</button>
                 </div>
             </div>
