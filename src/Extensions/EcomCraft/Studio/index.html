@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.18.0">
-    <script src="/EcomCraft/lang/en.js?v=0.18.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.18.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.18.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.18.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.19.0">
+    <script src="/EcomCraft/lang/en.js?v=0.19.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.19.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.19.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.19.0" defer></script>
 </head>
 
 <body>
@@ -749,6 +749,26 @@
                 <p class="hint">图片和视频只在已登记的本机或局域网 ComfyUI 执行服务器上生成，不会自动切换到云端。</p>
             </div>
             <div class="modal-foot"><button type="button" class="btn btn-primary" id="setup-guide-done">知道了</button></div>
+        </div>
+    </div>
+
+    <!-- 首次设置向导（管理员，F40）：语言 → 存储位置 → 登记服务器 → 检查模型 → 选常用平台；每步可跳过 -->
+    <div class="modal" id="wizard-modal" hidden>
+        <div class="modal-backdrop" id="wizard-backdrop"></div>
+        <div class="modal-dialog modal-wide" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+            <div class="modal-head">
+                <div>
+                    <h3 id="wizard-title">首次设置向导</h3>
+                    <p class="hint" id="wizard-step-title"></p>
+                </div>
+                <button type="button" class="icon-btn" id="wizard-close" aria-label="关闭向导">✕</button>
+            </div>
+            <div class="modal-body" id="wizard-body"></div>
+            <div class="modal-foot">
+                <span class="hint" id="wizard-progress"></span>
+                <button type="button" class="btn" id="wizard-skip">跳过这一步</button>
+                <button type="button" class="btn btn-primary" id="wizard-next">下一步</button>
+            </div>
         </div>
     </div>
 

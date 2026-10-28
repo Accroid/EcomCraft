@@ -33,6 +33,7 @@ class SimpleMode {
     static cutting = false;
     static drag = null;
     static storageKey = 'ecomcraft.simple';
+    static preferredKey = 'ecomcraft.preferred-platforms';
     static quality = { min_side: 512, blur_variance: 30, min_cutout_ratio: 0.08 };
 
     /** The product rectangle on a canvas, the same math as Placement.Rect on the server: centered at (x, y) as fractions of the canvas,
@@ -500,17 +501,45 @@ class SimpleMode {
         box.hidden = !text;
     }
 
-    /** Fills the platform list; "all platforms" shows every template. */
+    /** The platform IDs this browser marked as common (first-setup wizard, F40), limited to still-known platforms. */
+    static preferredPlatforms() {
+        if (!this.api) {
+            return [];
+        }
+        try {
+            let saved = JSON.parse(this.api.readStorage(this.preferredKey) || '[]');
+            let ids = Array.isArray(saved) ? saved.map(id => String(id)).slice(0, 10) : [];
+            return ids.filter(id => this.data.platforms.some(platform => platform.id == id));
+        }
+        catch (error) {
+            return [];
+        }
+    }
+
+    /** Fills the platform list; "all platforms" shows every template. Common platforms come first and the first one is preselected. */
     static renderPlatforms() {
         let select = this.api.$('simple-platform');
+        let preferred = this.preferredPlatforms();
+        let ordered = [];
+        for (let id of preferred) {
+            let platform = this.data.platforms.find(item => item.id == id);
+            if (platform) {
+                ordered.push(platform);
+            }
+        }
+        for (let platform of this.data.platforms) {
+            if (!ordered.includes(platform)) {
+                ordered.push(platform);
+            }
+        }
         let all = new Option(this.api.tr('全部平台'), '');
         let options = [all];
-        for (let platform of this.data.platforms) {
+        for (let platform of ordered) {
             options.push(new Option(platform.name, platform.id));
         }
         select.replaceChildren(...options);
         if (!this.data.platforms.some(platform => platform.id == this.choice.platform)) {
-            this.choice.platform = '';
+            this.choice.platform = preferred.length ? preferred[0] : '';
         }
         select.value = this.choice.platform;
     }

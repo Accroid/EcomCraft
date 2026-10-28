@@ -204,6 +204,9 @@
         updateControls();
         ExecutionServerPicker.load(true);
         SimpleMode.refresh();
+        if (!$('wizard-modal').hidden) {
+            SetupWizard.render();
+        }
     }
 
     /** Switches between light and dark themes and remembers the choice in this browser. */
@@ -297,9 +300,17 @@
         $('setup-cloud-settings').hidden = !catalog.can_manage_settings;
     }
 
-    /** Opens the setup guide once per browser while the servers or the cloud prompt model are not ready. */
+    /** Opens the setup guide once per browser while the servers or the cloud prompt model are not ready.
+     * Administrators get the full first-setup wizard (F40) once instead. */
     function maybeOpenSetupGuide() {
-        if (!state.catalog || readStorage('ecomcraft-setup-guide-seen') == '1') {
+        if (!state.catalog) {
+            return;
+        }
+        if (state.catalog.can_manage_settings && readStorage('ecomcraft-wizard-seen') != '1') {
+            SetupWizard.open(document.body);
+            return;
+        }
+        if (readStorage('ecomcraft-setup-guide-seen') == '1') {
             return;
         }
         if (!state.catalog.local_backends_observed || !state.catalog.cloud_configured) {
@@ -2509,6 +2520,198 @@
         }
     }
 
+    /** The administrator's first-setup wizard (F40): language → storage location → register servers → model check → common platforms.
+     * Every step can be skipped and the whole wizard can be reopened from the setup guide button; nothing is forced. */
+    class SetupWizard {
+        static step = 0;
+        static platforms = [];
+        static chosen = new Set();
+        static steps = [
+            { title: '选择语言', render: () => SetupWizard.renderLanguage() },
+            { title: '作品保存位置', render: () => SetupWizard.renderStorage() },
+            { title: '登记执行服务器', render: () => SetupWizard.renderServers() },
+            { title: '检查模板所需模型', render: () => SetupWizard.renderModels() },
+            { title: '选择常用平台', render: () => SetupWizard.renderPlatforms() }
+        ];
+
+        /** Opens the wizard at its first step and remembers that this browser has seen it. */
+        static open(opener) {
+            this.step = 0;
+            this.chosen = new Set(SimpleMode.preferredPlatforms());
+            $('wizard-modal').hidden = false;
+            DialogFocus.enter($('wizard-modal'), opener, $('wizard-next'));
+            this.render();
+            writeStorage('ecomcraft-wizard-seen', '1');
+            writeStorage('ecomcraft-setup-guide-seen', '1');
+        }
+
+        /** Closes the wizard; the common-platform choice of the last step is kept only when finishing there. */
+        static close() {
+            if ($('wizard-modal').hidden) {
+                return;
+            }
+            $('wizard-modal').hidden = true;
+            DialogFocus.leave($('wizard-modal'));
+        }
+
+        /** Redraws the current step's title, body and footer buttons. */
+        static render() {
+            let step = this.steps[this.step];
+            $('wizard-step-title').textContent = tr('第 {0} 步，共 {1} 步：{2}', this.step + 1, this.steps.length, tr(step.title));
+            $('wizard-progress').textContent = tr('第 {0} / {1} 步', this.step + 1, this.steps.length);
+            $('wizard-next').textContent = this.step == this.steps.length - 1 ? tr('完成') : tr('下一步');
+            $('wizard-body').replaceChildren(step.render());
+        }
+
+        /** Goes to the next step, saving the last step's platform choice; the last step closes the wizard. */
+        static next() {
+            if (this.step >= this.steps.length - 1) {
+                writeStorage('ecomcraft.preferred-platforms', JSON.stringify(Array.from(this.chosen)));
+                SimpleMode.refresh();
+                this.close();
+                return;
+            }
+            this.step++;
+            this.render();
+        }
+
+        /** Skips the current step without saving anything; the platform choice keeps its previous value. */
+        static skip() {
+            if (this.step >= this.steps.length - 1) {
+                this.close();
+                return;
+            }
+            this.step++;
+            this.render();
+        }
+
+        /** Step 1: the interface language; switching applies immediately so the rest of the wizard follows. */
+        static renderLanguage() {
+            let box = el('div');
+            box.append(el('p', '', tr('工作台支持中文和英文，随时可以在右上角切换。选一种现在就用的语言：')));
+            let row = el('div', 'wizard-chips');
+            for (let code of ['zh-CN', 'en']) {
+                let offer = I18n.switchTo[code];
+                let chip = el('button', 'btn', offer.text);
+                chip.type = 'button';
+                chip.setAttribute('aria-pressed', I18n.current == code ? 'true' : 'false');
+                chip.addEventListener('click', () => {
+                    if (I18n.current != code) {
+                        I18n.set(code);
+                        this.render();
+                    }
+                });
+                row.append(chip);
+            }
+            box.append(row);
+            return box;
+        }
+
+        /** Step 2: where finished works are copied to; opens the existing storage settings, nothing new to invent. */
+        static renderStorage() {
+            let box = el('div');
+            box.append(el('p', '', tr('作品默认保存在平台服务器本机；也可以统一复制到 NAS 或其他电脑的共享文件夹，方便全团队访问。')));
+            let button = el('button', 'btn', tr('打开存储设置'));
+            button.type = 'button';
+            button.addEventListener('click', () => {
+                this.close();
+                StorageSettingsView.open(button);
+            });
+            box.append(button, el('p', 'hint', tr('现在跳过也没关系，之后可以在画廊右上角的“存储设置”里随时修改。')));
+            return box;
+        }
+
+        /** Step 3: registering ComfyUI execution servers reuses SwarmUI's backend management. */
+        static renderServers() {
+            let box = el('div');
+            let observed = Number(state.catalog?.local_backends_observed || 0);
+            box.append(el('p', '', observed > 0
+                ? tr('已检测到 {0} 台在线执行服务器。需要更多算力时，把局域网内装有 ComfyUI 的电脑登记进来：', observed)
+                : tr('还没有在线的执行服务器。在一台装有 ComfyUI 的电脑上以 --listen 启动，然后在原生引擎的 Server / Backends 里登记：')));
+            let list = el('ul', 'wizard-list');
+            list.append(el('li', '', tr('本机 ComfyUI：安装时会自动扫描；没有识别到时用原生引擎的 Scan ComfyUI。')));
+            list.append(el('li', '', tr('局域网服务器：添加“ComfyUI API By URL”后端，填写地址并设置显示名称。')));
+            list.append(el('li', '', tr('登记后记得设置显示名称；工作流会按名称分组。')));
+            box.append(list);
+            let link = el('a', 'btn', tr('打开原生引擎的后端设置'));
+            link.href = '/Text2Image#Image-History-Tab,server_tab,Settings-Backends';
+            link.target = '_blank';
+            link.rel = 'noopener';
+            box.append(link);
+            return box;
+        }
+
+        /** Step 4: the model check of the template list (F08) shown as a summary with a link to the workflow view. */
+        static async renderModels() {
+            let box = el('div');
+            box.append(el('p', '', tr('正在读取模板所需模型…')));
+            try {
+                let result = await request('EcomCraftTemplateRequirements');
+                let templates = Array.isArray(result.templates) ? result.templates : [];
+                let servers = Array.isArray(result.servers) ? result.servers : [];
+                let missing = 0;
+                for (let template of templates) {
+                    let items = [...(template.models || []), ...(template.nodes || [])];
+                    if (items.some(item => (item.missing_on || []).length > 0)) {
+                        missing++;
+                    }
+                }
+                box.replaceChildren(el('p', '', missing == 0
+                    ? tr('模板声明的模型和节点在各执行服务器上都已就绪。')
+                    : tr('有 {0} 个模板缺少模型或节点；缺少的模板会隐藏，用户看不到。', missing)));
+                if (missing > 0) {
+                    let open = el('a', 'btn', tr('在工作流页查看缺失明细'));
+                    open.href = '#workflows';
+                    open.addEventListener('click', () => this.close());
+                    box.append(open);
+                    box.append(el('p', 'hint', tr('模型由管理员在每台服务器上手动安装；页面里附有下载地址和安装位置。')));
+                }
+            }
+            catch (error) {
+                box.replaceChildren(el('p', '', error.message || tr('模板所需模型读取失败，请稍后重试。')));
+            }
+            return box;
+        }
+
+        /** Step 5: common platforms, kept in this browser and used to preselect the simple mode. */
+        static async renderPlatforms() {
+            let box = el('div');
+            box.append(el('p', '', tr('选上你们常用的销售平台，简易模式会把它排在最前面并默认选中。')));
+            let chips = el('div', 'wizard-chips');
+            let platforms = this.platforms.length ? this.platforms : SimpleMode.data.platforms;
+            if (!platforms.length) {
+                try {
+                    let result = await request('EcomCraftStudioPlatforms', { language: I18n.current });
+                    platforms = result.platforms || [];
+                    this.platforms = platforms;
+                }
+                catch (error) {
+                    platforms = [];
+                }
+            }
+            for (let platform of platforms) {
+                let chip = el('button', 'btn', platform.name || platform.id);
+                chip.type = 'button';
+                chip.setAttribute('aria-pressed', this.chosen.has(platform.id) ? 'true' : 'false');
+                chip.addEventListener('click', () => {
+                    if (this.chosen.has(platform.id)) {
+                        this.chosen.delete(platform.id);
+                    }
+                    else {
+                        this.chosen.add(platform.id);
+                    }
+                    chip.setAttribute('aria-pressed', this.chosen.has(platform.id) ? 'true' : 'false');
+                });
+                chips.append(chip);
+            }
+            box.append(chips);
+            if (!platforms.length) {
+                box.append(el('p', 'hint', tr('平台列表暂时读不到；之后在简易模式里选平台也一样。')));
+            }
+            return box;
+        }
+    }
+
     /** Models and nodes each template needs, their commercial-use license status and the servers that lack them (F08). Reviewers only. */
     class TemplateRequirementsView {
         static licenseLabels = { allowed: '允许商用', forbidden: '禁止商用', unknown: '许可未知' };
@@ -3838,7 +4041,18 @@
         $('enhance-retry').addEventListener('click', () => enhancePrompt());
         $('enhance-dismiss').addEventListener('click', resetEnhanceCard);
         $('enhancer-settings').addEventListener('click', openEnhancerSettings);
-        $('open-setup-guide').addEventListener('click', openSetupGuide);
+        $('open-setup-guide').addEventListener('click', () => {
+            if (state.catalog?.can_manage_settings) {
+                SetupWizard.open($('open-setup-guide'));
+            }
+            else {
+                openSetupGuide();
+            }
+        });
+        $('wizard-close').addEventListener('click', () => SetupWizard.close());
+        $('wizard-backdrop').addEventListener('click', () => SetupWizard.close());
+        $('wizard-skip').addEventListener('click', () => SetupWizard.skip());
+        $('wizard-next').addEventListener('click', () => SetupWizard.next());
         $('setup-guide-close').addEventListener('click', closeSetupGuide);
         $('setup-guide-backdrop').addEventListener('click', closeSetupGuide);
         $('setup-guide-done').addEventListener('click', closeSetupGuide);
@@ -4007,6 +4221,15 @@
                 }
                 else {
                     DialogFocus.trap($('submit-modal'), e);
+                }
+                return;
+            }
+            if (!$('wizard-modal').hidden) {
+                if (e.key == 'Escape') {
+                    SetupWizard.close();
+                }
+                else {
+                    DialogFocus.trap($('wizard-modal'), e);
                 }
                 return;
             }
