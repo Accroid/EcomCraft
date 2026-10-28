@@ -196,6 +196,7 @@ class SimpleMode {
         });
         $('simple-generate').addEventListener('click', () => this.generate());
         $('simple-generate-set').addEventListener('click', () => this.generateSet());
+        $('simple-count').addEventListener('input', () => this.update());
         $('simple-count').addEventListener('change', () => this.update());
         $('simple-batch-cancel').addEventListener('click', () => this.cancelBatch());
         $('simple-product-name').addEventListener('change', e => this.renameProduct(e.target.value));
@@ -884,6 +885,24 @@ class SimpleMode {
         this.update();
     }
 
+    /** The candidate count the user typed, as a number (NaN when not numeric). The same 1–20 cap applies to single generations and whole sets (F55). */
+    static countValue() {
+        return Number(String(this.api.$('simple-count').value || '').trim());
+    }
+
+    /** Why the typed count cannot be used, or an empty string when it is a positive integer from 1 to 20 (F55). */
+    static countProblem() {
+        let raw = String(this.api.$('simple-count').value || '').trim();
+        if (!/^[1-9][0-9]*$/.test(raw)) {
+            return '请输入正整数。';
+        }
+        let n = Number(raw);
+        if (n < 1 || n > 20) {
+            return '候选张数须为 1–20 的正整数。';
+        }
+        return '';
+    }
+
     /** Why the generate button is disabled, or an empty string when it can be pressed. */
     static blocker() {
         let template = this.currentTemplate();
@@ -901,6 +920,10 @@ class SimpleMode {
         }
         if (!this.choice.subtype) {
             return '请选择产品类型。';
+        }
+        let countProblem = this.countProblem();
+        if (countProblem) {
+            return countProblem;
         }
         if (this.submitting) {
             return '提交中…';
@@ -951,13 +974,27 @@ class SimpleMode {
             : this.api.tr('勾选后提示词会加入模特描述（初版仅此一项，后续再扩展性别、手模等属性）。');
         let blocker = this.blocker();
         this.api.$('simple-generate').disabled = Boolean(blocker);
+        let countProblem = this.countProblem();
+        let countHint = this.api.$('simple-count-hint');
+        countHint.textContent = countProblem || this.api.tr('可输入 1–20 的正整数；单次出图和一键出整套最多共 20 张。');
+        countHint.classList.toggle('simple-hint-error', Boolean(countProblem));
+        let count = countProblem ? 0 : this.countValue();
+        this.api.$('simple-hint').textContent = blocker
+            ? this.api.tr(blocker)
+            : (cutoutOnly
+                ? this.api.tr('为当前商品生成白底主图 1 张（不调用生成模型）。')
+                : this.api.tr('为当前商品 × {0}（{1}）生成 {2} 张候选。', template ? template.name : '', this.needModel ? this.api.tr('含模特') : this.api.tr('无模特'), count));
         let set = this.setTemplates();
-        let setReady = this.loaded && this.products.length > 0 && set.length > 0 && Boolean(this.choice.subtype) && !this.submitting;
+        // One shared cap of 20 for single generations and whole sets (F55): products × set types × candidates.
+        let total = this.products.length * set.length * count;
+        let setReady = this.loaded && this.products.length > 0 && set.length > 0 && Boolean(this.choice.subtype) && !countProblem && total > 0 && total <= 20 && !this.submitting;
         this.api.$('simple-generate-set').disabled = !setReady;
-        this.api.$('simple-set-hint').textContent = set.length
-            ? this.api.tr('整套包含：{0}；{1} 张商品图 × {2} 种 × 每种 {3} 张。', set.map(template => template.name).join(this.api.tr('、')), this.products.length, set.length, Number(this.api.$('simple-count').value) || 1)
-            : this.api.tr('这个平台还没有可用的套图模板。');
-        this.api.$('simple-hint').textContent = blocker ? this.api.tr(blocker) : '';
+        this.api.$('simple-set-hint').textContent = !set.length
+            ? this.api.tr('这个平台还没有可用的套图模板。')
+            : (total > 20
+                ? this.api.tr('预计 {0} 张，超过 20 张总上限，请减少商品图、类型或候选张数。', total)
+                : this.api.tr('为全部 {0} 张商品图 × 套图 {1} 种类型（{2}）× 每种 {3} 张，预计共 {4} 张（上限 20）。',
+                    this.products.length, set.length, set.map(template => template.name).join(this.api.tr('、')), count, total));
         this.api.$('simple-download').disabled = this.selected.size == 0;
     }
 
@@ -1004,7 +1041,8 @@ class SimpleMode {
     /** Starts a one-click set for every uploaded product: each product × each image type of the set, with the chosen number of candidates. */
     static async generateSet() {
         let tr = this.api.tr;
-        if (!this.products.length || this.submitting) {
+        let set = this.setTemplates();
+        if (!this.products.length || this.submitting || this.countProblem() || this.products.length * set.length * this.countValue() > 20) {
             return;
         }
         let payload = {
@@ -1015,7 +1053,7 @@ class SimpleMode {
             product_type_id: this.choice.subtype,
             need_model: this.needModel,
             description: this.api.$('simple-description').value.trim(),
-            candidates: Number(this.api.$('simple-count').value) || 1,
+            candidates: this.countValue(),
             products: this.products.map(product => product.id
                 ? { product_id: product.id, placement: this.clampPlacement(this.placement) }
                 : { image: product.cutout || product.data, placement: this.clampPlacement(this.placement) })
@@ -1174,7 +1212,7 @@ class SimpleMode {
             product_type_id: this.choice.subtype,
             need_model: this.needModel,
             description: this.api.$('simple-description').value.trim(),
-            images: Number(this.api.$('simple-count').value) || 1,
+            images: this.countValue(),
             platform: this.choice.platform,
             async: true
         };

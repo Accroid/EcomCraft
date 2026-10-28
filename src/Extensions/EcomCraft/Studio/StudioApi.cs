@@ -1361,12 +1361,13 @@ public static class StudioApi
             return Error("本版工作台只接受普通描述，不支持原生 <…> 指令、预设或 __通配符__。", "unsupported_prompt_syntax");
         }
         int step = Math.Max(8, model?.ModelClass.CompatClass.ResolutionPrecision ?? 8);
-        int imageLimit = kind == "video" ? 1 : 4;
+        // The workflow path serves the simple mode's candidate count, widened to 20 (F55); the standard path below keeps 1–4.
+        int imageLimit = kind == "video" ? 1 : 20;
         if (!Integer(rawInput, "width", 256, 2048, out int width) || width % step != 0
             || !Integer(rawInput, "height", 256, 2048, out int height) || height % step != 0
             || !Integer(rawInput, "images", 1, imageLimit, out int images))
         {
-            return Error($"尺寸须为 256–2048 且是 {step} 的倍数；图片每批 1–4 张，视频每批 1 条。", "invalid_parameters");
+            return Error($"尺寸须为 256–2048 且是 {step} 的倍数；图片每批 1–20 张，视频每批 1 条。", "invalid_parameters");
         }
         JToken rawWorkflowParams = rawInput["workflow_params"];
         if (rawWorkflowParams is not null && rawWorkflowParams.Type is not (JTokenType.Object or JTokenType.Null))

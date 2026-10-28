@@ -171,10 +171,10 @@ public static class BatchService
         string language = rawInput.Value<string>("language") == "en" ? "en" : "zh-CN";
         string platform = rawInput["platform"]?.Type == JTokenType.String ? rawInput.Value<string>("platform") : "";
         string setId = rawInput["set_id"]?.Type == JTokenType.String ? rawInput.Value<string>("set_id") : "standard";
-        int candidates = rawInput["candidates"]?.Type == JTokenType.Integer ? rawInput.Value<int>("candidates") : 2;
-        if (candidates < 1 || candidates > 4)
+        int candidates = rawInput["candidates"]?.Type == JTokenType.Integer ? rawInput.Value<int>("candidates") : 4;
+        if (candidates < 1 || candidates > 20)
         {
-            return StudioApi.Error("每种图片的候选张数须为 1–4。", "invalid_parameters");
+            return StudioApi.Error("每种图片的候选张数须为 1–20。", "invalid_parameters");
         }
         batch.Candidates = candidates;
         batch.Platform = platform;
@@ -197,6 +197,11 @@ public static class BatchService
         if (expanded.Count > SetRules.MaxJobs)
         {
             return StudioApi.Error($"一次最多 {SetRules.MaxJobs} 个任务，请减少商品数量。", "invalid_parameters");
+        }
+        // One shared cap for single generations and whole sets alike (F55): products × set types × candidates may not exceed 20 images.
+        if (expanded.Count * candidates > 20)
+        {
+            return StudioApi.Error($"预计 {expanded.Count * candidates} 张，超过 20 张总上限，请减少商品图、类型或候选张数。", "invalid_parameters");
         }
         foreach (SetRules.Job job in expanded)
         {
