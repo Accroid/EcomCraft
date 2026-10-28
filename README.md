@@ -69,6 +69,7 @@ cd EcomCraft
 - 模型清单与商用许可：模板声明所需模型和节点及每个模型的商用许可（允许 / 禁止 / 未知），工作流页面按服务器列出缺失项，许可有问题时突出提示。
 - 合规：亚马逊白底主图走纯抠图分支，只把抠图居中放到纯白背景上，不调用生成模型；导出时检查主图背景是否纯白，并为 AI 生成或合成的图片写入 IPTC 数字来源类型等元数据。
 - 平台导出：选择平台后按预设等比缩放并补边，每个商品一个文件夹，打包下载 zip 或导出到管理员设置的共享文件夹；预设覆盖国内外平台、可在配置中修改，内置数值标为待核对。接口为 `EcomCraftStudioExportOptions` 和 `EcomCraftStudioExport`。
+- 卖点图：在一张候选图上按固定版式（底部横幅、左侧文字栏、标题加角标）叠加用户填写的标题（≤ 20 字）和最多 3 条卖点（每条 ≤ 16 字），文字由服务端用随附的思源黑体（Noto Sans SC，SIL OFL 1.1，可商用）绘制，不由 AI 生成；强调色默认取所选品牌资料包的第一个品牌色；结果另存为新作品，原图不变，并保留原图的 AI 元数据。不支持 emoji。接口为 `EcomCraftStudioSellingImage`。
 - 商品库（简版）：上传的商品自动入库，保存原图、抠图和确认过的位置，下次出图直接选择；按账号隔离，可重命名和删除。接口为 `EcomCraftStudioProducts`、`EcomCraftStudioProductSave`、`EcomCraftStudioProductUpdate` 和 `EcomCraftStudioProductDelete`。
 - 品牌资料包：每个账号可保存最多 20 个资料包（名称、最多 5 个品牌色、偏好背景描述、Logo、最多 4 张风格参考图），只有自己能看到和使用。出图时选中资料包，品牌色（换算成英文颜色词）和偏好背景（中文在保存时翻译一次）加入提示词；Logo 和第一张参考图只传给模板 `brand_kit` 槽位声明的图片参数，不由 AI 生成 Logo。客户端只提交资料包 ID。接口为 `EcomCraftStudioBrandKits`、`EcomCraftStudioBrandKitSave` 和 `EcomCraftStudioBrandKitDelete`。
 - 一键套图与批量：多张商品图 × 平台套图中的每种图片类型展开成独立任务，分配到多台执行服务器并行；每人同时执行的任务数受限，失败项可单独重试，可取消剩余任务。

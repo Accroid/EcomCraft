@@ -15,6 +15,7 @@ class SimpleMode {
     static prompt = { zh: '', en: '', base: { zh: '', en: '' }, last: '', tab: 'zh', expanding: false };
     static promptUsed = null;
     static storyboard = { points: [''], shots: [], running: false };
+    static selling = { layout: 'banner', running: false, accentTouched: false, prefilled: false };
     static brandKits = [];
     static brandEditor = null;
     static brandSaving = false;
@@ -226,6 +227,17 @@ class SimpleMode {
                 this.renderPromptState();
             });
         }
+        // Selling-point images (F47): the user's own text in a fixed layout, drawn by the server.
+        for (let chip of Array.from($('simple-selling-layouts').querySelectorAll('button[data-layout]'))) {
+            chip.addEventListener('click', () => {
+                this.selling.layout = chip.dataset.layout;
+                this.renderSelling();
+            });
+        }
+        $('simple-selling-accent').addEventListener('input', () => {
+            this.selling.accentTouched = true;
+        });
+        $('simple-selling-run').addEventListener('click', () => this.makeSellingImage());
         // Brand kits (F12): pick one for generation, or manage them in a dialog.
         $('simple-brand').addEventListener('change', e => {
             this.choice.brandKit = e.target.value;
@@ -557,6 +569,81 @@ class SimpleMode {
             note += ' ' + tr('这个平台的尺寸规格还没有经过管理员核对，上传前请对照平台最新要求。');
         }
         this.api.$('simple-export-note').textContent = note;
+        this.renderSelling();
+    }
+
+    /** Shows the selling-image panel once there are candidates (F47); it works on exactly one picked image. Points planned in the storyboard
+     * and the brand kit's first color are offered once as a start. */
+    static renderSelling() {
+        let tr = this.api.tr;
+        let panel = this.api.$('simple-selling');
+        panel.hidden = !this.results.length;
+        if (panel.hidden) {
+            return;
+        }
+        if (!this.selling.prefilled) {
+            this.selling.prefilled = true;
+            let points = this.storyboard.points.map(point => String(point).trim()).filter(point => point).slice(0, 3);
+            for (let [index, point] of points.entries()) {
+                let input = this.api.$(`simple-selling-point-${index + 1}`);
+                if (!input.value) {
+                    input.value = point.slice(0, 16);
+                }
+            }
+        }
+        if (!this.selling.accentTouched) {
+            let kit = this.brandKits.find(item => item.id == this.choice.brandKit);
+            let color = kit && (kit.colors || []).length ? String(kit.colors[0]) : '#1F2937';
+            this.api.$('simple-selling-accent').value = color.toLowerCase();
+        }
+        for (let chip of Array.from(this.api.$('simple-selling-layouts').querySelectorAll('button[data-layout]'))) {
+            chip.setAttribute('aria-pressed', chip.dataset.layout == this.selling.layout ? 'true' : 'false');
+        }
+        let ready = this.selected.size == 1 && !this.selling.running;
+        let run = this.api.$('simple-selling-run');
+        run.disabled = !ready;
+        run.textContent = this.selling.running ? tr('正在生成卖点图…') : tr('生成卖点图');
+        this.api.$('simple-selling-note').textContent = this.selected.size == 1
+            ? tr('将用所选的这张图做卖点图。文字由程序按固定版式排版，不由 AI 生成；会另存为新作品，原图不变。')
+            : tr('先点选一张候选图。文字由程序按固定版式排版，不由 AI 生成；会另存为新作品，原图不变。');
+    }
+
+    /** Makes a selling-point image from the one picked candidate (F47) and adds it to the front of the candidates. */
+    static async makeSellingImage() {
+        let tr = this.api.tr;
+        if (this.selected.size != 1 || this.selling.running) {
+            return;
+        }
+        let source = Array.from(this.selected)[0];
+        let title = this.api.$('simple-selling-title').value.trim();
+        if (!title) {
+            this.message(tr('请填写卖点图标题。'), true);
+            return;
+        }
+        this.selling.running = true;
+        this.renderSelling();
+        try {
+            let result = await this.api.request('EcomCraftStudioSellingImage', {
+                image: source,
+                layout: this.selling.layout,
+                title,
+                points: [1, 2, 3].map(index => this.api.$(`simple-selling-point-${index}`).value.trim()).filter(point => point),
+                accent: this.api.$('simple-selling-accent').value
+            });
+            for (let url of result.images || []) {
+                this.results.unshift(url);
+                this.resultGroups.set(url, this.resultGroups.get(source) || '');
+            }
+            this.renderResults();
+            this.message(tr('卖点图已生成，排在候选图最前面，也保存在作品画廊。'), false);
+        }
+        catch (error) {
+            this.message(error.message || tr('卖点图没有生成，请稍后重试。'), true);
+        }
+        finally {
+            this.selling.running = false;
+            this.renderSelling();
+        }
     }
 
     /** Exports the selected candidates for the chosen platform, grouped by product. */
