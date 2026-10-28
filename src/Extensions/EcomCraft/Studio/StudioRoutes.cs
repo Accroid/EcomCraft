@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Http;
 using SwarmUI.Accounts;
 using SwarmUI.Core;
 using System.IO;
+using EcomCraftStudio.Studio.Templates;
+using FreneticUtilities.FreneticExtensions;
 
 namespace EcomCraftStudio.Studio;
 
@@ -43,6 +45,30 @@ public static class StudioRoutes
                 await context.Response.WriteAsync(content, context.RequestAborted);
             });
         }
+        // Template example images: built-in ones ship in the extension folder, administrator ones live in Data/EcomCraft/template-images.
+        WebServer.WebApp.MapGet("/EcomCraft/template-image/{id}", async (HttpContext context, string id) =>
+        {
+            User user = WebServer.GetUserFor(context);
+            TemplateStore.Entry entry = user is not null && user.HasPermission(Permissions.FundamentalGenerateTabAccess) ? TemplateStore.Find(id) : null;
+            string file = entry?.Template?.ExampleImage;
+            string path = file is null ? null : Path.Combine(TemplateStore.ImageDir(entry.Source), file);
+            if (path is null || !File.Exists(path))
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+            context.Response.Headers.CacheControl = "private, max-age=300";
+            context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            context.Response.ContentType = Path.GetExtension(file).ToLowerFast() switch { ".png" => "image/png", ".webp" => "image/webp", _ => "image/jpeg" };
+            try
+            {
+                await context.Response.Body.WriteAsync(await File.ReadAllBytesAsync(path, context.RequestAborted), context.RequestAborted);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+            }
+        });
         WebServer.WebApp.MapGet("/EcomCraft", async (HttpContext context) =>
         {
             User user = WebServer.GetUserFor(context);

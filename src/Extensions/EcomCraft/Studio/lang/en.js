@@ -587,5 +587,7 @@ window.EcomCraftLanguages.en = {
     "error:invalid_storage_path": "The location is not a valid full path, or it is inside the system data or output folder.",
     "error:storage_check_failed": "The location check failed: it is unreachable, not writable, a mapped network drive, or has less than 1 GB free. Nothing was saved.",
     "error:storage_save_failed": "The storage settings could not be saved in the server data folder. Check disk space and file permissions.",
-    "error:invalid_storage_action": "There are no old works to migrate, or a migration is already running."
+    "error:invalid_storage_action": "There are no old works to migrate, or a migration is already running.",
+    "error:invalid_template": "The template does not exist, is disabled or its configuration is invalid. Refresh the template list.",
+    "error:template_image_failed": "The template was saved, but its example image could not be written to the server data folder."
 };
