@@ -2168,6 +2168,8 @@ class SimpleMode {
             return null;
         }
         let ollama = vision.provider == 'ollama';
+        // The one-click scripts (F69) install Ollama when needed and pull the model; the manual steps follow.
+        let script = tr('最省事：在服务器的 EcomCraft 目录运行一键安装脚本。Windows：powershell -ExecutionPolicy Bypass -File launchtools\\install-vision-model-windows.ps1 -Model {0}；Linux：bash launchtools/install-vision-model-linux.sh {0}', vision.model);
         if (!vision.can_manage) {
             return {
                 title: vision.state == 'off'
@@ -2184,11 +2186,11 @@ class SimpleMode {
         }
         if (vision.state == 'unreachable') {
             return ollama
-                ? { title: tr('连不上 Ollama 视觉服务。'), steps: [tr('在这台服务器上安装 Ollama：打开 https://ollama.com/download 下载并安装，安装后它会在后台自动运行。'), tr('打开命令行运行：ollama pull {0}', vision.model), tr('下载完成后回到本页点“重新检查”。')] }
+                ? { title: tr('连不上 Ollama 视觉服务。'), steps: [script, tr('或者手动：在这台服务器上安装 Ollama：打开 https://ollama.com/download 下载并安装，安装后它会在后台自动运行。'), tr('打开命令行运行：ollama pull {0}', vision.model), tr('下载完成后回到本页点“重新检查”。')] }
                 : { title: tr('连不上视觉服务 {0}。', vision.provider), steps: [tr('打开“提示词优化设置”，检查视觉服务的 Key 和模型是否可用。'), tr('也可以改用本机 Ollama：免费，图片不出本机。')] };
         }
         return ollama
-            ? { title: tr('Ollama 已在运行，但还没有视觉模型 {0}。', vision.model), steps: [tr('在服务器上打开命令行运行：ollama pull {0}', vision.model), tr('下载完成后回到本页点“重新检查”；也可以在“提示词优化设置”中改选已安装的视觉模型。')] }
+            ? { title: tr('Ollama 已在运行，但还没有视觉模型 {0}。', vision.model), steps: [script, tr('或者在服务器上打开命令行运行：ollama pull {0}', vision.model), tr('下载完成后回到本页点“重新检查”；也可以在“提示词优化设置”中改选已安装的视觉模型。')] }
             : { title: tr('视觉服务里没有模型 {0}。', vision.model), steps: [tr('打开“提示词优化设置”，改选可用的视觉模型。')] };
     }
 

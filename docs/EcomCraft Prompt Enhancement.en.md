@@ -177,7 +177,17 @@ The workspace fetches text models of the chosen backend temporarily through `Pre
 The reference-image feature (F59) sends reference images to a vision model that reads out composition descriptions, one prompt per reference. Image description is **on by default** (decision A5) and used for references only; administrators can turn it off. Sending product photos to the vision model to describe products stays off by default.
 
 1. Administrators turn it off by unticking **Allow image description** in the workspace's **prompt enhancement settings**. The line under the toggle shows the configured vision model.
-2. The vision model is a separate configuration from the prompt model; both default to Ollama, with the vision model defaulting to `llama3.2-vision:latest`. With Ollama, pull it first:
+2. The vision model is a separate configuration from the prompt model; both default to Ollama, with the vision model defaulting to `llama3.2-vision:latest`. The easiest way is the one-click install script (F69), run in the EcomCraft folder on the server: it installs Ollama when missing (on Windows through winget, or else the official installer, run only after its code signature checks out; on Linux the official install script), starts the service and pulls the vision model, and on failure says why and gives the manual steps:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File launchtools\install-vision-model-windows.ps1 -Model llama3.2-vision:latest
+```
+
+```bash
+bash launchtools/install-vision-model-linux.sh llama3.2-vision:latest
+```
+
+   `-Model` (the first argument on Linux) is the vision model name from the prompt enhancement settings and defaults to the default model; on macOS install the Ollama app from the website first. You can also install Ollama by hand and pull the model:
 
 ```bash
 ollama pull llama3.2-vision

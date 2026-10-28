@@ -257,7 +257,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F66 | Gallery and queue cleanup | UI redesign v4 (T69, to do) |
 | F67 | Star preference analysis and prompt feedback | UI redesign v4 (T70, deferred, design pending) |
 | F68 | Image description on by default, with setup guidance | UI redesign v4 (T71) |
-| F69 | One-click vision model install script | UI redesign v4 (T72, to do) |
+| F69 | One-click vision model install script | UI redesign v4 (T72, `launchtools/install-vision-model-*`) |
 | F16 | Per-account licensing (limits the number of accounts only, no feature tiers) | Team and commercial (A12) |
 | F18 | Cloud generation | Reserved (change the rules first) |
 | F17 | Brand-specific model training | Reserved (custom service) |

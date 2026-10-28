@@ -180,7 +180,17 @@ curl http://localhost:8000/v1/models
 参考图功能（F59）需要把参考图发给视觉模型，读出构图描述后逐张生成提示词。看图描述**默认开启**（决策 A5），只用于参考图；管理员可以关闭。把商品图发给视觉模型描述商品仍默认关闭。
 
 1. 管理员可以在工作台的 **提示词优化设置** 中取消勾选 **允许看图描述** 来关闭它。开关下方会显示当前配置的视觉模型。
-2. 视觉模型与提示词模型是两份独立配置，默认同为 Ollama，视觉模型默认 `llama3.2-vision:latest`。使用 Ollama 时先拉取：
+2. 视觉模型与提示词模型是两份独立配置，默认同为 Ollama，视觉模型默认 `llama3.2-vision:latest`。最省事的做法是在服务器的 EcomCraft 目录运行一键安装脚本（F69）：没有 Ollama 时自动安装（Windows 优先用 winget，否则下载官方安装包并校验数字签名后才运行；Linux 用官方安装脚本），启动服务并拉取视觉模型，失败时给出原因和手动步骤：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File launchtools\install-vision-model-windows.ps1 -Model llama3.2-vision:latest
+```
+
+```bash
+bash launchtools/install-vision-model-linux.sh llama3.2-vision:latest
+```
+
+   `-Model`（Linux 为第一个参数）填提示词优化设置中的视觉模型名称，省略时为默认模型；macOS 请先从官网安装 Ollama 应用。也可以手动安装 Ollama 后拉取：
 
 ```bash
 ollama pull llama3.2-vision
