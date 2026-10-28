@@ -1,7 +1,7 @@
 namespace EcomCraftStudio.Studio.Generation;
 
 /// <summary>Short-lived results of background generations, so the submitting browser learns whether a task failed and can offer reassignment (R6).
-/// Holds only IDs, the server display name and an already sanitized message: never prompts, parameters, images or graphs.</summary>
+/// Holds only IDs, the server display name, an already sanitized message and the owner's result URLs: never prompts, parameters, image data or graphs.</summary>
 public static class TaskOutcomes
 {
     /// <summary>How long a result stays readable.</summary>
@@ -10,8 +10,9 @@ public static class TaskOutcomes
     /// <summary>Upper bound for results kept per account.</summary>
     private const int MaxPerUser = 50;
 
-    /// <summary>One finished background task. <see cref="TaskId"/> is the SwarmUI generation claim ID, unique across sessions.</summary>
-    public sealed record class Outcome(string UserId, long TaskId, bool Failed, string Error, string ErrorId, string Server, long Finished);
+    /// <summary>One finished background task. <see cref="TaskId"/> is the SwarmUI generation claim ID, unique across sessions.
+    /// <see cref="Images"/> are the owner's own result URLs (as the gallery serves them), so the simple mode can show candidates; never sent to other accounts.</summary>
+    public sealed record class Outcome(string UserId, long TaskId, bool Failed, string Error, string ErrorId, string Server, long Finished, IReadOnlyList<string> Images);
 
     /// <summary>Results by task ID.</summary>
     private static readonly ConcurrentDictionary<long, Outcome> Outcomes = new();

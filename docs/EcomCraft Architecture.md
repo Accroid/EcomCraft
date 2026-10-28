@@ -60,7 +60,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 
 | Layer | Module | Responsibility | Status |
 |---|---|---|---|
-| Front end | Simple mode | Three-step image creation for operators and owners: upload → choose platform and style → pick and download | Planned |
+| Front end | Simple mode | Three-step image creation for operators and owners: upload → choose platform and style → pick and download | Implemented (`Studio/simple.js`), the default view |
 | | Admin views | Workflow review, template configuration, server status, model checklist, storage settings, setup wizard | Review view implemented |
 | | Internationalization | Chinese / English translation tables; every UI string is looked up by key | Implemented for the workspace (`Studio/i18n.js`, `Studio/lang/en.js`) |
 | API | Catalog / templates | Returns template names, sample images and adjustable fields (minimal disclosure) | Extends the existing `EcomCraftStudioCatalog` |

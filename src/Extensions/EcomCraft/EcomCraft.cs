@@ -72,6 +72,7 @@ public class EcomCraft : Extension
         API.RegisterAPICall(StorageApi.EcomCraftStorageMigrate, true, Permissions.EditServerSettings);
         API.RegisterAPICall(StorageApi.EcomCraftStoragePending, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(TemplateApi.EcomCraftStudioTemplates, false, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(TemplateApi.EcomCraftStudioPlatforms, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(PromptService.EcomCraftStudioStyles, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(PromptService.EcomCraftStudioComposePrompt, false, Permissions.BasicImageGeneration);
         API.RegisterAPICall(PromptService.EcomCraftPromptSettings, true, Permissions.EditServerSettings);

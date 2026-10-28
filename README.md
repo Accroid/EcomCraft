@@ -46,7 +46,8 @@ cd EcomCraft
 
 当前已实现：
 
-- 图片与视频创作工作台，复用 SwarmUI 的生成能力；可用模式取决于已安装的模型、节点和账号权限。界面支持中文和英文，页头按钮切换，不刷新页面，选择记在浏览器中；首次打开按浏览器语言选择。
+- 三步式简易模式（默认界面）：上传商品图 → 选平台、图片类型（模板）和风格，可写一句描述 → 挑选候选图并下载。界面没有提示词框，提示词由服务端根据风格和描述生成；采样器、LoRA、步数等专业参数只在管理员的“专业模式”中出现。平台列表接口为 `EcomCraftStudioPlatforms`。
+- 图片与视频创作工作台（专业模式，管理员可见），复用 SwarmUI 的生成能力；可用模式取决于已安装的模型、节点和账号权限。界面支持中文和英文，页头按钮切换，不刷新页面，选择记在浏览器中；首次打开按浏览器语言选择。
 - 管理员发布 ComfyUI 工作流供工作台选用；服务端校验工作流 ID 和已发布参数白名单，提供 `EcomCraftStudioCatalog`、`EcomCraftStudioGenerate`、`EcomCraftStudioQueue` 和 `EcomCraftStudioCancelTask` API。
 - 工作流审核：自动发现的原生工作流须经审核才能给用户调用。用户可提交自己保存的工作流并查看驳回原因；审核人配置用户可见参数（显示名、默认值、范围、可选项）、查看可运行服务器后发布、驳回或下架。通过时冻结快照，来源文件修改后需重新审核，通过前用户继续使用旧快照。权限为 `ecomcraft_submit_workflows` 和 `ecomcraft_review_workflows`，接口为 `EcomCraftStudioReviewList`、`EcomCraftStudioReviewDetail`、`EcomCraftStudioReviewDecide`、`EcomCraftStudioWorkflowSubmissions` 和 `EcomCraftStudioSubmitWorkflow`。原生工作流批量出图时逐张递增实际采样种子，填写 `-1` 可随机确定本批起始值。
 - 自动发现本机 ComfyUI 安装中的 `workflows` 和 `blueprints`，以及局域网执行服务器 ComfyUI 中保存的工作流，支持内嵌子图蓝图；发现在后台进行，约每 30 秒更新。列表按“来源服务器 / 工作流”命名。无需逐个填写路径；`EcomCraft.ComfyWorkflowSearchPaths` 仅用于补充目录。发现的工作流仍须通过结构及正负提示词校验和人工审核，并由具备所需模型和节点的执行服务器执行。可选列表按执行内容合并重复原生工作流，并隐藏所有在线执行服务器都缺少默认模型或节点的项。页面读取工作流内保存的模型和参数，修改值传入对应节点，提交前再次检查依赖。Windows AMD 本机后端默认禁用固定内存（pinned memory），改善量化编码器重新加载时的 ROCm 兼容性。Comfy Desktop 安装的后端会自动追加同一根目录下的 `ComfyUI-Shared/models` 共享模型路径。

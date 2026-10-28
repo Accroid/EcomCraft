@@ -11,6 +11,8 @@ const vm = require('node:vm');
 
 const studioDir = path.join(__dirname, '..', 'Studio');
 const chinese = /[　-〿㐀-鿿＀-￯]/;
+// Workspace scripts whose Chinese literals are shown to users. i18n.js only holds the language names, which are never translated.
+const scriptFiles = ['studio.js', 'simple.js'];
 
 /** Same lookup form as I18n.normalize in i18n.js. */
 function normalize(text) {
@@ -145,9 +147,11 @@ function sourceTexts() {
         add(text, 'index.html');
     }
     let script = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
-    for (let literal of literals(script)) {
-        if (chinese.test(literal.text) && literal.quote != '`') {
-            add(normalize(literal.text), `studio.js:${literal.line}`);
+    for (let file of scriptFiles) {
+        for (let literal of literals(fs.readFileSync(path.join(studioDir, file), 'utf8'))) {
+            if (chinese.test(literal.text) && literal.quote != '`') {
+                add(normalize(literal.text), `${file}:${literal.line}`);
+            }
         }
     }
     let codes = script.match(/const safeErrors = new Set\(\[([\s\S]*?)\]\)/);
@@ -157,9 +161,12 @@ function sourceTexts() {
     return texts;
 }
 
-test('studio.js has no Chinese template literals; variable text must go through tr()', () => {
-    let script = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
-    let offending = literals(script).filter(literal => literal.quote == '`' && chinese.test(literal.text)).map(literal => `studio.js:${literal.line}`);
+test('workspace scripts have no Chinese template literals; variable text must go through tr()', () => {
+    let offending = [];
+    for (let file of scriptFiles) {
+        let script = fs.readFileSync(path.join(studioDir, file), 'utf8');
+        offending.push(...literals(script).filter(literal => literal.quote == '`' && chinese.test(literal.text)).map(literal => `${file}:${literal.line}`));
+    }
     assert.deepStrictEqual(offending, []);
 });
 

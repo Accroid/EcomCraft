@@ -24,7 +24,7 @@
 - 主程序编译：`dotnet build src/SwarmUI.csproj -c Debug -o <临时目录>`（不要输出到正在使用的 `src/bin/live_release`）
 - 提交前：`git status --short`、`git diff --stat`、`git diff --check`
 - 单元测试：`dotnet test src/Extensions/EcomCraft/Tests/EcomCraft.Tests.csproj`（只覆盖不依赖 SwarmUI 的逻辑，例如调度规则 `SchedulerRules`；测试项目不参与扩展编译）
-- 界面翻译测试：`node --test src/Extensions/EcomCraft/Tests/studio-i18n.test.cjs`（英文模式不残留中文、翻译表无缺漏，本机可运行）
+- 前端测试（本机可运行）：`node --test src/Extensions/EcomCraft/Tests/studio-i18n.test.cjs src/Extensions/EcomCraft/Tests/simple-mode.test.cjs`（英文模式不残留中文、翻译表无缺漏；简易模式无提示词框、专业参数只在专业模式）
 
 ## 修改 C# 扩展后
 
