@@ -1,5 +1,7 @@
 # EcomCraft 提示词优化（MagicPrompt）使用与部署指南
 
+> **语言：** 简体中文 · [English](EcomCraft%20Prompt%20Enhancement.en.md)
+
 EcomCraft 创作工作台的「✦ 优化提示词」按钮，会把你输入的简短描述，交给大语言模型（LLM）改写成一段细节更丰富、更适合生图的提示词，再回填到描述框，可直接用于生成。
 
 该功能**内置 MagicPrompt**（源自开源项目 [HartsyAI/SwarmUI-MagicPromptExtension](https://github.com/HartsyAI/SwarmUI-MagicPromptExtension)，MIT 协议，随 EcomCraft 安装即默认启用，无需另行安装扩展）。
@@ -172,6 +174,21 @@ curl http://localhost:8000/v1/models
 工作台通过 `PreviewMagicPromptModels` 临时拉取所选后端的文本模型，需要配置保存和模型列表权限。此接口不调用配置或 Key 保存逻辑，不返回上游错误正文或凭据。
 
 ---
+
+## 看图描述（视觉模型，默认关闭）
+
+参考图功能（F59）需要把图片发给视觉模型，读出构图描述后逐张生成提示词。出于隐私考虑（决策 A5），**默认关闭**，由管理员在设置中开启：
+
+1. 打开工作台的 **提示词优化设置**（管理员可见），勾选 **允许看图描述**，保存。开关下方会显示当前配置的视觉模型。
+2. 视觉模型与提示词模型是两份独立配置，默认同为 Ollama，视觉模型默认 `llama3.2-vision:latest`。使用 Ollama 时先拉取：
+
+```bash
+ollama pull llama3.2-vision
+```
+
+3. 开启后，参考图上传会自动逐张描述；关闭时参考图模式不可用，普通出图不受影响。
+
+注意：看图描述会把用户上传的图片发送到所配置的视觉模型服务。使用本地 Ollama 时图片不出本机；若把视觉后端改为云端服务，图片会离开本机，请管理员确认团队可接受后再改。参考图本身只在内存中短暂存在，不会保存到服务器。
 
 ## 验证与排错
 

@@ -1247,6 +1247,8 @@
     let enhanceBusy = false;
     let enhancedText = '';
     let mpSettings = null;
+    /** The vision toggle as last loaded (F59), so save only sends it when it changed. */
+    let mpVisionEnabled = false;
 
     /** Tracks modal requests so canceled or superseded results cannot replace the current form. */
     class PromptSettingsRequests {
@@ -1429,6 +1431,22 @@
             } else {
                 $('enh-cfg-key-status').textContent = '';
             }
+            // The vision toggle (F59): shown to accounts that may read it; failures simply hide the row.
+            try {
+                const vs = await request('EcomCraftPromptSettings');
+                if (revision == PromptSettingsRequests.revision) {
+                    mpVisionEnabled = vs.vision_enabled === true;
+                    $('enh-cfg-vision').checked = mpVisionEnabled;
+                    $('enh-cfg-vision-status').textContent = vs.vision_model
+                        ? tr('视觉模型：{0} / {1}', vs.vision_provider || '', vs.vision_model)
+                        : '';
+                    $('enh-cfg-vision-fld').hidden = false;
+                }
+            } catch (visionErr) {
+                if (revision == PromptSettingsRequests.revision) {
+                    $('enh-cfg-vision-fld').hidden = true;
+                }
+            }
         } catch (err) {
             if (revision == PromptSettingsRequests.revision) {
                 showEnhCfgMessage(err.message, true);
@@ -1553,7 +1571,12 @@
             }
             // 2) Save backend/model/url settings.
             await saveMpCore({ backend, model, baseurl });
-            // 3) Report status.
+            // 3) Save the vision toggle (F59) when it is visible and changed.
+            if (!$('enh-cfg-vision-fld').hidden && $('enh-cfg-vision').checked != mpVisionEnabled) {
+                await request('EcomCraftPromptSettings', { vision_enabled: $('enh-cfg-vision').checked ? 'true' : 'false' });
+                mpVisionEnabled = $('enh-cfg-vision').checked;
+            }
+            // 4) Report status.
             if (meta.keyType) {
                 const st = await request('GetAPIKeyStatus', { keyType: meta.keyType });
                 $('enh-cfg-key-status').textContent = st.status === 'not set' ? '尚未设置 Key' : `Key ${st.status}`;

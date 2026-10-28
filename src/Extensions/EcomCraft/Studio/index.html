@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.36.0">
-    <script src="/EcomCraft/lang/en.js?v=0.36.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.36.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.36.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.36.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.37.0">
+    <script src="/EcomCraft/lang/en.js?v=0.37.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.37.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.37.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.37.0" defer></script>
 </head>
 
 <body>
@@ -699,6 +699,12 @@
                     <input id="enh-cfg-key" name="enh-key" type="password" autocomplete="off" spellcheck="false" placeholder="填写后可直接拉取模型，点击保存才会保存…">
                     <p class="hint">拉取时优先使用这里填写的 Key；留空时使用该地址已保存的 Key。修改服务地址后，请重新填写所需的 Key。</p>
                     <p class="hint" id="enh-cfg-key-status" role="status"></p>
+                </div>
+                <div class="fld" id="enh-cfg-vision-fld" hidden>
+                    <input type="checkbox" id="enh-cfg-vision">
+                    <label for="enh-cfg-vision">允许看图描述（把图片发送给视觉模型，用于参考图借鉴构图）</label>
+                    <p class="hint" id="enh-cfg-vision-status" role="status"></p>
+                    <p class="hint">关闭时参考图模式不可用；开启前请确认视觉模型已安装并运行（默认 Ollama 的 llama3.2-vision）。</p>
                 </div>
                 <p class="notice" id="enh-cfg-message" hidden role="status"></p>
             </div>
