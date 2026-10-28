@@ -35,6 +35,7 @@
 
 - [EcomCraft Architecture and Roadmap](/docs/EcomCraft%20Architecture.md) for product positioning, deployment topology, layered architecture, MVP scope and later features (development planning, including features not yet implemented).
 - [EcomCraft LAN Multi-Server Platform Requirements](/docs/EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md) for execution servers, workflow review and snapshots, scheduling, multi-user use, work storage and the reserved cloud capability.
+- [EcomCraft Simple Mode Redesign](/docs/EcomCraft%20Simple%20Mode%20Redesign.md) ([Chinese](/docs/EcomCraft%20简易模式改版需求.zh-CN.md)) for the confirmed simple-mode redesign (development pending): four upload sources, two-level product types, bilingual prompts with AI expansion, the candidate-count cap, the faster generation path and automatic workflow creation; with an [interactive prototype](/docs/EcomCraft%20简易模式改版原型.html).
 - [Calling ComfyUI Workflows in EcomCraft](/docs/EcomCraft%20ComfyUI%20Workflows.md) for workflow discovery on local installations and LAN execution servers, review and publishing, execution server scheduling, and the client API.
 - [EcomCraft LAN Deployment Guide](/docs/EcomCraft%20LAN%20Deployment.md) for multi-user login, per-role queue limits, execution server firewalls, visibility of works on shared storage, and browser restrictions under `http://` LAN addresses.
 - [EcomCraft Upgrade and Data Guide](/docs/EcomCraft%20Upgrade.md) for what survives an upgrade and how to back up and restore system data.

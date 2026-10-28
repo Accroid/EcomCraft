@@ -107,7 +107,7 @@ Planned: team node management, persistent task history, a shared asset library, 
 - [Basic Usage (Chinese)](docs/Basic%20Usage.zh-CN.md) · [Troubleshooting (Chinese)](docs/Troubleshooting.zh-CN.md)
 - [EcomCraft ComfyUI workflow calls](docs/EcomCraft%20ComfyUI%20Workflows.md) · [LAN Deployment Guide](docs/EcomCraft%20LAN%20Deployment.md) (multi-user login, queue limits, firewalls, shared storage and HTTPS restrictions) · [Upgrade and Data Guide](docs/EcomCraft%20Upgrade.md) (data retention, backup and restore)
 - [Prompt Enhancement and Deployment](docs/EcomCraft%20Prompt%20Enhancement.md)
-- [EcomCraft Architecture and Roadmap](docs/EcomCraft%20Architecture.md) · [LAN Multi-Server Platform Requirements](docs/EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md) (development planning, including features not yet implemented)
+- [EcomCraft Architecture and Roadmap](docs/EcomCraft%20Architecture.md) · [LAN Multi-Server Platform Requirements](docs/EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md) · [Simple Mode Redesign](docs/EcomCraft%20Simple%20Mode%20Redesign.md) (development planning, including features not yet implemented)
 - [API Guide (Chinese)](docs/API.zh-CN.md) · [Command-Line Arguments (Chinese)](docs/Command%20Line%20Arguments.zh-CN.md)
 
 ## Data and Access
