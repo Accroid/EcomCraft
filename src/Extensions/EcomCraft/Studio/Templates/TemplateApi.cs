@@ -1,3 +1,4 @@
+using EcomCraftStudio.Studio.PostProcess;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
 using SwarmUI.WebAPI;
@@ -60,6 +61,7 @@ public static class TemplateApi
                 ["kind"] = workflow["kind"]?.DeepClone(),
                 ["platforms"] = new JArray(template.Platforms),
                 ["sets"] = new JArray(template.Sets),
+                ["preserve_product"] = template.PreserveProduct,
                 ["fields"] = new JArray((workflow["inputs"] as JArray ?? new JArray()).OfType<JObject>().Where(field => userFields.Contains(field["id"]?.ToString() ?? "")).Select(field => field.DeepClone()))
             });
         }
@@ -106,9 +108,10 @@ public static class TemplateApi
     /// <summary>Turns a template request into a published-workflow request: the template's snapshot, its presets, the user's allowed fields
     /// (template_params, by parameter ID) and the prompt with the template's fragments. Returns null with an error response when the template cannot be used.
     /// Page fields bound to parameters the template does not open to users are removed or overwritten, so only presets, allowed fields and snapshot values apply.</summary>
-    public static JObject Resolve(Session session, JObject rawInput, string templateId, out JObject error)
+    public static JObject Resolve(Session session, JObject rawInput, string templateId, out JObject error, out string preserveToken)
     {
         error = null;
+        preserveToken = null;
         TemplateStore.Entry entry = TemplateStore.Find(templateId);
         if (entry?.Template is null || !entry.Template.Enabled || TemplateStore.Problems(entry).Count > 0)
         {
@@ -149,6 +152,31 @@ public static class TemplateApi
         {
             workflowParams[property.Name] = property.Value.DeepClone();
         }
+        if (template.PreserveProduct)
+        {
+            // Local preprocessing (R10.3): the cut-out product is placed on the input canvas; the same placement pastes it back after generation.
+            string field = plan.UserFields.FirstOrDefault(id => parameters[id]?["type"]?.ToString() == "image" && workflowParams[id]?.Type == JTokenType.String);
+            if (field is null)
+            {
+                error = StudioApi.Error("这个模板需要商品图。", "invalid_reference");
+                return null;
+            }
+            Placement placement = Placement.Default;
+            if (rawInput["placement"] is JObject requested
+                && !Placement.TryCreate(requested.Value<double?>("x"), requested.Value<double?>("y"), requested.Value<double?>("size"), out placement))
+            {
+                error = StudioApi.Error("商品位置无效：中心须在画面内，大小在 0.1–1.5 之间。", "invalid_parameters");
+                return null;
+            }
+            (int width, int height) = TargetSize(parameters, workflowParams, plan.Workflow);
+            string problem = ProductPreserve.Prepare(session.User.UserID, workflowParams.Value<string>(field), width, height, placement, out string canvas, out preserveToken);
+            if (problem is not null)
+            {
+                error = StudioApi.Error(problem, "invalid_reference");
+                return null;
+            }
+            workflowParams[field] = canvas;
+        }
         request["workflow_params"] = workflowParams;
         foreach (JProperty property in parameters.Properties())
         {
@@ -170,6 +198,19 @@ public static class TemplateApi
         request["prompt"] = Join(" ", template.PromptPrefix, rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : "", template.PromptSuffix);
         request["negativeprompt"] = Join(", ", template.Negative, rawInput["negativeprompt"]?.Type == JTokenType.String ? rawInput.Value<string>("negativeprompt") : "");
         return request;
+    }
+
+    /// <summary>Output size of a template run: the preset or user value of the parameters bound to the width and height fields, else the snapshot defaults, else 1024.</summary>
+    private static (int Width, int Height) TargetSize(JObject parameters, JObject workflowParams, string workflowId)
+    {
+        JObject defaults = TemplateStore.SnapshotFormDefaults(workflowId);
+        int read(string form)
+        {
+            JProperty bound = parameters.Properties().FirstOrDefault(property => property.Value["form"]?.ToString() == form);
+            JToken value = (bound is null ? null : workflowParams[bound.Name]) ?? defaults[form];
+            return value?.Type is JTokenType.Integer or JTokenType.Float ? Math.Clamp((int)value.Value<double>(), 64, 8192) : 1024;
+        }
+        return (read("width"), read("height"));
     }
 
     /// <summary>Joins the non-empty parts.</summary>

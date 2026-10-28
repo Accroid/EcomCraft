@@ -53,6 +53,7 @@ cd EcomCraft
 - 自动发现本机 ComfyUI 安装中的 `workflows` 和 `blueprints`，以及局域网执行服务器 ComfyUI 中保存的工作流，支持内嵌子图蓝图；发现在后台进行，约每 30 秒更新。列表按“来源服务器 / 工作流”命名。无需逐个填写路径；`EcomCraft.ComfyWorkflowSearchPaths` 仅用于补充目录。发现的工作流仍须通过结构及正负提示词校验和人工审核，并由具备所需模型和节点的执行服务器执行。可选列表按执行内容合并重复原生工作流，并隐藏所有在线执行服务器都缺少默认模型或节点的项。页面读取工作流内保存的模型和参数，修改值传入对应节点，提交前再次检查依赖。Windows AMD 本机后端默认禁用固定内存（pinned memory），改善量化编码器重新加载时的 ROCm 兼容性。Comfy Desktop 安装的后端会自动追加同一根目录下的 `ComfyUI-Shared/models` 共享模型路径。
 - 执行服务器调度：每次提交按“规则 1”在具备所需节点和模型的在线服务器中选择排队最少的一台（排队数包括其他人直接提交到 ComfyUI 的任务），整批图片在同一台执行；用户可在创作区限定只在某台服务器执行，所选服务器繁忙而其他服务器空闲时给出提示；没有可运行的服务器时说明原因且不提交。结果标注实际执行服务器；任务失败时不自动重试，可一键“改派到其他服务器”。作品画廊显示每个作品的工作流和执行服务器。
 - 电商场景模板：模板引用已发布的工作流快照，加上中英文名称、示例图、适用平台、所属套图和提示词片段；内置模板与管理员自定义模板分开存放，不合格的模板不提供给用户并说明原因。管理接口为 `EcomCraftTemplateAdminList`、`EcomCraftTemplateSave` 和 `EcomCraftTemplateDelete`；用户通过 `EcomCraftStudioTemplates` 读取可用模板（按语言返回名称），向 `EcomCraftStudioGenerate` 提交 `template_id` 按模板生成，仍经快照白名单校验。
+- 商品保真：模板开启 `preserve_product` 后，平台在本地把透明背景的商品图按位置放到输入画布上，生成后再把原商品像素贴回成图，Logo、文字和形状不会被改动。
 - 提示词服务：用户选风格并写一句描述（中文或英文），由已配置的提示词优化模型生成英文提示词，模型只能填写提示词文字；模型不可用时退回模板和风格的默认描述并说明。把商品图发给视觉模型默认关闭，只有管理员能开启。接口为 `EcomCraftStudioStyles`、`EcomCraftStudioComposePrompt` 和 `EcomCraftPromptSettings`。
 - 作品存储：管理员可把作品库设到本机目录、NAS 或共享文件夹（保存时检测可写、空间和速度）。作品先保存在平台服务器，再在后台复制，失败自动重试，画廊显示“待同步”；改位置后可迁移旧作品。接口为 `EcomCraftStorageSettings`、`EcomCraftStorageSave`、`EcomCraftStorageMigrate` 和 `EcomCraftStoragePending`。
 - 实时任务队列按执行服务器展示运行任务、排队任务（含平台已分配但尚未交给 ComfyUI 的任务）、空闲 / 忙碌 / 繁忙状态、当前节点和节点进度，并支持结束当前账号自己的活动生成任务。
