@@ -1,0 +1,1118 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>EcomCraft 创作工作台 · 出图（改版原型 v3）</title>
+<style>
+/* 布局与视觉均按 src/Extensions/EcomCraft/Studio/studio.css 复刻（灰卡中性 + 绿幕操作色 + 指示灯） */
+:root {
+    --font-display: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
+    --font-body: "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+    --fs-12: 12px; --fs-13: 13px; --fs-14: 14px; --fs-16: 16px; --fs-20: 20px; --fs-28: 28px;
+    --radius: 6px;
+    --topbar-h: 56px;
+}
+:root,
+[data-theme="light"] {
+    color-scheme: light;
+    --backdrop: #E8E8E6; --panel: #F7F7F5; --field: #FFFFFF;
+    --ink: #1F2123; --ink-2: #616365;
+    --line: rgba(31, 33, 35, .14); --line-strong: rgba(31, 33, 35, .28);
+    --key: #0B7A53; --key-hover: #08633F; --key-soft: rgba(11, 122, 83, .10); --on-key: #FFFFFF;
+    --tally: #D93A26; --tally-soft: rgba(217, 58, 38, .10); --on-tally: #FFFFFF;
+    --amber: #D97706;
+}
+[data-theme="dark"] {
+    color-scheme: dark;
+    --backdrop: #1E1F20; --panel: #28292A; --field: #202122;
+    --ink: #ECECEA; --ink-2: #9A9C9E;
+    --line: rgba(236, 236, 234, .14); --line-strong: rgba(236, 236, 234, .28);
+    --key: #3FBF8A; --key-hover: #5ACE9C; --key-soft: rgba(63, 191, 138, .14); --on-key: #1E1F20;
+    --tally: #FF6A55; --tally-soft: rgba(255, 106, 85, .14); --on-tally: #1E1F20;
+    --amber: #FBBF24;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: var(--backdrop); color: var(--ink); font: 400 var(--fs-14)/1.6 var(--font-body); -webkit-font-smoothing: antialiased; }
+h1, h2, h3, p, ul, ol { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+button:disabled { cursor: not-allowed; }
+a { color: var(--key); }
+.hint { font-size: var(--fs-12); color: var(--ink-2); }
+
+/* ---------- 顶栏 ---------- */
+.topbar {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; gap: 28px;
+    height: var(--topbar-h); padding: 0 24px;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.brand { font: 600 var(--fs-20)/1 var(--font-display); color: var(--ink); text-decoration: none; letter-spacing: .02em; }
+.views { display: flex; align-self: stretch; gap: 4px; }
+.nav-item { position: relative; display: flex; align-items: center; gap: 6px; padding: 0 12px; color: var(--ink-2); font-size: var(--fs-14); text-decoration: none; }
+.nav-item:hover { color: var(--ink); }
+.nav-item[aria-current="page"] { color: var(--ink); font-weight: 600; }
+.nav-item[aria-current="page"]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--key); }
+.nav-count { font-size: var(--fs-12); color: var(--ink-2); font-variant-numeric: tabular-nums; font-weight: 400; }
+.topbar-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.health { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: var(--radius); color: var(--ink-2); font-size: var(--fs-13); text-decoration: none; }
+.health-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-2); }
+.health.ok .health-dot { background: var(--key); }
+.icon-btn { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: var(--radius); color: var(--ink-2); }
+.icon-btn:hover { background: var(--key-soft); color: var(--ink); }
+.lang-toggle { width: auto; min-width: 32px; padding: 0 8px; font-size: var(--fs-12); font-weight: 600; }
+.user { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-13); }
+.avatar { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--backdrop); border: 1px solid var(--line-strong); font-size: var(--fs-12); font-weight: 600; }
+.user-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.native-link { font-size: var(--fs-13); color: var(--ink-2); text-decoration: none; }
+.native-link:hover { color: var(--key); text-decoration: underline; text-underline-offset: 3px; }
+.theme-toggle .icon-moon { display: none; }
+[data-theme="dark"] .theme-toggle .icon-sun { display: none; }
+[data-theme="dark"] .theme-toggle .icon-moon { display: block; }
+
+/* ---------- 页面框架 ---------- */
+.page-title { font: 600 var(--fs-28)/1.25 var(--font-display); letter-spacing: .02em; text-wrap: balance; }
+.view { padding: 28px 24px 0; max-width: 1600px; margin: 0 auto; }
+.page-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.page-meta { color: var(--ink-2); font-size: var(--fs-13); }
+.proto-tag { margin-left: auto; padding: 2px 10px; border: 1px solid var(--line-strong); border-radius: 999px; font-size: var(--fs-12); color: var(--ink-2); }
+.banner { display: flex; gap: 10px; align-items: baseline; margin-bottom: 16px; padding: 10px 14px; border: 1px solid var(--line); border-left: 3px solid var(--key); border-radius: var(--radius); background: var(--panel); font-size: var(--fs-13); }
+.banner.error { border-left-color: var(--tally); background: var(--tally-soft); }
+.banner[hidden] { display: none; }
+
+/* ---------- 三步卡片（同 simple-steps） ---------- */
+.simple-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+.simple-step { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.simple-step-title { display: flex; align-items: center; gap: 8px; font-size: var(--fs-16); }
+.simple-step-num { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--key); color: var(--on-key); font-size: var(--fs-12); font-weight: 700; }
+
+/* ---------- 表单控件 ---------- */
+input[type=text], input[type=number], textarea, select {
+    width: 100%; min-width: 0; padding: 8px 10px;
+    background-color: var(--field); color: var(--ink);
+    border: 1px solid var(--line-strong); border-radius: var(--radius);
+    font-size: var(--fs-14);
+}
+input[type=number] { font-variant-numeric: tabular-nums; }
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--key); outline-offset: 0; border-color: var(--key); }
+input::placeholder, textarea::placeholder { color: var(--ink-2); opacity: .8; }
+textarea { resize: vertical; line-height: 1.7; }
+select {
+    appearance: none; padding-right: 30px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23808284' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 9px center; background-size: 14px;
+}
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 4px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--field); color: var(--ink); }
+.btn:hover:not(:disabled) { border-color: var(--key); color: var(--key); }
+.btn:disabled { opacity: .45; }
+.btn-primary { background: var(--key); border-color: var(--key); color: var(--on-key); font-weight: 600; }
+.btn-primary:hover:not(:disabled) { background: var(--key-hover); border-color: var(--key-hover); color: var(--on-key); }
+.btn-sm { min-height: 30px; padding: 4px 12px; }
+.btn-block { width: 100%; min-height: 44px; font-size: var(--fs-14); }
+.link-btn { min-height: 32px; padding: 4px 6px; margin: 0 -6px; border-radius: 4px; color: var(--key); font-size: var(--fs-13); text-decoration: none; }
+.link-btn:hover { text-decoration: underline; }
+.fld { padding: 10px 0; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+.step > .fld:last-of-type { border-bottom: 0; }
+.fld > label, .fld-label { display: block; font-size: var(--fs-13); font-weight: 600; }
+.fld-optional { margin-left: 8px; font-weight: 400; color: var(--ink-2); font-size: var(--fs-12); }
+.inline-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 0; }
+.inline-row > label { font-size: var(--fs-13); font-weight: 600; }
+.inline-row > input[type=number] { width: 110px; }
+.recover-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* 第 1 步：上传 */
+.simple-drop { display: grid; place-items: center; gap: 6px; min-height: 160px; padding: 12px; border: 2px dashed var(--line-strong); border-radius: 8px; text-align: center; cursor: pointer; }
+.simple-drop.is-over { border-color: var(--key); }
+.simple-preview { max-width: 100%; max-height: 200px; object-fit: contain; }
+.simple-products { display: flex; flex-wrap: wrap; gap: 6px; }
+.simple-product { position: relative; width: 56px; height: 56px; padding: 0; border: 2px solid transparent; border-radius: 6px; background: var(--backdrop); }
+.simple-product[aria-pressed="true"] { border-color: var(--key); }
+.simple-product img { width: 100%; height: 100%; object-fit: contain; border-radius: 4px; }
+.simple-product .src { position: absolute; left: 2px; bottom: 2px; padding: 0 4px; border-radius: 3px; background: rgba(31,33,35,.6); color: #fff; font-size: 10px; line-height: 14px; }
+.simple-product-meta { display: grid; grid-template-columns: 1fr; gap: 6px; font-size: var(--fs-13); }
+
+/* 卡片选择 */
+.simple-cards { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+.simple-card { display: grid; gap: 4px; padding: 8px; min-height: 32px; text-align: left; border: 1px solid var(--line); border-radius: 6px; background: var(--backdrop); color: var(--ink); }
+.simple-card[aria-pressed="true"] { border-color: var(--key); box-shadow: inset 0 0 0 1px var(--key); }
+.simple-card-name { font-size: var(--fs-13); font-weight: 600; }
+.simple-card-desc { font-size: var(--fs-12); color: var(--ink-2); overflow-wrap: anywhere; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { min-height: 32px; padding: 4px 14px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--field); }
+.chip[aria-pressed="true"] { border-color: var(--key); box-shadow: inset 0 0 0 1px var(--key); background: var(--key-soft); }
+
+/* 模特 / 提示词 / 提示 */
+.model-row { display: flex; align-items: center; gap: 8px; }
+.model-row input { width: 16px; height: 16px; accent-color: var(--key); }
+.fragment { padding: 6px 10px; border-left: 3px solid var(--key); border-radius: 0 6px 6px 0; background: var(--field); font-size: var(--fs-12); color: var(--ink-2); overflow-wrap: anywhere; }
+.count-error { color: var(--tally); }
+.prompt-panel { border: 1px solid var(--line); border-radius: 6px; background: var(--field); overflow: hidden; }
+.prompt-tabs { display: flex; border-bottom: 1px solid var(--line); }
+.prompt-tabs .btn { border: 0; border-radius: 0; min-height: 36px; padding: 4px 16px; background: transparent; color: var(--ink-2); }
+.prompt-tabs .btn[aria-selected="true"] { background: var(--field); color: var(--key); font-weight: 600; box-shadow: inset 0 -2px 0 var(--key); }
+.prompt-panel textarea { border: 0; border-radius: 0; min-height: 88px; }
+.prompt-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--line); background: var(--panel); }
+.state-chip { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-12); background: var(--key-soft); color: var(--key); }
+.state-chip.is-dirty { background: var(--tally-soft); color: var(--tally); }
+
+/* 第 3 步：结果 */
+.status { display: flex; align-items: center; gap: 8px; font-size: var(--fs-13); min-height: 20px; }
+.tally-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--tally); animation: blink 1.2s infinite; flex: none; }
+@keyframes blink { 50% { opacity: .25; } }
+.simple-batch { display: grid; gap: 8px; }
+.simple-jobs { display: grid; gap: 4px; }
+.simple-job { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: var(--fs-13); }
+.simple-job-state { color: var(--ink-2); white-space: nowrap; }
+.simple-job.is-running .simple-job-state { color: var(--tally); }
+.simple-results { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.simple-result { position: relative; padding: 0; border: 2px solid transparent; border-radius: 6px; background: var(--backdrop); }
+.simple-result[aria-pressed="true"] { border-color: var(--key); }
+.simple-result img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 4px; }
+.simple-result-check { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--panel); border: 1px solid var(--line-strong); font-size: 13px; }
+.simple-result[aria-pressed="true"] .simple-result-check { background: var(--key); color: var(--on-key); border-color: var(--key); }
+.result-empty { display: grid; place-items: center; gap: 6px; min-height: 140px; border: 1px dashed var(--line-strong); border-radius: 6px; color: var(--ink-2); font-size: var(--fs-13); text-align: center; padding: 8px; }
+details.summary-box { border: 1px solid var(--line); border-radius: 6px; background: var(--field); padding: 8px 12px; }
+details.summary-box summary { cursor: pointer; font-size: var(--fs-13); font-weight: 600; }
+details.summary-box .body { padding-top: 8px; display: grid; gap: 6px; font-size: var(--fs-12); color: var(--ink-2); overflow-wrap: anywhere; }
+
+/* 弹窗 */
+dialog { width: min(92vw, 720px); max-height: 82vh; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); box-shadow: 0 12px 40px rgba(31,33,35,.25); }
+dialog::backdrop { background: rgba(31, 33, 35, .45); }
+.dlg-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.dlg-head h2 { font-size: var(--fs-16); }
+.dlg-body { padding: 16px; overflow: auto; }
+.pick-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.pick { display: grid; gap: 4px; padding: 8px; text-align: left; border: 1px solid var(--line); border-radius: 6px; background: var(--field); }
+.pick:hover { border-color: var(--key); }
+.pick img { width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 4px; background: var(--backdrop); }
+.pick-name { font-size: var(--fs-12); font-weight: 600; overflow-wrap: anywhere; }
+.pick-meta { font-size: var(--fs-12); color: var(--ink-2); }
+
+@media (max-width: 900px) {
+    .simple-steps { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+    <header class="topbar">
+        <a class="brand" href="#" translate="no">EcomCraft</a>
+        <nav class="views" aria-label="工作台视图">
+            <a class="nav-item" aria-current="page" href="#">出图</a>
+            <a class="nav-item" href="#">画廊<span class="nav-count">12</span></a>
+            <a class="nav-item" href="#">队列<span class="nav-count">3</span></a>
+        </nav>
+        <div class="topbar-actions">
+            <a class="health ok" href="#" title="查看执行服务器和任务队列">
+                <span class="health-dot" aria-hidden="true"></span><span>2 台服务器在线</span>
+            </a>
+            <button type="button" class="icon-btn lang-toggle" aria-label="切换语言（原型中未启用）">EN</button>
+            <button type="button" class="icon-btn theme-toggle" id="theme-toggle" aria-label="切换到深色主题" title="切换到深色主题">
+                <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="4"></circle>
+                    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+                </svg>
+                <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"></path>
+                </svg>
+            </button>
+            <span class="user">
+                <span class="avatar" aria-hidden="true">王</span>
+                <span class="user-name">美工小王</span>
+            </span>
+            <a class="native-link" href="#">原生引擎</a>
+        </div>
+    </header>
+
+    <main>
+        <section class="view" aria-labelledby="simple-title">
+            <header class="page-head">
+                <h1 class="page-title" id="simple-title">商品出图</h1>
+                <p class="page-meta">三步完成：上传商品，选平台、类型与风格，挑图下载。</p>
+                <span class="proto-tag">改版交互原型 v3 · 数据为模拟</span>
+            </header>
+            <div class="banner" id="message" role="status" aria-live="polite" hidden></div>
+
+            <ol class="simple-steps">
+                <!-- ============ 第 1 步 上传 ============ -->
+                <li class="simple-step">
+                    <h2 class="simple-step-title"><span class="simple-step-num" aria-hidden="true">1</span>上传商品图</h2>
+                    <label class="simple-drop" id="simple-drop">
+                        <input type="file" id="file-local" accept="image/png,image/jpeg,image/webp" hidden>
+                        <img class="simple-preview" id="simple-preview" alt="已选择的商品图" hidden>
+                        <span id="simple-drop-text">点击或拖入商品图</span>
+                        <span class="hint">PNG、JPEG 或 WebP，最大 5 MB；只在提交时发送</span>
+                    </label>
+                    <div class="recover-actions">
+                        <button type="button" class="btn" id="btn-camera">拍照上传</button>
+                        <button type="button" class="btn" id="btn-library">从商品库选择</button>
+                        <button type="button" class="btn" id="btn-gallery">从画廊选择</button>
+                        <input type="file" id="file-camera" accept="image/*" capture="environment" hidden>
+                    </div>
+                    <div class="simple-products" id="products" hidden></div>
+                    <div class="simple-product-meta" id="product-meta" hidden>
+                        <label for="product-name">商品名称</label>
+                        <input type="text" id="product-name" maxlength="60" autocomplete="off">
+                        <button type="button" class="link-btn" id="btn-remove">移除当前商品图</button>
+                    </div>
+                    <p class="hint" id="product-empty-hint">画廊里已生成的作品图也能选来当商品图，继续二次创作。</p>
+                </li>
+
+                <!-- ============ 第 2 步 参数 ============ -->
+                <li class="simple-step">
+                    <h2 class="simple-step-title"><span class="simple-step-num" aria-hidden="true">2</span>选平台、类型与风格</h2>
+
+                    <div class="fld">
+                        <label for="platform">平台</label>
+                        <select id="platform" style="max-width:260px">
+                            <option value="">全部平台</option>
+                            <option value="taobao">淘宝</option>
+                            <option value="jd">京东</option>
+                            <option value="amazon">亚马逊</option>
+                        </select>
+                    </div>
+
+                    <div class="fld">
+                        <span class="fld-label" id="types-label">图片类型</span>
+                        <div class="simple-cards" id="types" role="group" aria-labelledby="types-label"></div>
+                        <p class="hint" id="type-hint"></p>
+                    </div>
+
+                    <div class="fld">
+                        <span class="fld-label" id="category-label">产品类型<span class="fld-optional">决定提示词中的商品描述</span></span>
+                        <div class="chips" id="categories" role="group" aria-label="产品大类"></div>
+                        <div class="simple-cards" id="subtypes" role="group" aria-label="产品子类"></div>
+                    </div>
+
+                    <div class="fld">
+                        <span class="fld-label" id="styles-label">视觉风格<span class="fld-optional">可选，不选则由模型发挥</span></span>
+                        <div class="simple-cards" id="styles" role="group" aria-labelledby="styles-label"></div>
+                    </div>
+
+                    <div class="fld">
+                        <div class="model-row">
+                            <input type="checkbox" id="need-model">
+                            <label for="need-model" style="font-weight:600">需要模特</label>
+                        </div>
+                        <p class="hint" id="model-hint">勾选后提示词会加入模特描述（初版仅此一项，后续再扩展性别、手模等属性）。</p>
+                    </div>
+
+                    <div class="fld">
+                        <label for="description">一句话描述（可选）</label>
+                        <input type="text" id="description" maxlength="500" autocomplete="off" placeholder="例如：放在木桌上，早晨的阳光">
+                        <div class="recover-actions">
+                            <button type="button" class="btn" id="btn-expand">AI 扩写</button>
+                        </div>
+                        <p class="hint">AI 扩写按提示词面板当前语言生成，回填到下方提示词，可继续修改。</p>
+                    </div>
+
+                    <div class="fld">
+                        <span class="fld-label">提示词<span class="fld-optional">两种语言都可编辑；发送给引擎的始终是英文</span></span>
+                        <div class="prompt-panel">
+                            <div class="prompt-tabs" role="tablist">
+                                <button type="button" id="tab-zh" role="tab" aria-selected="true">中文</button>
+                                <button type="button" id="tab-en" role="tab" aria-selected="false">English</button>
+                            </div>
+                            <textarea id="prompt-zh" aria-label="中文提示词" spellcheck="false"></textarea>
+                            <textarea id="prompt-en" aria-label="英文提示词" spellcheck="false" hidden></textarea>
+                            <div class="prompt-foot">
+                                <span class="state-chip" id="prompt-state">未生成</span>
+                                <span class="hint">中文修改后，提交时自动翻译成英文发送；英文修改后直接发送。</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="fld">
+                        <div class="inline-row">
+                            <label for="count">候选张数</label>
+                            <input type="number" id="count" min="1" max="20" step="1" value="4">
+                        </div>
+                        <p class="hint" id="count-hint">可手动输入 1–20 的正整数。</p>
+                    </div>
+
+                    <button type="button" class="btn btn-primary btn-block" id="btn-generate" disabled>开始出图</button>
+                    <p class="hint" id="generate-hint"></p>
+                    <button type="button" class="btn btn-block" id="btn-set" disabled>一键出整套</button>
+                    <p class="hint" id="set-hint"></p>
+                </li>
+
+                <!-- ============ 第 3 步 结果 ============ -->
+                <li class="simple-step">
+                    <h2 class="simple-step-title"><span class="simple-step-num" aria-hidden="true">3</span>挑图下载</h2>
+                    <div class="status" id="status"><p class="hint" style="margin:0">出图完成后，候选图会出现在这里。点选满意的图片后下载。</p></div>
+                    <div class="simple-batch" id="simple-batch" hidden>
+                        <ul class="simple-jobs" id="jobs"></ul>
+                    </div>
+                    <div class="simple-results" id="results"></div>
+                    <div class="result-empty" id="results-empty">
+                        <p>候选图区域</p>
+                        <p class="hint">演示：点「开始出图」或「一键出整套」看模拟流程</p>
+                    </div>
+                    <details class="summary-box" id="used-prompt" hidden>
+                        <summary>本次发送给引擎的提示词</summary>
+                        <div class="body" id="used-prompt-body"></div>
+                    </details>
+                    <div class="recover-actions">
+                        <button type="button" class="btn btn-primary" id="btn-download" disabled>下载所选</button>
+                        <button type="button" class="btn" id="btn-clear">清空重来</button>
+                    </div>
+                    <p class="hint">提示词和素材不会保存在浏览器里，生成结果保存在你的作品画廊。</p>
+                </li>
+            </ol>
+        </section>
+    </main>
+
+    <!-- 商品库弹窗 -->
+    <dialog id="dlg-library" aria-labelledby="dlg-library-title">
+        <div class="dlg-head">
+            <h2 id="dlg-library-title">从商品库选择</h2>
+            <button type="button" class="btn btn-sm" data-close>关闭</button>
+        </div>
+        <div class="dlg-body">
+            <div class="pick-grid" id="library-grid"></div>
+            <p class="hint" style="margin-top:12px">商品库 = 历史上传并自动入库的商品图（含已确认的抠图与位置）。</p>
+        </div>
+    </dialog>
+
+    <!-- 画廊弹窗 -->
+    <dialog id="dlg-gallery" aria-labelledby="dlg-gallery-title">
+        <div class="dlg-head">
+            <h2 id="dlg-gallery-title">从画廊选择（已生成的作品图）</h2>
+            <button type="button" class="btn btn-sm" data-close>关闭</button>
+        </div>
+        <div class="dlg-body">
+            <div class="pick-grid" id="gallery-grid"></div>
+            <p class="hint" style="margin-top:12px">选中的作品图会压缩到 5 MB 内作为商品图使用；分辨率、模糊检查同样生效。</p>
+        </div>
+    </dialog>
+
+<script>
+'use strict';
+
+/* ---------- 模拟数据 ---------- */
+
+// 用内联 SVG 生成缩略图，避免外部资源
+function svgThumb(kind, label, c1, c2) {
+    let shapes = '';
+    if (kind == 'bottle') {
+        shapes = `<rect x="86" y="60" width="28" height="30" rx="4" fill="${c2}"/>
+            <rect x="70" y="88" width="60" height="120" rx="14" fill="${c1}"/>
+            <rect x="70" y="120" width="60" height="44" rx="4" fill="rgba(255,255,255,.85)"/>`;
+    } else if (kind == 'tube') {
+        shapes = `<rect x="82" y="70" width="36" height="18" rx="5" fill="${c2}"/>
+            <path d="M70 88 h60 v104 a8 8 0 0 1 -8 8 h-44 a8 8 0 0 1 -8 -8 z" fill="${c1}"/>
+            <rect x="76" y="118" width="48" height="36" rx="4" fill="rgba(255,255,255,.85)"/>`;
+    } else if (kind == 'box') {
+        shapes = `<rect x="58" y="76" width="84" height="132" rx="8" fill="${c1}"/>
+            <rect x="58" y="76" width="84" height="34" rx="8" fill="${c2}"/>
+            <rect x="66" y="126" width="68" height="38" rx="4" fill="rgba(255,255,255,.85)"/>`;
+    } else {
+        shapes = `<rect x="58" y="70" width="84" height="140" rx="12" fill="${c1}"/>
+            <circle cx="100" cy="140" r="26" fill="${c2}" opacity=".75"/>`;
+    }
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 210">
+        <rect width="200" height="210" fill="#D3D3D0"/>
+        ${shapes}
+        <text x="100" y="204" text-anchor="middle" font-size="11" fill="#616365" font-family="sans-serif">${label}</text>
+    </svg>`;
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
+let categories = [
+    { id: 'care', name: '个护美妆', subtypes: [
+        { id: 'shampoo', name: '洗发水', fragment: 'glossy shampoo bottle, clean minimal label, water droplets' },
+        { id: 'handcream', name: '护手霜', fragment: 'hand cream tube, soft pastel packaging' },
+        { id: 'bodylotion', name: '身体乳', fragment: 'body lotion bottle, clean cosmetic look' },
+        { id: 'lipstick', name: '口红', fragment: 'luxurious lipstick, makeup product photography' },
+        { id: 'perfume', name: '香水', fragment: 'glass perfume bottle with light refraction' }
+    ]},
+    { id: 'appliance', name: '家用电器', subtypes: [
+        { id: 'ac', name: '空调', fragment: 'split air conditioner unit' },
+        { id: 'fridge', name: '冰箱', fragment: 'modern refrigerator' },
+        { id: 'washer', name: '洗衣机', fragment: 'front-load washing machine' },
+        { id: 'cooker', name: '电饭煲', fragment: 'electric rice cooker' }
+    ]},
+    { id: 'home', name: '家居日用', subtypes: [
+        { id: 'tableware', name: '水杯餐具', fragment: 'glassware and tableware set' },
+        { id: 'storage', name: '收纳用品', fragment: 'neat storage organizer boxes' },
+        { id: 'lamp', name: '台灯', fragment: 'modern table lamp, warm glow' },
+        { id: 'bedding', name: '床上用品', fragment: 'soft bedding set, cozy textile' }
+    ]},
+    { id: 'general', name: '通用商品', subtypes: [
+        { id: 'auto', name: '不指定', fragment: '' }
+    ]}
+];
+
+let types = [
+    { id: 'white', name: '白底主图', desc: '纯白背景，平台规范', cutoutOnly: true },
+    { id: 'scene', name: '场景图', desc: '商品置于使用场景', inSet: true },
+    { id: 'detail', name: '细节图', desc: '局部特写与质感', inSet: true }
+];
+
+let styles = [
+    { id: 'auto', name: '自动', desc: '不指定，由模型发挥', fragment: '' },
+    { id: 'clean', name: '简洁棚拍', desc: '浅色背景、柔和布光', fragment: 'clean seamless studio backdrop, soft diffused lighting' },
+    { id: 'lifestyle', name: '生活场景', desc: '自然光家居场景', fragment: 'lifestyle scene, natural window light, cozy interior' },
+    { id: 'premium', name: '高级质感', desc: '深色背景轮廓光', fragment: 'premium dark backdrop, dramatic rim lighting' },
+    { id: 'pastel', name: '清新简约', desc: '马卡龙色几何道具', fragment: 'minimalist pastel backdrop, geometric podium props' }
+];
+
+let libraryItems = [
+    { id: 'l1', name: '洗发水-绿瓶.png', thumb: svgThumb('bottle', '洗发水', '#3FBF8A', '#0B7A53') },
+    { id: 'l2', name: '护手霜-小样.png', thumb: svgThumb('tube', '护手霜', '#F4C2C2', '#D98CA1') },
+    { id: 'l3', name: '身体乳.png', thumb: svgThumb('bottle', '身体乳', '#9EC5E8', '#4A7BA6') },
+    { id: 'l4', name: '口红.png', thumb: svgThumb('box', '口红', '#C0392B', '#7B241C') },
+    { id: 'l5', name: '香水.png', thumb: svgThumb('bottle', '香水', '#D5A021', '#8C6D1F') },
+    { id: 'l6', name: '水杯.png', thumb: svgThumb('other', '水杯', '#BFC9CA', '#7F8C8D') }
+];
+
+let galleryItems = [
+    { id: 'g1', name: '洗发水-场景图-03', thumb: svgThumb('bottle', '场景作品', '#3FBF8A', '#0B7A53') },
+    { id: 'g2', name: '护手霜-细节图-01', thumb: svgThumb('tube', '细节作品', '#F4C2C2', '#D98CA1') },
+    { id: 'g3', name: '身体乳-场景图-02', thumb: svgThumb('bottle', '场景作品', '#9EC5E8', '#4A7BA6') },
+    { id: 'g4', name: '口红-白底主图', thumb: svgThumb('box', '白底作品', '#EAEAEA', '#C0392B') },
+    { id: 'g5', name: '香水-场景图-05', thumb: svgThumb('bottle', '场景作品', '#D5A021', '#8C6D1F') },
+    { id: 'g6', name: '水杯-场景图-01', thumb: svgThumb('other', '场景作品', '#BFC9CA', '#5D6D7E') },
+    { id: 'g7', name: '洗发水-整套-12', thumb: svgThumb('bottle', '整套作品', '#58D68D', '#1E8449') },
+    { id: 'g8', name: '护手霜-场景图-04', thumb: svgThumb('tube', '场景作品', '#F8D7DA', '#B03A2E') }
+];
+
+// AI 扩写的模拟文案（按子类）
+let expansions = {
+    '洗发水': ['绿瓶洗发水置于浅色木桌中央，清晨柔和阳光从侧窗洒入，背景是虚化的绿植与水珠，突出瓶身标签与质感，商业摄影级布光。',
+        'Glossy green shampoo bottle centered on a light oak table, soft morning sunlight from a side window, blurred green plants and water droplets, premium commercial lighting, high detail label.'],
+    '护手霜': ['护手霜软管斜放在奶油色台面上，旁边点缀干花与亚麻布，柔和窗光营造温润氛围，突出软管的哑光质感，商业摄影级布光。',
+        'Hand cream tube on a cream countertop, dried flowers and linen cloth beside it, soft window light, cozy warm mood, matte texture detail, commercial product photography.'],
+    default: ['商品置于干净台面中央，柔和侧光勾勒轮廓，背景简洁不抢主体，商业摄影级布光。',
+        'Product centered on a clean surface, soft side lighting outlining the silhouette, simple uncluttered background, commercial product photography.']
+};
+
+const modelFragmentZh = '一位气质优雅的模特手持/展示商品，自然姿态，浅景深突出商品';
+const modelFragmentEn = 'an elegant model presenting the product, natural pose, shallow depth of field';
+
+/* ---------- 状态 ---------- */
+
+let state = {
+    products: [],            // { id, name, thumb, source }
+    current: null,
+    type: 'scene',
+    category: 'care',
+    subtype: 'shampoo',
+    style: 'auto',
+    needModel: false,
+    promptZh: '', promptEn: '',
+    promptZhDirty: false, promptEnDirty: false,
+    promptGenerated: false,
+    count: 4,
+    generating: false,
+    selected: new Set()
+};
+let uid = 1;
+let lastGenerated = { zh: '', en: '' };
+
+/* ---------- 工具 ---------- */
+
+let $ = id => document.getElementById(id);
+
+function message(text, error) {
+    let box = $('message');
+    box.textContent = text || '';
+    box.classList.toggle('error', Boolean(error));
+    box.hidden = !text;
+}
+
+function currentType() { return types.find(t => t.id == state.type); }
+function currentSubtype() {
+    let cat = categories.find(c => c.id == state.category);
+    return cat ? cat.subtypes.find(s => s.id == state.subtype) || cat.subtypes[0] : null;
+}
+function currentStyle() { return styles.find(s => s.id == state.style); }
+function subtypeName() { let s = currentSubtype(); return s ? s.name : ''; }
+
+/** 合成后的完整英文提示词（发送给引擎的内容） */
+function composedEn() {
+    let sub = currentSubtype();
+    let parts = [];
+    parts.push(sub && sub.fragment ? sub.fragment : 'product');
+    if (state.needModel) { parts.push(modelFragmentEn); }
+    let style = currentStyle();
+    if (style && style.fragment) { parts.push(style.fragment); }
+    let user = state.promptEn.trim();
+    if (user) { parts.push(user); }
+    return parts.join(', ');
+}
+function composedZh() {
+    let prefix = state.needModel ? modelFragmentZh + '；' : '';
+    return prefix + (state.promptZh.trim() || '（未填写描述）');
+}
+
+/* ---------- 主题切换 ---------- */
+
+$('theme-toggle').addEventListener('click', () => {
+    let html = document.documentElement;
+    let dark = html.getAttribute('data-theme') == 'dark';
+    html.setAttribute('data-theme', dark ? 'light' : 'dark');
+});
+
+/* ---------- 第 1 步：上传 ---------- */
+
+function addProduct(name, thumb, source) {
+    let product = { id: 'p' + (uid++), name, thumb, source };
+    state.products.push(product);
+    state.current = product;
+    renderProducts();
+    update();
+}
+
+function renderProducts() {
+    let list = $('products');
+    list.hidden = state.products.length == 0;
+    $('product-empty-hint').hidden = state.products.length > 0;
+    $('product-meta').hidden = !state.current;
+    if (state.current) {
+        $('product-name').value = state.current.name.replace(/\.[^.]+$/, '');
+        let preview = $('simple-preview');
+        preview.src = state.current.thumb;
+        preview.hidden = false;
+        $('simple-drop-text').textContent = state.current.name;
+    }
+    let items = [];
+    for (let product of state.products) {
+        let button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'simple-product';
+        button.setAttribute('aria-pressed', product == state.current ? 'true' : 'false');
+        button.title = product.name + '（' + product.source + '）';
+        let img = document.createElement('img');
+        img.src = product.thumb;
+        img.alt = '';
+        let src = document.createElement('span');
+        src.className = 'src';
+        src.textContent = product.source;
+        button.append(img, src);
+        button.addEventListener('click', () => { state.current = product; renderProducts(); update(); });
+        items.push(button);
+    }
+    list.replaceChildren(...items);
+}
+
+$('simple-drop').addEventListener('click', e => {
+    if (e.target.tagName != 'INPUT') { $('file-local').click(); }
+});
+$('simple-drop').addEventListener('dragover', e => { e.preventDefault(); $('simple-drop').classList.add('is-over'); });
+$('simple-drop').addEventListener('dragleave', () => $('simple-drop').classList.remove('is-over'));
+$('simple-drop').addEventListener('drop', e => {
+    e.preventDefault();
+    $('simple-drop').classList.remove('is-over');
+    let file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) { readLocalFile(file); }
+});
+$('file-local').addEventListener('change', e => {
+    let file = e.target.files && e.target.files[0];
+    if (file) { readLocalFile(file); }
+    e.target.value = '';
+});
+function readLocalFile(file) {
+    let reader = new FileReader();
+    reader.onload = () => addProduct(file.name, String(reader.result), '本机');
+    reader.readAsDataURL(file);
+}
+$('btn-camera').addEventListener('click', () => $('file-camera').click());
+$('file-camera').addEventListener('change', e => {
+    let file = e.target.files && e.target.files[0];
+    if (file) {
+        let reader = new FileReader();
+        reader.onload = () => addProduct(file.name, String(reader.result), '拍照');
+        reader.readAsDataURL(file);
+    }
+    e.target.value = '';
+});
+$('btn-remove').addEventListener('click', () => {
+    state.products = state.products.filter(p => p != state.current);
+    state.current = state.products[state.products.length - 1] || null;
+    if (!state.current) {
+        $('simple-preview').hidden = true;
+        $('simple-preview').removeAttribute('src');
+        $('simple-drop-text').textContent = '点击或拖入商品图';
+    }
+    renderProducts();
+    update();
+});
+
+function fillPickGrid(gridId, items, source) {
+    let grid = $(gridId);
+    let nodes = [];
+    for (let item of items) {
+        let button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'pick';
+        let img = document.createElement('img');
+        img.src = item.thumb;
+        img.alt = '';
+        let name = document.createElement('span');
+        name.className = 'pick-name';
+        name.textContent = item.name;
+        let meta = document.createElement('span');
+        meta.className = 'pick-meta';
+        meta.textContent = item.meta || '';
+        button.append(img, name, meta);
+        button.addEventListener('click', () => {
+            addProduct(item.name, item.thumb, source);
+            button.closest('dialog').close();
+            message('已添加商品图：' + item.name, false);
+        });
+        nodes.push(button);
+    }
+    grid.replaceChildren(...nodes);
+}
+
+$('btn-library').addEventListener('click', () => {
+    fillPickGrid('library-grid', libraryItems.map(i => ({ ...i, meta: '已含抠图与位置' })), '商品库');
+    $('dlg-library').showModal();
+});
+$('btn-gallery').addEventListener('click', () => {
+    fillPickGrid('gallery-grid', galleryItems.map(i => ({ ...i, meta: '已生成作品 · 2026-11-02' })), '画廊');
+    $('dlg-gallery').showModal();
+});
+for (let dialog of document.querySelectorAll('dialog')) {
+    dialog.querySelector('[data-close]').addEventListener('click', () => dialog.close());
+}
+
+/* ---------- 第 2 步：参数 ---------- */
+
+function renderTypes() {
+    let wrap = $('types');
+    let nodes = [];
+    for (let type of types) {
+        let button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'simple-card';
+        button.setAttribute('aria-pressed', type.id == state.type ? 'true' : 'false');
+        let name = document.createElement('span');
+        name.className = 'simple-card-name';
+        name.textContent = type.name;
+        let desc = document.createElement('span');
+        desc.className = 'simple-card-desc';
+        desc.textContent = type.desc;
+        button.append(name, desc);
+        button.addEventListener('click', () => {
+            state.type = type.id;
+            renderTypes();
+            update();
+        });
+        nodes.push(button);
+    }
+    wrap.replaceChildren(...nodes);
+}
+
+function renderCategories() {
+    let wrap = $('categories');
+    let nodes = [];
+    for (let cat of categories) {
+        let button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'chip';
+        button.setAttribute('aria-pressed', cat.id == state.category ? 'true' : 'false');
+        button.textContent = cat.name + (cat.id == 'care' ? ' ⭐' : '');
+        button.addEventListener('click', () => {
+            state.category = cat.id;
+            state.subtype = cat.subtypes[0].id;
+            renderCategories();
+            update();
+        });
+        nodes.push(button);
+    }
+    wrap.replaceChildren(...nodes);
+    renderSubtypes();
+}
+
+function renderSubtypes() {
+    let cat = categories.find(c => c.id == state.category);
+    let wrap = $('subtypes');
+    let nodes = [];
+    for (let sub of cat.subtypes) {
+        let button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'simple-card';
+        button.setAttribute('aria-pressed', sub.id == state.subtype ? 'true' : 'false');
+        let name = document.createElement('span');
+        name.className = 'simple-card-name';
+        name.textContent = sub.name;
+        let desc = document.createElement('span');
+        desc.className = 'simple-card-desc';
+        desc.textContent = sub.fragment || '按描述生成，不指定商品类型';
+        button.append(name, desc);
+        button.addEventListener('click', () => {
+            state.subtype = sub.id;
+            renderSubtypes();
+            update();
+        });
+        nodes.push(button);
+    }
+    wrap.replaceChildren(...nodes);
+}
+
+function renderStyles() {
+    let wrap = $('styles');
+    let nodes = [];
+    for (let style of styles) {
+        let button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'simple-card';
+        button.setAttribute('aria-pressed', style.id == state.style ? 'true' : 'false');
+        let name = document.createElement('span');
+        name.className = 'simple-card-name';
+        name.textContent = style.name;
+        let desc = document.createElement('span');
+        desc.className = 'simple-card-desc';
+        desc.textContent = style.desc;
+        button.append(name, desc);
+        button.addEventListener('click', () => {
+            state.style = style.id;
+            renderStyles();
+            update();
+        });
+        nodes.push(button);
+    }
+    wrap.replaceChildren(...nodes);
+}
+
+$('need-model').addEventListener('change', e => {
+    state.needModel = e.target.checked;
+    update();
+});
+
+/* ---------- AI 扩写（模拟） ---------- */
+
+$('btn-expand').addEventListener('click', () => {
+    if (state.generating) { return; }
+    let button = $('btn-expand');
+    button.disabled = true;
+    button.textContent = 'AI 扩写中…';
+    message('', false);
+    setTimeout(() => {
+        let pair = expansions[subtypeName()] || expansions.default;
+        let zh = pair[0], en = pair[1];
+        let desc = $('description').value.trim();
+        if (desc) {
+            zh = zh.replace('。', '，' + desc + '。');
+            en += ', ' + desc;
+        }
+        state.promptZh = zh;
+        state.promptEn = en;
+        state.promptZhDirty = false;
+        state.promptEnDirty = false;
+        state.promptGenerated = true;
+        renderPrompt();
+        button.disabled = false;
+        button.textContent = 'AI 扩写';
+        message('已生成提示词，可直接修改中文或英文。', false);
+    }, 900);
+});
+
+/* ---------- 提示词面板 ---------- */
+
+$('tab-zh').addEventListener('click', () => switchPromptLang('zh'));
+$('tab-en').addEventListener('click', () => switchPromptLang('en'));
+$('prompt-zh').addEventListener('input', e => {
+    state.promptZh = e.target.value;
+    state.promptZhDirty = state.promptGenerated && e.target.value != lastGenerated.zh;
+    renderPromptState();
+});
+$('prompt-en').addEventListener('input', e => {
+    state.promptEn = e.target.value;
+    state.promptEnDirty = state.promptGenerated && e.target.value != lastGenerated.en;
+    renderPromptState();
+});
+
+function switchPromptLang(lang) {
+    $('tab-zh').setAttribute('aria-selected', lang == 'zh' ? 'true' : 'false');
+    $('tab-en').setAttribute('aria-selected', lang == 'en' ? 'true' : 'false');
+    $('prompt-zh').hidden = lang != 'zh';
+    $('prompt-en').hidden = lang != 'en';
+}
+
+function renderPrompt() {
+    $('prompt-zh').value = state.promptZh;
+    $('prompt-en').value = state.promptEn;
+    if (state.promptGenerated) {
+        lastGenerated.zh = state.promptZh;
+        lastGenerated.en = state.promptEn;
+    }
+    renderPromptState();
+}
+
+function renderPromptState() {
+    let chip = $('prompt-state');
+    if (!state.promptGenerated) {
+        chip.textContent = '未生成';
+        chip.classList.remove('is-dirty');
+        return;
+    }
+    if (state.promptEnDirty) {
+        chip.textContent = '英文已手动修改 · 将直接发送';
+        chip.classList.add('is-dirty');
+    } else if (state.promptZhDirty) {
+        chip.textContent = '中文已修改 · 提交时自动翻译成英文';
+        chip.classList.add('is-dirty');
+    } else {
+        chip.textContent = '已同步';
+        chip.classList.remove('is-dirty');
+    }
+}
+
+/* ---------- 候选张数 ---------- */
+
+function countProblem() {
+    let raw = $('count').value.trim();
+    if (!/^[1-9][0-9]*$/.test(raw)) { return '请输入正整数。'; }
+    let n = Number(raw);
+    if (n < 1 || n > 20) { return '候选张数须为 1–20 的正整数。'; }
+    return '';
+}
+
+$('count').addEventListener('input', () => update());
+
+/* ---------- 汇总更新 ---------- */
+
+function setTypes() { return types.filter(t => t.inSet); }
+
+function update() {
+    // 图片类型提示
+    let type = currentType();
+    $('type-hint').textContent = type.cutoutOnly
+        ? '白底主图不调用生成模型：纯本地抠图并居中贴到纯白背景，直接出 1 张。'
+        : '生成类图片类型，由执行服务器上的 ComfyUI 工作流出图。';
+    // 模特与白底主图互斥
+    let modelBox = $('need-model');
+    modelBox.disabled = Boolean(type.cutoutOnly);
+    if (type.cutoutOnly && state.needModel) {
+        state.needModel = false;
+        modelBox.checked = false;
+    }
+    $('model-hint').textContent = type.cutoutOnly
+        ? '白底主图为纯抠图，不支持模特。'
+        : '勾选后提示词会加入模特描述（初版仅此一项，后续再扩展性别、手模等属性）。';
+
+    // 候选张数
+    let problem = countProblem();
+    $('count-hint').textContent = problem || '可手动输入 1–20 的正整数。';
+    $('count-hint').classList.toggle('count-error', Boolean(problem));
+
+    let count = problem ? 0 : Number($('count').value);
+    let hasProduct = Boolean(state.current);
+
+    // 开始出图
+    let generateBlocked = '';
+    if (!hasProduct) { generateBlocked = '请先上传或选择商品图。'; }
+    else if (problem) { generateBlocked = '请先修正候选张数。'; }
+    else if (state.generating) { generateBlocked = '任务进行中…'; }
+    $('btn-generate').disabled = Boolean(generateBlocked);
+    $('generate-hint').textContent = type.cutoutOnly
+        ? '为当前商品生成白底主图 1 张（不调用生成模型）。'
+        : generateBlocked || ('为当前商品 × ' + type.name + ' × ' + (state.needModel ? '含模特' : '无模特') + '，生成 ' + count + ' 张候选。');
+
+    // 一键出整套：商品数 × 套图类型数 × 候选张数 ≤ 20
+    let setList = setTypes();
+    let total = state.products.length * setList.length * count;
+    let setBlocked = '';
+    if (!state.products.length) { setBlocked = '请先上传或选择商品图。'; }
+    else if (problem) { setBlocked = '请先修正候选张数。'; }
+    else if (total > 20) { setBlocked = '预计 ' + total + ' 张，超过 20 张总上限，请减少商品图、类型或候选张数。'; }
+    else if (state.generating) { setBlocked = '任务进行中…'; }
+    $('btn-set').disabled = Boolean(setBlocked) || setList.length == 0;
+    $('set-hint').textContent = setBlocked
+        || ('为全部 ' + state.products.length + ' 张商品图 × 套图 ' + setList.length + ' 种类型（' + setList.map(t => t.name).join('、') + '）× 每种 ' + count + ' 张，预计共 ' + total + ' 张（上限 20）。');
+
+    // 下载按钮
+    $('btn-download').disabled = state.selected.size == 0;
+}
+
+/* ---------- 生成模拟 ---------- */
+
+function sceneThumb(i) {
+    let palette = [['#DDE8D5', '#3FBF8A'], ['#E8E0D5', '#C8A96A'], ['#D8E2EA', '#5D8AA8'], ['#EFE3E8', '#C97B84'], ['#E3E8EF', '#7D9BC1'], ['#EDF0DD', '#8FA65A']];
+    let pair = palette[i % palette.length];
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${pair[0]}"/><stop offset="1" stop-color="${pair[1]}" stop-opacity=".5"/></linearGradient></defs>
+        <rect width="200" height="200" fill="url(#g)"/>
+        <ellipse cx="100" cy="168" rx="52" ry="10" fill="rgba(31,33,35,.18)"/>
+        <rect x="82" y="66" width="36" height="20" rx="5" fill="#fff" opacity=".9"/>
+        <path d="M70 84 h60 v62 a10 10 0 0 1 -10 10 h-40 a10 10 0 0 1 -10 -10 z" fill="#fff"/>
+        <rect x="78" y="106" width="44" height="26" rx="4" fill="${pair[1]}"/>
+        <text x="100" y="190" text-anchor="middle" font-size="10" fill="#616365" font-family="sans-serif">候选 ${i + 1}</text>
+    </svg>`;
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
+function addResult(thumb) {
+    $('results-empty').hidden = true;
+    let button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'simple-result';
+    button.setAttribute('aria-pressed', 'false');
+    let img = document.createElement('img');
+    img.src = thumb;
+    img.alt = '候选图';
+    let check = document.createElement('span');
+    check.className = 'simple-result-check';
+    check.textContent = '✓';
+    button.append(img, check);
+    button.addEventListener('click', () => {
+        let on = button.getAttribute('aria-pressed') == 'true';
+        button.setAttribute('aria-pressed', on ? 'false' : 'true');
+        if (on) { state.selected.delete(thumb); } else { state.selected.add(thumb); }
+        update();
+    });
+    $('results').append(button);
+}
+
+function setStatusText(text) {
+    let box = $('status');
+    box.replaceChildren();
+    let p = document.createElement('p');
+    p.className = 'hint';
+    p.style.margin = '0';
+    p.textContent = text;
+    box.append(p);
+}
+
+function setStatusWithDot(text) {
+    let box = $('status');
+    box.replaceChildren();
+    let dot = document.createElement('span');
+    dot.className = 'tally-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    let p = document.createElement('p');
+    p.className = 'hint';
+    p.style.margin = '0';
+    p.textContent = text;
+    box.append(dot, p);
+}
+
+function showUsedPrompt() {
+    $('used-prompt').hidden = false;
+    $('used-prompt-body').replaceChildren();
+    let zhLine = document.createElement('p');
+    zhLine.textContent = '中文（展示用）：' + composedZh();
+    let enLine = document.createElement('p');
+    enLine.textContent = 'English（实际发送）：' + composedEn();
+    $('used-prompt-body').append(zhLine, enLine);
+}
+
+function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+$('btn-generate').addEventListener('click', () => {
+    let type = currentType();
+    if (type.cutoutOnly) {
+        // 白底主图：不调生成，直接 1 张
+        addResult(libraryItems[3].thumb);
+        setStatusText('白底主图已按平台要求抠图并贴纯白背景（未调用生成模型）。');
+        showUsedPrompt();
+        return;
+    }
+    let count = Number($('count').value);
+    state.generating = true;
+    update();
+    (async () => {
+        // 阶段 1：正在生成提示词（中文被改过或未扩写时模拟中译英）
+        if (state.promptZhDirty || !state.promptGenerated) {
+            setStatusWithDot('正在生成提示词（中译英）…');
+            await wait(900);
+        }
+        // 阶段 2：排队
+        setStatusWithDot('排队中 · 分配执行服务器…');
+        await wait(700);
+        // 阶段 3：执行
+        let server = '本机 ComfyUI #' + (1 + Math.floor(Math.random() * 2));
+        for (let i = 0; i < count; i++) {
+            setStatusWithDot('执行中 · ' + server + ' · ' + (i + 1) + '/' + count);
+            await wait(500);
+            addResult(sceneThumb(i));
+        }
+        setStatusText('已完成（' + server + '）。点选满意的图片后下载。');
+        showUsedPrompt();
+        state.generating = false;
+        update();
+    })();
+});
+
+$('btn-set').addEventListener('click', () => {
+    let count = Number($('count').value);
+    let setList = setTypes();
+    let jobsEl = $('jobs');
+    $('simple-batch').hidden = false;
+    jobsEl.replaceChildren();
+    state.generating = true;
+    update();
+    (async () => {
+        // 模拟逐任务执行
+        let queue = [];
+        for (let [pi, product] of state.products.entries()) {
+            for (let type of setList) {
+                queue.push({ pi, type, product });
+            }
+        }
+        let rows = new Map();
+        for (let job of queue) {
+            let li = document.createElement('li');
+            li.className = 'simple-job';
+            let name = document.createElement('span');
+            name.textContent = '商品 ' + (job.pi + 1) + '（' + job.product.name + '）｜' + job.type.name + ' × ' + count;
+            let stateEl = document.createElement('span');
+            stateEl.className = 'simple-job-state';
+            stateEl.textContent = '排队中';
+            li.append(name, stateEl);
+            jobsEl.append(li);
+            rows.set(job, { li, stateEl });
+        }
+        let done = 0;
+        for (let job of queue) {
+            let row = rows.get(job);
+            row.li.classList.add('is-running');
+            row.stateEl.textContent = '正在生成提示词…';
+            await wait(500);
+            row.stateEl.textContent = '执行中 · 本机 ComfyUI #1';
+            await wait(600);
+            for (let i = 0; i < count; i++) { addResult(sceneThumb(done * count + i)); }
+            done++;
+            row.li.classList.remove('is-running');
+            row.stateEl.textContent = '已完成';
+        }
+        setStatusText('整套出图已完成，点选满意的图片后下载。');
+        showUsedPrompt();
+        state.generating = false;
+        update();
+    })();
+});
+
+$('btn-clear').addEventListener('click', () => {
+    $('results').replaceChildren();
+    $('results-empty').hidden = false;
+    $('simple-batch').hidden = true;
+    $('used-prompt').hidden = true;
+    state.selected.clear();
+    setStatusText('出图完成后，候选图会出现在这里。点选满意的图片后下载。');
+    update();
+});
+
+$('btn-download').addEventListener('click', () => {
+    message('（演示）已打包 ' + state.selected.size + ' 张图片，开始下载。', false);
+});
+
+$('platform').addEventListener('change', update);
+
+/* ---------- 初始化 ---------- */
+
+renderTypes();
+renderCategories();
+renderStyles();
+addProduct(libraryItems[0].name, libraryItems[0].thumb, '商品库');
+update();
+</script>
+</body>
+</html>
