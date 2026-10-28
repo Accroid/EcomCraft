@@ -123,7 +123,7 @@ public static class TemplateStore
             return entry.Errors;
         }
         ExecutionPlan plan = entry.Template.LocalPlan;
-        return TemplateValidator.CheckPlan(plan, SnapshotParameters(WorkflowIdFor(plan)), entry.Template.PreserveProduct);
+        return TemplateValidator.CheckPlan(plan, SnapshotParameters(WorkflowIdFor(plan)), entry.Template.PreserveProduct, entry.Template.BrandImageParams);
     }
 
     /// <summary>The published snapshot a plan runs. "*/path" picks the first published snapshot (by ID) whose path after the server name matches,
@@ -261,7 +261,7 @@ public static class TemplateStore
         {
             return string.Join(" ", errors);
         }
-        List<string> problems = TemplateValidator.CheckPlan(template.LocalPlan, SnapshotParameters(WorkflowIdFor(template.LocalPlan)), template.PreserveProduct);
+        List<string> problems = TemplateValidator.CheckPlan(template.LocalPlan, SnapshotParameters(WorkflowIdFor(template.LocalPlan)), template.PreserveProduct, template.BrandImageParams);
         if (problems.Count > 0)
         {
             return string.Join(" ", problems);

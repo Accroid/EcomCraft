@@ -691,6 +691,17 @@ public static class StudioApi
             {
                 return Error($"提示词最多 {PromptRules.MaxPromptLength} 个字符。", "invalid_prompt");
             }
+            // A brand kit (F12) adds its color words and preferred background to the prompt; the client only sends the kit's ID.
+            string brandFragment = "";
+            if (rawInput["brand_kit_id"]?.Type == JTokenType.String && rawInput.Value<string>("brand_kit_id").Length > 0)
+            {
+                (string fragment, string problem) = Brand.BrandKitLibrary.FragmentFor(session.User.UserID, rawInput.Value<string>("brand_kit_id"));
+                if (problem is not null)
+                {
+                    return Error(problem, "invalid_brand_kit");
+                }
+                brandFragment = fragment;
+            }
             // Main images for platforms such as Amazon skip generation entirely (F22), so they never wait for the language model.
             JObject cutoutOnly = await TemplateApi.TryCutoutOnlyAsync(session, rawInput, requestedTemplate);
             if (cutoutOnly is not null)
@@ -707,9 +718,14 @@ public static class StudioApi
             }
             if (compose && !background)
             {
-                composed = await PromptService.ComposePanelAsync(session, styleId, productTypeId, needModel, description, promptEn, promptZh);
+                composed = WithBrand(await PromptService.ComposePanelAsync(session, styleId, productTypeId, needModel, description, promptEn, promptZh), brandFragment);
                 templateInput = (JObject)rawInput.DeepClone();
                 templateInput["prompt"] = composed.Prompt;
+            }
+            else if (!compose && brandFragment.Length > 0)
+            {
+                templateInput = (JObject)rawInput.DeepClone();
+                templateInput["prompt"] = JoinPrompt(rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : "", brandFragment);
             }
             // The template decides the workflow and presets; the client's own workflow_id and workflow_params are replaced.
             // A background submission is resolved now with an empty subject, so invalid requests still fail at once; the prompt is filled in later.
@@ -730,7 +746,7 @@ public static class StudioApi
             if (background)
             {
                 return StartPreparing(session, resolved, requestedTemplate, pinnedServer, preserveToken, postProcess,
-                    () => PromptService.ComposePanelAsync(session, styleId, productTypeId, needModel, description, promptEn, promptZh));
+                    async () => WithBrand(await PromptService.ComposePanelAsync(session, styleId, productTypeId, needModel, description, promptEn, promptZh), brandFragment));
             }
             JObject templateResult = await GeneratePublishedWorkflow(session, resolved, resolved.Value<string>("workflow_id"), pinnedServer, requestedTemplate, postProcess);
             if (templateResult.ContainsKey("error"))
@@ -908,6 +924,13 @@ public static class StudioApi
         }
         return await ScheduleAndSubmit(session, images, input, pinnedServer, false, rawInput.Value<bool?>("async") is true, StandardModeProblems);
     }
+
+    /// <summary>Joins prompt parts with commas, skipping empty ones.</summary>
+    private static string JoinPrompt(params string[] parts) => string.Join(", ", parts.Select(part => part?.Trim()).Where(part => !string.IsNullOrEmpty(part)));
+
+    /// <summary>The composed prompt with a brand kit's fragment (F12) added; unchanged without one.</summary>
+    private static PromptService.Composed WithBrand(PromptService.Composed composed, string brandFragment) =>
+        string.IsNullOrEmpty(brandFragment) ? composed : composed with { Prompt = JoinPrompt(composed.Prompt, brandFragment) };
 
     /// <summary>Adds the prompt this account's own submission was sent with (F54) to its response, so the result card can show it, plus any fallback notice.
     /// Only the submitter's own answers carry it; the shared queue never does.</summary>

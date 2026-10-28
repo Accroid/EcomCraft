@@ -113,6 +113,9 @@ public static class BatchService
         /// <summary>Whether some shot fragment could not be translated and was left out (F25).</summary>
         public bool ShotsUntranslated;
 
+        /// <summary>The owner's brand kit for every task (F12), or null.</summary>
+        public string BrandKitId;
+
         /// <summary>Optional user negative prompt.</summary>
         public string Negative;
 
@@ -288,6 +291,16 @@ public static class BatchService
         {
             return StudioApi.Error($"提示词最多 {PromptRules.MaxPromptLength} 个字符。", "invalid_prompt");
         }
+        if (rawInput["brand_kit_id"]?.Type == JTokenType.String && rawInput.Value<string>("brand_kit_id").Length > 0)
+        {
+            // Checked now so a missing kit fails at once; every task then sends the kit's ID through the normal template path (F12).
+            (_, string brandProblem) = Brand.BrandKitLibrary.FragmentFor(session.User.UserID, rawInput.Value<string>("brand_kit_id"));
+            if (brandProblem is not null)
+            {
+                return StudioApi.Error(brandProblem, "invalid_brand_kit");
+            }
+            batch.BrandKitId = rawInput.Value<string>("brand_kit_id");
+        }
         batch.Negative = rawInput["negativeprompt"]?.Type == JTokenType.String ? rawInput.Value<string>("negativeprompt") : "";
         foreach (Job job in batch.Jobs)
         {
@@ -413,6 +426,10 @@ public static class BatchService
         if (batch.Server is int server)
         {
             payload["execution_server_id"] = server;
+        }
+        if (batch.BrandKitId is not null)
+        {
+            payload["brand_kit_id"] = batch.BrandKitId;
         }
         return await StudioApi.EcomCraftStudioGenerate(session, payload);
     }

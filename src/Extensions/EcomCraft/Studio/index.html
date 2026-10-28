@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.31.0">
-    <script src="/EcomCraft/lang/en.js?v=0.31.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.31.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.31.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.31.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.32.0">
+    <script src="/EcomCraft/lang/en.js?v=0.32.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.32.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.32.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.32.0" defer></script>
 </head>
 
 <body>
@@ -128,6 +128,14 @@
                             <label for="simple-model">需要模特</label>
                         </div>
                         <p class="hint" id="simple-model-hint">勾选后提示词会加入模特描述（初版仅此一项，后续再扩展性别、手模等属性）。</p>
+                    </div>
+                    <div class="fld">
+                        <div class="inline-row simple-brand-row">
+                            <label for="simple-brand">品牌资料包</label>
+                            <select id="simple-brand"></select>
+                        </div>
+                        <button type="button" class="link-btn" id="simple-brand-manage">管理品牌资料包</button>
+                        <p class="hint">选中后，品牌色和偏好背景会加入提示词；声明了品牌槽位的模板还会用上 Logo 和参考图。</p>
                     </div>
                     <div class="fld">
                         <label for="simple-description">一句话描述（可选）</label>
@@ -693,6 +701,59 @@
                 <button type="button" class="btn" id="review-cancel">取消</button>
                 <button type="button" class="btn btn-danger" id="review-reject">驳回</button>
                 <button type="button" class="btn btn-primary" id="review-approve">通过并发布</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 简易模式：品牌资料包管理（F12） -->
+    <div class="modal" id="brand-modal" hidden>
+        <div class="modal-backdrop" id="brand-backdrop"></div>
+        <div class="modal-dialog modal-wide" role="dialog" aria-modal="true" aria-labelledby="brand-title">
+            <div class="modal-head">
+                <div>
+                    <h3 id="brand-title">品牌资料包</h3>
+                    <p class="hint">资料包只有你自己能看到和使用。</p>
+                </div>
+                <button type="button" class="icon-btn" id="brand-close" aria-label="关闭品牌资料包">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="brand-list" id="brand-list" role="group" aria-label="我的品牌资料包"></div>
+                <div class="recover-actions">
+                    <button type="button" class="btn btn-sm" id="brand-new">新建资料包</button>
+                </div>
+                <div class="brand-editor" id="brand-editor" hidden>
+                    <div class="fld">
+                        <label for="brand-name">名称</label>
+                        <input id="brand-name" type="text" maxlength="40" autocomplete="off">
+                    </div>
+                    <div class="fld">
+                        <span class="fld-label" id="brand-colors-label">品牌色<span class="fld-optional">最多 5 个</span></span>
+                        <div class="brand-colors" id="brand-colors" role="group" aria-labelledby="brand-colors-label"></div>
+                        <button type="button" class="btn btn-sm" id="brand-color-add">添加颜色</button>
+                    </div>
+                    <div class="fld">
+                        <label for="brand-background">偏好背景描述</label>
+                        <input id="brand-background" type="text" maxlength="200" autocomplete="off" placeholder="例如：浅色大理石台面，柔和自然光">
+                        <p class="hint">中文会在保存时翻译成英文提示词。</p>
+                    </div>
+                    <div class="fld">
+                        <span class="fld-label" id="brand-logo-label">Logo<span class="fld-optional">只传给声明了 Logo 槽位的模板，不由 AI 生成</span></span>
+                        <div class="brand-images" id="brand-logo" role="group" aria-labelledby="brand-logo-label"></div>
+                        <button type="button" class="btn btn-sm" id="brand-logo-pick">选择 Logo</button>
+                        <input type="file" id="brand-logo-file" accept="image/png,image/jpeg,image/webp" class="visually-hidden">
+                    </div>
+                    <div class="fld">
+                        <span class="fld-label" id="brand-references-label">风格参考图<span class="fld-optional">最多 4 张</span></span>
+                        <div class="brand-images" id="brand-references" role="group" aria-labelledby="brand-references-label"></div>
+                        <button type="button" class="btn btn-sm" id="brand-reference-pick">添加参考图</button>
+                        <input type="file" id="brand-reference-file" accept="image/png,image/jpeg,image/webp" class="visually-hidden" multiple>
+                    </div>
+                    <p class="hint" id="brand-message" aria-live="polite" hidden></p>
+                    <div class="recover-actions">
+                        <button type="button" class="btn btn-primary" id="brand-save">保存</button>
+                        <button type="button" class="btn btn-danger" id="brand-delete">删除资料包</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

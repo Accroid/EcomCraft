@@ -38,8 +38,14 @@ public sealed class EcomTemplate
     /// <summary>Reserved for category presets (F26); stored but not used yet.</summary>
     public List<string> Categories = [];
 
-    /// <summary>Reserved for brand kits (F27); must be null in this phase.</summary>
-    public JObject BrandKit;
+    /// <summary>Brand kit slot (F12): the snapshot image parameter that receives the kit's first style reference image, or null.</summary>
+    public string BrandReferenceParam;
+
+    /// <summary>Brand kit slot (F12): the snapshot image parameter that receives the kit's logo, or null.</summary>
+    public string BrandLogoParam;
+
+    /// <summary>The image parameters the brand kit slot fills.</summary>
+    public IEnumerable<string> BrandImageParams => new[] { BrandReferenceParam, BrandLogoParam }.Where(param => param is not null);
 
     /// <summary>Ways to run the template; this phase accepts exactly one local plan (R10.2).</summary>
     public List<ExecutionPlan> ExecutionPlans = [];
@@ -177,7 +183,21 @@ public static class TemplateValidator
         }
         if (json["brand_kit"] is JToken brand && brand.Type != JTokenType.Null)
         {
-            errors.Add("brand_kit 是预留字段，本期须为 null。");
+            // Brand kit slot (F12): which snapshot image parameters receive the kit's reference image and logo; the kit's prompt text applies to every template.
+            if (brand is not JObject slot || slot.Properties().Any(property => property.Name is not ("reference_image" or "logo_image")
+                || property.Value.Type is not (JTokenType.String or JTokenType.Null)))
+            {
+                errors.Add("brand_kit 须为 null，或只含 reference_image、logo_image 两个参数 ID 的对象。");
+            }
+            else
+            {
+                template.BrandReferenceParam = slot["reference_image"]?.Type == JTokenType.String ? slot.Value<string>("reference_image") : null;
+                template.BrandLogoParam = slot["logo_image"]?.Type == JTokenType.String ? slot.Value<string>("logo_image") : null;
+                if (template.BrandReferenceParam is not null && template.BrandReferenceParam == template.BrandLogoParam)
+                {
+                    errors.Add("brand_kit 的 reference_image 和 logo_image 不能是同一个参数。");
+                }
+            }
         }
         if (json["enabled"] is JToken enabled && enabled.Type != JTokenType.Null)
         {
@@ -302,7 +322,7 @@ public static class TemplateValidator
 
     /// <summary>Checks a plan against the published snapshot's parameter definitions (parameter ID to definition), or null when the snapshot is not published.
     /// Presets must name whitelisted parameters with valid values and may not set the prompt or an image; user fields must be visible, unfixed parameters.</summary>
-    public static List<string> CheckPlan(ExecutionPlan plan, JObject parameters, bool requireImageField = false)
+    public static List<string> CheckPlan(ExecutionPlan plan, JObject parameters, bool requireImageField = false, IEnumerable<string> brandImageParams = null)
     {
         List<string> errors = [];
         if (parameters is null)
@@ -356,6 +376,17 @@ public static class TemplateValidator
             else if (plan.Presets.ContainsKey(field))
             {
                 errors.Add($"参数“{field}”已有预设值，不能同时开放给用户。");
+            }
+        }
+        foreach (string field in brandImageParams ?? Enumerable.Empty<string>())
+        {
+            if (parameters[field] is not JObject definition || definition["type"]?.ToString() != "image")
+            {
+                errors.Add($"brand_kit 的参数“{field}”不是该工作流的图片参数。");
+            }
+            else if (userFields.Contains(field))
+            {
+                errors.Add($"brand_kit 的参数“{field}”已开放给用户，不能同时由品牌资料包填写。");
             }
         }
         return errors;
