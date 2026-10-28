@@ -948,6 +948,8 @@ class SimpleMode {
         try {
             let batch = await this.api.request('EcomCraftStudioGenerateSet', payload);
             this.batch = batch;
+            this.batchDone = 0;
+            this.api.titleAdd((batch.jobs || []).length);
             this.renderBatch();
             this.trackBatch();
             this.api.$('simple-status').textContent = tr('已开始出整套图：共 {0} 个任务，会分配到空闲的执行服务器上并行完成。', (batch.jobs || []).length);
@@ -961,13 +963,14 @@ class SimpleMode {
         }
     }
 
-    /** Polls the batch until every task has ended, adding finished candidates to the results. */
+    /** Polls the batch until every task has ended, adding finished candidates to the results. Keeps polling in the background
+     * so the tab title shows the progress (F43). */
     static trackBatch() {
         if (this.batchTimer) {
             return;
         }
         this.batchTimer = setInterval(async () => {
-            if (!this.batch || document.hidden) {
+            if (!this.batch) {
                 return;
             }
             try {
@@ -976,10 +979,23 @@ class SimpleMode {
             catch (error) {
                 return;
             }
+            let jobs = this.batch.jobs || [];
+            let finished = jobs.filter(job => job.state != 'queued' && job.state != 'running').length;
+            if (finished > (this.batchDone || 0)) {
+                this.api.titleDone(finished - (this.batchDone || 0));
+                this.batchDone = finished;
+            }
             this.renderBatch();
-            if (this.batchFinished(this.batch.jobs)) {
+            if (this.batchFinished(jobs)) {
                 clearInterval(this.batchTimer);
                 this.batchTimer = null;
+                let failed = jobs.filter(job => job.state == 'failed' || job.state == 'cancelled').length;
+                if (failed) {
+                    this.message(this.api.tr('整套出图结束：{0} 个任务没有完成，可以点“重试”单独重提。', failed), true);
+                }
+                else {
+                    this.message(this.api.tr('整套出图已完成，点选满意的图片后下载。'), false);
+                }
                 this.api.$('simple-status').textContent = this.api.tr('点选满意的图片，再点“下载所选”。所有结果也保存在作品画廊。');
             }
         }, 3000);
@@ -1036,6 +1052,7 @@ class SimpleMode {
     static async retryJob(id) {
         try {
             this.batch = await this.api.request('EcomCraftStudioBatchRetry', { batch_id: this.batch.batch_id, job_id: id });
+            this.api.titleAdd();
             this.renderBatch();
             this.trackBatch();
         }
@@ -1102,6 +1119,7 @@ class SimpleMode {
             if (result.task_id != null) {
                 this.pending.add(result.task_id);
                 this.taskProducts.set(result.task_id, this.product ? this.product.name : '');
+                this.api.titleAdd();
                 this.track();
             }
             let status = result.cutout_only ? tr('已按平台要求把商品抠图放到纯白背景上（不调用生成模型），结果在下方。') : tr('已开始出图，完成后候选图会出现在下方。');
@@ -1121,13 +1139,13 @@ class SimpleMode {
         }
     }
 
-    /** Polls the queue for this page's tasks and collects their results. */
+    /** Polls the queue for this page's tasks and collects their results; keeps polling in the background (F43). */
     static track() {
         if (this.timer) {
             return;
         }
         this.timer = setInterval(async () => {
-            if (!this.pending.size || document.hidden) {
+            if (!this.pending.size) {
                 return;
             }
             let queue;
@@ -1145,6 +1163,7 @@ class SimpleMode {
                     continue;
                 }
                 this.pending.delete(id);
+                this.api.titleDone();
                 if (outcome.state == 'failed') {
                     let reason = outcome.error_id ? this.api.serverErrorText(outcome.error_id, outcome.error) : (outcome.error || this.api.tr('执行服务器没有返回结果。'));
                     this.message(this.api.tr('出图失败：{0}', reason), true);

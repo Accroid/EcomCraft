@@ -5,6 +5,9 @@ window.EcomCraftLanguages.en = {
     // Page shell and navigation
     "EcomCraft 创作工作台": "EcomCraft Studio",
     "{0} - EcomCraft 创作工作台": "{0} - EcomCraft Studio",
+    "（{0}/{1}）EcomCraft 创作工作台": "({0}/{1}) EcomCraft Studio",
+    "整套出图结束：{0} 个任务没有完成，可以点“重试”单独重提。": "The set finished: {0} tasks did not complete; press “Retry” to resubmit them individually.",
+    "整套出图已完成，点选满意的图片后下载。": "The whole set is ready; pick the images you like and download them.",
     "跳到主要内容": "Skip to main content",
     "出图": "Create",
     "专业模式": "Professional mode",

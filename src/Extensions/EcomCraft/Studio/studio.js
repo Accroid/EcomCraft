@@ -219,6 +219,46 @@
     /* ============================================================
        View routing
        ============================================================ */
+    /** Counts running tasks for the tab-title progress while the page is in the background (F43). No Notification API: it needs HTTPS. */
+    class TitleProgress {
+        static total = 0;
+        static finished = 0;
+
+        /** Whether any task is still outstanding. */
+        static active() {
+            return this.total > 0 && this.finished < this.total;
+        }
+
+        /** Registers newly submitted tasks. */
+        static add(count = 1) {
+            this.total += count;
+            applyDocumentTitle();
+        }
+
+        /** Registers ended tasks; when everything ended the title returns to the plain view title. */
+        static done(count = 1) {
+            this.finished += count;
+            if (!this.active()) {
+                this.total = 0;
+                this.finished = 0;
+            }
+            applyDocumentTitle();
+        }
+    }
+
+    /** The plain title of the current view. */
+    function currentViewTitle() {
+        let titles = { simple: '出图', create: '专业模式', gallery: '作品画廊', queue: '任务队列', workflows: WorkflowReviewView.reviewer() ? '工作流审核' : '提交工作流审核' };
+        return tr('{0} - EcomCraft 创作工作台', tr(titles[state.view] || titles.simple));
+    }
+
+    /** Applies the tab title: task progress while tasks run, the plain view title otherwise. */
+    function applyDocumentTitle() {
+        document.title = TitleProgress.active()
+            ? tr('（{0}/{1}）EcomCraft 创作工作台', TitleProgress.finished, TitleProgress.total)
+            : currentViewTitle();
+    }
+
     /** Shows one view, marks its navigation entry as current and loads its data. */
     function setView(view) {
         if (!['simple', 'create', 'gallery', 'queue', 'workflows'].includes(view)) {
@@ -230,8 +270,7 @@
         $('view-gallery').hidden = view != 'gallery';
         $('view-queue').hidden = view != 'queue';
         $('view-workflows').hidden = view != 'workflows';
-        let titles = { simple: '出图', create: '专业模式', gallery: '作品画廊', queue: '任务队列', workflows: WorkflowReviewView.reviewer() ? '工作流审核' : '提交工作流审核' };
-        document.title = tr('{0} - EcomCraft 创作工作台', tr(titles[view]));
+        applyDocumentTitle();
         for (let item of document.querySelectorAll('.nav-item[data-view]')) {
             if (item.dataset.view == view) {
                 item.setAttribute('aria-current', 'page');
@@ -1776,6 +1815,7 @@
             if (result.task_id != null) {
                 state.pending.add(result.task_id);
                 Reassign.remember(result.task_id, payload);
+                TitleProgress.add();
                 startPendingTracker();
             }
             let task = result.task_id != null ? tr('（任务 #{0}）', result.task_id) : '';
@@ -1856,7 +1896,8 @@
     function startPendingTracker() {
         if (state.pendingTimer) { return; }
         state.pendingTimer = setInterval(async () => {
-            if (!state.pending.size || document.hidden) { return; }
+            if (!state.pending.size) { return; }
+            // Keep polling while the tab is in the background: the title shows the progress there (F43).
             let mine;
             let outcomes;
             try {
@@ -1879,6 +1920,7 @@
                     }
                 }
                 state.pending.delete(id);
+                TitleProgress.done();
                 let payload = Reassign.take(id);
                 let server = outcome?.execution_server ? tr('（{0}）', outcome.execution_server) : '';
                 if (outcome?.state == 'failed') {
@@ -4253,7 +4295,8 @@
        ============================================================ */
     initTheme();
     bind();
-    SimpleMode.attach({ $, el, tr, request, readStorage, writeStorage, serverErrorText, state });
+    SimpleMode.attach({ $, el, tr, request, readStorage, writeStorage, serverErrorText, state,
+        titleAdd: count => TitleProgress.add(count), titleDone: count => TitleProgress.done(count) });
     updateControls();
     setType('image');
     setMode('text2img');
