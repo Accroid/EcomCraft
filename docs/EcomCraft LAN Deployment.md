@@ -99,7 +99,7 @@ Browsers treat addresses like `http://192.168.x.x` as an "insecure context" and 
 | Feature | Under an `http://` LAN address | Effect on EcomCraft |
 |---|---|---|
 | Writing to the clipboard (copy image, copy text) | Unavailable | Not used by the workspace; buttons such as "copy image" in the native SwarmUI interface stop working, use download instead |
-| Opening the camera from the page (`getUserMedia`) | Unavailable | Not used by the workspace. The planned "phone photo upload" will take photos through the file picker, which is unaffected |
+| Opening the camera from the page (`getUserMedia`) | Unavailable | Not used by the workspace. The "Take a photo" button invokes the camera through a file picker with the `capture` attribute, which is unaffected; phones can upload, generate and browse the gallery |
 | Browser system notifications (Notification) | Unavailable | Not used by the workspace. The planned "completion notice" can only be shown inside the page under `http://` |
 | Installing as an app (PWA / Service Worker) | Unavailable | No effect |
 | Upload, download, generation, gallery, queue | Work normally | No effect |
