@@ -9,6 +9,17 @@ namespace EcomCraftStudio.Studio;
 /// A backup is valid only when every file it lists is present with the recorded size and SHA-256, and the zip holds nothing else.</summary>
 public static class BackupRules
 {
+    /// <summary>The backup entry name of a local file: files under the EcomCraft data root are "ecomcraft/…", other files under the data root
+    /// (the account database) are "accounts/…".</summary>
+    public static string EntryName(string file, string ecomcraftRoot, string dataRoot)
+    {
+        if (file.StartsWith(ecomcraftRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        {
+            return "ecomcraft/" + file[(ecomcraftRoot.Length + 1)..].Replace('\\', '/');
+        }
+        return "accounts/" + file[(dataRoot.Length + 1)..].Replace('\\', '/');
+    }
+
     /// <summary>Builds the manifest entry of one file.</summary>
     public static JObject Entry(string name, long size, string sha256) => new()
     {
@@ -17,10 +28,10 @@ public static class BackupRules
         ["sha256"] = sha256
     };
 
-    /// <summary>The SHA-256 of a file's content, hex encoded.</summary>
+    /// <summary>The SHA-256 of a file's content, hex encoded. Files the server holds open (the account database) are read with write sharing.</summary>
     public static string Hash(string path)
     {
-        using FileStream stream = File.OpenRead(path);
+        using FileStream stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
@@ -67,7 +78,7 @@ public static class BackupRules
                 problems.Add($"内容校验失败：{name}");
             }
         }
-        foreach (string extra in entries.Keys.Where(name => !listed.Contains(name)))
+        foreach (string extra in entries.Keys.Where(name => name != "manifest.json" && !listed.Contains(name)))
         {
             problems.Add($"备份中有清单未记录的文件：{extra}");
         }

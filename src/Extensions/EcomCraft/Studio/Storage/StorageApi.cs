@@ -156,13 +156,14 @@ public static class StorageApi
         return Task.FromResult(new JObject() { ["pending"] = new JArray(WorkSync.PendingFor(session.User.UserID).Take(500)) });
     }
 
-    [API.APIDescription("Mark works kept (picked, downloaded or exported) so the candidate cleanup never deletes them. images: [gallery path or result URL] of the current account.", "kept: 2")]
-    public static Task<JObject> EcomCraftStudioMarkKept(Session session, JArray images)
+    [API.APIDescription("Mark works kept (picked, downloaded or exported) so the candidate cleanup never deletes them. images: [gallery path or result URL] of the current account. rawInput is the root request JSON.", "kept: 2")]
+    public static Task<JObject> EcomCraftStudioMarkKept(Session session, JObject rawInput)
     {
         if (!StudioApi.CanView(session))
         {
             return Task.FromResult(StudioApi.Error("无权访问创作工作台。", "bad_permissions"));
         }
+        JArray images = rawInput?["images"] as JArray;
         if (images is null || images.Count == 0 || images.Count > 500)
         {
             return Task.FromResult(StudioApi.Error("请提交 1–500 个作品路径。", "invalid_parameters"));

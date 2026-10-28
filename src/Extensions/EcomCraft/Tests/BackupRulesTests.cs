@@ -42,7 +42,7 @@ public class BackupRulesTests
     [Fact]
     public void MatchingBackupPasses()
     {
-        (MemoryStream stream, ZipArchive zip) = ZipOf(("ecomcraft/storage.json", "{}"));
+        (MemoryStream stream, ZipArchive zip) = ZipOf(("ecomcraft/storage.json", "{}"), ("manifest.json", "{}"));
         try
         {
             Assert.Empty(BackupRules.Validate(zip, ManifestOf(("ecomcraft/storage.json", "{}"))));
@@ -108,5 +108,17 @@ public class BackupRulesTests
         File.WriteAllText(file, "stable");
         Assert.Equal(BackupRules.Hash(file), BackupRules.Hash(file));
         Assert.Equal(64, BackupRules.Hash(file).Length);
+    }
+
+    [Fact]
+    public void EntryNamesSeparateEcomCraftDataFromAccountData()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "ecomcraft-tests", "naming");
+        string data = Path.Combine(root, "Data");
+        string ecomcraft = Path.Combine(data, "EcomCraft");
+        Assert.Equal("ecomcraft/storage.json", BackupRules.EntryName(Path.Combine(ecomcraft, "storage.json"), ecomcraft, data));
+        Assert.Equal("ecomcraft/product-files/local/a/original.jpg", BackupRules.EntryName(Path.Combine(ecomcraft, "product-files", "local", "a", "original.jpg"), ecomcraft, data));
+        Assert.Equal("accounts/Users.ldb", BackupRules.EntryName(Path.Combine(data, "Users.ldb"), ecomcraft, data));
+        Assert.Equal("accounts/Roles.fds", BackupRules.EntryName(Path.Combine(data, "Roles.fds"), ecomcraft, data));
     }
 }
