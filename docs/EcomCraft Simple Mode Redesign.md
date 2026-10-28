@@ -176,7 +176,14 @@ Development order: **T55 → T57 → T56 → T58 → T59 → T54** (controls fir
 
 | Feature | Status | Notes |
 |---|---|---|
-| F52–F57 | Not started | Interactive prototype done and confirmed: [EcomCraft Simple Mode Redesign Prototype](EcomCraft%20简易模式改版原型.html) |
+| F53 product type, style, model | Implemented, pending acceptance (T55, commit 467c036d) | Two-level choice, optional style and the mutually exclusive model checkbox are live; UI design doc v1.13 |
+| F55 candidate count and button texts | Implemented, pending acceptance (T57, commit 0e7c6b3e) | Number input, the 20-image cap and the hint texts are live; UI design doc v1.14 |
+| F54 bilingual prompts and AI expansion | Not started (T56) |
+| F56 faster generation path | Not started (T58) |
+| F57 automatic workflow creation | Not started (T59) |
+| F52 four upload sources | Not started (T54) |
+
+Interactive prototype (confirmed): [EcomCraft Simple Mode Redesign Prototype](EcomCraft%20简易模式改版原型.html). Task statuses in the development sheet are filled in after user acceptance.
 
 ## Change Log
 
