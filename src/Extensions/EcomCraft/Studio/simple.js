@@ -40,8 +40,8 @@ class SimpleMode {
     /** Reference images of reference mode (F59): each { image, promptEn, promptZh, edited, describing, failed }; one image is made per reference. */
     static references = [];
 
-    /** Set when the server reports vision is off, so reference mode cannot describe references (F59). */
-    static referenceVisionOff = false;
+    /** Whether image description works (F68): { state, provider, model, can_manage } from the server, state 'unknown' when it could not be asked, null before the first answer. */
+    static vision = null;
 
     static exportOptions = { platforms: [], folder_available: false };
     static resultGroups = new Map();
@@ -419,6 +419,7 @@ class SimpleMode {
         this.renderTasks();
         this.renderProducts();
         this.renderStoryboard();
+        this.renderVision();
         this.update();
     }
 
@@ -558,6 +559,7 @@ class SimpleMode {
             return;
         }
         this.loading = true;
+        this.loadVision();
         let language = I18n.current;
         try {
             let [platforms, templates, styles, productTypes] = await Promise.all([
@@ -2133,16 +2135,88 @@ class SimpleMode {
             }
         }
         catch (error) {
-            if (error.error_id == 'vision_disabled') {
-                this.referenceVisionOff = true;
-            }
             item.failed = true;
+            // The vision service may have gone away or been turned off; refresh the guidance (F68).
+            this.loadVision();
         }
         finally {
             item.describing = false;
             this.renderReferences();
             this.update();
         }
+    }
+
+    /** Asks the server whether image description can work (F68) and shows what is missing for "follow a reference". */
+    static async loadVision() {
+        try {
+            let status = await this.api.request('EcomCraftStudioVisionStatus', {});
+            this.vision = { state: String(status.state || 'unknown'), provider: String(status.provider || ''), model: String(status.model || ''), can_manage: status.can_manage == true };
+        }
+        catch (error) {
+            // Without an answer nothing is blocked; describing a reference reports its own error.
+            this.vision = { state: 'unknown', provider: '', model: '', can_manage: false };
+        }
+        this.renderVision();
+        this.update();
+    }
+
+    /** The guidance for an image description problem (F68): a title and the steps; administrators get the steps to fix it, other accounts are asked to contact one. */
+    static visionGuide() {
+        let tr = this.api.tr;
+        let vision = this.vision;
+        if (!vision || vision.state == 'ready' || vision.state == 'unknown') {
+            return null;
+        }
+        let ollama = vision.provider == 'ollama';
+        if (!vision.can_manage) {
+            return {
+                title: vision.state == 'off'
+                    ? tr('照参考图做需要看图描述，管理员已关闭这项功能。')
+                    : tr('照参考图做需要视觉模型，服务器还没有配置好。'),
+                steps: [tr('请联系管理员按页面提示配置；期间可以先用“做一张图”或“出一整套”。')]
+            };
+        }
+        if (vision.state == 'off') {
+            return { title: tr('照参考图做需要看图描述，它已在“提示词优化设置”中关闭。'), steps: [tr('打开“提示词优化设置”，勾选“允许看图描述”并保存。'), tr('回到本页点“重新检查”。')] };
+        }
+        if (vision.state == 'no_model') {
+            return { title: tr('还没有为看图描述设置视觉模型。'), steps: [tr('打开“提示词优化设置”，为看图描述选择一个视觉模型并保存。'), tr('回到本页点“重新检查”。')] };
+        }
+        if (vision.state == 'unreachable') {
+            return ollama
+                ? { title: tr('连不上 Ollama 视觉服务。'), steps: [tr('在这台服务器上安装 Ollama：打开 https://ollama.com/download 下载并安装，安装后它会在后台自动运行。'), tr('打开命令行运行：ollama pull {0}', vision.model), tr('下载完成后回到本页点“重新检查”。')] }
+                : { title: tr('连不上视觉服务 {0}。', vision.provider), steps: [tr('打开“提示词优化设置”，检查视觉服务的 Key 和模型是否可用。'), tr('也可以改用本机 Ollama：免费，图片不出本机。')] };
+        }
+        return ollama
+            ? { title: tr('Ollama 已在运行，但还没有视觉模型 {0}。', vision.model), steps: [tr('在服务器上打开命令行运行：ollama pull {0}', vision.model), tr('下载完成后回到本页点“重新检查”；也可以在“提示词优化设置”中改选已安装的视觉模型。')] }
+            : { title: tr('视觉服务里没有模型 {0}。', vision.model), steps: [tr('打开“提示词优化设置”，改选可用的视觉模型。')] };
+    }
+
+    /** Shows the image description guidance under the references (F68); hidden when description works. */
+    static renderVision() {
+        if (!this.api) {
+            return;
+        }
+        let el = this.api.el;
+        let box = this.api.$('simple-vision');
+        let guide = this.visionGuide();
+        box.hidden = !guide;
+        if (!guide) {
+            box.replaceChildren();
+            return;
+        }
+        let list = el('ol', 'simple-vision-steps');
+        for (let step of guide.steps) {
+            list.append(el('li', '', step));
+        }
+        let parts = [el('p', 'simple-vision-title', guide.title), list];
+        if (this.vision.can_manage) {
+            let again = el('button', 'btn btn-sm', this.api.tr('重新检查'));
+            again.type = 'button';
+            again.addEventListener('click', () => this.loadVision());
+            parts.push(again);
+        }
+        box.replaceChildren(...parts);
     }
 
     /** Whether reference mode is on: the "follow a reference" task is chosen (F61); its references are required (F59). */
@@ -2210,9 +2284,7 @@ class SimpleMode {
         }
         this.api.$('simple-reference-list').replaceChildren(...rows);
         this.api.$('simple-reference-add').hidden = this.references.length >= 8;
-        this.api.$('simple-reference-hint').textContent = this.referenceVisionOff && this.references.length
-            ? tr('借鉴构图需要管理员开启看图描述，当前未开启，参考模式暂不可用。')
-            : tr('参考图只用于借鉴构图与光线，请使用有权使用的图片（自己拍摄、已授权或无版权限制）；生成结果请勿与参考图雷同。');
+        this.api.$('simple-reference-hint').textContent = tr('参考图只用于借鉴构图与光线，请使用有权使用的图片（自己拍摄、已授权或无版权限制）；生成结果请勿与参考图雷同。');
     }
 
     /** Turns the other step-2 options on or off (F59): in reference mode they do not apply (and are hidden by the task, F61). */
@@ -2246,8 +2318,8 @@ class SimpleMode {
         if (!this.referenceMode()) {
             return '';
         }
-        if (this.referenceVisionOff) {
-            return '借鉴构图需要管理员开启看图描述，当前未开启。';
+        if (this.visionGuide()) {
+            return '照参考图做暂不可用，请按上方提示处理。';
         }
         if (!this.references.length) {
             return '请添加参考图（1–8 张），每张参考图出 1 张。';

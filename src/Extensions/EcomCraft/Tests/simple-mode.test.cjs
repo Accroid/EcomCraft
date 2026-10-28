@@ -229,6 +229,24 @@ test('each task shows only its own step-2 fields and main button (F61)', () => {
     }
 });
 
+test('"follow a reference" explains a missing vision model: steps for administrators, "ask your administrator" for others (F68)', () => {
+    let simple = section('view-simple');
+    assert.match(simple, /id="simple-references-fld" data-tasks="reference">[\s\S]*id="simple-vision"/, 'the guidance sits with the references');
+    let SimpleMode = loadSimpleMode();
+    SimpleMode.api = { tr: (text, ...args) => text.replace(/\{(\d+)\}/g, (match, index) => String(args[Number(index)])), state: { session: 'x' } };
+    SimpleMode.vision = { state: 'ready', provider: 'ollama', model: 'llama3.2-vision:latest', can_manage: true };
+    assert.strictEqual(SimpleMode.visionGuide(), null);
+    SimpleMode.vision.state = 'unknown';
+    assert.strictEqual(SimpleMode.visionGuide(), null, 'an unanswered check never blocks');
+    SimpleMode.vision.state = 'model_missing';
+    assert.ok(SimpleMode.visionGuide().steps.some(step => step.includes('ollama pull llama3.2-vision:latest')));
+    SimpleMode.vision.can_manage = false;
+    assert.ok(SimpleMode.visionGuide().steps.every(step => !step.includes('ollama')), 'other accounts are asked to contact an administrator');
+    SimpleMode.chosenTask = 'reference';
+    SimpleMode.references = [{ promptEn: 'a', describing: false }];
+    assert.match(SimpleMode.referenceProblem(), /暂不可用/);
+});
+
 test('reference mode follows the chosen task and needs at least one reference (F61)', () => {
     let SimpleMode = loadSimpleMode();
     SimpleMode.api = { tr: text => text, state: { session: 'x' } };

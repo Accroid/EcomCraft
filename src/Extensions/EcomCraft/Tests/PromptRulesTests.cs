@@ -1,4 +1,5 @@
 using EcomCraftStudio.Studio.Prompting;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace EcomCraftStudio.Tests;
@@ -84,5 +85,29 @@ public class PromptRulesTests
         Assert.False(PromptRules.NeedsModel("", "", "a red mug"), "ASCII text in the Chinese tab needs no translation");
         Assert.True(PromptRules.NeedsModel("放在木桌上", "", ""), "an empty panel rewrites the description");
         Assert.False(PromptRules.NeedsModel("  ", "", ""), "nothing to rewrite: template and product-type defaults only");
+    }
+
+    [Fact]
+    public void ImageDescriptionIsOnByDefaultButProductPhotosAreNot()
+    {
+        Assert.True(PromptRules.VisionOn(null), "no settings file: describing references is on (A5)");
+        Assert.True(PromptRules.VisionOn(new JObject()));
+        Assert.False(PromptRules.VisionOn(new JObject() { ["vision_enabled"] = false }), "an administrator turned it off");
+        Assert.False(PromptRules.ProductVisionOn(null), "product photos are never sent unless allowed");
+        Assert.False(PromptRules.ProductVisionOn(new JObject() { ["vision_enabled"] = true }), "allowing references does not allow product photos");
+        Assert.True(PromptRules.ProductVisionOn(new JObject() { ["product_vision_enabled"] = true }));
+    }
+
+    [Fact]
+    public void VisionStateExplainsWhatIsMissing()
+    {
+        Assert.Equal("off", PromptRules.VisionState(false, "llama3.2-vision", ["llama3.2-vision:latest"]));
+        Assert.Equal("no_model", PromptRules.VisionState(true, " ", ["llama3.2-vision:latest"]));
+        Assert.Equal("unreachable", PromptRules.VisionState(true, "llama3.2-vision", null));
+        Assert.Equal("model_missing", PromptRules.VisionState(true, "llama3.2-vision:latest", []));
+        Assert.Equal("model_missing", PromptRules.VisionState(true, "llama3.2-vision:latest", ["llama3.2:latest", null]));
+        Assert.Equal("ready", PromptRules.VisionState(true, "llama3.2-vision", ["Llama3.2-Vision:latest"]));
+        Assert.Equal("ready", PromptRules.VisionState(true, "llama3.2-vision:latest", ["llama3.2-vision"]));
+        Assert.Equal("model_missing", PromptRules.VisionState(true, "llama3.2-vision:11b", ["llama3.2-vision:latest"]));
     }
 }
