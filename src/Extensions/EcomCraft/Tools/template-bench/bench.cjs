@@ -15,7 +15,7 @@ const path = require('node:path');
 
 /** Parses the command line into an options object. */
 function parseArgs(argv) {
-    let options = { count: 1, timeout: 600, url: 'http://127.0.0.1:7801' };
+    let options = { count: 1, timeout: 600, url: 'http://127.0.0.1:7801', width: 1024, height: 1024 };
     for (let i = 0; i < argv.length; i++) {
         let key = argv[i];
         if (!key.startsWith('--')) {
@@ -44,6 +44,8 @@ const HELP = `Usage: node bench.cjs --url http://127.0.0.1:7801 --products <dir>
   --pass      Account password
   --style     Style ID (default: the first available style)
   --count     Candidates per product and template (default 1)
+  --width     Output width in pixels, multiple of 8 (default 1024)
+  --height    Output height in pixels, multiple of 8 (default 1024)
   --timeout   Seconds to wait per task (default 600)
   --compare   Previous report.csv whose scores are copied into the new report`;
 
@@ -198,18 +200,56 @@ async function main() {
                 template_params: field ? { [field.id]: image } : {},
                 style_id: style,
                 images: Math.max(1, Number(options.count) || 1),
+                width: Math.max(256, Math.round(Number(options.width) / 8) * 8 || 1024),
+                height: Math.max(256, Math.round(Number(options.height) / 8) * 8 || 1024),
                 async: true
             };
             console.log(`提交：${product} × ${template.id}`);
+            // The claim can take longer than the API's 3-second window (slow prompt composition); adopt the new task
+            // that appears under this account instead of submitting twice.
+            let mineBefore = new Set();
+            {
+                let queue = await request('EcomCraftStudioQueue', {});
+                for (let task of queue.tasks || []) {
+                    if (task.mine && task.id != null) {
+                        mineBefore.add(task.id);
+                    }
+                }
+                for (let outcome of queue.finished_tasks || []) {
+                    if (outcome.id != null) {
+                        mineBefore.add(outcome.id);
+                    }
+                }
+            }
             let result = await request('EcomCraftStudioGenerate', payload);
+            let taskId = result.task_id;
             let images = result.images || [];
-            if (result.task_id != null) {
+            if (taskId == null && images.length == 0) {
+                console.warn('  服务端没有立刻返回任务号，等待任务出现…');
+                for (let i = 0; i < 20 && taskId == null; i++) {
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    let queue = await request('EcomCraftStudioQueue', {});
+                    for (let task of queue.tasks || []) {
+                        if (task.mine && task.id != null && !mineBefore.has(task.id)) {
+                            taskId = task.id;
+                        }
+                    }
+                    for (let outcome of queue.finished_tasks || []) {
+                        if (taskId == null && outcome.id != null && !mineBefore.has(outcome.id)) {
+                            taskId = outcome.id;
+                        }
+                    }
+                }
+            }
+            if (taskId != null && images.length == 0) {
                 let start = Date.now();
+                // A task leaves the queue a few seconds before its outcome is recorded; tolerate that gap like the workspace does.
+                let misses = 0;
                 while (images.length == 0 && Date.now() - start < deadlineMs) {
                     await new Promise(resolve => setTimeout(resolve, 3000));
                     let queue = await request('EcomCraftStudioQueue', {});
-                    let outcome = (queue.finished_tasks || []).find(task => task.id == result.task_id);
-                    let running = (queue.tasks || []).some(task => task.id == result.task_id);
+                    let outcome = (queue.finished_tasks || []).find(task => task.id == taskId);
+                    let running = (queue.tasks || []).some(task => task.id == taskId);
                     if (outcome) {
                         if (outcome.state == 'failed') {
                             console.warn(`  任务失败：${outcome.error}`);
@@ -217,8 +257,11 @@ async function main() {
                         images = outcome.images || [];
                         break;
                     }
-                    if (!running) {
+                    if (!running && ++misses >= 3) {
                         break;
+                    }
+                    if (running) {
+                        misses = 0;
                     }
                 }
             }
@@ -246,7 +289,7 @@ async function main() {
 if (require.main === module) {
     main().catch(error => {
         console.error(`错误：${error.message}`);
-        process.exit(1);
+        process.exitCode = 1;
     });
 }
 

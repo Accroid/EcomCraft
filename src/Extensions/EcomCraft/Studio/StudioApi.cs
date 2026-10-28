@@ -920,6 +920,9 @@ public static class StudioApi
         /// <summary>Result URLs of a successful generation.</summary>
         private List<string> Images = [];
 
+        /// <summary>Result URLs of a successful generation, or an empty list.</summary>
+        public List<string> ImageUrls { get { lock (Lock) { return [.. Images]; } } }
+
         /// <summary>Marks the generation ended with a sanitized error, or null on success with its result URLs.</summary>
         public void Finish(JObject error, List<string> images)
         {
@@ -1007,11 +1010,27 @@ public static class StudioApi
             }
             if (task.Finished)
             {
-                return task.Failure is JObject failed ? (JObject)failed.DeepClone() : new JObject() { ["queued"] = true, ["task_id"] = null };
+                return FinishedResponse(task);
             }
             await Task.Delay(100);
         }
+        if (task.Finished)
+        {
+            return FinishedResponse(task);
+        }
         return new JObject() { ["queued"] = true, ["task_id"] = null };
+    }
+
+    /// <summary>The response for a task that finished during the submit call. A fully cached generation can complete before its claim is ever
+    /// observed, so the claim ID never becomes known and the outcome is never recorded; such fast tasks return their images inline instead,
+    /// the same way the cut-out-only branch does.</summary>
+    private static JObject FinishedResponse(BackgroundTask task)
+    {
+        if (task.Failure is JObject failed)
+        {
+            return (JObject)failed.DeepClone();
+        }
+        return new JObject() { ["queued"] = true, ["task_id"] = null, ["images"] = new JArray(task.ImageUrls) };
     }
 
     /// <summary>Allows the stored-workflow selector only for a published workflow in an EcomCraft-local request.</summary>

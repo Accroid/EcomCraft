@@ -1108,9 +1108,10 @@ class SimpleMode {
         this.update();
         try {
             let result = await this.api.request('EcomCraftStudioGenerate', payload);
-            if (result.cutout_only) {
-                // Main images for platforms such as Amazon are made right away from the cut-out on pure white, without generation.
-                for (let url of result.images || []) {
+            if (result.images && result.images.length) {
+                // Fully cached generations can finish during the submit call and return their images inline,
+                // the same way the cut-out-only branch does; slower tasks deliver images through the queue poll.
+                for (let url of result.images) {
                     this.results.unshift(url);
                     this.resultGroups.set(url, this.product ? this.product.name : '');
                 }
