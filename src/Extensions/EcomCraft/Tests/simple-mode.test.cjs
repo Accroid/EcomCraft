@@ -26,10 +26,12 @@ function loadSimpleMode() {
     return sandbox.SimpleMode;
 }
 
-test('the simple view is the default and has no prompt box', () => {
+test('the simple view is the default and its only text boxes are the bilingual prompt panel', () => {
     let simple = section('view-simple');
     assert.ok(!/<section class="view" id="view-simple"[^>]*\bhidden\b/.test(simple), 'simple view must be visible by default');
-    assert.ok(!/<textarea/i.test(simple), 'no prompt box in simple mode');
+    let textareas = [...simple.matchAll(/<textarea\b[^>]*\bid="([^"]+)"/gi)].map(match => match[1]);
+    assert.strictEqual((simple.match(/<textarea\b/gi) || []).length, textareas.length, 'every textarea in simple mode needs an id');
+    assert.deepStrictEqual(textareas, ['simple-prompt-zh', 'simple-prompt-en'], 'only the bilingual prompt panel (F54) in simple mode');
     assert.ok(!/id="prompt"|id="negative"/.test(simple));
     assert.match(section('view-create'), /<section class="view" id="view-create"[^>]*\bhidden\b/);
 });
@@ -103,4 +105,18 @@ test('the set button uses the standard set of the chosen platform', () => {
     SimpleMode.data.templates = [{ id: 'a', platforms: ['*'], sets: ['standard'] }, { id: 'b', platforms: ['amazon'], sets: ['standard'] }, { id: 'c', platforms: ['*'], sets: [] }];
     SimpleMode.choice.platform = 'taobao';
     assert.deepStrictEqual(SimpleMode.setTemplates().map(template => template.id), ['a']);
+});
+
+test('the prompt panel sends edited English as is, edited Chinese for translation, and nothing when empty (F54)', () => {
+    let SimpleMode = loadSimpleMode();
+    let panel = (zh, en, base, last) => ({ zh, en, base: base || { zh: '', en: '' }, last: last || '' });
+    let synced = { zh: '红色马克杯', en: 'a red mug' };
+    assert.strictEqual(SimpleMode.promptSource(panel('', '')), '');
+    assert.strictEqual(SimpleMode.promptSource(panel('红色马克杯', 'a red mug', synced)), 'en', 'a synced panel sends the expanded English');
+    assert.strictEqual(SimpleMode.promptSource(panel('红色马克杯，木桌', 'a red mug', synced, 'zh')), 'zh', 'edited Chinese is translated, never the old English');
+    assert.strictEqual(SimpleMode.promptSource(panel('红色马克杯', 'a red mug on wood', synced, 'en')), 'en');
+    assert.strictEqual(SimpleMode.promptSource(panel('红色马克杯，木桌', 'a red mug on wood', synced, 'zh')), 'zh', 'the last edited language wins');
+    assert.strictEqual(SimpleMode.promptSource(panel('红色马克杯，木桌', 'a red mug on wood', synced, 'en')), 'en');
+    assert.strictEqual(SimpleMode.promptSource(panel('只写了中文', '')), 'zh', 'typing without expanding counts as an edit');
+    assert.strictEqual(SimpleMode.promptSource(panel('', 'a red mug', synced, 'zh')), 'en', 'a cleared Chinese text falls back to the English one');
 });

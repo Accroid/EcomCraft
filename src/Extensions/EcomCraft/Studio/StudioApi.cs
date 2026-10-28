@@ -669,33 +669,40 @@ public static class StudioApi
         string requestedTemplate = rawInput["template_id"]?.Type == JTokenType.String ? rawInput.Value<string>("template_id") : null;
         if (!string.IsNullOrWhiteSpace(requestedTemplate))
         {
-            // Without a prompt, a style and one-line description are turned into the prompt here, so the model's answer can only become prompt text (F37).
+            // Without a prompt, a style and one-line description (or the bilingual prompt panel, F54) are turned into the prompt here,
+            // so the model's answer can only become prompt text (F37).
             JObject templateInput = rawInput;
             PromptService.Composed composed = null;
             string description = rawInput["description"]?.Type == JTokenType.String ? rawInput.Value<string>("description").Trim() : "";
             string styleId = rawInput["style_id"]?.Type == JTokenType.String ? rawInput.Value<string>("style_id") : "";
             string productTypeId = rawInput["product_type_id"]?.Type == JTokenType.String ? rawInput.Value<string>("product_type_id") : "";
             bool needModel = rawInput["need_model"]?.Type == JTokenType.Boolean && rawInput.Value<bool>("need_model");
+            string promptEn = rawInput["prompt_en"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt_en") : "";
+            string promptZh = rawInput["prompt_zh"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt_zh") : "";
             if (!PromptService.KnownProductType(productTypeId))
             {
                 return Error("未知的产品类型，请刷新页面后重选。", "invalid_product_type");
             }
-            if (string.IsNullOrWhiteSpace(rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : null)
-                && (description.Length > 0 || styleId.Length > 0 || productTypeId.Length > 0 || needModel))
+            if (description.Length > PromptService.MaxDescriptionLength)
             {
-                if (description.Length > PromptService.MaxDescriptionLength)
-                {
-                    return Error($"描述最多 {PromptService.MaxDescriptionLength} 个字符。", "invalid_prompt");
-                }
-                composed = await PromptService.ComposeAsync(session, styleId, productTypeId, needModel, description, null);
-                templateInput = (JObject)rawInput.DeepClone();
-                templateInput["prompt"] = composed.Prompt;
+                return Error($"描述最多 {PromptService.MaxDescriptionLength} 个字符。", "invalid_prompt");
             }
-            // Main images for platforms such as Amazon skip generation entirely (F22).
+            if (promptEn.Length > PromptRules.MaxPromptLength || promptZh.Length > PromptRules.MaxPromptLength)
+            {
+                return Error($"提示词最多 {PromptRules.MaxPromptLength} 个字符。", "invalid_prompt");
+            }
+            // Main images for platforms such as Amazon skip generation entirely (F22), so they never wait for the language model.
             JObject cutoutOnly = await TemplateApi.TryCutoutOnlyAsync(session, rawInput, requestedTemplate);
             if (cutoutOnly is not null)
             {
                 return cutoutOnly;
+            }
+            if (string.IsNullOrWhiteSpace(rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : null)
+                && (description.Length > 0 || styleId.Length > 0 || productTypeId.Length > 0 || needModel || PromptRules.PanelSource(promptEn, promptZh).Length > 0))
+            {
+                composed = await PromptService.ComposePanelAsync(session, styleId, productTypeId, needModel, description, promptEn, promptZh);
+                templateInput = (JObject)rawInput.DeepClone();
+                templateInput["prompt"] = composed.Prompt;
             }
             // The template decides the workflow and presets; the client's own workflow_id and workflow_params are replaced.
             JObject resolved = TemplateApi.Resolve(session, templateInput, requestedTemplate, out JObject templateError, out string preserveToken);
@@ -717,10 +724,19 @@ public static class StudioApi
             {
                 PostProcess.ProductPreserve.Discard(preserveToken);
             }
-            if (composed?.NoticeCode is not null && !templateResult.ContainsKey("error"))
+            if (composed is not null && !templateResult.ContainsKey("error"))
             {
-                templateResult["prompt_notice"] = composed.Notice;
-                templateResult["prompt_notice_code"] = composed.NoticeCode;
+                // The prompt this account's own task was sent with (F54), so the result card can show it; never part of queue or status answers.
+                templateResult["prompt_used"] = composed.Prompt;
+                if (composed.Translated is not null)
+                {
+                    templateResult["prompt_translated"] = composed.Translated;
+                }
+                if (composed.NoticeCode is not null)
+                {
+                    templateResult["prompt_notice"] = composed.Notice;
+                    templateResult["prompt_notice_code"] = composed.NoticeCode;
+                }
             }
             return templateResult;
         }

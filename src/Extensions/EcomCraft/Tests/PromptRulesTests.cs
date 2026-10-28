@@ -58,4 +58,21 @@ public class PromptRulesTests
         Assert.Equal("clean studio", PromptRules.Compose("", "红色马克杯", "clean studio"));
         Assert.Equal("", PromptRules.Compose("", "", ""));
     }
+
+    [Fact]
+    public void UserPromptsKeepEveryLineButLoseNativeSyntax()
+    {
+        Assert.Equal("a red mug on a table, morning light", PromptRules.CleanUserPrompt("a red mug on a table,\n\nmorning light"));
+        Assert.Equal("a red mug", PromptRules.CleanUserPrompt("a red mug <lora:style:1>"));
+        Assert.Equal("", PromptRules.CleanUserPrompt(null));
+    }
+
+    [Fact]
+    public void PanelEnglishWinsOverChineseAndEmptyPanelFallsBack()
+    {
+        Assert.Equal("en", PromptRules.PanelSource("a red mug", "红色马克杯"));
+        Assert.Equal("zh", PromptRules.PanelSource("", "红色马克杯"));
+        Assert.Equal("zh", PromptRules.PanelSource("  ", "红色马克杯"));
+        Assert.Equal("", PromptRules.PanelSource(" ", null));
+    }
 }

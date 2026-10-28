@@ -358,6 +358,21 @@ main:focus:not(:focus-visible) { outline: none; }
 .simple-model input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--key); }
 .simple-model label { font-size: var(--fs-13); font-weight: 600; }
 .simple-hint-error { color: var(--tally); }
+.simple-expand-row { margin-top: 8px; }
+.simple-prompt { border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--field); overflow: hidden; }
+.simple-prompt-tabs { display: flex; border-bottom: 1px solid var(--line); }
+.simple-prompt-tabs button { min-height: 36px; padding: 4px 16px; border: 0; background: transparent; color: var(--ink-2); cursor: pointer; }
+.simple-prompt-tabs button[aria-selected="true"] { color: var(--key); font-weight: 600; box-shadow: inset 0 -2px 0 var(--key); }
+.simple-prompt textarea { display: block; min-height: 88px; border: 0; border-radius: 0; resize: vertical; }
+.simple-prompt textarea[hidden] { display: none; }
+.simple-prompt-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--line); background: var(--panel); }
+.simple-prompt-foot .hint { margin-top: 0; }
+.simple-prompt-state { display: inline-flex; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-12); background: var(--backdrop); color: var(--ink-2); }
+.simple-prompt-state.is-synced { background: var(--key-soft); color: var(--key); }
+.simple-prompt-state.is-dirty { background: var(--tally-soft); color: var(--tally); }
+.simple-prompt-used { margin: 8px 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--field); }
+.simple-prompt-used summary { cursor: pointer; font-size: var(--fs-13); font-weight: 600; }
+.simple-prompt-used .body { display: grid; gap: 6px; padding-top: 8px; font-size: var(--fs-12); color: var(--ink-2); overflow-wrap: anywhere; }
 .simple-card { display: grid; gap: 4px; padding: 8px; min-height: 32px; text-align: left; border: 1px solid var(--line); border-radius: 6px; background: var(--backdrop); color: var(--ink); cursor: pointer; }
 .simple-card[aria-pressed="true"] { border-color: var(--key); box-shadow: inset 0 0 0 1px var(--key); }
 .simple-card img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; }

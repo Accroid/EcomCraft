@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.27.0">
-    <script src="/EcomCraft/lang/en.js?v=0.27.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.27.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.27.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.27.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.28.0">
+    <script src="/EcomCraft/lang/en.js?v=0.28.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.28.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.28.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.28.0" defer></script>
 </head>
 
 <body>
@@ -133,6 +133,25 @@
                     <div class="fld">
                         <label for="simple-description">一句话描述（可选）</label>
                         <input id="simple-description" type="text" maxlength="500" autocomplete="off" placeholder="例如：放在木桌上，早晨的阳光">
+                        <div class="recover-actions simple-expand-row">
+                            <button type="button" class="btn" id="simple-expand">AI 扩写</button>
+                        </div>
+                        <p class="hint">AI 扩写会把一句话描述（不填则按产品类型）写成完整的中英文提示词，填到下方面板，可继续修改。</p>
+                    </div>
+                    <div class="fld">
+                        <span class="fld-label" id="simple-prompt-label">提示词<span class="fld-optional">可选，两种语言都可编辑；发送给引擎的始终是英文</span></span>
+                        <div class="simple-prompt">
+                            <div class="simple-prompt-tabs" role="tablist" aria-labelledby="simple-prompt-label">
+                                <button type="button" role="tab" id="simple-prompt-tab-zh" aria-controls="simple-prompt-zh" aria-selected="true">中文</button>
+                                <button type="button" role="tab" id="simple-prompt-tab-en" aria-controls="simple-prompt-en" aria-selected="false">English</button>
+                            </div>
+                            <textarea id="simple-prompt-zh" role="tabpanel" aria-labelledby="simple-prompt-tab-zh" rows="3" maxlength="1500" spellcheck="false" placeholder="点“AI 扩写”生成，或直接输入。留空时按一句话描述出图。"></textarea>
+                            <textarea id="simple-prompt-en" role="tabpanel" aria-labelledby="simple-prompt-tab-en" rows="3" maxlength="1500" spellcheck="false" placeholder="点“AI 扩写”生成，或直接输入英文提示词。" hidden></textarea>
+                            <div class="simple-prompt-foot">
+                                <span class="simple-prompt-state" id="simple-prompt-state">未填写</span>
+                                <span class="hint">修改中文后，提交时自动翻译成英文发送；修改英文后直接发送。</span>
+                            </div>
+                        </div>
                     </div>
                     <div class="inline-row">
                         <label for="simple-count">候选张数</label>
@@ -147,6 +166,10 @@
                 <li class="simple-step">
                     <h2 class="simple-step-title"><span class="simple-step-num" aria-hidden="true">3</span>挑图下载</h2>
                     <p class="hint" id="simple-status" aria-live="polite">出图完成后，候选图会出现在这里。点选满意的图片后下载。</p>
+                    <details class="simple-prompt-used" id="simple-prompt-used" hidden>
+                        <summary>本次发送给引擎的提示词</summary>
+                        <div class="body" id="simple-prompt-used-body" data-i18n-skip></div>
+                    </details>
                     <div class="simple-batch" id="simple-batch" hidden>
                         <ul class="simple-jobs" id="simple-jobs"></ul>
                         <button type="button" class="btn btn-sm" id="simple-batch-cancel">取消剩余任务</button>

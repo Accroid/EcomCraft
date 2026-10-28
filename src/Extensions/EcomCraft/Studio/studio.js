@@ -52,7 +52,7 @@
         'workflow_state','invalid_review','review_save_failed',
         'invalid_storage_path','storage_check_failed','storage_save_failed','invalid_storage_action',
         'invalid_template','template_image_failed','prompt_settings_failed','cutout_failed','product_save_failed','invalid_export','export_failed','diagnostics_failed',
-        'backup_failed','backup_invalid','backup_confirm_required','disk_full','invalid_product_type',
+        'backup_failed','backup_invalid','backup_confirm_required','disk_full','invalid_product_type','prompt_service_unavailable',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
     const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
 

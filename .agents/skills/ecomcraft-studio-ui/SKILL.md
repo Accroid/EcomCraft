@@ -25,7 +25,7 @@ description: 修改 EcomCraft 工作台页面（src/Extensions/EcomCraft/Studio 
 - 弹窗打开时调用 `DialogFocus.enter`，关闭时调用 `DialogFocus.leave`，并在全局 `keydown` 中处理 Esc 和 `DialogFocus.trap`。
 - 保留现有元素 ID：`studio.js` 依赖它们。
 - **新文字必须走翻译表**：界面原文写中文，中文原文就是翻译 key，英文写进 `Studio/lang/en.js`。固定文字（HTML 中的文字和 `title`、`placeholder`、`aria-label`、`alt`，以及 JS 里直接写入页面的中文字符串）由 `i18n.js` 自动查表；带变量的文字必须写成 `tr('已删除 {0} 个作品。', count)`，不要用带中文的模板字符串或 `+` 拼接中文。`window.confirm`、`document.title` 等不经过页面元素的文字也要用 `tr()`。用户内容（提示词、作品名、工作流名）不翻译，需要排除的元素加 `data-i18n-skip`。服务端错误在英文模式下按错误码显示 `error:<code>` 条目，新增错误码时同步补英文。改完运行 `node --test src/Extensions/EcomCraft/Tests/studio-i18n.test.cjs`：缺译、多余条目、英文里混入中文或占位符不一致都会失败。
-- 默认视图是 `simple.js` 的三步式简易模式，原创作视图是只给管理员的“专业模式”。不要在简易模式中加入提示词框或采样器、LoRA、步数等专业参数（`Tests/simple-mode.test.cjs` 会检查）。`simple.js` 先于 `studio.js` 加载，通过 `SimpleMode.attach()` 拿到 `studio.js` 的工具函数。
+- 默认视图是 `simple.js` 的三步式简易模式，原创作视图是只给管理员的“专业模式”。简易模式里唯一的提示词输入是 F54 的中英双语提示词面板（`simple-prompt-zh` / `simple-prompt-en`），不要再加其他提示词框或采样器、LoRA、步数等专业参数（`Tests/simple-mode.test.cjs` 会检查）；发送给引擎的提示词始终是英文，修改过的中文由服务端翻译。`simple.js` 先于 `studio.js` 加载，通过 `SimpleMode.attach()` 拿到 `studio.js` 的工具函数。
 - 切换语言不刷新页面：静态文字由 `i18n.js` 重新翻译；用 `tr()` 生成的动态文字需要在 `studio.js` 的 `onLanguageChange` 中重新渲染。
 - 文案：写用户能看懂的结果（“已删除 3 个作品”），加载状态以“…”结尾，错误说明原因和下一步；不用中点“·”拼接信息，不用全大写标签。
 - 修改后运行 `node --check src/Extensions/EcomCraft/Studio/studio.js` 和上面的翻译测试，再启动服务在浏览器中实际查看效果（中英文各看一遍）。
