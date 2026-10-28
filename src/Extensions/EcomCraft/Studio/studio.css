@@ -200,7 +200,7 @@ input[type=range] { width: 100%; accent-color: var(--key); }
 .user-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Hand-off to the professional mode (F64): desktop only, phones keep to the simple mode (U9). */
 @media (max-width: 720px) {
-    .simple-refine { display: none; }
+    .simple-refine, .pro-only { display: none; }
 }
 
 /* Own uploaded workflows in professional mode (F60). */

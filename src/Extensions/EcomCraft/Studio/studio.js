@@ -270,6 +270,14 @@
         if (!['simple', 'create', 'gallery', 'queue', 'workflows'].includes(view)) {
             view = 'simple';
         }
+        // Phones get the simple mode only (U9, F63): the professional mode asks for a computer and returns to creating images.
+        if (view == 'create' && phoneScreen()) {
+            view = 'simple';
+            history.replaceState(null, '', '#simple');
+            if (SimpleMode.api) {
+                SimpleMode.message(tr('专业模式请在电脑上使用；手机上可以出图、看画廊和队列。'), false);
+            }
+        }
         state.view = view;
         $('view-simple').hidden = view != 'simple';
         $('view-create').hidden = view != 'create';
@@ -298,6 +306,11 @@
             WorkflowReviewView.enter();
         }
     }
+    /** Whether the page is on a phone-sized screen, where only the simple mode, gallery and queue are offered (U9). */
+    function phoneScreen() {
+        return typeof window.matchMedia == 'function' && window.matchMedia('(max-width: 720px)').matches;
+    }
+
     function route() {
         const hash = (location.hash || '').replace('#', '');
         setView(['create', 'gallery', 'queue', 'workflows'].includes(hash) ? hash : 'simple');
