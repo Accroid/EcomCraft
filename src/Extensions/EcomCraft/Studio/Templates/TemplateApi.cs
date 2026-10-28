@@ -246,6 +246,69 @@ public static class TemplateApi
         return request;
     }
 
+    /// <summary>When the template only places the cut-out on pure white for the requested platform, makes that picture locally and returns the result;
+    /// returns null when the normal generation applies. The cut-out comes from the saved product, the request's image (cut out on an execution server when needed).</summary>
+    public static async Task<JObject> TryCutoutOnlyAsync(Session session, JObject rawInput, string templateId)
+    {
+        string platform = rawInput["platform"]?.Type == JTokenType.String ? rawInput.Value<string>("platform") : "";
+        TemplateStore.Entry entry = TemplateStore.Find(templateId);
+        if (entry?.Template is null || string.IsNullOrEmpty(platform) || !entry.Template.CutoutOnlyPlatforms.Contains(platform))
+        {
+            return null;
+        }
+        string image = null;
+        if (rawInput["product_id"]?.Type == JTokenType.String)
+        {
+            (string saved, _, string problem) = Products.ProductLibrary.ForGeneration(session.User.UserID, rawInput.Value<string>("product_id"), true);
+            (string original, _, _) = saved is null ? Products.ProductLibrary.ForGeneration(session.User.UserID, rawInput.Value<string>("product_id"), false) : (null, null, null);
+            image = saved ?? original;
+            if (image is null)
+            {
+                return StudioApi.Error(problem, "invalid_reference");
+            }
+        }
+        else if (rawInput["template_params"] is JObject parameters)
+        {
+            image = parameters.Properties().Select(property => property.Value).FirstOrDefault(value => value.Type == JTokenType.String && value.ToString().StartsWith("data:image/", StringComparison.Ordinal))?.ToString();
+        }
+        if (image is null)
+        {
+            return StudioApi.Error("这个模板需要商品图。", "invalid_reference");
+        }
+        byte[] bytes;
+        try
+        {
+            bytes = Convert.FromBase64String(image[(image.IndexOf(',') + 1)..]);
+        }
+        catch (FormatException)
+        {
+            return StudioApi.Error("无法读取商品图。", "invalid_reference");
+        }
+        string cutout = image;
+        using (SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32> loaded = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(bytes))
+        {
+            if (!ProductComposite.HasTransparency(loaded))
+            {
+                (byte[] png, _, string error, string errorId) = await CutoutService.CutoutAsync(bytes);
+                if (png is null)
+                {
+                    return StudioApi.Error(error, errorId);
+                }
+                cutout = "data:image/png;base64," + Convert.ToBase64String(png);
+            }
+        }
+        ExportImageSize(platform, out int width, out int height);
+        return CutoutOnly.Create(session.User, cutout, width, height, templateId);
+    }
+
+    /// <summary>The platform's export size, or 2000 × 2000 when it has none.</summary>
+    private static void ExportImageSize(string platform, out int width, out int height)
+    {
+        (_, Export.ExportPreset preset) = Export.ExportService.Presets().FirstOrDefault(item => item.Platform["id"]?.ToString() == platform);
+        width = preset?.Width ?? 2000;
+        height = preset?.Height ?? 2000;
+    }
+
     /// <summary>Output size of a template run: the preset or user value of the parameters bound to the width and height fields, else the snapshot defaults, else 1024.</summary>
     private static (int Width, int Height) TargetSize(JObject parameters, JObject workflowParams, string workflowId)
     {

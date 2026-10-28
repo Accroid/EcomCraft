@@ -667,6 +667,12 @@ public static class StudioApi
                 templateInput = (JObject)rawInput.DeepClone();
                 templateInput["prompt"] = composed.Prompt;
             }
+            // Main images for platforms such as Amazon skip generation entirely (F22).
+            JObject cutoutOnly = await TemplateApi.TryCutoutOnlyAsync(session, rawInput, requestedTemplate);
+            if (cutoutOnly is not null)
+            {
+                return cutoutOnly;
+            }
             // The template decides the workflow and presets; the client's own workflow_id and workflow_params are replaced.
             JObject resolved = TemplateApi.Resolve(session, templateInput, requestedTemplate, out JObject templateError, out string preserveToken);
             if (resolved is null)
@@ -1466,6 +1472,11 @@ public static class StudioApi
         if (templateId is not null)
         {
             ((JObject)input["extra_metadata"])["ecomcraft_template"] = templateId;
+        }
+        if (postProcess is not null)
+        {
+            // Marks the work as a composite of the real product and a generated picture, for the provenance metadata written on export (F22).
+            ((JObject)input["extra_metadata"])["ecomcraft_preserve"] = "true";
         }
         // Dependencies are checked per server against the final request, so the scheduler only considers servers that can run it (Rule 1).
         JObject executable = native ? ParseWorkflowObject(workflow.Prompt) : null;

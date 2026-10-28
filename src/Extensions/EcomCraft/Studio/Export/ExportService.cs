@@ -6,6 +6,8 @@ using Newtonsoft.Json.Linq;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SwarmUI.Accounts;
@@ -144,6 +146,7 @@ public static class ExportService
     private static JObject WriteZip(string userId, string label, List<(string Group, string Path)> files, ExportPreset preset)
     {
         Cleanup();
+        List<string> notWhite = [];
         string id = Guid.NewGuid().ToString("N");
         string folder = Path.Combine(ZipDir, userId);
         Directory.CreateDirectory(folder);
@@ -151,40 +154,72 @@ public static class ExportService
         using (FileStream stream = File.Create(zipPath))
         using (ZipArchive zip = new(stream, ZipArchiveMode.Create))
         {
-            foreach ((string name, byte[] data) in Rendered(label, files, preset))
+            foreach ((string name, byte[] data) in Rendered(label, files, preset, notWhite))
             {
                 ZipArchiveEntry entry = zip.CreateEntry(name, CompressionLevel.NoCompression);
                 using Stream entryStream = entry.Open();
                 entryStream.Write(data, 0, data.Length);
             }
         }
-        return new JObject() { ["download"] = $"/EcomCraft/export/{id}", ["file_name"] = $"{label}.zip", ["count"] = files.Count, ["verified"] = preset.Verified };
+        return new JObject() { ["download"] = $"/EcomCraft/export/{id}", ["file_name"] = $"{label}.zip", ["count"] = files.Count, ["verified"] = preset.Verified, ["not_white"] = new JArray(notWhite) };
     }
 
     /// <summary>Writes the rendered works under the export location: export/&lt;account&gt;/&lt;time-platform&gt;/&lt;group&gt;/.</summary>
     private static JObject WriteFolder(string userId, string root, string label, List<(string Group, string Path)> files, ExportPreset preset)
     {
-        foreach ((string name, byte[] data) in Rendered(label, files, preset))
+        List<string> notWhite = [];
+        foreach ((string name, byte[] data) in Rendered(label, files, preset, notWhite))
         {
             string path = Path.Combine(root, userId, name.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             File.WriteAllBytes(path, data);
         }
-        return new JObject() { ["exported"] = files.Count, ["folder"] = $"{userId}/{label}", ["verified"] = preset.Verified };
+        return new JObject() { ["exported"] = files.Count, ["folder"] = $"{userId}/{label}", ["verified"] = preset.Verified, ["not_white"] = new JArray(notWhite) };
     }
 
-    /// <summary>Renders every work, naming them "&lt;label&gt;/&lt;group&gt;/&lt;n&gt;.&lt;ext&gt;" numbered within each group.</summary>
-    private static IEnumerable<(string Name, byte[] Data)> Rendered(string label, List<(string Group, string Path)> files, ExportPreset preset)
+    /// <summary>Renders every work, naming them "&lt;label&gt;/&lt;group&gt;/&lt;n&gt;.&lt;ext&gt;" numbered within each group. AI provenance metadata is written
+    /// from the work's own markers (F22), and works whose border is not pure white are added to <paramref name="notWhite"/> when the preset requires it.</summary>
+    private static IEnumerable<(string Name, byte[] Data)> Rendered(string label, List<(string Group, string Path)> files, ExportPreset preset, List<string> notWhite)
     {
         Dictionary<string, int> counters = [];
         foreach ((string group, string path) in files)
         {
             int number = counters.GetValueOrDefault(group) + 1;
             counters[group] = number;
+            string name = $"{label}/{group}/{number:D2}.{preset.Format}";
             using Image<Rgba32> source = Image.Load<Rgba32>(path);
             using Image<Rgb24> rendered = ExportImage.Render(source, preset);
-            yield return ($"{label}/{group}/{number:D2}.{preset.Format}", Encode(rendered, preset));
+            if (preset.RequireWhite && ComplianceRules.NonWhiteBorderFraction(rendered) > 0)
+            {
+                notWhite.Add($"{group}/{number:D2}.{preset.Format}");
+            }
+            string kind = ComplianceRules.SourceKind(MetadataText(source));
+            string type = ComplianceRules.DigitalSourceType(kind);
+            if (type is not null)
+            {
+                string description = ComplianceRules.Description(kind);
+                rendered.Metadata.XmpProfile = new XmpProfile(Encoding.UTF8.GetBytes(ComplianceRules.Xmp(type, description)));
+                rendered.Metadata.ExifProfile ??= new ExifProfile();
+                rendered.Metadata.ExifProfile.SetValue(ExifTag.Software, ComplianceRules.CreatorTool);
+                rendered.Metadata.ExifProfile.SetValue(ExifTag.ImageDescription, description);
+            }
+            yield return (name, Encode(rendered, preset));
         }
+    }
+
+    /// <summary>The SwarmUI metadata text of a saved work (PNG text chunks or the JPEG user comment), or an empty string.</summary>
+    private static string MetadataText(Image<Rgba32> image)
+    {
+        StringBuilder text = new();
+        foreach (SixLabors.ImageSharp.Formats.Png.Chunks.PngTextData item in image.Metadata.GetPngMetadata().TextData)
+        {
+            text.Append(item.Value);
+        }
+        if (image.Metadata.ExifProfile?.TryGetValue(ExifTag.UserComment, out IExifValue<EncodedString> comment) == true)
+        {
+            text.Append(comment.Value.Text);
+        }
+        return text.ToString();
     }
 
     /// <summary>The account's prepared zip, or null.</summary>

@@ -51,6 +51,9 @@ public sealed class EcomTemplate
     /// pixels are pasted back onto every result, so logos, text and shapes stay unchanged.</summary>
     public bool PreserveProduct;
 
+    /// <summary>Platforms where the template skips generation and only centers the product cut-out on pure white (F22), for example Amazon main images.</summary>
+    public List<string> CutoutOnlyPlatforms = [];
+
     /// <summary>"builtin" or "custom"; set by the store, never read from the file.</summary>
     public string Source;
 
@@ -100,7 +103,7 @@ public static class TemplateValidator
     private static readonly Regex IdPattern = new("^[a-z0-9][a-z0-9-]{0,47}$", RegexOptions.CultureInvariant);
 
     /// <summary>Keys a template file may contain; anything else is rejected so typos do not silently disable a setting.</summary>
-    private static readonly HashSet<string> TemplateKeys = ["id", "name", "description", "example_image", "platforms", "sets", "prompt", "categories", "brand_kit", "execution_plans", "enabled", "preserve_product"];
+    private static readonly HashSet<string> TemplateKeys = ["id", "name", "description", "example_image", "platforms", "sets", "prompt", "categories", "brand_kit", "execution_plans", "enabled", "preserve_product", "cutout_only_platforms"];
 
     /// <summary>Keys an execution plan may contain.</summary>
     private static readonly HashSet<string> PlanKeys = ["kind", "workflow", "presets", "user_fields"];
@@ -151,6 +154,7 @@ public static class TemplateValidator
         }
         template.Sets = IdList(json["sets"], "sets", false, errors);
         template.Categories = IdList(json["categories"], "categories", false, errors);
+        template.CutoutOnlyPlatforms = IdList(json["cutout_only_platforms"], "cutout_only_platforms", false, errors);
         if (json["prompt"] is JToken prompt && prompt.Type != JTokenType.Null)
         {
             if (prompt is not JObject parts || parts.Properties().Any(part => part.Name is not ("prefix" or "suffix" or "negative")))

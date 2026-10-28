@@ -5,8 +5,8 @@
     "en": "White background main image"
   },
   "description": {
-    "zh-CN": "纯白背景、商品居中，适合各平台主图；保留原商品像素。",
-    "en": "Pure white background with the product centered, for main images on any platform; keeps the original product pixels."
+    "zh-CN": "纯白背景、商品居中，适合各平台主图；保留原商品像素。亚马逊平台只抠图放到纯白背景上，不调用生成模型。",
+    "en": "Pure white background with the product centered, for main images on any platform; keeps the original product pixels. For Amazon the cut-out is simply placed on pure white without any generation model."
   },
   "example_image": null,
   "platforms": [
@@ -33,5 +33,8 @@
       ]
     }
   ],
-  "enabled": true
+  "enabled": true,
+  "cutout_only_platforms": [
+    "amazon"
+  ]
 }
