@@ -73,6 +73,7 @@ public class EcomCraft : Extension
         API.RegisterAPICall(OwnWorkflowApi.EcomCraftStudioMyWorkflows, false, Permissions.BasicImageGeneration);
         API.RegisterAPICall(OwnWorkflowApi.EcomCraftStudioWorkflowDelete, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(OwnWorkflowApi.EcomCraftStudioWorkflowSubmitOwn, true, PermSubmitWorkflows);
+        API.RegisterAPICall(StandardWorkflows.EcomCraftStandardWorkflows, true, Permissions.EditServerSettings);
         API.RegisterAPICall(StorageApi.EcomCraftStorageSettings, false, Permissions.EditServerSettings);
         API.RegisterAPICall(StorageApi.EcomCraftStorageSave, true, Permissions.EditServerSettings);
         API.RegisterAPICall(StorageApi.EcomCraftStorageMigrate, true, Permissions.EditServerSettings);
@@ -126,6 +127,7 @@ public class EcomCraft : Extension
         DiskMonitor.Start();
         TemplateStore.Init(FilePath);
         PromptService.Init(FilePath);
+        StandardWorkflows.Init(FilePath);
         EcomCraftStudio.Studio.Export.SellingImageService.Init(FilePath);
     }
 
@@ -144,6 +146,7 @@ public class EcomCraft : Extension
         T2IEngine.PreGenerateEvent -= StudioApi.PrepareNativeWorkflowSeeds;
         ComfyUIAPIAbstractBackend.QueueProgressObserved -= StudioApi.ObserveComfyProgress;
         WorkflowDiscovery.Shutdown();
+        StandardWorkflows.Shutdown();
         WorkSync.Shutdown();
         CandidateCleanup.Shutdown();
         DiskMonitor.Shutdown();

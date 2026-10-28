@@ -3949,6 +3949,83 @@
         }
     }
 
+    /** The administrators' standard workflow dialog (F57): which built-in template workflows are published, and why the others are not. */
+    class StandardWorkflowView {
+        static busy = false;
+
+        /** Plain-language text of a state; problems name missing nodes or models. */
+        static stateText(item) {
+            let texts = {
+                published: '已发布，内置模板可以直接出图。',
+                taken_down: '已在审核中下架；点“初始化标准工作流”可重新发布。',
+                missing_blueprint: '缺少蓝图文件 Templates/blueprints/text-to-image.json，请更新 EcomCraft。',
+                unsupported: '蓝图文件无法通过校验，请更新 EcomCraft。',
+                missing_dependencies: '执行服务器缺少节点或模型，安装后点“初始化标准工作流”。',
+                no_server: '没有在线的执行服务器，服务器上线后会自动检查。',
+                failed: '保存失败，请检查服务器数据目录的磁盘空间和权限。',
+                not_checked: '还没有检查，服务启动约 30 秒后会自动检查。'
+            };
+            let text = tr(texts[item.state] || '状态未知，请稍后刷新。');
+            let problems = Array.isArray(item.problems) ? item.problems : [];
+            return problems.length ? text + tr('缺少：{0}', problems.join(tr('、'))) : text;
+        }
+
+        /** Shows the list and the configured default models. */
+        static render(result) {
+            let names = { scene: '场景图', detail: '细节图' };
+            let rows = [];
+            for (let item of result.workflows || []) {
+                let row = el('li', item.state == 'published' ? 'is-ok' : 'is-problem');
+                row.append(el('strong', '', tr(names[item.kind] || item.kind)), el('span', 'standard-state', this.stateText(item)));
+                rows.push(row);
+            }
+            $('standard-list').replaceChildren(...rows);
+            let models = result.models || {};
+            $('standard-models').textContent = tr('默认模型：{0}、{1}、{2}', models.unet || '', models.text_encoder || '', models.vae || '');
+        }
+
+        /** Reads the state, or with "init" generates and publishes now. */
+        static async load(action = '') {
+            if (this.busy) {
+                return;
+            }
+            this.busy = true;
+            $('standard-init').disabled = true;
+            $('standard-init').textContent = action ? tr('正在生成…') : tr('初始化标准工作流');
+            try {
+                this.render(await request('EcomCraftStandardWorkflows', action ? { action } : {}));
+            }
+            catch (error) {
+                $('standard-list').replaceChildren(el('li', 'is-problem', error.message || tr('读取失败，请稍后重试。')));
+            }
+            finally {
+                this.busy = false;
+                $('standard-init').disabled = false;
+                $('standard-init').textContent = tr('初始化标准工作流');
+            }
+        }
+
+        /** Opens the dialog and reads the state. */
+        static open(opener) {
+            $('standard-modal').hidden = false;
+            DialogFocus.enter($('standard-modal'), opener, $('standard-close'));
+            this.load();
+        }
+
+        /** Closes the dialog. */
+        static close() {
+            $('standard-modal').hidden = true;
+            DialogFocus.leave($('standard-modal'));
+        }
+
+        /** Binds the dialog buttons. */
+        static bind() {
+            $('standard-close').addEventListener('click', () => this.close());
+            $('standard-backdrop').addEventListener('click', () => this.close());
+            $('standard-init').addEventListener('click', () => this.load('init'));
+        }
+    }
+
     /** The administrators' "Manage" menu (F62): workflow review, setup wizard, prompt settings, storage and backup, diagnostics and the native engine. */
     class AdminMenu {
         /** Shows the menu and its entries for the account's permissions; reviewers see the review, server administrators everything else. */
@@ -4018,6 +4095,7 @@
             });
             let actions = {
                 'admin-menu-wizard': () => SetupWizard.open($('admin-menu-btn')),
+                'admin-menu-standard': () => StandardWorkflowView.open($('admin-menu-btn')),
                 'admin-menu-prompt': () => openEnhancerSettings(),
                 'admin-menu-storage': () => StorageSettingsView.open($('admin-menu-btn')),
                 'admin-menu-diagnostics': () => downloadDiagnostics($('admin-menu-diagnostics'))
@@ -4698,6 +4776,7 @@
         $('review-unpublish').addEventListener('click', () => WorkflowReviewView.decide('unpublish'));
         $('submit-close').addEventListener('click', () => WorkflowReviewView.closeSubmit());
         AdminMenu.bind();
+        StandardWorkflowView.bind();
         OwnWorkflows.bind();
         $('storage-close').addEventListener('click', () => StorageSettingsView.close());
         $('storage-cancel').addEventListener('click', () => StorageSettingsView.close());
@@ -4797,6 +4876,15 @@
                 }
                 else {
                     DialogFocus.trap($('simple-picker-modal'), e);
+                }
+                return;
+            }
+            if (!$('standard-modal').hidden) {
+                if (e.key == 'Escape') {
+                    StandardWorkflowView.close();
+                }
+                else {
+                    DialogFocus.trap($('standard-modal'), e);
                 }
                 return;
             }
