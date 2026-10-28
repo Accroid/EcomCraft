@@ -48,6 +48,8 @@ SwarmUI 账号系统的通用说明见 [Sharing Your Swarm（分享你的 SwarmU
 
 生成还需要 SwarmUI 自带的基础生成权限；`User` 角色默认已经具备。不要给普通成员 ComfyUI 原生工作流相关的权限，这类权限可以绕过 EcomCraft 的参数白名单。
 
+在画廊删除作品需要 SwarmUI 的 `user_delete_image` 权限，删除前会确认；服务器设置开启回收站（`Paths.RecycleDeletedImages`）时文件移入回收站，否则永久删除。
+
 如果开启登录后自己进不去，先关闭服务，用文本编辑器打开 `Data/Settings.fds`，把 `AuthorizationRequired` 改回 `false`，再启动服务。
 
 ## 4. 每人排队上限（R9.2）
