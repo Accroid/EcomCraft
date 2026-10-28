@@ -2,7 +2,20 @@
 
 > **Language:** [简体中文](README.md) · English
 
-EcomCraft Studio is an e-commerce creation workspace built on [SwarmUI](https://github.com/mcmonkeyprojects/SwarmUI). This repository includes the SwarmUI server source and the EcomCraft extension; **you do not need a separate upstream SwarmUI installation**. The project is under active development and has not completed production acceptance.
+EcomCraft Studio is an e-commerce creation workspace built on [SwarmUI](https://github.com/mcmonkeyprojects/SwarmUI). This repository includes the SwarmUI server source and the EcomCraft extension; **you do not need a separate upstream SwarmUI installation**. The project is under active development and has not completed production acceptance. If you hit a bug, please report it via Issues.
+
+## Before and After
+
+<!-- Before/after showcase: the uploaded product photo on the left, a generated result on the right. Images to be added later. -->
+
+| Uploaded photo | Generated result |
+|---|---|
+| (image pending) | (image pending) |
+
+## Demo
+
+- Demo video: (to be added)
+- The usual creation flow is described under “Quick Start” and in the [documentation overview](docs/README.md).
 
 ## Quick Start
 
@@ -66,6 +79,15 @@ Implemented:
 - Generated results can be downloaded, reused as the initial image for a new creation, or opened in the gallery; the full-size preview supports previous / next buttons and arrow keys, plus zoom for both images and videos (mouse wheel, double click, pinch or buttons, `+` / `-` / `0` keys) with drag-to-pan once zoomed in.
 - A gallery with starring, search, and single or batch deletion of the current user's outputs. Deletion requires the `user_delete_image` permission and a confirmation; files go to the recycle bin when the server enables `Paths.RecycleDeletedImages`, otherwise they are deleted permanently.
 - MagicPrompt prompt enhancement with configurable local or cloud language model services. Enter an API key to preview models immediately; configuration is applied only when you save. Prompt generation defaults to a 120-second timeout; model listing keeps its 20-second limit.
+- Upload quality checks: resolution, sharpness (Laplacian variance) and the product's share of the cut-out are checked on upload; weak photos get a plain warning with a suggestion and the user can continue. Thresholds live in `upload_quality` of `platforms.json`.
+- Unpicked candidate cleanup: simple-mode candidates that were never picked, downloaded or exported are deleted after a retention time (14 days by default, administrator-configurable or off); paths are verified to stay inside the works folder and only pictures or videos are removed. API: `EcomCraftStudioMarkKept`.
+- Plain-language errors: every API failure carries an error code and the front end shows a Chinese or English explanation with a next step, never a stack trace, address, prompt or node graph.
+- Administrator first-setup wizard: language → storage location → register servers → model check → common platforms; every step is skippable and the wizard can be reopened from the setup guide button. Common platforms come first and are preselected in the simple mode.
+- Mobile support: a camera-capture upload (the `capture` attribute works under `http://` LAN addresses), a single-column gallery on narrow screens, and no browser features that need HTTPS.
+- Completion notices: batches announce their outcome in the page, and a background tab shows “(done/total)” progress in its title until everything ends.
+- One-click diagnostics (administrators): recent logs, execution-server status, versions and sanitized configuration in one zip; secrets, passwords, prompts, images and session data are removed automatically. API: `EcomCraftDiagnostics`.
+- System data backup and restore (administrators): `Data/EcomCraft` plus the account database packed into a zip with a SHA-256 manifest; restores validate every file and require confirmation. See the [Upgrade and Data Guide](docs/EcomCraft%20Upgrade.md). APIs: `EcomCraftBackupCreate` and `EcomCraftBackupRestore`.
+- Disk space monitoring: the free space of the platform server and the work library is checked in the background; below the warning threshold (10 GB by default) administrators see a notice, below the critical threshold (2 GB by default) new generations are rejected with a plain reason. Thresholds are configurable or can be disabled.
 - An optional EcomCraft Studio desktop shortcut during Windows initial setup.
 
 Planned: team node management, persistent task history, a shared asset library, and per-task authorization for cloud generation. These planned features are not yet available.
@@ -91,6 +113,11 @@ Planned: team node management, persistent task history, a shared asset library, 
 ## Data and Access
 
 Selecting a cloud prompt model sends input text to the configured provider. That is a separate path from generation requests restricted to registered ComfyUI execution servers. ComfyUI on LAN execution servers has no login; use a firewall so that only the platform server can reach its port. The installer's “just yourself, with LAN access” mode still treats visitors as administrators. Before allowing multiple users, configure account authentication and permissions separately, and review the listening address, backend access, and asset-directory permissions. The default `Data/`, `Models/`, and `Output/` directories hold local settings, models, and generated data; if you change their paths, retain the configured directories instead.
+
+## Contact and Deployment Service
+
+- Bug reports and feature requests: [GitHub Issues](https://github.com/Accroid/EcomCraft/issues).
+- Deployment service: remote setup for single-machine or multi-machine LAN installations (installation, server registration, shared storage and team training); contact details: (to be added).
 
 ## Origin and License
 
