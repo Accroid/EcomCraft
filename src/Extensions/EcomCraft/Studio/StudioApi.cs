@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using EcomCraftStudio.MagicPrompt.WebAPI;
 using EcomCraftStudio.Studio.Generation;
 using EcomCraftStudio.Studio.Storage;
+using EcomCraftStudio.Studio.Templates;
 using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
@@ -642,6 +643,17 @@ public static class StudioApi
         {
             return Error("所选执行服务器不存在或已被停用，请刷新后重新选择。", "invalid_execution_server");
         }
+        string requestedTemplate = rawInput["template_id"]?.Type == JTokenType.String ? rawInput.Value<string>("template_id") : null;
+        if (!string.IsNullOrWhiteSpace(requestedTemplate))
+        {
+            // The template decides the workflow and presets; the client's own workflow_id and workflow_params are replaced.
+            JObject resolved = TemplateApi.Resolve(session, rawInput, requestedTemplate, out JObject templateError);
+            if (resolved is null)
+            {
+                return templateError;
+            }
+            return await GeneratePublishedWorkflow(session, resolved, resolved.Value<string>("workflow_id"), pinnedServer, requestedTemplate);
+        }
         string requestedWorkflow = (string)rawInput["workflow_id"];
         if (!string.IsNullOrWhiteSpace(requestedWorkflow))
         {
@@ -969,6 +981,9 @@ public static class StudioApi
     }
 
     /// <summary>Lists templates that at least one ready execution server can run, and collapses identical native graphs without removing stored workflows.</summary>
+    /// <summary>The published workflows the account can run on an online server now, as the workspace catalog lists them.</summary>
+    internal static JArray PublishedWorkflowsFor(Session session) => PublishedWorkflowCatalog(session);
+
     private static JArray PublishedWorkflowCatalog(Session session)
     {
         JArray published = new();
@@ -1183,7 +1198,7 @@ public static class StudioApi
         }
     }
 
-    private static async Task<JObject> GeneratePublishedWorkflow(Session session, JObject rawInput, string workflowId, int? pinnedServer)
+    private static async Task<JObject> GeneratePublishedWorkflow(Session session, JObject rawInput, string workflowId, int? pinnedServer, string templateId = null)
     {
         if (!session.User.HasPermission(EcomCraft.PermUsePublishedWorkflows))
         {
@@ -1394,6 +1409,10 @@ public static class StudioApi
             [ExecutionScopeKey] = ExecutionScopeValue,
             [PublishedWorkflowScopeKey] = workflow.Name
         };
+        if (templateId is not null)
+        {
+            ((JObject)input["extra_metadata"])["ecomcraft_template"] = templateId;
+        }
         // Dependencies are checked per server against the final request, so the scheduler only considers servers that can run it (Rule 1).
         JObject executable = native ? ParseWorkflowObject(workflow.Prompt) : null;
         JObject checkedInput = (JObject)input.DeepClone();
