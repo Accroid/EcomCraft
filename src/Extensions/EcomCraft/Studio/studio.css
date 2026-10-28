@@ -321,6 +321,18 @@ main:focus:not(:focus-visible) { outline: none; }
 .inline-row > select { width: auto; max-width: 60%; }
 /* Simple mode: three steps, cards that wrap on narrow screens. */
 .simple-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+/* Task-first simple mode (F61): three task cards; step 2 shows only the fields marked with the chosen task in data-tasks. */
+.simple-tasks { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 16px; }
+.simple-task { display: grid; gap: 4px; align-content: start; padding: 12px 14px; min-height: 64px; text-align: left; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; cursor: pointer; }
+.simple-task[aria-pressed="true"] { border-color: var(--key); box-shadow: inset 0 0 0 1px var(--key); }
+.simple-task-name { font-size: var(--fs-16); font-weight: 600; }
+.simple-task-desc { font-size: var(--fs-12); color: var(--ink-2); }
+[data-simple-task="reference"] [data-tasks]:not([data-tasks~="reference"]),
+[data-simple-task="single"] [data-tasks]:not([data-tasks~="single"]),
+[data-simple-task="set"] [data-tasks]:not([data-tasks~="set"]) { display: none; }
+.simple-more { padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--field); }
+.simple-more summary { cursor: pointer; font-size: var(--fs-13); font-weight: 600; padding: 4px 0; }
+.simple-more > .fld { margin-top: 12px; }
 .simple-step { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
 .simple-step-title { display: flex; align-items: center; gap: 8px; font-size: var(--fs-16); margin: 0; }
 .simple-step-num { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--key); color: var(--on-key); font-size: var(--fs-12); font-weight: 700; }
