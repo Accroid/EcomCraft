@@ -89,3 +89,18 @@ test('transparency detection follows the server rule (at least 2% transparent pi
     assert.strictEqual(SimpleMode.hasTransparency(pixels(100, 2)), true);
     assert.strictEqual(SimpleMode.hasTransparency(pixels(100, 1)), false);
 });
+
+test('a batch counts as finished only when no task is queued or running', () => {
+    let SimpleMode = loadSimpleMode();
+    assert.strictEqual(SimpleMode.batchFinished([{ state: 'done' }, { state: 'failed' }, { state: 'cancelled' }]), true);
+    assert.strictEqual(SimpleMode.batchFinished([{ state: 'done' }, { state: 'running' }]), false);
+    assert.strictEqual(SimpleMode.batchFinished([{ state: 'queued' }]), false);
+    assert.strictEqual(SimpleMode.batchFinished([]), true);
+});
+
+test('the set button uses the standard set of the chosen platform', () => {
+    let SimpleMode = loadSimpleMode();
+    SimpleMode.data.templates = [{ id: 'a', platforms: ['*'], sets: ['standard'] }, { id: 'b', platforms: ['amazon'], sets: ['standard'] }, { id: 'c', platforms: ['*'], sets: [] }];
+    SimpleMode.choice.platform = 'taobao';
+    assert.deepStrictEqual(SimpleMode.setTemplates().map(template => template.id), ['a']);
+});

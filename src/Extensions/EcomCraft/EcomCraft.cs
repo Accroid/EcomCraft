@@ -78,6 +78,10 @@ public class EcomCraft : Extension
         API.RegisterAPICall(PromptService.EcomCraftStudioComposePrompt, false, Permissions.BasicImageGeneration);
         API.RegisterAPICall(PromptService.EcomCraftPromptSettings, true, Permissions.EditServerSettings);
         API.RegisterAPICall(CutoutService.EcomCraftStudioCutout, true, Permissions.BasicImageGeneration);
+        API.RegisterAPICall(EcomCraftStudio.Studio.Generation.BatchService.EcomCraftStudioGenerateSet, true, Permissions.BasicImageGeneration);
+        API.RegisterAPICall(EcomCraftStudio.Studio.Generation.BatchService.EcomCraftStudioBatchStatus, false, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(EcomCraftStudio.Studio.Generation.BatchService.EcomCraftStudioBatchRetry, true, Permissions.BasicImageGeneration);
+        API.RegisterAPICall(EcomCraftStudio.Studio.Generation.BatchService.EcomCraftStudioBatchCancel, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateAdminList, false, PermReviewWorkflows);
         API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateSave, true, PermReviewWorkflows);
         API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateDelete, true, PermReviewWorkflows);

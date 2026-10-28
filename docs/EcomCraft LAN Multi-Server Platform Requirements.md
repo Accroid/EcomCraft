@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20局域网多服务器平台需求.zh-CN.md)
 >
-> **Status:** In development (phase 1 steps 1–7 code and documentation complete, awaiting real tests) · **Version:** v1.9 · **Date:** 2026-10-28
+> **Status:** In development (phase 1 steps 1–7 code and documentation complete, awaiting real tests) · **Version:** v1.10 · **Date:** 2026-10-28
 >
 > This document is the reference for further development. When requirements change, update this document first (Chinese and English together), record the change in the change log at the end, and only then change the code. For the e-commerce image layer, the overall architecture and the MVP roadmap, see [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md).
 
@@ -135,6 +135,7 @@ Published + source file changed → Pending re-review (users keep using the old 
 - R5.4 When the user ticks "run only on a specific server", the task is not reassigned and waits on that server. If that server is congested while another runnable server is idle, the page suggests "consider removing the restriction".
 - R5.5 When no server can run the task, the reason is stated clearly (all offline, or which nodes / models are missing) and nothing is submitted.
 - R5.6 Results are labelled with the server that actually ran them.
+- R5.7 One-click sets and batches (F03) expand into independent tasks: one per product photo × image type in the set, each scheduled by Rule 1 on its own, so they can run in parallel on several servers. A failed task does not affect the others and can be retried alone; cancelling stops the tasks still waiting, while running tasks finish.
 
 ### R6 Failure Handling
 
@@ -158,6 +159,7 @@ Published + source file changed → Pending re-review (users keep using the old 
 
 - R9.1 Account login is enabled (`UserAuthorization.AuthorizationRequired`), with one account per person.
 - R9.2 Each user's queue limit reuses the existing SwarmUI role setting `MaxQueued`, configured per role by the administrator.
+- R9.4 Per-person limit: in sets and batches, each person runs at most the smaller of their role's `MaxT2ISimultaneous` and 4 tasks at once; the rest wait inside the platform without occupying execution servers, so one person cannot take every GPU. `MaxQueued` still limits the total queued images.
 - R9.3 User groups (phase 2): the administrator maintains user groups, used for gallery sharing and grouped workflow authorization.
 
 ### R10 Cloud Integration (capability reserved only; not developed in this phase)
@@ -336,4 +338,5 @@ Implementation notes for step 7:
 | 2026-10-27 | v1.7 | Completed step 5 code (T35): background task results and failure notices, reassignment to another server, gallery shows the workflow and execution server; added V5 |
 | 2026-10-27 | v1.8 | Completed step 6 (T36): added the LAN Deployment Guide (Chinese and English) covering account login, `MaxQueued`, firewalls, visibility on shared storage and browser restrictions under `http://`; exceeding the queue limit returns `queue_limit` |
 | 2026-10-28 | v1.9 | Completed step 7 code (T37): work library and export location settings and checks, write locally then sync with retries, pending-sync mark, migration of old works; added implementation notes |
+| 2026-10-28 | v1.10 | Added R5.7 scheduling rules for sets and batches and R9.4 per-person limit (T08) |
 | 2026-10-27 | v1.5 | Static review of steps 1–3 (T33): workflow discovery now refreshes on a background timer started by the extension instead of only when a page is opened; added notes on server names and workflow IDs, and on re-review after conversion logic upgrades |

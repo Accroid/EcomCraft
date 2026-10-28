@@ -86,6 +86,30 @@ public static class TemplateApi
         return Task.FromResult(new JObject() { ["platforms"] = platforms });
     }
 
+    /// <summary>Templates this account can run now, with the resolved snapshot ID and the snapshot's image field for the product photo (null when there is none).</summary>
+    internal static List<(EcomTemplate Template, string WorkflowId, string ImageField)> RunnableTemplates(Session session)
+    {
+        Dictionary<string, JObject> runnable = Runnable(session);
+        List<(EcomTemplate, string, string)> result = [];
+        foreach (TemplateStore.Entry entry in TemplateStore.All())
+        {
+            if (entry.Template is not { Enabled: true } || TemplateStore.Problems(entry).Count > 0)
+            {
+                continue;
+            }
+            string workflowId = TemplateStore.WorkflowIdFor(entry.Template.LocalPlan);
+            if (workflowId is null || !runnable.ContainsKey(workflowId))
+            {
+                continue;
+            }
+            JObject parameters = TemplateStore.SnapshotParameters(workflowId);
+            string image = TemplateValidator.ExpandFields(entry.Template.LocalPlan.UserFields, parameters)
+                .FirstOrDefault(field => parameters?[field]?["type"]?.ToString() == "image");
+            result.Add((entry.Template, workflowId, image));
+        }
+        return result;
+    }
+
     /// <summary>One hidden template: ID, name, reason code, and details for reviewers only.</summary>
     private static JObject Hidden(string id, string name, string code, string detail) => new()
     {
