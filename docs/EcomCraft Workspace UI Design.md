@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.25 · **Date:** 2026-10-29
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.26 · **Date:** 2026-10-29
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -165,7 +165,7 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 
 | Control | Purpose | Current | After |
 |---|---|---|---|
-| Navigation "Create" / "Professional mode" | Switch views | New | Everyone starts in "Create"; "Professional mode" is the former creation view, open to every account (A2, F60) |
+| Navigation "Create" / "Professional mode" | Switch views | New | Everyone starts in "Create"; "Professional mode" is the former creation view, open to every account (A2, F60); hidden on phone-sized screens (≤720px), where opening `#create` returns to creating images with a note to use a computer (F63) |
 | Professional mode Upload workflow / My workflows | Upload a workflow saved with ComfyUI's Save for one's own use (F60) | New | "Upload workflow" button and list under the workflow picker; each entry shows the name, how many execution servers can run it or which nodes and models are missing, and "Delete" (with confirmation); a refused upload lists the disallowed nodes and inputs; own workflows form their own "My workflows" group in the picker; hidden for accounts without generation rights |
 | Task cards: Follow a reference / Make one image / Make a full set | Choose what to make, then fill it in (F61) | New | Three cards at the top; "Follow a reference" comes first and is the first-visit default; the chosen card has the green-screen border and `aria-pressed`; remembered in the browser; step 2 shows only that task's fields (marked with `data-tasks` in HTML, hidden by CSS from `data-simple-task`), and its title becomes "Pick platform and references / image type / product type"; switching tasks keeps product photos and references |
 | Step 2 References (Follow a reference) | Upload 1–8 references with an editable prompt each (F59) | New | Shown and required only in "Follow a reference"; the main button "Generate by reference" makes one image per reference for every product photo |
@@ -408,3 +408,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-29 | v1.23 | Professional mode open to every account, with workflow upload and "My workflows" (F60/T63) |
 | 2026-10-29 | v1.24 | Step 3 gained "Refine in professional mode" (F64/T67) |
 | 2026-10-29 | v1.25 | Star button on candidates (F65/T68) |
+| 2026-10-29 | v1.26 | Phones get simple mode only (F63/T66): narrow screens hide the professional mode entry, the lightbox "Create from this image" and "Refine in professional mode" |

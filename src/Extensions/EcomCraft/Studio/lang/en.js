@@ -5,6 +5,7 @@ window.EcomCraftLanguages.en = {
     // Page shell and navigation
     "EcomCraft 工作台": "EcomCraft Studio",
     "管理": "Manage",
+    "专业模式请在电脑上使用；手机上可以出图、看画廊和队列。": "Professional mode is for computers; on a phone you can create images and view the gallery and queue.",
     "在专业模式里精修": "Refine in professional mode",
     "已带入这张图和它的提示词，可以在专业模式里继续精修。": "This image and its prompt are loaded; keep refining in professional mode.",
     "已带入这张图，但没读到它的提示词，请自己填写创作描述。": "This image is loaded, but its prompt could not be read; write the description yourself.",

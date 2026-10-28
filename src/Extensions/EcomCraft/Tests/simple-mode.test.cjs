@@ -58,7 +58,7 @@ test('professional parameters live only in the professional view', () => {
 });
 
 test('the professional mode navigation starts hidden', () => {
-    assert.match(html, /<a class="nav-item" data-view="create" href="#create" id="nav-create" hidden>/);
+    assert.match(html, /<a class="nav-item pro-only" data-view="create" href="#create" id="nav-create" hidden>/);
     assert.match(html, /<a class="nav-item" data-view="simple" href="#simple">/);
 });
 
@@ -262,7 +262,7 @@ test('reference mode follows the chosen task and needs at least one reference (F
 test('the top bar: create images, professional mode, gallery and queue; administration lives in the hidden "Manage" menu (F62)', () => {
     let start = html.indexOf('<header class="topbar">');
     let topbar = html.slice(start, html.indexOf('</header>', start));
-    let labels = [...topbar.matchAll(/<a class="nav-item" data-view="(simple|create|gallery|queue)"[^>]*>([^<]+)/g)].map(match => match[2]);
+    let labels = [...topbar.matchAll(/<a class="nav-item[^"]*" data-view="(simple|create|gallery|queue)"[^>]*>([^<]+)/g)].map(match => match[2]);
     assert.deepStrictEqual(labels, ['出图', '专业模式', '画廊', '队列']);
     assert.match(topbar, /<div class="admin-menu" id="admin-menu" hidden>/, 'the menu starts hidden and is shown to administrators only');
     let native = [...topbar.matchAll(/<a [^>]*href="\/Text2Image"[^>]*>/g)].map(match => match[0]);
@@ -285,7 +285,7 @@ test('one picked candidate can be refined in professional mode, with the prompt 
     let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
     assert.match(studio, /request\('EcomCraftStudioWorkRecipe', \{ image: url \}\)/, 'the prompt comes from the work itself, not from page memory');
     let css = fs.readFileSync(path.join(studioDir, 'studio.css'), 'utf8');
-    assert.match(css, /@media \(max-width: 720px\) \{\s*\.simple-refine \{ display: none; \}/, 'phones keep to the simple mode');
+    assert.match(css, /@media \(max-width: 720px\) \{\s*\.simple-refine, \.pro-only \{ display: none; \}/, 'phones keep to the simple mode');
 });
 
 test('candidates are starred with the gallery star, by their gallery path (F65)', () => {

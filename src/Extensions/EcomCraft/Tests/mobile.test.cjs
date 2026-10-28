@@ -31,3 +31,12 @@ test('the gallery collapses to a single column on narrow phones', () => {
     assert.ok(narrow, 'a max-width: 560px block must exist');
     assert.match(narrow[0], /\.contact-sheet \{[^}]*grid-template-columns: 1fr/);
 });
+
+test('phones get the simple mode only: professional entries are hidden and #create returns to creating images (F63)', () => {
+    assert.match(css, /@media \(max-width: 720px\) \{\s*\.simple-refine, \.pro-only \{ display: none; \}/);
+    for (let id of ['nav-create', 'lb-edit']) {
+        assert.match(html, new RegExp(`class="[^"]*\\bpro-only\\b[^"]*"[^>]*id="${id}"`), `${id} is hidden on phones`);
+    }
+    let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    assert.match(studio, /if \(view == 'create' && phoneScreen\(\)\) \{\s*view = 'simple';/);
+});

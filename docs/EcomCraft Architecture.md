@@ -251,7 +251,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F60 | Professional mode open to every account (A2), with ComfyUI workflow upload (usable by the uploader at once, by others after review) | UI redesign v4 (T63 opening and own uploads; T73 review and publishing, to do) |
 | F61 | Task-first simple mode (follow a reference / make one image / make a full set) | UI redesign v4 (T64) |
 | F62 | Navigation, "Admin" menu and consistent wording | UI redesign v4 (T65, to do) |
-| F63 | Phones get simple mode only | UI redesign v4 (T66, to do) |
+| F63 | Phones get simple mode only | UI redesign v4 (T66) |
 | F64 | One-way hand-off from simple to professional mode | UI redesign v4 (T67) |
 | F65 | Star candidates (first filter) | UI redesign v4 (T68) |
 | F66 | Gallery and queue cleanup | UI redesign v4 (T69, to do) |
