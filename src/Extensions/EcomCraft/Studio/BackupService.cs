@@ -54,7 +54,12 @@ public static class BackupService
                 foreach (string file in EnumerateBackupFiles())
                 {
                     string name = EntryName(file);
-                    zip.CreateEntryFromFile(file, name, CompressionLevel.Optimal);
+                    // The account database stays open while the server runs; reading it with write sharing keeps the backup working.
+                    using (FileStream source = File.Open(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    using (Stream target = zip.CreateEntry(name, CompressionLevel.Optimal).Open())
+                    {
+                        source.CopyTo(target);
+                    }
                     ((JArray)manifest["files"]).Add(BackupRules.Entry(name, new FileInfo(file).Length, BackupRules.Hash(file)));
                 }
                 ZipArchiveEntry manifestEntry = zip.CreateEntry("manifest.json", CompressionLevel.Optimal);
@@ -183,16 +188,9 @@ public static class BackupService
         return null;
     }
 
-    /// <summary>The backup entry name of a local file.</summary>
-    private static string EntryName(string file)
-    {
-        string dataFull = Path.GetFullPath(Program.DataDir);
-        if (file.StartsWith(dataFull + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-        {
-            return "accounts/" + file[(dataFull.Length + 1)..].Replace('\\', '/');
-        }
-        return "ecomcraft/" + file[(Path.GetFullPath(Path.Combine(Program.DataDir, "EcomCraft")).Length + 1)..].Replace('\\', '/');
-    }
+    /// <summary>The backup entry name of a local file: files under Data/EcomCraft are "ecomcraft/…", the account database files under Data are "accounts/…".</summary>
+    private static string EntryName(string file) => BackupRules.EntryName(file,
+        Path.GetFullPath(Path.Combine(Program.DataDir, "EcomCraft")), Path.GetFullPath(Program.DataDir));
 
     /// <summary>Every file of Data/EcomCraft except transient folders, then the account database files.</summary>
     private static IEnumerable<string> EnumerateBackupFiles()
