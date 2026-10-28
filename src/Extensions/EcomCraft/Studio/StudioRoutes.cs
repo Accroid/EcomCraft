@@ -86,6 +86,22 @@ public static class StudioRoutes
             context.Response.ContentType = extension switch { "png" => "image/png", "webp" => "image/webp", _ => "image/jpeg" };
             await context.Response.Body.WriteAsync(bytes, context.RequestAborted);
         });
+        // Prepared export zips (F05): only the account that made them can download them.
+        WebServer.WebApp.MapGet("/EcomCraft/export/{id}", async (HttpContext context, string id) =>
+        {
+            User user = WebServer.GetUserFor(context);
+            string path = user is null ? null : Export.ExportService.ZipPath(user.UserID, id);
+            if (path is null)
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+            context.Response.Headers.CacheControl = "no-store";
+            context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            context.Response.Headers.ContentDisposition = "attachment; filename=\"ecomcraft-export.zip\"";
+            context.Response.ContentType = "application/zip";
+            await context.Response.SendFileAsync(path, context.RequestAborted);
+        });
         WebServer.WebApp.MapGet("/EcomCraft", async (HttpContext context) =>
         {
             User user = WebServer.GetUserFor(context);

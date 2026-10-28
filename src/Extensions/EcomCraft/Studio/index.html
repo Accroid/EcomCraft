@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.14.0">
-    <script src="/EcomCraft/lang/en.js?v=0.14.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.14.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.14.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.14.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.15.0">
+    <script src="/EcomCraft/lang/en.js?v=0.15.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.15.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.15.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.15.0" defer></script>
 </head>
 
 <body>
@@ -138,6 +138,17 @@
                         <button type="button" class="btn btn-sm" id="simple-batch-cancel">取消剩余任务</button>
                     </div>
                     <div class="simple-results" id="simple-results"></div>
+                    <div class="simple-export" id="simple-export" hidden>
+                        <div class="inline-row">
+                            <label for="simple-export-platform">导出到平台</label>
+                            <select id="simple-export-platform"></select>
+                        </div>
+                        <p class="hint" id="simple-export-note"></p>
+                        <div class="recover-actions">
+                            <button type="button" class="btn" id="simple-export-zip" disabled>按平台打包下载</button>
+                            <button type="button" class="btn" id="simple-export-folder" disabled hidden>导出到共享文件夹</button>
+                        </div>
+                    </div>
                     <div class="recover-actions">
                         <button type="button" class="btn btn-primary" id="simple-download" disabled>下载所选</button>
                         <a class="btn" href="#gallery">在画廊查看全部</a>

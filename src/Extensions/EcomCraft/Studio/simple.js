@@ -13,6 +13,11 @@ class SimpleMode {
     static product = null;
     static products = [];
     static library = [];
+    static exportOptions = { platforms: [], folder_available: false };
+    static resultGroups = new Map();
+    static taskProducts = new Map();
+    static batchProducts = [];
+    static exporting = false;
     static placementTimer = null;
     static batch = null;
     static batchTimer = null;
@@ -113,6 +118,9 @@ class SimpleMode {
         $('simple-count').addEventListener('change', () => this.update());
         $('simple-batch-cancel').addEventListener('click', () => this.cancelBatch());
         $('simple-product-name').addEventListener('change', e => this.renameProduct(e.target.value));
+        $('simple-export-zip').addEventListener('click', () => this.exportSelected('zip'));
+        $('simple-export-folder').addEventListener('click', () => this.exportSelected('folder'));
+        $('simple-export-platform').addEventListener('change', () => this.renderExport());
         $('simple-product-delete').addEventListener('click', () => this.deleteProduct());
         $('simple-size').addEventListener('change', () => this.savePlacement());
         $('simple-download').addEventListener('click', () => this.download());
@@ -184,6 +192,82 @@ class SimpleMode {
         this.renderTemplates();
         this.renderStyles();
         await this.loadLibrary();
+        await this.loadExportOptions();
+    }
+
+    /** Reads the platforms that have export presets and whether the shared export folder is available. */
+    static async loadExportOptions() {
+        try {
+            this.exportOptions = await this.api.request('EcomCraftStudioExportOptions', { language: I18n.current });
+        }
+        catch (error) {
+            this.exportOptions = { platforms: [], folder_available: false };
+        }
+        let select = this.api.$('simple-export-platform');
+        let current = select.value || this.choice.platform;
+        let options = (this.exportOptions.platforms || []).map(platform => new Option(this.api.tr('{0}（{1}×{2}）', platform.name, platform.width, platform.height), platform.id));
+        select.replaceChildren(...options);
+        if (options.some(option => option.value == current)) {
+            select.value = current;
+        }
+        this.renderExport();
+    }
+
+    /** Shows the export panel once there are candidates, with a notice when the chosen preset is not verified yet. */
+    static renderExport() {
+        let tr = this.api.tr;
+        let platform = (this.exportOptions.platforms || []).find(item => item.id == this.api.$('simple-export-platform').value);
+        this.api.$('simple-export').hidden = !this.results.length || !(this.exportOptions.platforms || []).length;
+        this.api.$('simple-export-folder').hidden = !this.exportOptions.folder_available;
+        let ready = Boolean(platform) && this.selected.size > 0 && !this.exporting;
+        this.api.$('simple-export-zip').disabled = !ready;
+        this.api.$('simple-export-folder').disabled = !ready;
+        let note = this.selected.size ? tr('将导出已选的 {0} 张，每个商品一个文件夹。', this.selected.size) : tr('先点选要导出的图片。');
+        if (platform && !platform.verified) {
+            note += ' ' + tr('这个平台的尺寸规格还没有经过管理员核对，上传前请对照平台最新要求。');
+        }
+        this.api.$('simple-export-note').textContent = note;
+    }
+
+    /** Exports the selected candidates for the chosen platform, grouped by product. */
+    static async exportSelected(target) {
+        let tr = this.api.tr;
+        let platform = this.api.$('simple-export-platform').value;
+        if (!platform || !this.selected.size || this.exporting) {
+            return;
+        }
+        let groups = new Map();
+        for (let url of this.selected) {
+            let name = this.resultGroups.get(url) || tr('商品');
+            if (!groups.has(name)) {
+                groups.set(name, []);
+            }
+            groups.get(name).push(url);
+        }
+        this.exporting = true;
+        this.renderExport();
+        try {
+            let result = await this.api.request('EcomCraftStudioExport', { platform, target, groups: Array.from(groups, ([name, images]) => ({ name, images })) });
+            if (result.download) {
+                let link = document.createElement('a');
+                link.href = result.download;
+                link.download = result.file_name || 'ecomcraft-export.zip';
+                document.body.append(link);
+                link.click();
+                link.remove();
+                this.message(tr('已打包 {0} 张图片，开始下载。', result.count), false);
+            }
+            else {
+                this.message(tr('已导出 {0} 张图片到共享文件夹：{1}', result.exported, result.folder), false);
+            }
+        }
+        catch (error) {
+            this.message(error.message || tr('导出失败，请稍后重试。'), true);
+        }
+        finally {
+            this.exporting = false;
+            this.renderExport();
+        }
     }
 
     /** Reads the account's saved products for the "from the product library" list. */
@@ -709,6 +793,7 @@ class SimpleMode {
         };
         this.submitting = true;
         this.update();
+        this.batchProducts = this.products.map(product => product.name || '');
         try {
             let batch = await this.api.request('EcomCraftStudioGenerateSet', payload);
             this.batch = batch;
@@ -784,6 +869,7 @@ class SimpleMode {
             for (let url of job.images || []) {
                 if (!this.results.includes(url)) {
                     this.results.push(url);
+                    this.resultGroups.set(url, this.batchProducts[job.product] || tr('商品 {0}', job.product + 1));
                     added = true;
                 }
             }
@@ -855,6 +941,7 @@ class SimpleMode {
             let result = await this.api.request('EcomCraftStudioGenerate', payload);
             if (result.task_id != null) {
                 this.pending.add(result.task_id);
+                this.taskProducts.set(result.task_id, this.product ? this.product.name : '');
                 this.track();
             }
             let status = tr('已开始出图，完成后候选图会出现在下方。');
@@ -905,6 +992,7 @@ class SimpleMode {
                 else {
                     for (let url of outcome.images || []) {
                         this.results.unshift(url);
+                        this.resultGroups.set(url, this.taskProducts.get(id) || '');
                     }
                     this.renderResults();
                 }
@@ -959,6 +1047,7 @@ class SimpleMode {
             tiles.push(button);
         }
         this.api.$('simple-results').replaceChildren(...tiles);
+        this.renderExport();
     }
 
     /** Downloads the selected candidates one by one through the browser. */
