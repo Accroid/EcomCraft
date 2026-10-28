@@ -100,7 +100,7 @@ Release 模式下，C# 扩展程序集按 Git 提交短哈希缓存。修改 `sr
 - `EcomCraftStudioCatalog`、`EcomCraftStudioQueue` 和 `EcomCraftStudioCancelTask` 返回的数据应遵守最小披露原则：队列接口可以返回执行服务器的 ID、显示名称、状态、排队数、排队位置和节点进度，但不得返回服务器地址、提示词、原始工作流、其他用户的任务 ID、会话 ID 或密钥。取消任务前必须验证当前账号拥有该任务。
 - 原生 ComfyUI 工作流发现由 `WorkflowDiscovery` 在后台执行，接口请求只读缓存。本机只读取已配置本机后端、`Installation.FindComfyScripts` 验证的本机安装中的标准 `workflows` / `blueprints` 目录，或 `Settings.EcomCraft.ComfyWorkflowSearchPaths` 指定的目录；局域网执行服务器只通过其 ComfyUI `userdata` 接口读取 `workflows` 目录。不得全盘扫描任意 JSON 或扫描局域网网段。导入前必须验证工作流结构、子图连接和正负提示词输入；发现的工作流只是审核候选，不得直接注册给用户调用，只有 `WorkflowReview` 发布的快照进入工作流注册表，并继续使用参数白名单边界；工作流的来源服务器不决定执行服务器。
 - 工作流审核接口（`WorkflowReviewApi`）只能返回参数定义、审核状态和缺失的节点或模型名称，不得返回原始节点图或服务器地址；驳回原因只给提交人和审核人。审核记录和快照保存在 `Data/EcomCraft/workflow-reviews.json`，写入须经临时文件替换，读取失败时不得覆盖原文件。
-- EcomCraft 进度观测不得长期保存提示词、工作流输入或生成结果。进度缓存应在任务结束或超时后清理，并在扩展卸载时解除 `ComfyUIAPIAbstractBackend.QueueProgressObserved` 事件订阅。
+- EcomCraft 进度观测不得长期保存提示词、工作流输入或生成结果。进度缓存应在任务结束或超时后清理，并在扩展卸载时解除 `ComfyUIAPIAbstractBackend.QueueProgressObserved` 事件订阅。候选图清理登记（`Data/EcomCraft/candidates.json`）、诊断包和备份只保存文件路径、时间和脱敏后的配置，不保存提示词、图片或节点图，不属于进度缓存。
 - 修改桌面入口或首页跳转时，应同时检查 `Desktop/`、`src/Core/Installation.cs`、`src/Core/Program.cs`、启动脚本、`src/Pages/Text2Image.cshtml` 和 `src/wwwroot/ecomcraft.ico` 的名称与路径一致性。
 - 修改 EcomCraft 功能后，应同步检查根目录的 `README.md`、`README.en.md`、`docs/README.zh-CN.md` 以及对应功能文档；API 名称、配置键和安全边界必须保持一致。
 - 局域网多服务器平台的开发以 [`docs/EcomCraft 局域网多服务器平台需求.zh-CN.md`](docs/EcomCraft%20局域网多服务器平台需求.zh-CN.md) 为准；需求变更先改该文档再改代码。
