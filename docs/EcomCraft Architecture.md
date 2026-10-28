@@ -228,9 +228,9 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F50 | User groups and work sharing | Team and commercial |
 | F51 | Server operations (maintenance mode, workflow distribution, remote cleanup) | Team and commercial |
 | F52 | Four upload sources (local, camera, product library, gallery pick) | Simple mode redesign v3 (confirmed) |
-| F53 | Two-level product type, optional visual style and model checkbox | Simple mode redesign v3 (confirmed) |
+| F53 | Two-level product type, optional visual style and model checkbox | Simple mode redesign v3 (implemented, pending acceptance) |
 | F54 | Bilingual prompts and AI expansion | Simple mode redesign v3 (confirmed) |
-| F55 | Manual candidate count with a 20-image cap | Simple mode redesign v3 (confirmed) |
+| F55 | Manual candidate count with a 20-image cap | Simple mode redesign v3 (implemented, pending acceptance) |
 | F56 | Faster generation path (queue on submit) | Simple mode redesign v3 (confirmed) |
 | F57 | Automatic standard workflow creation | Simple mode redesign v3 (confirmed) |
 | F16 | Paid feature licensing | Team and commercial |
@@ -261,3 +261,4 @@ For each task's files, dependencies, acceptance criteria and Claude Code prompt,
 | 2026-10-28 | v1.1 | The Chinese / English workspace interface (F24 / T22) is implemented; noted how it works and that server messages are not localized yet |
 | 2026-10-28 | v1.3 | All MVP code complete (T06, T16, T41–T49): status table refreshed (generation orchestration, scheduling, storage etc. now implemented); operations APIs (diagnostics, backup/restore) and usability features (upload quality, candidate cleanup, setup wizard, mobile upload, completion notices, disk monitoring) added; multi-machine testing and seed-team trials pending |
 | 2026-10-28 | v1.4 | Simple mode redesign v3 added (F52–F57 / T54–T59, confirmed, development pending): four upload sources, two-level product type, bilingual prompts with AI expansion, a 20-image candidate cap, a faster generation path, and automatic standard workflow creation; requirements in "EcomCraft Simple Mode Redesign" |
+| 2026-10-28 | v1.5 | First two redesign tasks done and deployed: F53 (T55, 467c036d) and F55 (T57, 0e7c6b3e); handover notes and remaining tasks in "EcomCraft Simple Mode Redesign" section 11 |

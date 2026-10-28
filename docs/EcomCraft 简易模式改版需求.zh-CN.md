@@ -2,7 +2,7 @@
 
 > **语言：** 简体中文 · [English](EcomCraft%20Simple%20Mode%20Redesign.md)
 >
-> **状态：** 已确认待开发 · **版本：** v3 · **日期：** 2026-10-28
+> **状态：** 开发中（F53、F55 已实现并部署，待人工验收；F52、F54、F56、F57 待开发） · **版本：** v3.1 · **日期：** 2026-10-28
 >
 > 本文档记录简易模式（三步出图）改版的需求定稿。开发以本文为准，需求变更时先修改本文（中英文同步）并登记文末变更记录，再修改代码。整体架构和 MVP 路线见 [EcomCraft 架构与路线图](EcomCraft%20Architecture.zh-CN.md)；交互原型见 [EcomCraft 简易模式改版原型.html](EcomCraft%20简易模式改版原型.html)（浏览器直接打开）。
 
@@ -172,21 +172,39 @@ MVP 完成后的试用反馈集中在简易模式的易用性和开箱可用性�
 
 开发顺序：**T55 → T57 → T56 → T58 → T59 → T54**（先控件，再链路，最后工作流与上传入口）。每步完成后跑翻译测试与构建验证，再进入下一步。
 
-## 11. 开发进度
+## 11. 开发进度与交接（面向继续开发的代理）
 
-| 功能 | 状态 | 说明 |
-|---|---|---|
-| F53 产品类型、风格与模特 | 已实现，待验收（T55，提交 467c036d） | 两级选择、可选风格、模特勾选与互斥均已上线；界面设计文档 v1.13 |
-| F55 候选张数与按钮文案 | 已实现，待验收（T57，提交 0e7c6b3e） | 数字输入、20 张总上限与提示文案均已上线；界面设计文档 v1.14 |
-| F54 双语提示词与 AI 扩写 | 未开始（T56） |
-| F56 出图链路提速 | 未开始（T58） |
-| F57 标准工作流自动生成 | 未开始（T59） |
-| F52 上传四入口 | 未开始（T54） |
+### 11.1 当前状态（2026-10-28）
 
-交互原型（已确认）：[EcomCraft 简易模式改版原型.html](EcomCraft%20简易模式改版原型.html)。开发总表中的任务状态由用户验收后填写。
+| 功能 | 任务 | 状态 | 提交 | 备注 |
+|---|---|---|---|---|
+| F53 产品类型、可选风格与模特 | T55 | **已实现**，已部署，待人工验收 | 467c036d | 两级选择 + `product-types.json` + `EcomCraftStudioProductTypes` 接口；界面设计文档 v1.13 |
+| F55 候选张数与按钮文案 | T57 | **已实现**，已部署，待人工验收 | 0e7c6b3e | 数字输入 1–20；单次与整套共用 20 张总上限（服务端同步拦截）；界面设计文档 v1.14 |
+| F54 双语提示词与 AI 扩写 | T56 | 待开发 | — | 需求见第 4 节。⚠️ `Tests/simple-mode.test.cjs` 目前断言简易模式无 textarea，实现提示词面板时需同步调整该断言（仍须禁止采样器、LoRA 等专业参数） |
+| F56 出图链路提速 | T58 | 待开发 | — | 需求见第 6 节；涉及 `EcomCraftStudioGenerate` / `EcomCraftStudioGenerateSet` 提交路径 |
+| F57 标准工作流自动生成 | T59 | 待开发 | — | 需求见第 7 节；依赖 N01（管理员先在设置中指定默认大模型） |
+| F52 上传四入口 | T54 | 待开发 | — | 需求见第 2 节；画廊选图客户端压缩到 5 MB |
+
+服务状态：dev 分支最新提交 f9d021b7；本机服务已按该代码重启（`src/bin/extensions/SwarmExtensionEcomCraft/SwarmExtensionEcomCraft-0e7c6b3e.dll`）。
+
+### 11.2 如何继续开发
+
+1. 按 **T56 → T58 → T59 → T54** 顺序，一次只做一个任务。每个任务的涉及文件、依赖、验收标准、测试方式和可直接粘贴的 Claude Code 提示词在 [EcomCraft 开发总表](EcomCraft%20开发总表.xlsx)的“开发任务”工作表（K 列）。
+2. 每个任务完成后的验证步骤（缺一不可）：
+   - `node --check src/Extensions/EcomCraft/Studio/simple.js`（及本次改动的其他 js）
+   - `node --test src/Extensions/EcomCraft/Tests/studio-i18n.test.cjs src/Extensions/EcomCraft/Tests/error-codes.test.cjs src/Extensions/EcomCraft/Tests/simple-mode.test.cjs`
+   - `dotnet build src/Extensions/EcomCraft/EcomCraft.csproj -c Debug -o <临时目录>`（0 错误）
+   - `dotnet test src/Extensions/EcomCraft/Tests/EcomCraft.Tests.csproj -c Debug`
+   - 改了 C# 必须重启服务才生效（见 `.agents/skills/ecomcraft-build-run`）；只改前端时更新 `index.html` 的 `?v=` 后浏览器强刷即可。
+3. 硬性约束（详见第 9 节与 `AGENTS.md`）：客户端只提交模板 / 参数 ID；只用已登记执行服务器；引擎提示词固定英文；新界面文字必须同步 `Studio/lang/en.js`；文档中英文同步更新。
+4. 一个任务一次提交（dev 分支），提交信息格式见 `.agents/skills/dev-branch-commit`；不要提交 `src/bin`、`src/obj`、`Data/`、`Output/`。
+5. 任务完成并经用户验收后：开发总表中该任务状态改为“已完成”，并同步更新本节 11.1。
+
+交互原型（已确认，实现以本文为准）：[EcomCraft 简易模式改版原型.html](EcomCraft%20简易模式改版原型.html)。
 
 ## 变更记录
 
 | 日期 | 版本 | 说明 |
 |---|---|---|
 | 2026-10-28 | v3 | 初版定稿：R1–R7 七项需求确认为 F52–F57 六个功能；含分类体系、双语提示词规则、20 张总上限、出图提速与工作流自动生成方案；交互原型随附 |
+| 2026-10-28 | v3.1 | 交接版：F53（T55，467c036d）与 F55（T57，0e7c6b3e）已实现并部署；第 11 节改为开发进度与交接说明（含验证步骤与 T56 的测试断言注意事项） |

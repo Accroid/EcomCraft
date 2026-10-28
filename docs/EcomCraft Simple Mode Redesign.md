@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20简易模式改版需求.zh-CN.md)
 >
-> **Status:** Confirmed, development pending · **Version:** v3 · **Date:** 2026-10-28
+> **Status:** In development (F53 and F55 implemented and deployed, pending manual acceptance; F52, F54, F56 and F57 pending) · **Version:** v3.1 · **Date:** 2026-10-28
 >
 > This document holds the finalized requirements for the simple-mode (three-step) redesign. Development follows this document; when requirements change, update this document first (Chinese and English together), record the change in the change log, and only then change the code. For the overall architecture and MVP roadmap see [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md); for the interactive prototype see [EcomCraft Simple Mode Redesign Prototype](EcomCraft%20简易模式改版原型.html) (open directly in a browser; Chinese UI).
 
@@ -172,21 +172,39 @@ After the redesign:
 
 Development order: **T55 → T57 → T56 → T58 → T59 → T54** (controls first, then the generation path, then workflows and upload sources). Each step runs the i18n tests and a build check before the next.
 
-## 11. Development Progress
+## 11. Progress and Handover (for the agent continuing development)
 
-| Feature | Status | Notes |
-|---|---|---|
-| F53 product type, style, model | Implemented, pending acceptance (T55, commit 467c036d) | Two-level choice, optional style and the mutually exclusive model checkbox are live; UI design doc v1.13 |
-| F55 candidate count and button texts | Implemented, pending acceptance (T57, commit 0e7c6b3e) | Number input, the 20-image cap and the hint texts are live; UI design doc v1.14 |
-| F54 bilingual prompts and AI expansion | Not started (T56) |
-| F56 faster generation path | Not started (T58) |
-| F57 automatic workflow creation | Not started (T59) |
-| F52 four upload sources | Not started (T54) |
+### 11.1 Current state (2026-10-28)
 
-Interactive prototype (confirmed): [EcomCraft Simple Mode Redesign Prototype](EcomCraft%20简易模式改版原型.html). Task statuses in the development sheet are filled in after user acceptance.
+| Feature | Task | Status | Commit | Notes |
+|---|---|---|---|---|
+| F53 product type, optional style, model | T55 | **Implemented**, deployed, pending manual acceptance | 467c036d | Two-level choice + `product-types.json` + `EcomCraftStudioProductTypes` API; UI design doc v1.13 |
+| F55 candidate count and button texts | T57 | **Implemented**, deployed, pending manual acceptance | 0e7c6b3e | Number input 1–20; single generations and sets share the 20-image cap (enforced server-side too); UI design doc v1.14 |
+| F54 bilingual prompts and AI expansion | T56 | Pending | — | See section 4. ⚠️ `Tests/simple-mode.test.cjs` currently asserts the simple view has no textarea; implementing the prompt panel requires adjusting that assertion (professional parameters such as samplers and LoRAs must still be forbidden) |
+| F56 faster generation path | T58 | Pending | — | See section 6; touches the `EcomCraftStudioGenerate` / `EcomCraftStudioGenerateSet` submit paths |
+| F57 automatic workflow creation | T59 | Pending | — | See section 7; depends on N01 (an administrator must set the default checkpoint first) |
+| F52 four upload sources | T54 | Pending | — | See section 2; gallery picks are compressed to 5 MB client-side |
+
+Service state: latest dev commit f9d021b7; the local service was restarted on this code (`src/bin/extensions/SwarmExtensionEcomCraft/SwarmExtensionEcomCraft-0e7c6b3e.dll`).
+
+### 11.2 How to continue
+
+1. Work through **T56 → T58 → T59 → T54**, one task at a time. Each task's files, dependencies, acceptance criteria, test method and a ready-to-paste Claude Code prompt are in the "开发任务" sheet (column K) of the [development sheet](EcomCraft%20开发总表.xlsx).
+2. Required verification after every task:
+   - `node --check src/Extensions/EcomCraft/Studio/simple.js` (and any other changed js)
+   - `node --test src/Extensions/EcomCraft/Tests/studio-i18n.test.cjs src/Extensions/EcomCraft/Tests/error-codes.test.cjs src/Extensions/EcomCraft/Tests/simple-mode.test.cjs`
+   - `dotnet build src/Extensions/EcomCraft/EcomCraft.csproj -c Debug -o <temp dir>` (0 errors)
+   - `dotnet test src/Extensions/EcomCraft/Tests/EcomCraft.Tests.csproj -c Debug`
+   - C# changes need a service restart to take effect (see `.agents/skills/ecomcraft-build-run`); frontend-only changes just need the `?v=` bump in `index.html` plus a forced browser refresh.
+3. Hard constraints (see section 9 and `AGENTS.md`): clients submit template / parameter IDs only; only registered execution servers; the engine prompt is always English; every new UI text must be added to `Studio/lang/en.js`; keep Chinese and English docs in sync.
+4. One commit per task (dev branch), message format in `.agents/skills/dev-branch-commit`; never commit `src/bin`, `src/obj`, `Data/` or `Output/`.
+5. After user acceptance: set the task to "已完成" in the development sheet and refresh 11.1 above.
+
+Interactive prototype (confirmed; this document governs): [EcomCraft Simple Mode Redesign Prototype](EcomCraft%20简易模式改版原型.html).
 
 ## Change Log
 
 | Date | Version | Notes |
 |---|---|---|
 | 2026-10-28 | v3 | Initial final version: R1–R7 confirmed as features F52–F57; category system, bilingual prompt rules, the 20-image cap, the faster generation path and automatic workflow creation; interactive prototype attached |
+| 2026-10-28 | v3.1 | Handover release: F53 (T55, 467c036d) and F55 (T57, 0e7c6b3e) implemented and deployed; section 11 rewritten as progress and handover notes (verification steps and the T56 test-assertion caveat included) |
