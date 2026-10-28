@@ -41,5 +41,5 @@
 - [Calling ComfyUI Workflows in EcomCraft](/docs/EcomCraft%20ComfyUI%20Workflows.md) for workflow discovery on local installations and LAN execution servers, review and publishing, execution server scheduling, and the client API.
 - [EcomCraft LAN Deployment Guide](/docs/EcomCraft%20LAN%20Deployment.md) for multi-user login, per-role queue limits, execution server firewalls, visibility of works on shared storage, and browser restrictions under `http://` LAN addresses.
 - [EcomCraft Upgrade and Data Guide](/docs/EcomCraft%20Upgrade.md) for what survives an upgrade and how to back up and restore system data.
-- [Prompt Enhancement and Deployment](/docs/EcomCraft%20Prompt%20Enhancement.md) (Chinese) for MagicPrompt backend configuration and generation timeouts.
+- [Prompt Enhancement and Deployment](/docs/EcomCraft%20Prompt%20Enhancement.en.md) ([Chinese](/docs/EcomCraft%20Prompt%20Enhancement.md)) for MagicPrompt backend configuration, generation timeouts and the image-description (vision) toggle.
 - [EcomCraft Workspace UI Design](/docs/EcomCraft%20Workspace%20UI%20Design.md) for the workspace's design language and the per-page control inventory.

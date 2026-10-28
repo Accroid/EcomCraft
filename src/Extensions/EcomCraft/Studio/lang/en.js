@@ -915,6 +915,9 @@ window.EcomCraftLanguages.en = {
     "error:export_failed": "The export did not finish: the shared folder may be offline or not writable. Try again later.",
     "error:cutout_failed": "Background removal did not finish. Try again later, or upload a PNG whose background is already transparent.",
     "error:vision_disabled": "Borrowing compositions from reference images needs the administrator to enable image description, which is currently off.",
+    "允许看图描述（把图片发送给视觉模型，用于参考图借鉴构图）": "Allow image description (sends images to the vision model, used to borrow compositions from references)",
+    "关闭时参考图模式不可用；开启前请确认视觉模型已安装并运行（默认 Ollama 的 llama3.2-vision）。": "With it off, reference mode is unavailable; before turning it on, make sure the vision model is installed and running (Ollama's llama3.2-vision by default).",
+    "视觉模型：{0} / {1}": "Vision model: {0} / {1}",
 
     // Template model requirements and licenses
     "模板所需模型与商用许可": "Models templates need and commercial-use licenses",
