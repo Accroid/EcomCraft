@@ -102,6 +102,22 @@ public static class StudioRoutes
             context.Response.ContentType = "application/zip";
             await context.Response.SendFileAsync(path, context.RequestAborted);
         });
+        // System-data backups (F45): administrators only, created and downloaded by the same account.
+        WebServer.WebApp.MapGet("/EcomCraft/backup/{id}", async (HttpContext context, string id) =>
+        {
+            User user = WebServer.GetUserFor(context);
+            string path = user is null || !user.HasPermission(Permissions.EditServerSettings) ? null : BackupService.ZipPath(user.UserID, id);
+            if (path is null)
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+            context.Response.Headers.CacheControl = "no-store";
+            context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            context.Response.Headers.ContentDisposition = "attachment; filename=\"ecomcraft-backup.zip\"";
+            context.Response.ContentType = "application/zip";
+            await context.Response.SendFileAsync(path, context.RequestAborted);
+        });
         // Diagnostics packages (F44): administrators only, created and downloaded by the same account.
         WebServer.WebApp.MapGet("/EcomCraft/diagnostics/{id}", async (HttpContext context, string id) =>
         {

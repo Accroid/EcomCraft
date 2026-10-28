@@ -29,6 +29,7 @@
 - [EcomCraft 提示词优化与部署指南（中文）](EcomCraft%20Prompt%20Enhancement.md)：后端配置、输入 Key 后直接拉取模型、保存流程及生成超时设置。
 - [EcomCraft ComfyUI 工作流调用](EcomCraft%20ComfyUI%20工作流.zh-CN.md)（[English](EcomCraft%20ComfyUI%20Workflows.md)）：本机安装与局域网执行服务器的工作流自动发现、局域网 ComfyUI 接入、执行服务器调度、工作流与子图蓝图导入、重复项合并与依赖过滤、批量出图种子递增、Windows AMD 连续生成排查、共享模型目录接入、模型和参数默认值读取、修改回传及客户端调用。
 - [EcomCraft 局域网部署指南](EcomCraft%20局域网部署指南.zh-CN.md)（[English](EcomCraft%20LAN%20Deployment.md)）：多人使用时开启账号登录、按角色设置排队上限、执行服务器防火墙、共享存储上作品的可见性，以及 `http://` 局域网地址下的浏览器限制。
+- [EcomCraft 升级与数据说明](EcomCraft%20Upgrade.zh-CN.md)（[English](EcomCraft%20Upgrade.md)）：升级时哪些数据会保留，系统数据备份与恢复的操作步骤。
 - [EcomCraft 工作台界面设计（中文）](EcomCraft%20工作台界面设计.zh-CN.md)：开发设计文档，涵盖配色与字体、各页面和按钮的功能清单、本机预览方法。
 - [EcomCraft 架构与路线图（中文）](EcomCraft%20Architecture.zh-CN.md) · [English](EcomCraft%20Architecture.md)：开发规划文档，涵盖产品定位、部署拓扑、分层架构、一键套图数据流、设计约定、MVP 范围和后续功能；功能和任务进度见 [EcomCraft 开发总表](EcomCraft%20开发总表.xlsx)。
 - [EcomCraft 局域网多服务器平台需求（中文）](EcomCraft%20局域网多服务器平台需求.zh-CN.md) · [English](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md)：开发需求文档，涵盖多服务器接入、工作流审核与快照、负载调度、多人使用、画廊共享、作品存储及云端预留。
