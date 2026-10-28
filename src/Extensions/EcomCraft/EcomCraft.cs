@@ -3,6 +3,7 @@ using EcomCraftStudio.Studio;
 using EcomCraftStudio.Studio.Storage;
 using EcomCraftStudio.Studio.Templates;
 using EcomCraftStudio.Studio.Prompting;
+using EcomCraftStudio.Studio.PostProcess;
 using SwarmUI.Text2Image;
 using SwarmUI.Accounts;
 using SwarmUI.Core;
@@ -76,6 +77,7 @@ public class EcomCraft : Extension
         API.RegisterAPICall(PromptService.EcomCraftStudioStyles, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(PromptService.EcomCraftStudioComposePrompt, false, Permissions.BasicImageGeneration);
         API.RegisterAPICall(PromptService.EcomCraftPromptSettings, true, Permissions.EditServerSettings);
+        API.RegisterAPICall(CutoutService.EcomCraftStudioCutout, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateAdminList, false, PermReviewWorkflows);
         API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateSave, true, PermReviewWorkflows);
         API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateDelete, true, PermReviewWorkflows);
