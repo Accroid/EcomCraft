@@ -172,18 +172,18 @@ Closing or cancelling the settings discards the unsaved key; switching backend, 
 
 The workspace fetches text models of the chosen backend temporarily through `PreviewMagicPromptModels`, which needs configuration-save and model-list permissions. It calls no config or key saving and returns no upstream error bodies or credentials.
 
-## Image description (the vision model, off by default)
+## Image description (the vision model, on by default)
 
-The reference-image feature (F59) sends images to a vision model that reads out composition descriptions, one prompt per reference. For privacy (decision A5) this is **off by default** and an administrator enables it in the settings:
+The reference-image feature (F59) sends reference images to a vision model that reads out composition descriptions, one prompt per reference. Image description is **on by default** (decision A5) and used for references only; administrators can turn it off. Sending product photos to the vision model to describe products stays off by default.
 
-1. Open the workspace's **prompt enhancement settings** (visible to administrators), tick **Allow image description** and save. The line under the toggle shows the configured vision model.
+1. Administrators turn it off by unticking **Allow image description** in the workspace's **prompt enhancement settings**. The line under the toggle shows the configured vision model.
 2. The vision model is a separate configuration from the prompt model; both default to Ollama, with the vision model defaulting to `llama3.2-vision:latest`. With Ollama, pull it first:
 
 ```bash
 ollama pull llama3.2-vision
 ```
 
-3. Once enabled, uploaded references are described automatically, one at a time; while it is off, reference mode is unavailable and plain generation is unaffected.
+3. Uploaded references are described automatically, one at a time. When image description is off, the vision service cannot be reached, or the vision model has not been pulled, "Follow a reference" says what is missing: administrators see the steps to fix it and other accounts see "ask your administrator"; plain generation is unaffected.
 
 Note: image description sends the user's uploaded images to the configured vision service. With local Ollama the images never leave the machine; pointing the vision backend at a cloud service sends images off-site — change it only if the team accepts that. The reference images themselves exist briefly in memory only and are never stored on the server.
 

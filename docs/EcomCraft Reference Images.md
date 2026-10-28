@@ -29,12 +29,12 @@ Confirmed with the user on 2026-10-28 (A11, see the architecture document):
 
 ### 3.1 Path 1: borrow the composition (prompt reference)
 
-Each reference image goes to a vision model (MagicPrompt's vision capability; off by default per decision A5, enabled by the administrator or replaced by a local vision model), which produces **that reference's own** English composition description (camera, light, scene, color); it becomes that reference's prompt, shown to the user for editing (edits win), and the existing text-to-image plus product-preservation pipeline does the rest. In reference mode no product-type, style, model or brand fragments are appended.
+Each reference image goes to a vision model (MagicPrompt's vision capability; on by default per decision A5, administrators can turn it off), which produces **that reference's own** English composition description (camera, light, scene, color); it becomes that reference's prompt, shown to the user for editing (edits win), and the existing text-to-image plus product-preservation pipeline does the rest. In reference mode no product-type, style, model or brand fragments are appended.
 
 - One reference, one task, one description — **never merged, never mixed**, so multiple references cannot fight each other.
 - No new generative model is needed; the existing text-to-image pipeline works as is.
 - Effect: the broad direction of layout and mood carries over, details less so — consistent with "restore the feel".
-- With vision off: reference mode is unavailable, the page says "borrowing compositions needs the administrator to enable image description"; plain generation is unaffected.
+- With image description off or no usable vision model: reference mode is unavailable and the page says what is missing and how to fix it (F68); plain generation is unaffected.
 
 ### 3.2 Path 2: scene reference (image-to-image)
 

@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20Architecture.zh-CN.md)
 >
-> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); this document describes the target architecture and marks implemented parts · **Version:** v2.1 · **Date:** 2026-10-29
+> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); this document describes the target architecture and marks implemented parts · **Version:** v2.2 · **Date:** 2026-10-29
 >
 > Related files:
 > - [EcomCraft LAN Multi-Server Platform Requirements](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md): detailed requirements for the platform foundation (execution servers, review, scheduling, storage); it takes precedence.
@@ -32,7 +32,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators,
 | A2 | Target users are operators, graphic designers and shop owners: the default interface is simple mode with only the essential steps; any account can switch to professional mode, with no role restriction (administrators still handle installation, configuration and review). |
 | A3 | Both Chinese and international platforms are supported; the interface, documentation and platform presets are provided in Chinese and English. |
 | A4 | Users do not write prompts: a one-sentence description (Chinese or English) plus style options is turned into a prompt by the integrated online LLM (MagicPrompt). |
-| A5 | Online LLMs process text only. Sending product images to an online vision model (to describe products automatically) is off by default; the administrator can enable it or use a local vision model instead. |
+| A5 | Image description (sending reference images to a vision model to read their composition) is on by default; the default vision model is local Ollama, so images never leave the machine. Administrators can turn it off or switch to a cloud vision service (images then leave the machine, which administrators must confirm). Sending product photos to the vision model to describe products stays off by default and administrators enable it. (Revised 2026-10-29: image description was off by default.) |
 | A6 | Cloud generation capability is reserved (executor abstraction, three-stage generation flow), but **the MVP develops no cloud generation features**; see D11 and R10 in the requirements. |
 | A7 | Works are stored on the platform server by default; the administrator can switch to a NAS or a shared folder on another computer; system data always stays local. See D12 and R11 in the requirements. |
 | A8 | Within the platform, works are visible only to their owner; the storage layer is not isolated. See D9 in the requirements. |
@@ -40,7 +40,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators,
 | A10 | Single server first: the MVP is deployed and accepted as "one platform server that is also the execution server". The architecture and code for multi-server access, scheduling and storage remain in place; multi-machine testing (F28 / T33, N08) is deferred until a customer asks for it or the test environment is ready. |
 | A11 | Both reference-image paths are open (F59): "borrow the composition" (prompt reference) and "scene reference" (image-to-image) are both offered, the latter needing the administrator to install an image-to-image model (N10); the goal is restoring the feel of layout and light, never a 1:1 copy. Reference mode is standalone: once references are uploaded the other step-2 options stop applying, per-reference prompts are shown and editable, and each reference makes exactly one image (cap 8, mutually exclusive with storyboards); references are temporary and never stored. |
 | A12 | Revenue model: sold as software, priced per account. No complex roles or permissions: accounts are either administrators or regular accounts, and licensing limits only the number of accounts, never tiers features. |
-| A13 | UI and workflow redesign v4 (F60–F67): simple mode starts by choosing a task (follow a reference / make one image / make a full set, defaulting to follow a reference) with secondary options under "More options"; administration moves into an administrators' "Admin" menu and the native engine is for administrators only; phones get simple mode only; designers may upload ComfyUI workflows, usable only after review and publishing; candidates can be starred, personal analysis is deferred. See the EcomCraft UI and Workflow Redesign. |
+| A13 | UI and workflow redesign v4 (F60–F67): simple mode starts by choosing a task (follow a reference / make one image / make a full set, defaulting to follow a reference) with secondary options under "More options"; administration moves into an administrators' "Admin" menu and the native engine is for administrators only; phones get simple mode only; designers may upload ComfyUI workflows, usable by the uploader at once and by other accounts after review and publishing; image description is on by default with setup guidance when no vision model is available; candidates can be starred, personal analysis is deferred. See the EcomCraft UI and Workflow Redesign. |
 
 ## 3. Deployment Topology
 
@@ -183,7 +183,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | ID | Feature | Description |
 |---|---|---|
 | F01 | E-commerce scene templates | Built on published snapshots; 4 built in: white-background main image, scene, detail, model or hand-held |
-| F37 | Prompt service | One-sentence description + style → MagicPrompt enhancement; image description off by default |
+| F37 | Prompt service | One-sentence description + style → MagicPrompt enhancement; image description on by default (references only), product photo description off by default |
 | F07 | Three-step simple mode | The default interface; no prompt box, styles are options with sample images |
 | F02 | Product preservation | Composite the original product pixels back into the generated image, using the local cut-out as the mask (workflows need not output a mask) |
 | F35 | Background-removal confirmation and product positioning | Confirm the cut-out before generating; drag or scale the product |
@@ -248,7 +248,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F57 | Automatic standard workflow creation | Simple mode redesign v3 (default model chosen in N01, plan pending; text-to-image first, image-to-image waits for N10) |
 | F58 | Platform presets by slot (per-slot size and ratio, subject fill, size caps, forbidden content, AI labelling) | Enhancement (implemented, pending acceptance, T60; design in [EcomCraft Platform Preset Slots](EcomCraft%20Platform%20Preset%20Slots.md), values pending the N06 check) |
 | F59 | Reference images (one image per reference: borrow the composition and scene reference) | Enhancement (P1 implemented, pending acceptance, T61; P2 scene reference depends on N10, T62; requirements in [EcomCraft Reference Images](EcomCraft%20Reference%20Images.md)) |
-| F60 | Professional mode open to every account (A2), with ComfyUI workflow upload into review | UI redesign v4 (T63, to do) |
+| F60 | Professional mode open to every account (A2), with ComfyUI workflow upload (usable by the uploader at once, by others after review) | UI redesign v4 (T63, to do) |
 | F61 | Task-first simple mode (follow a reference / make one image / make a full set) | UI redesign v4 (T64) |
 | F62 | Navigation, "Admin" menu and consistent wording | UI redesign v4 (T65, to do) |
 | F63 | Phones get simple mode only | UI redesign v4 (T66, to do) |
@@ -256,6 +256,8 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F65 | Star candidates (first filter) | UI redesign v4 (T68, to do) |
 | F66 | Gallery and queue cleanup | UI redesign v4 (T69, to do) |
 | F67 | Star preference analysis and prompt feedback | UI redesign v4 (T70, deferred, design pending) |
+| F68 | Image description on by default, with setup guidance | UI redesign v4 (T71) |
+| F69 | One-click vision model install script | UI redesign v4 (T72, to do) |
 | F16 | Per-account licensing (limits the number of accounts only, no feature tiers) | Team and commercial (A12) |
 | F18 | Cloud generation | Reserved (change the rules first) |
 | F17 | Brand-specific model training | Reserved (custom service) |
@@ -293,3 +295,4 @@ For each task's files, dependencies, acceptance criteria and Claude Code prompt,
 | 2026-10-28 | v1.9 | F59 P1 standalone reference mode implemented pending acceptance (T61): reference upload (cap 8), per-reference editable prompts (EcomCraftStudioReferenceDescribe), the other step-2 options disabled, one image per reference per product (fixed scene template, mutually exclusive with storyboards), reference thumbnails on task cards, reference mode unavailable with vision off; AGENTS.md gained the reference-image rule; P2 still waits for N10 |
 | 2026-10-29 | v2.0 | Graphic designers added to the target users (simple mode for operators and owners, professional mode for designers); A2 now lets any account switch to professional mode; new A12 revenue model: sold as software, priced per account, no complex roles or permissions (F11 now not planned, F16 now per-account licensing); new F60 / T63 opens professional mode (to do) |
 | 2026-10-29 | v2.1 | New decision A13, UI and workflow redesign v4 (F60–F67 / T63–T70), requirements in the EcomCraft UI and Workflow Redesign; F60 adds ComfyUI workflow upload in professional mode (published after review) |
+| 2026-10-29 | v2.2 | A5 revised: image description on by default (references only; product photo description still off by default); A13 revised: uploaded ComfyUI workflows are usable by the uploader at once; new F68/T71 setup guidance and F69/T72 one-click install script; AGENTS.md gained the own-workflow rule |

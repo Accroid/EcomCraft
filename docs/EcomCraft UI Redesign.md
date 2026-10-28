@@ -2,9 +2,9 @@
 
 > **Language:** English · [简体中文](EcomCraft%20界面改版需求.zh-CN.md)
 >
-> **Status:** Confirmed (2026-10-29), built task by task · **Version:** v1.0 · **Date:** 2026-10-29
+> **Status:** Confirmed (2026-10-29), built task by task · **Version:** v1.1 · **Date:** 2026-10-29
 >
-> Related: [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md) (decisions A2, A12), [EcomCraft Workspace UI Design](EcomCraft%20Workspace%20UI%20Design.md) (control list), [EcomCraft development table](EcomCraft%20开发总表.xlsx) (F60–F67 / T63–T70).
+> Related: [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md) (decisions A2, A12), [EcomCraft Workspace UI Design](EcomCraft%20Workspace%20UI%20Design.md) (control list), [EcomCraft development table](EcomCraft%20开发总表.xlsx) (F60–F69 / T63–T72).
 
 ## 1. Background
 
@@ -21,12 +21,13 @@ After the simple mode redesign v3, step 2 holds more than a dozen controls (plat
 | U3 | Simple mode is "choose a task, then fill it in": three task entries at the top, **Follow a reference** (first and default), **Make one image** and **Make a full set**; each task shows only the options it needs. |
 | U4 | Visual style, model, brand kit, one-line description with AI expand, and the bilingual prompt are folded under "More options" by default, with the open state remembered in the browser; selling points and storyboard appear only in "Make a full set". |
 | U5 | Candidates can be starred after generation (the same star as the gallery) to weed out weak results. Personal analysis of stars feeding back into prompts is a to-do (F67, draft in section 6). |
-| U6 | Designers (any account) may upload a ComfyUI workflow JSON: it enters the existing workflow review and can be used only after an administrator publishes it; clients still generate by workflow ID and parameter whitelist, so the security boundary is unchanged. |
+| U6 | Designers (any account) may upload a ComfyUI workflow JSON in professional mode and **use it right away themselves** ("My workflows", visible to the uploader only); other accounts can use it after an administrator reviews and publishes it. Own workflows get the same server-side structure checks and an automatically generated parameter whitelist, run only on registered execution servers, and are rejected when they contain node types the administrator disabled (by default nodes that can run arbitrary code or read and write arbitrary paths); generation requests still send only the workflow ID and whitelisted parameters. (Revised 2026-10-29: formerly "usable only after publishing".) |
 | U7 | One-way hand-off from simple to professional mode: "Refine in professional mode" on a candidate carries the image and the English prompt actually sent; professional mode never writes back. |
 | U8 | The "Native engine" link is shown to administrators only. |
 | U9 | Phones get simple mode only (plus gallery viewing and the queue); narrow screens hide the professional mode entry and ask the user to switch to a computer. |
 | U10 | Consistent wording (section 3). |
 | U11 | Administration moves into an "Admin" menu at the right of the top bar, visible to administrators only (section 4). |
+| U12 | Image description is on by default (used to borrow compositions from references); administrators can turn it off in the prompt enhancement settings. When no vision model is available, the page says what is missing and how to fix it: administrators see the concrete steps (run the one-click install script, or install Ollama and pull a vision model, or switch to another vision service in the prompt enhancement settings) and other accounts see "ask your administrator". Sending product photos to the vision model to describe products stays off by default (A5). |
 
 ## 3. Wording
 
@@ -44,7 +45,7 @@ After the simple mode redesign v3, step 2 holds more than a dozen controls (plat
 
 - Top bar: **Create images**, **Professional mode** (every account, hidden on narrow screens), **Gallery**, **Queue**.
 - Right side: server status, language, theme, account name; administrators also get an "Admin" menu: workflow review, first-setup wizard, prompt enhancement settings, storage and backup, native engine (new tab).
-- Workflow upload lives in professional mode (U6); review lives in the "Admin" menu.
+- Workflow upload lives in professional mode (U6) and the uploader can use it at once; review and publishing for everyone lives in the "Admin" menu.
 
 ## 5. Simple Mode
 
@@ -79,11 +80,13 @@ This section is a direction only; confirm it again before development, and add d
 |---|---|---|---|
 | T64 | F61 | Simple mode task-first: three task cards, step 2 by task, "More options" fold | 1 |
 | T65 | F62 | Navigation, "Admin" menu and wording; native engine for administrators only | 2 |
-| T63 | F60 | Professional mode for every account; ComfyUI workflow upload into review | 3 |
+| T63 | F60 | Professional mode for every account; ComfyUI workflow upload, usable by the uploader at once | 3 |
 | T67 | F64 | One-way hand-off from simple to professional mode | 4 |
 | T68 | F65 | Star candidates (first filter) | 5 |
 | T66 | F63 | Phones get simple mode only | 6 |
 | T69 | F66 | Gallery and queue cleanup (star filter, own tasks first) | 7 |
+| T71 | F68 | Image description on by default, with setup guidance | 1.5 (right after T64) |
+| T72 | F69 | One-click vision model install script (installs Ollama and pulls the default vision model) | 2.5 (right after T71) |
 | T70 | F67 | Star preference analysis and prompt feedback | Deferred, design pending |
 
 ## 8. Change Log
@@ -91,3 +94,4 @@ This section is a direction only; confirm it again before development, and add d
 | Date | Version | Notes |
 |---|---|---|
 | 2026-10-29 | v1.0 | First version: decisions U1–U11, wording, navigation and administration, simple mode by task, stars and personal analysis draft, task list |
+| 2026-10-29 | v1.1 | U6 now lets the uploader use a workflow at once (other accounts still need review and publishing); new U12 image description on by default with setup guidance, F68/T71, and the one-click install script F69/T72 |
