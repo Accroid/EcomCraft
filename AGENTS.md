@@ -102,6 +102,7 @@ Release 模式下，C# 扩展程序集按 Git 提交短哈希缓存。修改 `sr
 - 工作流审核接口（`WorkflowReviewApi`）只能返回参数定义、审核状态和缺失的节点或模型名称，不得返回原始节点图或服务器地址；驳回原因只给提交人和审核人。审核记录和快照保存在 `Data/EcomCraft/workflow-reviews.json`，写入须经临时文件替换，读取失败时不得覆盖原文件。
 - 品牌资料包（`Studio/Brand/`）按账号隔离：客户端出图时只提交 `brand_kit_id`，服务端读取文件、生成提示词片段，并且只把图片填进模板 `brand_kit` 槽位声明的图片参数；不得接受客户端提交的图片路径，也不得让 AI 生成或改写 Logo。索引 `Data/EcomCraft/brand-kits.json` 经临时文件替换写入，图片地址只给拥有者。
 - 项目归档（`Studio/Projects/`）是用户主动保存的作品记录，可以长期保存该账号作品的模板 ID、种子、执行服务器显示名称和实际使用的提示词，用于“用相同参数重做”。记录只给拥有者读取、可随时删除；不得保存图片内容、原始工作流、节点图或服务器地址，不得出现在队列、诊断包或其他账号能读到的接口里。配方只从作品文件自带的元数据读取，不接受客户端提交的参数。记录写入 `Data/EcomCraft/projects.json`，经临时文件替换，读取失败时不得覆盖原文件。这条不改变进度观测的规则：进度缓存仍不得长期保存提示词。系统备份会包含 `projects.json`（含提示词），备份只有管理员能创建和下载。
+- 参考图（F59 独立参考模式）只接受客户端提交的图片数据与逐张英文提示词（`reference_prompts`，服务端清理）；参考图只在描述接口调用与内存批次中短暂存在，不得写入 `Data/`、商品库、项目归档、候选清理登记、诊断包或备份，也不得出现在队列或他人可见的接口里。参考图描述走 MagicPrompt 的 vision 能力（默认关闭，管理员开启）；不得提供竞品图抓取、图库推荐或一键复刻类功能，界面须展示版权提示并在海外平台加强提醒。
 - EcomCraft 进度观测不得长期保存提示词、工作流输入或生成结果。进度缓存应在任务结束或超时后清理，并在扩展卸载时解除 `ComfyUIAPIAbstractBackend.QueueProgressObserved` 事件订阅。候选图清理登记（`Data/EcomCraft/candidates.json`）、诊断包和备份只保存文件路径、时间和脱敏后的配置，不保存提示词、图片或节点图，不属于进度缓存。
 - 修改桌面入口或首页跳转时，应同时检查 `Desktop/`、`src/Core/Installation.cs`、`src/Core/Program.cs`、启动脚本、`src/Pages/Text2Image.cshtml` 和 `src/wwwroot/ecomcraft.ico` 的名称与路径一致性。
 - 修改 EcomCraft 功能后，应同步检查根目录的 `README.md`、`README.en.md`、`docs/README.zh-CN.md` 以及对应功能文档；API 名称、配置键和安全边界必须保持一致。
