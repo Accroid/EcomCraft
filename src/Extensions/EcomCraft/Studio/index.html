@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.12.0">
-    <script src="/EcomCraft/lang/en.js?v=0.12.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.12.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.12.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.12.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.13.0">
+    <script src="/EcomCraft/lang/en.js?v=0.13.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.13.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.13.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.13.0" defer></script>
 </head>
 
 <body>
@@ -68,12 +68,13 @@
                 <li class="simple-step">
                     <h2 class="simple-step-title"><span class="simple-step-num" aria-hidden="true">1</span>上传商品图</h2>
                     <label class="simple-drop" id="simple-drop">
-                        <input type="file" id="simple-file" accept="image/png,image/jpeg,image/webp" class="visually-hidden">
+                        <input type="file" id="simple-file" accept="image/png,image/jpeg,image/webp" class="visually-hidden" multiple>
                         <img class="simple-preview" id="simple-preview" alt="已选择的商品图" hidden>
                         <span class="simple-drop-text" id="simple-drop-text">点击或拖入商品图</span>
                         <span class="hint">PNG、JPEG 或 WebP，最大 5 MB；只在提交时发送</span>
                     </label>
                     <button type="button" class="link-btn" id="simple-clear" hidden>换一张</button>
+                    <div class="simple-products" id="simple-products" hidden></div>
                     <div class="simple-cutout" id="simple-cutout" hidden>
                         <p class="hint" id="simple-cutout-status"></p>
                         <div class="simple-stage" id="simple-stage" aria-label="商品位置预览，可拖动商品调整位置">
@@ -116,11 +117,17 @@
                         </select>
                     </div>
                     <button type="button" class="btn btn-primary btn-block" id="simple-generate" disabled>开始出图</button>
+                    <button type="button" class="btn btn-block" id="simple-generate-set" disabled>一键出整套</button>
+                    <p class="hint" id="simple-set-hint"></p>
                     <p class="hint" id="simple-hint" aria-live="polite"></p>
                 </li>
                 <li class="simple-step">
                     <h2 class="simple-step-title"><span class="simple-step-num" aria-hidden="true">3</span>挑图下载</h2>
                     <p class="hint" id="simple-status" aria-live="polite">出图完成后，候选图会出现在这里。点选满意的图片后下载。</p>
+                    <div class="simple-batch" id="simple-batch" hidden>
+                        <ul class="simple-jobs" id="simple-jobs"></ul>
+                        <button type="button" class="btn btn-sm" id="simple-batch-cancel">取消剩余任务</button>
+                    </div>
                     <div class="simple-results" id="simple-results"></div>
                     <div class="recover-actions">
                         <button type="button" class="btn btn-primary" id="simple-download" disabled>下载所选</button>

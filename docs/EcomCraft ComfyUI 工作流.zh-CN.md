@@ -147,6 +147,8 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行�
 
 抠图：`EcomCraftStudioCutout`（`product_image` 为不超过 5 MB 的 PNG、JPEG 或 WebP 数据地址）在具备 SwarmUI 配套节点（`SwarmLoadImageB64`、`SwarmRemBg`、`MaskToImage`、`PreviewImage`）的已登记执行服务器上去掉背景，服务器按规则 1 选择；节点图由服务端固定生成，客户端不能提交。服务端只取回蒙版，再与用户上传的原图在本地合成透明背景的 PNG（`cutout`），商品像素就是原图本身。没有服务器具备这些节点时返回 `no_execution_server`，失败返回 `cutout_failed`；也可以直接上传透明背景的 PNG。简易模式在开启商品保真的模板下显示抠图确认：可自动抠图、拖动商品位置、调整大小，提交时带上 `placement`。
 
+一键套图与批量：`EcomCraftStudioGenerateSet`（`products` 为 1–20 张商品图，每项 `{ image, placement? }`；`platform`；`set_id` 默认 `standard`；`style_id`、`description`；`candidates` 为每种图片的候选张数 1–4；可选 `execution_server_id`、`language`）把每张商品图 × 套图中适合该平台的每种图片类型展开成独立任务，最多 80 个。提示词整批只生成一次；保真模板需要的抠图由服务端自动完成（已是透明背景的图直接使用）。每个任务走普通的按模板生成，因此同样经过快照白名单校验，并各自按规则 1 调度到服务器、可多台并行；每人同时执行的任务数不超过角色 `MaxT2ISimultaneous` 与 4 中的较小值（需求 R9.4），其余在平台内排队。返回 `batch_id` 和 `jobs[]`（`id`、`product`、`template`、`template_name`、`state` 为 `queued` / `running` / `done` / `failed` / `cancelled`、`error`、`error_id`、`execution_server`、`images`）。`EcomCraftStudioBatchStatus` 读取进度，`EcomCraftStudioBatchRetry`（`batch_id`、`job_id`）重试失败或已取消的任务，`EcomCraftStudioBatchCancel` 取消还在排队的任务（正在执行的会完成）。批次只保存在内存中 6 小时，只有发起人能查看。
+
 原生导入项额外返回 `native: true` 和 `defaults`。`inputs[].form` 标记绑定到标准页面字段的参数（如 `width`、`seed`）；其余输入通过 `workflow_params` 提交。省略标准字段时使用相应已发布参数或保存的默认值，同时提供时以标准字段为准。原生项无需提交根级 `model`，模型修改通过 `inputs` 中模型下拉框的 ID 提交，服务端仅接受公布的选项；参数 ID 是不透明标识，客户端不要自行构造。
 
 ## 安全边界

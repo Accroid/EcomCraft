@@ -11,6 +11,9 @@ class SimpleMode {
     static data = { platforms: [], templates: [], styles: [] };
     static choice = { platform: '', template: '', style: '' };
     static product = null;
+    static products = [];
+    static batch = null;
+    static batchTimer = null;
     static loaded = false;
     static loading = false;
     static submitting = false;
@@ -62,7 +65,12 @@ class SimpleMode {
         this.api = api;
         let $ = api.$;
         let drop = $('simple-drop');
-        $('simple-file').addEventListener('change', e => this.readFile(e.target.files[0]));
+        $('simple-file').addEventListener('change', e => {
+            for (let file of Array.from(e.target.files || [])) {
+                this.readFile(file);
+            }
+            e.target.value = '';
+        });
         drop.addEventListener('dragover', e => {
             e.preventDefault();
             drop.classList.add('is-over');
@@ -71,8 +79,8 @@ class SimpleMode {
         drop.addEventListener('drop', e => {
             e.preventDefault();
             drop.classList.remove('is-over');
-            if (e.dataTransfer.files.length) {
-                this.readFile(e.dataTransfer.files[0]);
+            for (let file of Array.from(e.dataTransfer.files || [])) {
+                this.readFile(file);
             }
         });
         $('simple-clear').addEventListener('click', () => this.clearProduct());
@@ -99,6 +107,9 @@ class SimpleMode {
             this.update();
         });
         $('simple-generate').addEventListener('click', () => this.generate());
+        $('simple-generate-set').addEventListener('click', () => this.generateSet());
+        $('simple-count').addEventListener('change', () => this.update());
+        $('simple-batch-cancel').addEventListener('click', () => this.cancelBatch());
         $('simple-download').addEventListener('click', () => this.download());
         let saved = api.readStorage(this.storageKey);
         if (saved) {
@@ -274,7 +285,12 @@ class SimpleMode {
         }
         let reader = new FileReader();
         reader.onload = async () => {
+            if (this.products.length >= 20) {
+                this.message(this.api.tr('一次最多 20 张商品图。'), true);
+                return;
+            }
             this.product = { name: file.name, data: String(reader.result), cutout: null, width: 0, height: 0 };
+            this.products.push(this.product);
             try {
                 let image = await this.loadImage(this.product.data);
                 this.product.width = image.naturalWidth;
@@ -298,6 +314,7 @@ class SimpleMode {
             this.api.$('simple-drop-text').textContent = file.name;
             this.api.$('simple-clear').hidden = false;
             this.message('', false);
+            this.renderProducts();
             this.update();
         };
         reader.onerror = () => this.message(tr('无法读取文件，请重新选择。'), true);
@@ -409,7 +426,13 @@ class SimpleMode {
 
     /** Forgets the product photo. */
     static clearProduct() {
+        this.products = this.products.filter(product => product != this.product);
+        if (this.products.length) {
+            this.selectProduct(this.products[this.products.length - 1]);
+            return;
+        }
         this.product = null;
+        this.renderProducts();
         this.api.$('simple-cutout').hidden = true;
         this.api.$('simple-file').value = '';
         this.api.$('simple-preview').hidden = true;
@@ -450,8 +473,182 @@ class SimpleMode {
         }
         let blocker = this.blocker();
         this.api.$('simple-generate').disabled = Boolean(blocker);
+        let set = this.setTemplates();
+        let setReady = this.loaded && this.products.length > 0 && set.length > 0 && Boolean(this.choice.style) && !this.submitting;
+        this.api.$('simple-generate-set').disabled = !setReady;
+        this.api.$('simple-set-hint').textContent = set.length
+            ? this.api.tr('整套包含：{0}；{1} 张商品图 × {2} 种 × 每种 {3} 张。', set.map(template => template.name).join(this.api.tr('、')), this.products.length, set.length, Number(this.api.$('simple-count').value) || 1)
+            : this.api.tr('这个平台还没有可用的套图模板。');
         this.api.$('simple-hint').textContent = blocker ? this.api.tr(blocker) : '';
         this.api.$('simple-download').disabled = this.selected.size == 0;
+    }
+
+    /** Shows the uploaded product photos as thumbnails when there is more than one; clicking one makes it the current photo. */
+    static renderProducts() {
+        let el = this.api.el;
+        let list = this.api.$('simple-products');
+        let items = [];
+        for (let [index, product] of this.products.entries()) {
+            let button = el('button', 'simple-product');
+            button.type = 'button';
+            button.setAttribute('aria-pressed', product == this.product ? 'true' : 'false');
+            button.setAttribute('aria-label', this.api.tr('商品图 {0}', index + 1));
+            let image = el('img');
+            image.src = product.cutout || product.data;
+            image.alt = '';
+            button.append(image);
+            button.addEventListener('click', () => this.selectProduct(product));
+            items.push(button);
+        }
+        list.replaceChildren(...items);
+        list.hidden = this.products.length < 2;
+    }
+
+    /** Makes a product photo the current one for preview, cut-out and single generation. */
+    static selectProduct(product) {
+        this.product = product;
+        let preview = this.api.$('simple-preview');
+        preview.src = product.data;
+        preview.hidden = false;
+        this.api.$('simple-drop-text').textContent = product.name;
+        this.api.$('simple-clear').hidden = false;
+        this.renderProducts();
+        this.renderCutout();
+        this.update();
+    }
+
+    /** Templates of the standard set for the chosen platform, as the server will expand them. */
+    static setTemplates() {
+        return this.visibleTemplates().filter(template => (template.sets || []).includes('standard'));
+    }
+
+    /** Starts a one-click set for every uploaded product: each product × each image type of the set, with the chosen number of candidates. */
+    static async generateSet() {
+        let tr = this.api.tr;
+        if (!this.products.length || this.submitting) {
+            return;
+        }
+        let payload = {
+            language: I18n.current,
+            platform: this.choice.platform,
+            set_id: 'standard',
+            style_id: this.choice.style,
+            description: this.api.$('simple-description').value.trim(),
+            candidates: Number(this.api.$('simple-count').value) || 1,
+            products: this.products.map(product => ({ image: product.cutout || product.data, placement: this.clampPlacement(this.placement) }))
+        };
+        this.submitting = true;
+        this.update();
+        try {
+            let batch = await this.api.request('EcomCraftStudioGenerateSet', payload);
+            this.batch = batch;
+            this.renderBatch();
+            this.trackBatch();
+            this.api.$('simple-status').textContent = tr('已开始出整套图：共 {0} 个任务，会分配到空闲的执行服务器上并行完成。', (batch.jobs || []).length);
+        }
+        catch (error) {
+            this.message(error.message || tr('提交失败，请稍后重试。'), true);
+        }
+        finally {
+            this.submitting = false;
+            this.update();
+        }
+    }
+
+    /** Polls the batch until every task has ended, adding finished candidates to the results. */
+    static trackBatch() {
+        if (this.batchTimer) {
+            return;
+        }
+        this.batchTimer = setInterval(async () => {
+            if (!this.batch || document.hidden) {
+                return;
+            }
+            try {
+                this.batch = await this.api.request('EcomCraftStudioBatchStatus', { batch_id: this.batch.batch_id });
+            }
+            catch (error) {
+                return;
+            }
+            this.renderBatch();
+            if (this.batchFinished(this.batch.jobs)) {
+                clearInterval(this.batchTimer);
+                this.batchTimer = null;
+                this.api.$('simple-status').textContent = this.api.tr('点选满意的图片，再点“下载所选”。所有结果也保存在作品画廊。');
+            }
+        }, 3000);
+    }
+
+    /** Whether every task of a batch has ended (done, failed or cancelled). */
+    static batchFinished(jobs) {
+        return !(jobs || []).some(job => job.state == 'queued' || job.state == 'running');
+    }
+
+    /** Shows each task's state with a retry button for failed ones, and adds finished images to the candidates. */
+    static renderBatch() {
+        let tr = this.api.tr;
+        let el = this.api.el;
+        let jobs = this.batch?.jobs || [];
+        this.api.$('simple-batch').hidden = !jobs.length;
+        let labels = { queued: '排队中', running: '执行中', done: '已完成', failed: '失败', cancelled: '已取消' };
+        let items = [];
+        let added = false;
+        for (let job of jobs) {
+            let item = el('li', `simple-job${job.state == 'failed' ? ' is-failed' : ''}`);
+            let name = tr('商品 {0}｜{1}', job.product + 1, job.template_name || job.template);
+            let state = tr(labels[job.state] || job.state);
+            if (job.state == 'done' && job.execution_server) {
+                state = tr('已完成（{0}）', job.execution_server);
+            }
+            item.append(el('span', '', name), el('span', 'simple-job-state', state));
+            if (job.state == 'failed' || job.state == 'cancelled') {
+                if (job.error) {
+                    item.title = job.error_id ? this.api.serverErrorText(job.error_id, job.error) : job.error;
+                }
+                let retry = el('button', 'btn btn-sm', tr('重试'));
+                retry.type = 'button';
+                retry.addEventListener('click', () => this.retryJob(job.id));
+                item.append(retry);
+            }
+            items.push(item);
+            for (let url of job.images || []) {
+                if (!this.results.includes(url)) {
+                    this.results.push(url);
+                    added = true;
+                }
+            }
+        }
+        this.api.$('simple-jobs').replaceChildren(...items);
+        this.api.$('simple-batch-cancel').hidden = !jobs.some(job => job.state == 'queued');
+        if (added) {
+            this.renderResults();
+        }
+    }
+
+    /** Retries one failed or cancelled task. */
+    static async retryJob(id) {
+        try {
+            this.batch = await this.api.request('EcomCraftStudioBatchRetry', { batch_id: this.batch.batch_id, job_id: id });
+            this.renderBatch();
+            this.trackBatch();
+        }
+        catch (error) {
+            this.message(error.message || this.api.tr('操作失败，请稍后重试。'), true);
+        }
+    }
+
+    /** Cancels the tasks still waiting; running tasks finish. */
+    static async cancelBatch() {
+        if (!this.batch) {
+            return;
+        }
+        try {
+            this.batch = await this.api.request('EcomCraftStudioBatchCancel', { batch_id: this.batch.batch_id });
+            this.renderBatch();
+        }
+        catch (error) {
+            this.message(error.message || this.api.tr('操作失败，请稍后重试。'), true);
+        }
     }
 
     /** Submits one template generation; the server composes the prompt from the style and description. */

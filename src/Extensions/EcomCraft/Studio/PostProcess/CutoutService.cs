@@ -68,28 +68,39 @@ public static class CutoutService
         {
             return StudioApi.Error("无法读取商品图，请重新导出为 PNG、JPEG 或 WebP。", "invalid_reference");
         }
+        (byte[] cutout, string server, string error, string errorId) = await CutoutAsync(bytes);
+        if (cutout is null)
+        {
+            return StudioApi.Error(error, errorId);
+        }
+        return new JObject() { ["cutout"] = "data:image/png;base64," + Convert.ToBase64String(cutout), ["execution_server"] = server };
+    }
+
+    /// <summary>Removes the background of a photo on a registered execution server chosen by Rule 1. Returns the cut-out PNG and the server name,
+    /// or null with a user-facing error and its code.</summary>
+    internal static async Task<(byte[] Png, string Server, string Error, string ErrorId)> CutoutAsync(byte[] bytes)
+    {
         SchedulerRules.Decision decision = await ExecutionScheduler.PlanAsync(Capability, null);
         if (!decision.Success)
         {
-            return StudioApi.Error("没有执行服务器能抠图：" + decision.ErrorText + " 也可以上传已经去掉背景的透明 PNG。", "no_execution_server");
+            return (null, null, "没有执行服务器能抠图：" + decision.ErrorText + " 也可以上传已经去掉背景的透明 PNG。", "no_execution_server");
         }
         BackendHandler.T2IBackendData data = ExecutionServers.All.FirstOrDefault(server => server.ID == decision.ChosenId);
         if (data?.Backend is not ComfyUIAPIAbstractBackend backend)
         {
-            return StudioApi.Error("所选执行服务器已不可用，请稍后重试。", "no_execution_server");
+            return (null, null, "所选执行服务器已不可用，请稍后重试。", "no_execution_server");
         }
         try
         {
             using CancellationTokenSource timeout = new(Timeout);
             byte[] mask = await RunAsync(backend.APIAddress, Convert.ToBase64String(bytes), timeout.Token);
-            byte[] cutout = Combine(bytes, mask);
-            return new JObject() { ["cutout"] = "data:image/png;base64," + Convert.ToBase64String(cutout), ["execution_server"] = decision.ChosenName };
+            return (Combine(bytes, mask), decision.ChosenName, null, null);
         }
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException or IOException or InvalidDataException
             or UnknownImageFormatException or InvalidImageContentException)
         {
             Logs.Warning($"EcomCraft cut-out failed on execution server {data.ID}: {ex.GetType().Name}");
-            return StudioApi.Error("抠图没有完成，请稍后重试，或上传已经去掉背景的透明 PNG。", "cutout_failed");
+            return (null, null, "抠图没有完成，请稍后重试，或上传已经去掉背景的透明 PNG。", "cutout_failed");
         }
     }
 
