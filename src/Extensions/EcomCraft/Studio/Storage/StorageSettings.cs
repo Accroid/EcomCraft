@@ -27,6 +27,12 @@ public static class StorageSettings
         /// <summary>How many days an unkept simple-mode candidate stays before it is deleted automatically (F39); 0 disables the cleanup.</summary>
         public int CandidateRetentionDays = 14;
 
+        /// <summary>Free space of the works folder and the work library at or below this many GB shows an administrator warning (F46); 0 disables it.</summary>
+        public int DiskWarnGB = 10;
+
+        /// <summary>Free space at or below this many GB rejects new generations (F46); 0 disables it.</summary>
+        public int DiskCriticalGB = 2;
+
         /// <summary>Time of the last save, Unix milliseconds.</summary>
         public long ChangedAt;
     }

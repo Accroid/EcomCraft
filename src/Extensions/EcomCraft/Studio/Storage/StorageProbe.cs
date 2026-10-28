@@ -93,7 +93,7 @@ public static class StorageProbe
     }
 
     /// <summary>Free bytes of the volume holding the path, or null when it cannot be determined (UNC paths and unusual mounts).</summary>
-    private static long? FreeSpace(string path)
+    internal static long? FreeSpace(string path)
     {
         try
         {

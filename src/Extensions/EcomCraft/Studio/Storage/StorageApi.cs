@@ -24,6 +24,14 @@ public static class StorageApi
         ["write_mbps"] = result.WriteMBps
     };
 
+    /// <summary>The latest disk-space snapshot for administrators: the worst level and the free GB of the works folder and the work library (F46).</summary>
+    internal static JObject DiskJson() => new()
+    {
+        ["level"] = DiskMonitor.Level(),
+        ["output_free_gb"] = DiskMonitor.Status()?.OutputFree is long free ? Math.Round(free / 1024.0 / 1024.0 / 1024.0, 1) : null,
+        ["library_free_gb"] = DiskMonitor.Status()?.LibraryFree is long remote ? Math.Round(remote / 1024.0 / 1024.0 / 1024.0, 1) : null
+    };
+
     [API.APIDescription("Read the work library and export locations, the background sync queue and migration progress. Requires the server-settings permission.", "library_path: \"\", pending: 0")]
     public static Task<JObject> EcomCraftStorageSettings(Session session)
     {
@@ -40,6 +48,9 @@ public static class StorageApi
             ["export_path"] = settings.ExportPath,
             ["previous_library_path"] = settings.PreviousLibraryPath,
             ["candidate_retention_days"] = settings.CandidateRetentionDays,
+            ["disk_warn_gb"] = settings.DiskWarnGB,
+            ["disk_critical_gb"] = settings.DiskCriticalGB,
+            ["disk"] = DiskJson(),
             ["changed_by"] = settings.ChangedBy,
             ["changed_at"] = settings.ChangedAt > 0 ? settings.ChangedAt : null,
             ["pending"] = pending,
@@ -92,6 +103,14 @@ public static class StorageApi
         settings.LibraryPath = values[0];
         settings.ExportPath = values[1];
         settings.CandidateRetentionDays = Math.Clamp(rawInput.Value<int?>("candidate_retention_days") ?? 14, 0, 3650);
+        int warn = Math.Clamp(rawInput.Value<int?>("disk_warn_gb") ?? settings.DiskWarnGB, 0, 100_000);
+        int critical = Math.Clamp(rawInput.Value<int?>("disk_critical_gb") ?? settings.DiskCriticalGB, 0, 100_000);
+        if (warn > 0 && critical > warn)
+        {
+            return StudioApi.Error("磁盘严重不足阈值不能高于警告阈值。", "invalid_storage_path");
+        }
+        settings.DiskWarnGB = warn;
+        settings.DiskCriticalGB = critical;
         settings.ChangedBy = session.User.UserID;
         settings.ChangedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         if (!StorageSettings.Save(settings))

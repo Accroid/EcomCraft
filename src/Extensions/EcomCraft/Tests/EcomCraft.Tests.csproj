@@ -18,6 +18,7 @@
     <Compile Include="../Studio/Storage/CleanupRules.cs" Link="CleanupRules.cs" />
     <Compile Include="../Studio/DiagnosticsSanitizer.cs" Link="DiagnosticsSanitizer.cs" />
     <Compile Include="../Studio/BackupRules.cs" Link="BackupRules.cs" />
+    <Compile Include="../Studio/Storage/DiskRules.cs" Link="DiskRules.cs" />
     <Compile Include="../Studio/Templates/EcomTemplate.cs" Link="EcomTemplate.cs" />
     <Compile Include="../Studio/Templates/RequirementRules.cs" Link="RequirementRules.cs" />
     <Compile Include="../Studio/Prompting/PromptRules.cs" Link="PromptRules.cs" />
