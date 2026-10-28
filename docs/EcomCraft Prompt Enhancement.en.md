@@ -150,6 +150,8 @@ Then in the EcomCraft settings:
 | Model backend | One of the 6 backends above |
 | Base URL | Editable for Ollama / the compatible backend, local or remote; fixed for the others |
 | Prompt model | **Fetch** lists the backend's models, or type the ID |
+| Vision model service | The service used for image description — Ollama or an OpenAI-compatible one; saved separately from the prompt service |
+| Vision model | The vision service's model name, picked via **Fetch** or typed in; Qwen3-VL recommended |
 | API key | Required for cloud backends; not for Ollama; usually not for local services. Keys are stored safely in SwarmUI user data, never in config files |
 
 Switching backends auto-fills the URL and key state from that backend's saved values or its defaults.
@@ -177,7 +179,7 @@ The workspace fetches text models of the chosen backend temporarily through `Pre
 The reference-image feature (F59) sends reference images to a vision model that reads out composition descriptions, one prompt per reference. Image description is **on by default** (decision A5) and used for references only; administrators can turn it off. Sending product photos to the vision model to describe products stays off by default.
 
 1. Administrators turn it off by unticking **Allow image description** in the workspace's **prompt enhancement settings**. The line under the toggle shows the configured vision model.
-2. The vision model is a separate configuration from the prompt model; both default to Ollama, with the vision model defaulting to `llama3.2-vision:latest`. The easiest way is the one-click install script (F69), run in the EcomCraft folder on the server: it installs Ollama when missing (on Windows through winget, or else the official installer, run only after its code signature checks out; on Linux the official install script), starts the service and pulls the vision model, and on failure says why and gives the manual steps:
+2. The vision model is a separate configuration from the prompt model, set in the same dialog: the vision service is either Ollama or an OpenAI-compatible one, both default to Ollama, and the vision model defaults to `llama3.2-vision:latest`. The easiest way is the one-click install script (F69), run in the EcomCraft folder on the server: it installs Ollama when missing (on Windows through winget, or else the official installer, run only after its code signature checks out; on Linux the official install script), starts the service and pulls the vision model, and on failure says why and gives the manual steps:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File launchtools\install-vision-model-windows.ps1 -Model llama3.2-vision:latest
@@ -187,13 +189,42 @@ powershell -ExecutionPolicy Bypass -File launchtools\install-vision-model-window
 bash launchtools/install-vision-model-linux.sh llama3.2-vision:latest
 ```
 
-   `-Model` (the first argument on Linux) is the vision model name from the prompt enhancement settings and defaults to the default model; on macOS install the Ollama app from the website first. You can also install Ollama by hand and pull the model:
+   `-Model` (the first argument on Linux) is the vision model name from the prompt enhancement settings (`qwen3-vl:8b` when switching to Qwen3-VL) and defaults to the default model; on macOS install the Ollama app from the website first. You can also install Ollama by hand and pull the model:
 
 ```bash
 ollama pull llama3.2-vision
 ```
 
 3. Uploaded references are described automatically, one at a time. When image description is off, the vision service cannot be reached, or the vision model has not been pulled, "Follow a reference" says what is missing: administrators see the steps to fix it and other accounts see "ask your administrator"; plain generation is unaffected.
+
+### Recommended vision model: Qwen3-VL (much better Chinese image description)
+
+The default `llama3.2-vision` is mediocre with Chinese product photos. For image description we recommend Alibaba's open-source **Qwen3-VL** (Apache-2.0): high-quality Chinese and English descriptions, strong OCR for labels, tags and text on product photos, and consistently top download rankings.
+
+The official Ollama library hosts Qwen3-VL. The 2B / 4B / 8B / 30B variants of the family differ only in "brain size": the bigger the number, the more accurate the recognition, the richer the description and the more reliable the text reading — at the cost of more VRAM and slightly slower per image. Usage is identical, and you can pull another size and switch at any time (sizes below are the default 4-bit quantized downloads):
+
+| Command | Model | Download | VRAM | Difference in description quality |
+|---|---|---|---|---|
+| `ollama pull qwen3-vl:2b` | Qwen3-VL 2B | ~1.9 GB | 4 GB, or CPU only | Recognizes the subject and rough composition; small labels get missed; fastest |
+| `ollama pull qwen3-vl:4b` | Qwen3-VL 4B | ~3.3 GB | 6 GB | Accurate for everyday product photos; occasional errors on intricate patterns or dense small text |
+| `ollama pull qwen3-vl:8b` | Qwen3-VL 8B | ~6.2 GB | 8 GB | Clearly steadier and more professional on details, Chinese labels, composition and lighting; **the best pick for most teams** |
+| `ollama pull qwen3-vl:30b-a3b` | Qwen3-VL 30B (MoE) | ~20 GB | 24 GB | Top tier: reads multi-product scenes and dense long-image text fully; MoE keeps it fast |
+
+When unsure, choose by VRAM: no discrete GPU → 2B, 6 GB → 4B, 8 GB or more → 8B; pick 30B only with a 24 GB card (e.g. 3090/4090) and the highest quality demands. Pulling also works through the one-click install script above (pass the chosen size as the `-Model` argument).
+
+After pulling the size you picked, select it directly in the settings:
+
+1. Open the workspace's **prompt enhancement settings** (administrators) and make sure **Allow image description** is ticked.
+2. Set **Vision model service** to `Ollama (local, free)`; when it matches the "Model service" above, the Base URL is shared and needs no re-entry.
+3. In **Vision model**, press **Fetch** and pick the size you just pulled (e.g. `qwen3-vl:8b`), or type it in.
+4. Click **Save**. The line under the toggle should read `Vision model: ollama / qwen3-vl:8b`.
+
+To run Qwen3-VL on a local OpenAI-compatible service such as LM Studio or vLLM, set **Vision model service** to `OpenAI-compatible service (local / remote)`, fill in that service's Base URL and fetch. The vision service is saved separately from the prompt service, so Ollama can handle prompt expansion while the compatible service handles image description.
+
+Two notes:
+
+- Image description waits at most 45 seconds per image. Qwen3-VL 8B usually answers in seconds on a GPU with 8 GB or more; on CPU pick the 2B size — past the limit, description falls back to the template defaults with a service-unavailable notice.
+- If pulling from Ollama is slow on a restricted network, set an HTTPS_PROXY for the Ollama process, restart it and pull again.
 
 Note: image description sends the user's uploaded images to the configured vision service. With local Ollama the images never leave the machine; pointing the vision backend at a cloud service sends images off-site — change it only if the team accepts that. The reference images themselves exist briefly in memory only and are never stored on the server.
 
@@ -205,6 +236,7 @@ Note: image description sends the user's uploaded images to the configured visio
 | "Authentication / API Key not found" | Cloud backend without a key, or a wrong key; paste it again in the settings |
 | "401 / session expired" | Login session expired; refresh the page |
 | "Request timeout" | Local models can be slow or the network down; retry — large models on CPU may take a while |
+| Image description empty / status shows the service unavailable | Vision model not pulled, Ollama not running, the wrong vision model selected in the settings, or the model too slow (45 seconds per image at most; pick the 2B size on CPU); see the Qwen3-VL section above |
 | Model list empty / fetch fails | Check the service is running, the URL path is right and the key is valid |
 | Other computers cannot reach a local service | The local service must listen on `0.0.0.0` and the port must be open in the firewall |
 | Restoring defaults | Reset the MagicPrompt configuration in the native engine's settings, or choose the backend again in the settings |
