@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20局域网多服务器平台需求.zh-CN.md)
 >
-> **Status:** In development (phase 1 steps 1–6 code and documentation complete) · **Version:** v1.8 · **Date:** 2026-10-27
+> **Status:** In development (phase 1 steps 1–7 code and documentation complete, awaiting real tests) · **Version:** v1.9 · **Date:** 2026-10-28
 >
 > This document is the reference for further development. When requirements change, update this document first (Chinese and English together), record the change in the change log at the end, and only then change the code. For the e-commerce image layer, the overall architecture and the MVP roadmap, see [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md).
 
@@ -269,7 +269,7 @@ AGENTS.md, the READMEs and the workflow documentation have been updated accordin
 | 4 Calling and scheduling | Code complete, awaiting build and real tests | Added `Studio/Generation/` (executor abstraction, Rule 1 selection logic, scheduler) and unit tests in `src/Extensions/EcomCraft/Tests/`; the workspace gained an "Execution server" choice |
 | 5 Queue, failures, gallery | Code complete, awaiting build and real tests | Added `Studio/Generation/TaskOutcomes.cs` (background task results); the workspace shows failures with "Reassign to another server", and the gallery shows the workflow and execution server |
 | 6 Multi-user configuration and documentation | Documentation complete, awaiting a deployment test following it | Added the [LAN Deployment Guide](EcomCraft%20LAN%20Deployment.md) (Chinese and English); the workspace shows a clear message when `MaxQueued` is exceeded (`queue_limit`) |
-| 7 Work storage | Not started | |
+| 7 Work storage | Code complete, awaiting build and real tests | Added `Studio/Storage/` (location rules and checks, settings, background sync queue, migration, APIs) and unit tests; the gallery gained "Storage settings" and a "Pending sync" mark |
 
 Implementation notes for steps 1–2:
 
@@ -314,6 +314,15 @@ Implementation notes for step 5:
 - The gallery reads the workflow ID and execution server name from each work's metadata and shows them under the time on the work card; works from the standard workspace show "Standard workspace", and works from before the upgrade show nothing.
 - How long SwarmUI takes to fail a task after the executing server drops off has not been tested yet; see V5.
 
+Implementation notes for step 7:
+
+- Administrators (`edit_server_settings` permission) enter the work library and export locations under "Storage settings" on the gallery page; empty means works stay only on the platform server. On save the server checks: a full path that is not inside (and does not contain) `Data/` or the output folder; the location can be created and an 8 MB test file written; at least 1 GB free when the free space can be read; and it records the write speed. Mapped network drive letters on Windows are rejected. The check takes at most 30 seconds, after which the location counts as unavailable. Nothing is saved when any check fails. Settings are stored in `Data/EcomCraft/storage.json`.
+- Only works generated in the workspace are synced. When a generation finishes, SwarmUI has already saved its works in the local output folder; the platform adds them to the sync queue (`Data/EcomCraft/storage-sync.json`, kept across restarts), and a background loop handles due items every 5 seconds: copy to a temporary file in the target folder, check the size, then rename; the metadata sidecar (`.swarm.json`) is copied too. The library layout is `library/<account>/<same relative path as in the output folder>`. Failures retry from 10 seconds, doubling up to 10 minutes; an offline library never blocks generation.
+- Local copies are kept in this phase: the gallery, thumbnails and opening originals all read local files and never scan shared storage (R11.6). Removing local copies after a successful sync is left to a later task.
+- The gallery shows "Pending sync" for works not yet copied. The ordinary-user API `EcomCraftStoragePending` returns only gallery-relative paths of the user's own works and never a storage location; the administrator APIs are `EcomCraftStorageSettings`, `EcomCraftStorageSave` and `EcomCraftStorageMigrate`.
+- After the library location changes, new works go to the new location while already queued works still go where they were queued; works in the old location stay there. Administrators can choose "Migrate old works": each file is copied, verified with SHA-256, then deleted from the old location, with progress shown and the option to stop at any time; files that fail stay in place.
+- In this phase the export location is only set and checked; exporting to a shared folder is implemented in the platform export task (T11).
+
 ## 11. Change Log
 
 | Date | Version | Description |
@@ -326,4 +335,5 @@ Implementation notes for step 5:
 | 2026-10-27 | v1.6 | Completed step 4 code (T34): executor abstraction, Rule 1 scheduling, pinned server with congestion hint, explained reasons when no server can run a task, model options filtered by online servers; added implementation notes |
 | 2026-10-27 | v1.7 | Completed step 5 code (T35): background task results and failure notices, reassignment to another server, gallery shows the workflow and execution server; added V5 |
 | 2026-10-27 | v1.8 | Completed step 6 (T36): added the LAN Deployment Guide (Chinese and English) covering account login, `MaxQueued`, firewalls, visibility on shared storage and browser restrictions under `http://`; exceeding the queue limit returns `queue_limit` |
+| 2026-10-28 | v1.9 | Completed step 7 code (T37): work library and export location settings and checks, write locally then sync with retries, pending-sync mark, migration of old works; added implementation notes |
 | 2026-10-27 | v1.5 | Static review of steps 1–3 (T33): workflow discovery now refreshes on a background timer started by the extension instead of only when a page is opened; added notes on server names and workflow IDs, and on re-review after conversion logic upgrades |

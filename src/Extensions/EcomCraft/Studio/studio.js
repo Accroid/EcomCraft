@@ -50,6 +50,7 @@
         'invalid_scheduler','generation_failed','generation_uncertain','task_not_found','workflow_dependencies_missing',
         'no_execution_server','execution_server_unavailable','invalid_execution_server','queue_limit',
         'workflow_state','invalid_review','review_save_failed',
+        'invalid_storage_path','storage_check_failed','storage_save_failed','invalid_storage_action',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
     const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
 
@@ -651,6 +652,7 @@
             $('user-name').textContent = catalog.user_name;
             $('avatar').textContent = String(catalog.user_name || 'E').slice(0, 1).toUpperCase();
             $('enhancer-settings').hidden = !catalog.can_manage_settings;
+            $('storage-open').hidden = !catalog.can_manage_settings;
             WorkflowReviewView.updateAccess();
             if (state.view == 'workflows') {
                 WorkflowReviewView.load();
@@ -2138,6 +2140,14 @@
                 const starred = src.startsWith('Starred/');
                 return { src, name, url: viewUrl(src), starred, video: /\.(mp4|webm)$/i.test(name), time: typeof f.time == 'number' ? f.time : 0, origin: galleryOrigin(f.metadata) };
             });
+            g.pending = new Set();
+            try {
+                let sync = await request('EcomCraftStoragePending');
+                g.pending = new Set(sync.pending || []);
+            }
+            catch (error) {
+                // The mark is informational; the gallery works without it.
+            }
             sortGalleryItems();
             renderGallery();
             if (g.revealSrc) {
@@ -2319,6 +2329,11 @@
             if (item.video) {
                 meta.append(el('span', 'sheet-kind', '视频'));
             }
+            if (state.gallery.pending?.has(item.src)) {
+                let pending = el('span', 'sheet-kind is-pending', '待同步');
+                pending.title = '已保存在平台服务器，正在等待复制到作品库';
+                meta.append(pending);
+            }
             let star = el('button', 'sheet-star', item.starred ? '★' : '☆');
             star.type = 'button';
             star.dataset.src = item.src;
@@ -2357,6 +2372,120 @@
         if (refocus) {
             let target = Array.from(grid.querySelectorAll(`[data-role="${refocus.role}"]`)).find(node => node.dataset.src == refocus.src);
             target?.focus();
+        }
+    }
+
+    /** Administrator dialog for the work library and export locations (R11). Locations are checked and saved by the server; the dialog polls while a migration runs. */
+    class StorageSettingsView {
+        static timer = null;
+        static busy = false;
+
+        /** Opens the dialog and reads the current settings. */
+        static async open(opener) {
+            $('storage-message').hidden = true;
+            $('storage-modal').hidden = false;
+            DialogFocus.enter($('storage-modal'), opener, $('storage-library'));
+            await this.load(true);
+        }
+
+        /** Closes the dialog and stops polling. */
+        static close() {
+            if ($('storage-modal').hidden) {
+                return;
+            }
+            clearInterval(this.timer);
+            this.timer = null;
+            $('storage-modal').hidden = true;
+            DialogFocus.leave($('storage-modal'));
+        }
+
+        /** Shows a message under the form. */
+        static message(text, error) {
+            let box = $('storage-message');
+            box.textContent = text;
+            box.classList.toggle('is-error', Boolean(error));
+            box.hidden = !text;
+        }
+
+        /** Reads settings, queue and migration state; fills the inputs only when asked, so typing is not overwritten by polling. */
+        static async load(fillInputs) {
+            let data;
+            try {
+                data = await request('EcomCraftStorageSettings');
+            }
+            catch (error) {
+                this.message(error.message || tr('无法读取存储设置。'), true);
+                return;
+            }
+            if (fillInputs) {
+                $('storage-library').value = data.library_path || '';
+                $('storage-export').value = data.export_path || '';
+            }
+            let status = data.library_path ? tr('待同步 {0} 个作品', data.pending || 0) : tr('作品只保存在平台服务器本机。');
+            if (data.failing) {
+                status += tr('，其中 {0} 个暂时复制失败：{1}', data.failing, data.last_error || tr('会自动重试'));
+            }
+            $('storage-status').textContent = status;
+            let migration = data.migration || {};
+            let canMigrate = Boolean(data.previous_library_path && data.library_path && data.previous_library_path != data.library_path);
+            $('storage-migration').hidden = !canMigrate && !migration.Running && !migration.Total;
+            $('storage-migrate').hidden = Boolean(migration.Running) || !canMigrate;
+            $('storage-migrate-cancel').hidden = !migration.Running;
+            let progress = migration.Total ? tr('已迁移 {0}/{1} 个文件，失败 {2} 个。', migration.Done, migration.Total, migration.Failed) : '';
+            if (migration.Running) {
+                $('storage-migration-text').textContent = tr('正在迁移旧作品…') + ' ' + progress;
+            }
+            else if (migration.Total || migration.Error) {
+                $('storage-migration-text').textContent = (migration.Cancelled ? tr('迁移已停止。') : tr('迁移已结束。')) + ' ' + progress + (migration.Error ? ' ' + migration.Error : '');
+            }
+            else {
+                $('storage-migration-text').textContent = tr('作品库位置改过之后，旧作品仍留在原位置并可浏览。可以把它们迁移到新位置：先复制并校验，再删除原文件。');
+            }
+            if (migration.Running && !this.timer) {
+                this.timer = setInterval(() => this.load(false), 2000);
+            }
+            else if (!migration.Running && this.timer) {
+                clearInterval(this.timer);
+                this.timer = null;
+            }
+        }
+
+        /** Sends both locations to the server, which checks writability, free space and speed before saving. */
+        static async save() {
+            if (this.busy) {
+                return;
+            }
+            this.busy = true;
+            $('storage-save').disabled = true;
+            this.message(tr('正在检测位置，最长约 30 秒…'), false);
+            try {
+                let result = await request('EcomCraftStorageSave', { library_path: $('storage-library').value.trim(), export_path: $('storage-export').value.trim() });
+                let library = result.checks?.library;
+                let detail = library ? tr('写入速度约 {0} MB/s', library.write_mbps) + (library.free_gb != null ? tr('，剩余 {0} GB', library.free_gb) : '') : '';
+                this.message(tr('已保存。') + (detail ? ' ' + detail + tr('。') : ''), false);
+                await this.load(true);
+            }
+            catch (error) {
+                this.message(error.message || tr('保存失败，请稍后重试。'), true);
+            }
+            finally {
+                this.busy = false;
+                $('storage-save').disabled = false;
+            }
+        }
+
+        /** Starts or stops the migration of old works. */
+        static async migrate(action) {
+            if (action == 'start' && !window.confirm(tr('把旧作品库中的文件迁移到新位置？每个文件复制并校验后才会删除原文件，可以随时停止。'))) {
+                return;
+            }
+            try {
+                await request('EcomCraftStorageMigrate', { action });
+            }
+            catch (error) {
+                this.message(error.message || tr('操作失败，请稍后重试。'), true);
+            }
+            await this.load(false);
         }
     }
 
@@ -3673,6 +3802,13 @@
         $('review-reject').addEventListener('click', () => WorkflowReviewView.decide('reject'));
         $('review-unpublish').addEventListener('click', () => WorkflowReviewView.decide('unpublish'));
         $('submit-close').addEventListener('click', () => WorkflowReviewView.closeSubmit());
+        $('storage-open').addEventListener('click', () => StorageSettingsView.open($('storage-open')));
+        $('storage-close').addEventListener('click', () => StorageSettingsView.close());
+        $('storage-cancel').addEventListener('click', () => StorageSettingsView.close());
+        $('storage-backdrop').addEventListener('click', () => StorageSettingsView.close());
+        $('storage-save').addEventListener('click', () => StorageSettingsView.save());
+        $('storage-migrate').addEventListener('click', () => StorageSettingsView.migrate('start'));
+        $('storage-migrate-cancel').addEventListener('click', () => StorageSettingsView.migrate('cancel'));
         $('submit-backdrop').addEventListener('click', () => WorkflowReviewView.closeSubmit());
         $('submit-cancel').addEventListener('click', () => WorkflowReviewView.closeSubmit());
         $('submit-confirm').addEventListener('click', () => WorkflowReviewView.submit());
@@ -3767,6 +3903,15 @@
                 }
                 else {
                     DialogFocus.trap($('submit-modal'), e);
+                }
+                return;
+            }
+            if (!$('storage-modal').hidden) {
+                if (e.key == 'Escape') {
+                    StorageSettingsView.close();
+                }
+                else {
+                    DialogFocus.trap($('storage-modal'), e);
                 }
             }
         });

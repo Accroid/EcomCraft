@@ -1,5 +1,6 @@
 using EcomCraftStudio.MagicPrompt.WebAPI;
 using EcomCraftStudio.Studio;
+using EcomCraftStudio.Studio.Storage;
 using SwarmUI.Text2Image;
 using SwarmUI.Accounts;
 using SwarmUI.Core;
@@ -64,10 +65,15 @@ public class EcomCraft : Extension
         API.RegisterAPICall(WorkflowReviewApi.EcomCraftStudioReviewDecide, true, PermReviewWorkflows);
         API.RegisterAPICall(WorkflowReviewApi.EcomCraftStudioWorkflowSubmissions, false, PermSubmitWorkflows);
         API.RegisterAPICall(WorkflowReviewApi.EcomCraftStudioSubmitWorkflow, true, PermSubmitWorkflows);
+        API.RegisterAPICall(StorageApi.EcomCraftStorageSettings, false, Permissions.EditServerSettings);
+        API.RegisterAPICall(StorageApi.EcomCraftStorageSave, true, Permissions.EditServerSettings);
+        API.RegisterAPICall(StorageApi.EcomCraftStorageMigrate, true, Permissions.EditServerSettings);
+        API.RegisterAPICall(StorageApi.EcomCraftStoragePending, false, Permissions.FundamentalGenerateTabAccess);
         T2IEngine.AltBackendValidators.Add(StudioApi.ValidateExecutionBackend);
         T2IEngine.PreGenerateEvent += StudioApi.PrepareNativeWorkflowSeeds;
         ComfyUIAPIAbstractBackend.QueueProgressObserved += StudioApi.ObserveComfyProgress;
         WorkflowDiscovery.Start();
+        WorkSync.Start();
     }
 
     /// <inheritdoc/>
@@ -85,5 +91,6 @@ public class EcomCraft : Extension
         T2IEngine.PreGenerateEvent -= StudioApi.PrepareNativeWorkflowSeeds;
         ComfyUIAPIAbstractBackend.QueueProgressObserved -= StudioApi.ObserveComfyProgress;
         WorkflowDiscovery.Shutdown();
+        WorkSync.Shutdown();
     }
 }

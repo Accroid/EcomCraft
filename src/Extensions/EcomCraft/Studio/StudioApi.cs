@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using EcomCraftStudio.MagicPrompt.WebAPI;
 using EcomCraftStudio.Studio.Generation;
+using EcomCraftStudio.Studio.Storage;
 using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
@@ -344,6 +345,10 @@ public static class StudioApi
             {
                 JObject result = await T2IAPI.GenerateText2Image(session, images, input);
                 response = result.ContainsKey("error") ? GenerationError(result, workflow) : result;
+                if (!result.ContainsKey("error"))
+                {
+                    WorkSync.EnqueueResult(session.User, result);
+                }
             }
             catch (Exception)
             {
@@ -877,6 +882,10 @@ public static class StudioApi
                 if (result.ContainsKey("error"))
                 {
                     failure = GenerationError(result, workflow);
+                }
+                else
+                {
+                    WorkSync.EnqueueResult(session.User, result);
                 }
             }
             catch (Exception ex)
