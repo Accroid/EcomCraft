@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.12 · **Date:** 2026-10-28
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.13 · **Date:** 2026-10-28
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -173,9 +173,11 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Step 1 Product library | Auto-save on upload; "Choose from the product library"; rename and delete of the current product | New | Thumbnail list (cut-out when present); name saves on blur; delete asks; placement saves about a second after dragging |
 | Step 2 Platform | Filters the image types | New | "All platforms" lists every template; choice remembered in the browser; common platforms come first and the first is preselected (F40) |
 | Step 2 Image type | Pick a template | New | Cards with example images when available; reasons shown when none is usable |
-| Step 2 Style | Pick a visual style | New | Cards; choice remembered |
-| Step 2 One-line description | Optional, Chinese or English | New | Single-line input, not a prompt box; the server builds the English prompt with the style |
-| Step 2 Candidate count / Start | 1, 2 or 4 images | New | Disabled with a reason while a photo, template or style is missing |
+| Step 2 Product type | Two-level pick: category and subtype (F53, primary) | New | Category chips + subtype cards; data in `Templates/product-types.json`, subtypes contribute English prompt fragments; choice remembered; defaults to "General product｜Unspecified" |
+| Step 2 Visual style | Optional visual style (F53) | New | Cards, the first being "Auto" (unspecified); choice remembered |
+| Step 2 Needs a model | Adds a model fragment to the prompt when checked (F53) | New | Mutually exclusive with cut-out-only white main images: selecting that type disables and unchecks it; gender / hand-model attributes come later |
+| Step 2 One-line description | Optional, Chinese or English | New | Single-line input, not a prompt box; the server builds the English prompt with the product type and style |
+| Step 2 Candidate count / Start | 1, 2 or 4 images | New | Disabled with a reason while a photo, template or product type is missing |
 | Step 2 Whole set in one click | Every photo × every image type of the platform's set | New | Below, the set's types and total count; disabled without set templates |
 | Step 3 Task list | State of each set / batch task | New | "Product n｜type: state", failed items retryable with the reason on hover; "Cancel remaining"; finished candidates join the list below; finishing shows a banner and the tab title counts progress in the background (F43) |
 | Step 3 Export for platform | Scale and pad to the platform preset, then zip or shared folder | New | Appears with candidates; platform dropdown carries the size; only picked images export, one folder per product; unverified presets warn; the folder option hides without an export location |
@@ -379,3 +381,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-27 | v1.4 | Failure notice with "reassign to another server"; gallery cards show "workflow｜server" |
 | 2026-10-27 | v1.3 | Execution server choice (automatic or pinned) with the server that ran each job and busy hints; queue states computed server-side as idle / working / congested, "waiting" counting platform-assigned tasks |
 | 2026-10-28 | v1.12 | Usability and operations controls: camera upload and single-column narrow gallery (F42), upload quality notices (F38), keep-forever on pick (F39), administrator first-setup wizard (F40), storage dialog extended with disk thresholds and backup/restore (F45/F46), gallery "Download diagnostics" button (F44), batch completion banners and background title progress (F43); English version added |
+| 2026-10-28 | v1.13 | Simple-mode redesign v3, step one (F53/T55): "Style" became a two-level "Product type" (category chips + subtype cards, `Templates/product-types.json`), the visual style is now optional (first card "Auto"), and a "Needs a model" checkbox mutually exclusive with white main images was added; subtype and model fragments join the composed prompt; new `EcomCraftStudioProductTypes` API returning IDs and names only |

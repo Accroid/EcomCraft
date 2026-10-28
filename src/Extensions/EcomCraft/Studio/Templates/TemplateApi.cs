@@ -63,6 +63,7 @@ public static class TemplateApi
                 ["kind"] = workflow["kind"]?.DeepClone(),
                 ["platforms"] = new JArray(template.Platforms),
                 ["sets"] = new JArray(template.Sets),
+                ["cutout_only_platforms"] = new JArray(template.CutoutOnlyPlatforms),
                 ["preserve_product"] = template.PreserveProduct,
                 ["fields"] = new JArray((workflow["inputs"] as JArray ?? new JArray()).OfType<JObject>().Where(field => userFields.Contains(field["id"]?.ToString() ?? "")).Select(field => field.DeepClone()))
             });

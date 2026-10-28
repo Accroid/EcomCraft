@@ -1,15 +1,16 @@
 'use strict';
 
 /**
- * Three-step simple mode (F07), the default view: 1. upload a product photo, 2. pick platform, image type (template) and style with an optional
- * one-line description, 3. pick and download candidates. There is no prompt box: the server turns the style and description into the prompt
- * and fills the template's product image field. Professional parameters stay in the administrators' professional mode.
+ * Three-step simple mode (F07), the default view: 1. upload a product photo, 2. pick platform, image type (template), product type, an optional
+ * visual style and whether a model is needed (F53), 3. pick and download candidates. There is no prompt box: the server turns the product type,
+ * style and description into the prompt and fills the template's product image field. Professional parameters stay in the administrators' professional mode.
  * studio.js hands over its helpers through SimpleMode.attach(); all text goes through the translation table.
  */
 class SimpleMode {
     static api = null;
-    static data = { platforms: [], templates: [], styles: [] };
-    static choice = { platform: '', template: '', style: '' };
+    static data = { platforms: [], templates: [], styles: [], categories: [] };
+    static choice = { platform: '', template: '', style: '', category: '', subtype: '' };
+    static needModel = false;
     static product = null;
     static products = [];
     static library = [];
@@ -189,6 +190,10 @@ class SimpleMode {
             this.renderTemplates();
             this.update();
         });
+        $('simple-model').addEventListener('change', e => {
+            this.needModel = e.target.checked;
+            this.update();
+        });
         $('simple-generate').addEventListener('click', () => this.generate());
         $('simple-generate-set').addEventListener('click', () => this.generateSet());
         $('simple-count').addEventListener('change', () => this.update());
@@ -206,6 +211,8 @@ class SimpleMode {
                 let parsed = JSON.parse(saved);
                 this.choice.platform = String(parsed.platform || '');
                 this.choice.style = String(parsed.style || '');
+                this.choice.category = String(parsed.category || '');
+                this.choice.subtype = String(parsed.subtype || '');
             }
             catch (error) {
                 // A damaged preference only resets the remembered choice.
@@ -213,9 +220,9 @@ class SimpleMode {
         }
     }
 
-    /** Remembers the platform and style in this browser (never the photo or description). */
+    /** Remembers the platform, product type and style in this browser (never the photo or description). */
     static remember() {
-        this.api.writeStorage(this.storageKey, JSON.stringify({ platform: this.choice.platform, style: this.choice.style }));
+        this.api.writeStorage(this.storageKey, JSON.stringify({ platform: this.choice.platform, style: this.choice.style, category: this.choice.category, subtype: this.choice.subtype }));
     }
 
     /** Called when the view opens; loads platforms, templates and styles once per language. */
@@ -244,29 +251,39 @@ class SimpleMode {
         this.loading = true;
         let language = I18n.current;
         try {
-            let [platforms, templates, styles] = await Promise.all([
+            let [platforms, templates, styles, productTypes] = await Promise.all([
                 this.api.request('EcomCraftStudioPlatforms', { language }),
                 this.api.request('EcomCraftStudioTemplates', { language }),
-                this.api.request('EcomCraftStudioStyles', { language })
+                this.api.request('EcomCraftStudioStyles', { language }),
+                this.api.request('EcomCraftStudioProductTypes', { language })
             ]);
             this.data.platforms = platforms.platforms || [];
             this.quality = platforms.quality || this.quality;
             this.data.templates = templates.templates || [];
             this.data.styles = styles.styles || [];
-            if (!this.data.styles.some(style => style.id == this.choice.style)) {
-                this.choice.style = this.data.styles.length ? this.data.styles[0].id : '';
+            this.data.categories = productTypes.categories || [];
+            // The product type is the primary choice (F53): keep the remembered one when it still exists, else fall back to the general category.
+            if (!this.data.categories.some(category => category.id == this.choice.category && category.subtypes.some(subtype => subtype.id == this.choice.subtype))) {
+                let general = this.data.categories.find(category => category.id == 'general') || this.data.categories[0];
+                this.choice.category = general ? general.id : '';
+                this.choice.subtype = general && general.subtypes.length ? general.subtypes[0].id : '';
+            }
+            // The visual style is optional (F53): an empty choice means "auto"; only a stale remembered style is reset.
+            if (this.choice.style && !this.data.styles.some(style => style.id == this.choice.style)) {
+                this.choice.style = '';
             }
             this.loaded = true;
             this.message('', false);
         }
         catch (error) {
-            this.message(error.message || this.api.tr('无法读取模板和风格，请刷新页面重试。'), true);
+            this.message(error.message || this.api.tr('无法读取模板、产品类型和风格，请刷新页面重试。'), true);
         }
         finally {
             this.loading = false;
         }
         this.renderPlatforms();
         this.renderTemplates();
+        this.renderCategories();
         this.renderStyles();
         await this.loadLibrary();
         await this.loadExportOptions();
@@ -598,9 +615,56 @@ class SimpleMode {
         this.api.$('simple-templates-empty').hidden = cards.length > 0 || !this.loaded;
     }
 
-    /** Shows the styles; the choice is remembered in this browser. */
+    /** Shows the product-type categories as chips and their subtypes as cards (F53); the choice is remembered in this browser. */
+    static renderCategories() {
+        let el = this.api.el;
+        let chips = [];
+        for (let category of this.data.categories) {
+            let chip = el('button', 'simple-chip');
+            chip.type = 'button';
+            chip.textContent = category.name || category.id;
+            chip.setAttribute('aria-pressed', category.id == this.choice.category ? 'true' : 'false');
+            chip.addEventListener('click', () => {
+                this.choice.category = category.id;
+                this.choice.subtype = category.subtypes.length ? category.subtypes[0].id : '';
+                this.remember();
+                this.renderCategories();
+                this.update();
+            });
+            chips.push(chip);
+        }
+        this.api.$('simple-categories').replaceChildren(...chips);
+        this.renderSubtypes();
+    }
+
+    /** Shows the subtypes of the chosen category as cards. */
+    static renderSubtypes() {
+        let category = this.data.categories.find(item => item.id == this.choice.category);
+        let subtypes = category ? category.subtypes : [];
+        if (!subtypes.some(subtype => subtype.id == this.choice.subtype)) {
+            this.choice.subtype = subtypes.length ? subtypes[0].id : '';
+        }
+        let cards = [];
+        for (let subtype of subtypes) {
+            cards.push(this.card(subtype, null, subtype.id == this.choice.subtype, () => {
+                this.choice.subtype = subtype.id;
+                this.remember();
+                this.renderSubtypes();
+                this.update();
+            }));
+        }
+        this.api.$('simple-subtypes').replaceChildren(...cards);
+    }
+
+    /** Shows the optional visual styles (F53); the first card is "auto" and an empty choice means no style fragment. */
     static renderStyles() {
         let cards = [];
+        cards.push(this.card({ name: this.api.tr('自动'), description: this.api.tr('不指定，由模型发挥') }, null, this.choice.style == '', () => {
+            this.choice.style = '';
+            this.remember();
+            this.renderStyles();
+            this.update();
+        }));
         for (let style of this.data.styles) {
             cards.push(this.card(style, style.example_image, style.id == this.choice.style, () => {
                 this.choice.style = style.id;
@@ -835,8 +899,8 @@ class SimpleMode {
         if (template.preserve_product && !this.product.cutout) {
             return this.cutting ? '正在抠图…' : '请先确认抠图结果。';
         }
-        if (!this.choice.style) {
-            return '请选择风格。';
+        if (!this.choice.subtype) {
+            return '请选择产品类型。';
         }
         if (this.submitting) {
             return '提交中…';
@@ -873,10 +937,22 @@ class SimpleMode {
             return;
         }
         this.renderQuality();
+        // Cut-out-only platforms (white main images) never generate, so the model flag does not apply to them (F53).
+        let template = this.currentTemplate();
+        let cutoutOnly = Boolean(template && this.choice.platform && (template.cutout_only_platforms || []).includes(this.choice.platform));
+        if (cutoutOnly && this.needModel) {
+            this.needModel = false;
+        }
+        let modelBox = this.api.$('simple-model');
+        modelBox.disabled = cutoutOnly;
+        modelBox.checked = this.needModel;
+        this.api.$('simple-model-hint').textContent = cutoutOnly
+            ? this.api.tr('白底主图为纯抠图，不支持模特。')
+            : this.api.tr('勾选后提示词会加入模特描述（初版仅此一项，后续再扩展性别、手模等属性）。');
         let blocker = this.blocker();
         this.api.$('simple-generate').disabled = Boolean(blocker);
         let set = this.setTemplates();
-        let setReady = this.loaded && this.products.length > 0 && set.length > 0 && Boolean(this.choice.style) && !this.submitting;
+        let setReady = this.loaded && this.products.length > 0 && set.length > 0 && Boolean(this.choice.subtype) && !this.submitting;
         this.api.$('simple-generate-set').disabled = !setReady;
         this.api.$('simple-set-hint').textContent = set.length
             ? this.api.tr('整套包含：{0}；{1} 张商品图 × {2} 种 × 每种 {3} 张。', set.map(template => template.name).join(this.api.tr('、')), this.products.length, set.length, Number(this.api.$('simple-count').value) || 1)
@@ -936,6 +1012,8 @@ class SimpleMode {
             platform: this.choice.platform,
             set_id: 'standard',
             style_id: this.choice.style,
+            product_type_id: this.choice.subtype,
+            need_model: this.needModel,
             description: this.api.$('simple-description').value.trim(),
             candidates: Number(this.api.$('simple-count').value) || 1,
             products: this.products.map(product => product.id
@@ -1093,6 +1171,8 @@ class SimpleMode {
             template_id: template.id,
             template_params: params,
             style_id: this.choice.style,
+            product_type_id: this.choice.subtype,
+            need_model: this.needModel,
             description: this.api.$('simple-description').value.trim(),
             images: Number(this.api.$('simple-count').value) || 1,
             platform: this.choice.platform,

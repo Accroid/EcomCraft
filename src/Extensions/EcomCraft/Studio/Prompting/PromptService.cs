@@ -26,6 +26,15 @@ public static class PromptService
     /// <summary>One visual style users can pick: names, description and the English prompt fragment it adds.</summary>
     public sealed record class Style(string Id, Dictionary<string, string> Name, Dictionary<string, string> Description, string Prompt);
 
+    /// <summary>One product subtype users can pick (F53): names and the English prompt fragment it adds.</summary>
+    public sealed record class ProductType(string Id, Dictionary<string, string> Name, string Prompt);
+
+    /// <summary>One product-type category (F53) holding its subtypes.</summary>
+    public sealed record class ProductCategory(string Id, Dictionary<string, string> Name, List<ProductType> Subtypes);
+
+    /// <summary>The fixed prompt fragment added when "needs a model" is checked (F53); gender or hand-model choices may extend it later.</summary>
+    public const string ModelFragment = "an elegant model presenting the product, natural pose, shallow depth of field";
+
     /// <summary>The result of composing: the prompt subject, where it came from ("model", "template"), and when the model was not used a plain notice
     /// with a code the client can translate ("description_used" when the English description was used as is, "description_unused" otherwise).</summary>
     public sealed record class Composed(string Prompt, string Source, string Notice, string NoticeCode);
@@ -77,6 +86,81 @@ public static class PromptService
         return styles;
     }
 
+    /// <summary>The built-in fallback when product-types.json is unreadable: only the general category, so the step keeps working (F53).</summary>
+    private static List<ProductCategory> FallbackProductTypes() =>
+    [
+        new ProductCategory("general", new Dictionary<string, string>() { ["zh-CN"] = "通用商品", ["en"] = "General product" },
+            [new ProductType("unspecified", new Dictionary<string, string>() { ["zh-CN"] = "不指定", ["en"] = "Unspecified" }, "")])
+    ];
+
+    /// <summary>The product-type categories from Templates/product-types.json (F53). Invalid entries are skipped and logged;
+    /// when the file is missing or unreadable the built-in general category keeps the step usable.</summary>
+    public static List<ProductCategory> ProductTypes()
+    {
+        List<ProductCategory> categories = [];
+        try
+        {
+            string file = Path.Combine(TemplatesDir ?? "", "product-types.json");
+            if (!File.Exists(file))
+            {
+                return FallbackProductTypes();
+            }
+            foreach (JObject item in (JObject.Parse(File.ReadAllText(file))["categories"] as JArray ?? new JArray()).OfType<JObject>())
+            {
+                string id = item["id"]?.ToString() ?? "";
+                Dictionary<string, string> name = item["name"]?.ToObject<Dictionary<string, string>>() ?? [];
+                if (!Regex.IsMatch(id, "^[a-z0-9][a-z0-9-]{0,47}$") || !name.ContainsKey("zh-CN") || !name.ContainsKey("en"))
+                {
+                    Logs.Warning($"EcomCraft skipped an invalid product-type category '{id}'.");
+                    continue;
+                }
+                List<ProductType> subtypes = [];
+                foreach (JObject subtype in (item["subtypes"] as JArray ?? new JArray()).OfType<JObject>())
+                {
+                    ProductType type = ParseProductSubtype(subtype);
+                    if (type is null || subtypes.Any(existing => existing.Id == type.Id) || categories.SelectMany(category => category.Subtypes).Any(existing => existing.Id == type.Id))
+                    {
+                        continue;
+                    }
+                    subtypes.Add(type);
+                }
+                if (subtypes.Count == 0)
+                {
+                    Logs.Warning($"EcomCraft skipped the product-type category '{id}' because it has no valid subtypes.");
+                    continue;
+                }
+                categories.Add(new ProductCategory(id, name, subtypes));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            Logs.Error($"EcomCraft could not read the product-type list: {ex.Message}");
+        }
+        return categories.Count > 0 ? categories : FallbackProductTypes();
+    }
+
+    /// <summary>Reads one subtype; null with a logged warning when it is not valid.</summary>
+    private static ProductType ParseProductSubtype(JObject item)
+    {
+        string id = item["id"]?.ToString() ?? "";
+        Dictionary<string, string> name = item["name"]?.ToObject<Dictionary<string, string>>() ?? [];
+        string prompt = item["prompt"]?.ToString() ?? "";
+        if (!Regex.IsMatch(id, "^[a-z0-9][a-z0-9-]{0,47}$") || !name.ContainsKey("zh-CN") || !name.ContainsKey("en")
+            || prompt.Length > 300 || PromptRules.Sanitize(prompt) != prompt)
+        {
+            Logs.Warning($"EcomCraft skipped an invalid product subtype '{id}'.");
+            return null;
+        }
+        return new ProductType(id, name, prompt);
+    }
+
+    /// <summary>The subtype with this ID across all categories, or null. An empty ID means "unspecified".</summary>
+    public static ProductType ProductTypeById(string id) => string.IsNullOrWhiteSpace(id)
+        ? null : ProductTypes().SelectMany(category => category.Subtypes).FirstOrDefault(type => type.Id == id);
+
+    /// <summary>Whether a product type ID is known (or empty, meaning unspecified), so client-submitted IDs stay whitelisted (F53).</summary>
+    public static bool KnownProductType(string id) => string.IsNullOrWhiteSpace(id) || ProductTypeById(id) is not null;
+
     /// <summary>Whether administrators allowed sending product photos to the vision model.</summary>
     public static bool VisionEnabled()
     {
@@ -93,12 +177,15 @@ public static class PromptService
         }
     }
 
-    /// <summary>Composes the prompt subject for a style and description. The template's own prefix and suffix are added by the template request.
+    /// <summary>Composes the prompt subject for a product type, an optional style, the optional model flag and a description (F37/F53).
+    /// The template's own prefix and suffix are added by the template request.
     /// <paramref name="productImage"/> (a data URL) is used only when administrators enabled vision.</summary>
-    public static async Task<Composed> ComposeAsync(Session session, string styleId, string description, string productImage)
+    public static async Task<Composed> ComposeAsync(Session session, string styleId, string productTypeId, bool needModel, string description, string productImage)
     {
         Style style = string.IsNullOrEmpty(styleId) ? null : Styles().FirstOrDefault(item => item.Id == styleId);
-        string fragment = style?.Prompt ?? "";
+        ProductType productType = ProductTypeById(productTypeId);
+        string fragment = string.Join(", ", new[] { productType?.Prompt, needModel ? ModelFragment : null, style?.Prompt }
+            .Where(part => !string.IsNullOrEmpty(part)));
         description = description?.Trim() ?? "";
         string productHint = "";
         if (!string.IsNullOrEmpty(productImage) && VisionEnabled())
@@ -192,6 +279,29 @@ public static class PromptService
         });
     }
 
+    [API.APIDescription("List the product-type categories and subtypes users can pick (F53), with names in the requested language (zh-CN or en). The English prompt fragments are not exposed.", "categories: [{ id: \"care\", name: \"\", subtypes: [{ id: \"shampoo\", name: \"\" }] }]")]
+    public static Task<JObject> EcomCraftStudioProductTypes(Session session, string language = "zh-CN")
+    {
+        if (!StudioApi.CanView(session))
+        {
+            return Task.FromResult(StudioApi.Error("无权访问创作工作台。", "bad_permissions"));
+        }
+        language = language == "en" ? "en" : "zh-CN";
+        return Task.FromResult(new JObject()
+        {
+            ["categories"] = new JArray(ProductTypes().Select(category => new JObject()
+            {
+                ["id"] = category.Id,
+                ["name"] = EcomTemplate.Pick(category.Name, language),
+                ["subtypes"] = new JArray(category.Subtypes.Select(subtype => new JObject()
+                {
+                    ["id"] = subtype.Id,
+                    ["name"] = EcomTemplate.Pick(subtype.Name, language)
+                }))
+            }))
+        });
+    }
+
     [API.APIDescription("Turn a style and an optional one-line description (Chinese or English) into an English prompt. The answer is prompt text only; when the language model is unavailable the style and template defaults are used and notice explains it. product_image is used only when administrators enabled vision.", "prompt: \"\", source: \"model\", notice: null")]
     public static async Task<JObject> EcomCraftStudioComposePrompt(Session session, string style_id = "", string description = "", string product_image = "")
     {
@@ -207,7 +317,7 @@ public static class PromptService
         {
             return StudioApi.Error("商品图过大。", "invalid_reference");
         }
-        Composed composed = await ComposeAsync(session, style_id, description, product_image);
+        Composed composed = await ComposeAsync(session, style_id, "", false, description, product_image);
         return new JObject() { ["prompt"] = composed.Prompt, ["source"] = composed.Source, ["notice"] = composed.Notice, ["notice_code"] = composed.NoticeCode };
     }
 

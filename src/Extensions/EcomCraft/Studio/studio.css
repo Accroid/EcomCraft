@@ -351,6 +351,12 @@ main:focus:not(:focus-visible) { outline: none; }
 .simple-stage-product.is-dragging { cursor: grabbing; }
 .simple-size { display: grid; gap: 4px; font-size: var(--fs-13); font-weight: 600; }
 .simple-cards { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.simple-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.simple-chip { min-height: 32px; padding: 4px 14px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--field); color: var(--ink); }
+.simple-chip[aria-pressed="true"] { border-color: var(--key); box-shadow: inset 0 0 0 1px var(--key); background: var(--key-soft); }
+.simple-model { display: flex; align-items: center; gap: 8px; }
+.simple-model input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--key); }
+.simple-model label { font-size: var(--fs-13); font-weight: 600; }
 .simple-card { display: grid; gap: 4px; padding: 8px; min-height: 32px; text-align: left; border: 1px solid var(--line); border-radius: 6px; background: var(--backdrop); color: var(--ink); cursor: pointer; }
 .simple-card[aria-pressed="true"] { border-color: var(--key); box-shadow: inset 0 0 0 1px var(--key); }
 .simple-card img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; }
