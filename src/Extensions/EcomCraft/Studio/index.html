@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 创作工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.19.0">
-    <script src="/EcomCraft/lang/en.js?v=0.19.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.19.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.19.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.19.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.20.0">
+    <script src="/EcomCraft/lang/en.js?v=0.20.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.20.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.20.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.20.0" defer></script>
 </head>
 
 <body>
@@ -74,6 +74,10 @@
                         <span class="hint">PNG、JPEG 或 WebP，最大 5 MB；只在提交时发送</span>
                     </label>
                     <button type="button" class="link-btn" id="simple-clear" hidden>换一张</button>
+                    <div class="recover-actions simple-upload-actions">
+                        <button type="button" class="btn" id="simple-camera-btn">拍照上传</button>
+                    </div>
+                    <input type="file" id="simple-camera" accept="image/*" capture="environment" class="visually-hidden">
                     <div class="simple-products" id="simple-products" hidden></div>
                     <div class="simple-quality" id="simple-quality" role="status" hidden></div>
                     <div class="simple-product-meta" id="simple-product-meta" hidden>

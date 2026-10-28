@@ -159,6 +159,14 @@ class SimpleMode {
             }
         });
         $('simple-clear').addEventListener('click', () => this.clearProduct());
+        // Camera capture (F42): the capture attribute opens the camera on phones and works over plain http, unlike secure-context APIs.
+        $('simple-camera-btn').addEventListener('click', () => $('simple-camera').click());
+        $('simple-camera').addEventListener('change', e => {
+            for (let file of Array.from(e.target.files || [])) {
+                this.readFile(file);
+            }
+            e.target.value = '';
+        });
         $('simple-cutout-run').addEventListener('click', () => this.runCutout());
         $('simple-placement-reset').addEventListener('click', () => {
             this.placement = { x: 0.5, y: 0.5, size: 0.7 };
