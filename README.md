@@ -90,7 +90,7 @@ cd EcomCraft
 - 管理员首次设置向导：语言 → 存储位置 → 登记服务器 → 检查模型 → 选常用平台，每步可跳过，之后可从“查看配置指引”重新打开；常用平台在简易模式中排在最前并默认选中。
 - 手机支持：上传步骤可拍照上传（带 `capture` 属性的输入在 `http://` 局域网地址下也可调起相机），画廊在窄屏下改为单列，不使用需要 HTTPS 的浏览器功能。
 - 完成通知：批量任务完成或失败时页面内提示；页面在后台时标签页标题显示“（已完成/总数）”进度，全部结束后恢复。
-- 自用工作流（专业模式）：上传 ComfyUI 菜单“保存”得到的工作流文件（不超过 2 MB，每个账号最多 20 个），经服务端结构校验和禁用规则检查后上传者自己马上能用，其他账号看不到；含可执行代码的节点或像文件路径的参数会被拒绝，管理员可在服务器设置 `EcomCraft.DeniedWorkflowNodes` 追加禁用节点。接口为 `EcomCraftStudioWorkflowUpload`、`EcomCraftStudioMyWorkflows`、`EcomCraftStudioWorkflowDelete`。
+- 自用工作流（专业模式）：上传 ComfyUI 菜单“保存”得到的工作流文件（不超过 2 MB，每个账号最多 20 个），经服务端结构校验和禁用规则检查后上传者自己马上能用，其他账号看不到；含可执行代码的节点或像文件路径的参数会被拒绝，管理员可在服务器设置 `EcomCraft.DeniedWorkflowNodes` 追加禁用节点。自用工作流可以“提交审核”，管理员通过后复制为 `上传/<名称>` 发布给所有账号，驳回原因只给上传者。接口为 `EcomCraftStudioWorkflowUpload`、`EcomCraftStudioMyWorkflows`、`EcomCraftStudioWorkflowSubmitOwn`、`EcomCraftStudioWorkflowDelete`。
 - 画廊可按来源（出图 / 专业模式）筛选，队列把自己的请求放在最前。
 - 手机只做简易模式：手机等窄屏上可以出图、看画廊和队列，专业模式请在电脑上使用。
 - 候选图收藏（初筛）：第 3 步每张候选图左上角可点收藏，与画廊收藏是同一件事，收藏后的作品出现在画廊“已收藏”中，并且不会被候选图自动清理删除。

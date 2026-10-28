@@ -1,7 +1,9 @@
+using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
 using SwarmUI.Backends;
+using SwarmUI.Utils;
 using SwarmUI.WebAPI;
 
 namespace EcomCraftStudio.Studio;
@@ -69,7 +71,8 @@ public static class WorkflowReviewApi
     /// <summary>One row of the review list.</summary>
     private static JObject ReviewItem(string id, WorkflowDiscovery.Entry entry, WorkflowReview.Record record)
     {
-        string state = WorkflowReview.State(entry, record);
+        bool upload = record?.Status == WorkflowReview.Own;
+        string state = upload ? WorkflowReview.OwnState(record) : WorkflowReview.State(entry, record);
         ReviewVersion version = state == WorkflowReview.Invalid ? null : VersionFor(entry, record);
         JArray runnable = new();
         if (version?.Prompt is not null && version.BaseParams is not null)
@@ -80,10 +83,11 @@ public static class WorkflowReviewApi
         return new JObject()
         {
             ["id"] = id,
-            ["name"] = ShortName(id),
-            ["server"] = entry?.Server ?? record?.Snapshot?.Server ?? "",
-            ["source_online"] = WorkflowDiscovery.IsSourceOnline(entry),
-            ["source_missing"] = entry is null,
+            ["name"] = upload ? record.Name ?? id : ShortName(id),
+            ["server"] = upload ? UploadSource : entry?.Server ?? record?.Snapshot?.Server ?? "",
+            ["source_online"] = upload || WorkflowDiscovery.IsSourceOnline(entry),
+            ["source_missing"] = !upload && entry is null,
+            ["upload"] = upload,
             ["state"] = state,
             ["kind"] = version?.Prompt is null ? null : StudioApi.InferWorkflowKind(version.Prompt.ToString(Formatting.None)),
             ["problem"] = entry?.Problem,
@@ -117,7 +121,9 @@ public static class WorkflowReviewApi
         foreach (KeyValuePair<string, WorkflowReview.Record> pair in records.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase))
         {
             // A published snapshot outlives its source; other records without a source have nothing left to review.
-            if (!seen.Contains(pair.Key) && pair.Value.Snapshot is not null && pair.Value.Status != WorkflowReview.Own)
+            // Own uploads appear only while their submission waits for a decision (T73).
+            bool upload = pair.Value.Status == WorkflowReview.Own;
+            if (!seen.Contains(pair.Key) && pair.Value.Snapshot is not null && (!upload || WorkflowReview.OwnState(pair.Value) == WorkflowReview.Pending))
             {
                 items.Add(ReviewItem(pair.Key, null, pair.Value));
             }
@@ -134,10 +140,11 @@ public static class WorkflowReviewApi
         }
         WorkflowDiscovery.Entry entry = WorkflowDiscovery.Find(workflow_id);
         WorkflowReview.Record record = WorkflowReview.Get(workflow_id);
-        // Own uploads are private to their owner (F60) until submitted through a later review step.
-        if (record?.Status == WorkflowReview.Own)
+        // Own uploads are private to their owner (F60) until submitted for review (T73).
+        bool upload = record?.Status == WorkflowReview.Own;
+        if (upload && WorkflowReview.OwnState(record) != WorkflowReview.Pending)
         {
-            return Task.FromResult(StudioApi.Error("这是账号自用的工作流，不在审核范围内。", "invalid_workflow"));
+            return Task.FromResult(StudioApi.Error("这是账号自用的工作流，没有提交审核。", "invalid_workflow"));
         }
         ReviewVersion version = VersionFor(entry, record);
         if (version?.Prompt is null || version.BaseParams is null)
@@ -173,17 +180,17 @@ public static class WorkflowReviewApi
                 ["description"] = definition["description"]?.ToString() ?? ""
             });
         }
-        string state = WorkflowReview.State(entry, record);
+        string state = upload ? WorkflowReview.Pending : WorkflowReview.State(entry, record);
         return Task.FromResult(new JObject()
         {
             ["id"] = workflow_id,
-            ["name"] = ShortName(workflow_id),
-            ["server"] = version.Server ?? "",
+            ["name"] = upload ? record.Name ?? workflow_id : ShortName(workflow_id),
+            ["server"] = upload ? UploadSource : version.Server ?? "",
             ["state"] = state,
-            ["source_online"] = WorkflowDiscovery.IsSourceOnline(entry),
+            ["source_online"] = upload || WorkflowDiscovery.IsSourceOnline(entry),
             ["reviewing_source"] = version.Fingerprint == entry?.Fingerprint,
             ["kind"] = StudioApi.InferWorkflowKind(version.Prompt.ToString(Formatting.None)),
-            ["description"] = record?.Snapshot?.Description ?? version.Description ?? "",
+            ["description"] = upload ? "" : record?.Snapshot?.Description ?? version.Description ?? "",
             ["submitted_by"] = record?.SubmittedBy,
             ["submit_note"] = record?.SubmitNote,
             ["reject_reason"] = record?.RejectReason,
@@ -273,7 +280,7 @@ public static class WorkflowReviewApi
         }
         if (WorkflowReview.OwnerOf(id) is not null)
         {
-            return Task.FromResult(StudioApi.Error("这是账号自用的工作流，不在审核范围内。", "invalid_workflow"));
+            return Task.FromResult(DecideUpload(session, id, action, rawInput));
         }
         WorkflowDiscovery.Entry entry = WorkflowDiscovery.Find(id);
         string reviewer = session.User.UserID;
@@ -379,6 +386,98 @@ public static class WorkflowReviewApi
             return Task.FromResult(StudioApi.Error(error, error == WorkflowReview.SaveFailedMessage ? "review_save_failed" : "workflow_state"));
         }
         return Task.FromResult(new JObject() { ["success"] = true, ["state"] = WorkflowReview.State(entry, WorkflowReview.Get(id)) });
+    }
+
+    /// <summary>Source label of workflows that accounts uploaded (T73), shown to reviewers instead of a server name.</summary>
+    private const string UploadSource = "账号上传";
+
+    /// <summary>Decides a submitted own upload (T73): reject keeps it private with a reason for its owner; approve publishes a copy for everyone under
+    /// "上传/&lt;name&gt;" with the reviewer's parameter configuration, while the owner keeps the own workflow. Unpublishing applies to the published copy.</summary>
+    private static JObject DecideUpload(Session session, string id, string action, JObject rawInput)
+    {
+        WorkflowReview.Record current = WorkflowReview.Get(id);
+        if (WorkflowReview.OwnState(current) != WorkflowReview.Pending)
+        {
+            return StudioApi.Error("这个上传的工作流没有待审核的提交。请刷新列表。", "workflow_state");
+        }
+        string reviewer = session.User.UserID;
+        if (action == "unpublish")
+        {
+            return StudioApi.Error("请在已发布的副本上下架。", "workflow_state");
+        }
+        if (action == "reject")
+        {
+            string reason = Text(rawInput["reason"]);
+            if (string.IsNullOrEmpty(reason) || reason.Length > WorkflowReview.MaxTextLength)
+            {
+                return StudioApi.Error($"驳回时必须填写原因（最多 {WorkflowReview.MaxTextLength} 个字符）。", "invalid_review");
+            }
+            string rejectError = WorkflowReview.Update(id, record =>
+            {
+                if (WorkflowReview.OwnState(record) != WorkflowReview.Pending)
+                {
+                    return "该工作流的审核状态刚被修改，请刷新后重新审核。";
+                }
+                record.RejectReason = reason;
+                record.Reviewer = reviewer;
+                record.ReviewedAt = WorkflowReview.Now;
+                return null;
+            });
+            return rejectError is null ? new JObject() { ["success"] = true, ["state"] = WorkflowReview.Rejected }
+                : StudioApi.Error(rejectError, rejectError == WorkflowReview.SaveFailedMessage ? "review_save_failed" : "workflow_state");
+        }
+        ReviewVersion version = VersionFor(null, current);
+        if (version?.Prompt is null || version.BaseParams is null)
+        {
+            return StudioApi.Error("工作流无法通过校验，不能发布。", "invalid_workflow");
+        }
+        JToken rawConfig = rawInput["parameters"];
+        if (rawConfig is not null && rawConfig.Type is not (JTokenType.Object or JTokenType.Null))
+        {
+            return StudioApi.Error("参数配置格式无效。", "invalid_review");
+        }
+        JObject config = rawConfig as JObject ?? new JObject();
+        string description = Text(rawInput["description"]);
+        if (description?.Length > WorkflowReview.MaxTextLength)
+        {
+            return StudioApi.Error($"说明最多 {WorkflowReview.MaxTextLength} 个字符。", "invalid_review");
+        }
+        string configError = ValidateConfig(session, version, config);
+        if (configError is not null)
+        {
+            return StudioApi.Error(configError, "invalid_review");
+        }
+        WorkflowReview.Snapshot snapshot = new()
+        {
+            Canvas = version.Canvas,
+            Prompt = version.Prompt.ToString(Formatting.None),
+            BaseParams = version.BaseParams.ToString(Formatting.None),
+            BaseValues = version.BaseValues.ToString(Formatting.None),
+            Config = config.ToString(Formatting.None),
+            Description = string.IsNullOrEmpty(description) ? "由账号上传、经审核发布的工作流。" : description,
+            Fingerprint = version.Fingerprint,
+            Server = UploadSource,
+            Reviewer = reviewer,
+            ReviewedAt = WorkflowReview.Now
+        };
+        // A readable published name under "上传/"; a short random suffix when the name is taken. The ID must survive SwarmUI's name cleaning unchanged.
+        string baseId = Utilities.StrictFilenameClean($"上传/{current.Name ?? id}");
+        string error = null;
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            string publishedId = attempt == 0 ? baseId
+                : Utilities.StrictFilenameClean($"{baseId} ({System.Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(2)).ToLowerFast()})");
+            error = WorkflowReview.PublishOwn(id, publishedId, snapshot, reviewer);
+            if (error is null)
+            {
+                return new JObject() { ["success"] = true, ["state"] = WorkflowReview.Published, ["published_id"] = publishedId };
+            }
+            if (error != "发布名称已被占用，请刷新后重试。")
+            {
+                break;
+            }
+        }
+        return StudioApi.Error(error, error == WorkflowReview.SaveFailedMessage ? "review_save_failed" : "workflow_state");
     }
 
     [API.APIDescription("List discovered workflows that can be submitted for review, with the state of each and the caller's own submission notes and rejection reasons.", "workflows: [{ id: \"B/工作流1\", state: \"pending\", mine: false }]")]
