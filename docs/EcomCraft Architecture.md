@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20Architecture.zh-CN.md)
 >
-> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); this document describes the target architecture and marks implemented parts · **Version:** v1.7 · **Date:** 2026-10-28
+> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); this document describes the target architecture and marks implemented parts · **Version:** v1.8 · **Date:** 2026-10-28
 >
 > Related files:
 > - [EcomCraft LAN Multi-Server Platform Requirements](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md): detailed requirements for the platform foundation (execution servers, review, scheduling, storage); it takes precedence.
@@ -33,6 +33,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators 
 | A8 | Within the platform, works are visible only to their owner; the storage layer is not isolated. See D9 in the requirements. |
 | A9 | We will not take image orders ourselves to validate demand; instead, 3–5 seed teams will try the MVP after release. |
 | A10 | Single server first: the MVP is deployed and accepted as "one platform server that is also the execution server". The architecture and code for multi-server access, scheduling and storage remain in place; multi-machine testing (F28 / T33, N08) is deferred until a customer asks for it or the test environment is ready. |
+| A11 | Both reference-image paths are open (F59): "borrow the composition" (prompt reference) and "scene reference" (image-to-image) are both offered, the latter needing the administrator to install an image-to-image model (N10); the goal is restoring the feel of layout and light, never a 1:1 copy; each reference generates its own image (cap 8, mutually exclusive with storyboards); references are temporary and never stored. |
 
 ## 3. Deployment Topology
 
@@ -239,6 +240,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F56 | Faster generation path (queue on submit) | Simple mode redesign v3 (implemented, pending acceptance) |
 | F57 | Automatic standard workflow creation | Simple mode redesign v3 (default model chosen in N01, plan pending; text-to-image first, image-to-image waits for N10) |
 | F58 | Platform presets by slot (per-slot size and ratio, subject fill, size caps, forbidden content, AI labelling) | Enhancement (implemented, pending acceptance, T60; design in [EcomCraft Platform Preset Slots](EcomCraft%20Platform%20Preset%20Slots.md), values pending the N06 check) |
+| F59 | Reference images (one image per reference: borrow the composition and scene reference) | Enhancement (requirements in [EcomCraft Reference Images](EcomCraft%20Reference%20Images.md); T61 pending, T62 scene reference depends on N10) |
 | F16 | Paid feature licensing | Team and commercial |
 | F18 | Cloud generation | Reserved (change the rules first) |
 | F17 | Brand-specific model training | Reserved (custom service) |
@@ -271,3 +273,4 @@ For each task's files, dependencies, acceptance criteria and Claude Code prompt,
 | 2026-10-28 | v1.5 | First two redesign tasks done and deployed: F53 (T55, 467c036d) and F55 (T57, 0e7c6b3e); handover notes and remaining tasks in "EcomCraft Simple Mode Redesign" section 11 |
 | 2026-10-28 | v1.6 | Decision A10: single server first; multi-server support stays in the architecture and code, multi-machine testing (F28 / T33) and N08 deferred until a customer asks; F28 moved from MVP-A to later features; F58 platform presets by slot added (design draft, including the N06 checklist) |
 | 2026-10-28 | v1.7 | F58 platform presets by slot implemented pending acceptance (T60): platforms.json upgraded to v3 slots, image sets composed by slot kind, exports follow slot specs with automatic size-cap compression, pure-white and subject-fill hints, forbidden-content and AI-declaration notices; values still await the N06 check |
+| 2026-10-28 | v1.8 | Added the F59 reference-image requirements (decision A11): two paths (borrow the composition / scene reference via image-to-image), each reference generating its own image (cap 8, mutually exclusive with storyboards, temporary and never stored), copyright boundary (restore the feel, stronger notices on international platforms); T61 pending, T62 depends on N10; reserved the P3 direction of whole-set references to a whole set |
