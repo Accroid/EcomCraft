@@ -25,6 +25,7 @@
     <Compile Include="../Studio/Prompting/StoryboardRules.cs" Link="StoryboardRules.cs" />
     <Compile Include="../Studio/Brand/BrandKitIndex.cs" Link="BrandKitIndex.cs" />
     <Compile Include="../Studio/Export/SellingImageRules.cs" Link="SellingImageRules.cs" />
+    <Compile Include="../Studio/Projects/ProjectIndex.cs" Link="ProjectIndex.cs" />
     <Compile Include="../Studio/PostProcess/Placement.cs" Link="Placement.cs" />
     <Compile Include="../Studio/PostProcess/ProductComposite.cs" Link="ProductComposite.cs" />
   </ItemGroup>

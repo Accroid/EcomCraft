@@ -96,6 +96,12 @@ public class EcomCraft : Extension
         API.RegisterAPICall(EcomCraftStudio.Studio.Brand.BrandKitLibrary.EcomCraftStudioBrandKits, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(EcomCraftStudio.Studio.Brand.BrandKitLibrary.EcomCraftStudioBrandKitSave, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(EcomCraftStudio.Studio.Brand.BrandKitLibrary.EcomCraftStudioBrandKitDelete, true, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(EcomCraftStudio.Studio.Projects.ProjectLibrary.EcomCraftStudioProjects, false, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(EcomCraftStudio.Studio.Projects.ProjectLibrary.EcomCraftStudioProjectSave, true, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(EcomCraftStudio.Studio.Projects.ProjectLibrary.EcomCraftStudioProjectDelete, true, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(EcomCraftStudio.Studio.Projects.ProjectLibrary.EcomCraftStudioProjectAddWorks, true, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(EcomCraftStudio.Studio.Projects.ProjectLibrary.EcomCraftStudioProjectRemoveWorks, true, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(EcomCraftStudio.Studio.Projects.ProjectLibrary.EcomCraftStudioProjectWorks, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(EcomCraftStudio.Studio.Generation.BatchService.EcomCraftStudioGenerateSet, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(EcomCraftStudio.Studio.Generation.BatchService.EcomCraftStudioBatchStatus, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(EcomCraftStudio.Studio.Generation.BatchService.EcomCraftStudioBatchRetry, true, Permissions.BasicImageGeneration);

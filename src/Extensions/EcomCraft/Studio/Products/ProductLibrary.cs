@@ -145,6 +145,15 @@ public static class ProductLibrary
         return (image, placement ?? Placement.Default, null);
     }
 
+    /// <summary>Whether the account has a saved product with this ID (files are not read).</summary>
+    public static bool Exists(string userId, string productId)
+    {
+        lock (Lock)
+        {
+            return Loaded().Find(userId, productId) is not null;
+        }
+    }
+
     /// <summary>The account's product file for the image route ("original" or "cutout"), or null.</summary>
     public static (byte[] Bytes, string Extension) FileFor(string userId, string productId, string kind)
     {
