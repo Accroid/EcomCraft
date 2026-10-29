@@ -210,6 +210,12 @@ public static class TemplateApi
         {
             workflowParams[property.Name] = property.Value.DeepClone();
         }
+        // "Make again with the same settings" (F04): a seed read from a filed work's recipe only sets the snapshot's seed parameter, still checked against its range.
+        if (rawInput["seed"] is JValue { Value: long seed } && seed >= 0
+            && parameters.Properties().FirstOrDefault(property => property.Value["form"]?.ToString() == "seed") is JProperty seedParam)
+        {
+            workflowParams[seedParam.Name] = seed;
+        }
         string brandKitId = rawInput["brand_kit_id"]?.Type == JTokenType.String ? rawInput.Value<string>("brand_kit_id") : "";
         request.Remove("brand_kit_id");
         if (brandKitId.Length > 0 && template.BrandImageParams.Any())

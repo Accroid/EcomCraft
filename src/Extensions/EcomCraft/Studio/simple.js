@@ -21,6 +21,8 @@ class SimpleMode {
     static brandSaving = false;
     static product = null;
     static products = [];
+    /** "Make again with the same settings" (F04): the template, seed and prompt of a filed work, applied to the next single generation with that template. */
+    static redo = null;
     static library = [];
     static picker = '';
     static galleryItems = null;
@@ -270,6 +272,7 @@ class SimpleMode {
             this.remember();
         });
         $('simple-brand-manage').addEventListener('click', e => this.openBrand(e.currentTarget));
+        $('simple-redo-clear').addEventListener('click', () => this.clearRedo());
         $('brand-close').addEventListener('click', () => this.closeBrand());
         $('brand-backdrop').addEventListener('click', () => this.closeBrand());
         $('brand-new').addEventListener('click', () => this.editBrand(null));
@@ -1249,6 +1252,9 @@ class SimpleMode {
         for (let template of list) {
             cards.push(this.card(template, template.example_image, template.id == this.choice.template, () => {
                 this.choice.template = template.id;
+                if (this.redo && this.redo.template != template.id) {
+                    this.clearRedo();
+                }
                 this.renderTemplates();
                 this.renderCutout();
                 this.update();
@@ -1605,6 +1611,7 @@ class SimpleMode {
         }
         this.renderQuality();
         this.renderTask();
+        this.renderRedo();
         // Reference mode (F59): the other step-2 options stop applying and a single "generate by reference" button takes over.
         this.setReferenceOptions();
         let refMode = this.referenceMode();
@@ -2662,6 +2669,82 @@ class SimpleMode {
     }
 
     /** Submits one template generation; the server composes the prompt from the style and description. */
+    /** Fills the page with the settings of a filed work (F04): single image task, its template, platform, saved product, prompt and seed.
+     * The recipe comes from the project record, which the server read from the work's own metadata. Returns false when the template is no longer offered. */
+    static async applyRecipe(recipe) {
+        let tr = this.api.tr;
+        // Opening the view starts loading the lists too; wait for that load instead of racing it.
+        for (let i = 0; i < 100 && this.loading; i++) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        if (!this.loaded) {
+            await this.load();
+        }
+        let template = this.data.templates.find(item => item.id == recipe.template);
+        if (!template) {
+            this.message(tr('这件作品用的图片类型已停用或不存在，无法用相同参数重做。'), true);
+            return false;
+        }
+        this.chosenTask = 'single';
+        if (recipe.platform && this.data.platforms.some(platform => platform.id == recipe.platform)) {
+            this.choice.platform = recipe.platform;
+        }
+        if (!this.visibleTemplates().includes(template)) {
+            this.choice.platform = '';
+        }
+        this.api.$('simple-platform').value = this.choice.platform;
+        this.optionalSlots.clear();
+        this.renderPlatformSlots();
+        this.choice.template = template.id;
+        let prompt = String(recipe.prompt || '').trim();
+        this.setPromptTexts('', prompt);
+        this.switchPromptTab('en');
+        this.moreOpen = true;
+        this.api.$('simple-more').open = true;
+        this.remember();
+        let seed = Number.isSafeInteger(recipe.seed) && recipe.seed >= 0 ? recipe.seed : null;
+        this.redo = { template: template.id, name: template.name || template.id, seed, prompt };
+        let notice = '';
+        if (recipe.product_id && this.imageField(template)) {
+            let saved = this.library.find(product => product.id == recipe.product_id);
+            if (!saved) {
+                await this.loadLibrary();
+                saved = this.library.find(product => product.id == recipe.product_id);
+            }
+            if (saved) {
+                await this.useSaved(saved);
+            }
+            else {
+                notice = tr('原商品已不在商品库，请重新上传或选择商品图。');
+            }
+        }
+        this.renderTemplates();
+        this.renderStoryboard();
+        this.renderCutout();
+        this.update();
+        this.message(notice, Boolean(notice));
+        return true;
+    }
+
+    /** Stops applying the filed work's seed and prompt; the page keeps the filled-in choices. */
+    static clearRedo() {
+        this.redo = null;
+        this.renderRedo();
+    }
+
+    /** Shows which work's settings the next generation repeats, with a button to stop. */
+    static renderRedo() {
+        let tr = this.api.tr;
+        let box = this.api.$('simple-redo');
+        let redo = this.redo && this.redo.template == this.choice.template ? this.redo : null;
+        box.hidden = !redo;
+        if (redo) {
+            this.api.$('simple-redo-text').textContent = redo.seed != null
+                ? tr('下一次出图沿用原作品的种子 {0} 和提示词（图片类型：{1}）。', redo.seed, redo.name)
+                : tr('下一次出图沿用原作品的提示词（图片类型：{0}）。', redo.name);
+        }
+    }
+
     static async generate() {
         let tr = this.api.tr;
         let template = this.currentTemplate();
@@ -2695,11 +2778,26 @@ class SimpleMode {
         if (template.preserve_product) {
             payload.placement = this.clampPlacement(this.placement);
         }
+        let redo = this.redo && this.redo.template == template.id ? this.redo : null;
+        if (redo) {
+            // An untouched redo prompt goes out as the work's own prompt, so the template, brand and style words are not added a second time.
+            if (redo.prompt && sent.source == 'en' && !this.promptDirty('en') && String(this.prompt.en || '').trim() == redo.prompt) {
+                delete payload.prompt_en;
+                delete payload.brand_kit_id;
+                payload.prompt = redo.prompt;
+            }
+            if (redo.seed != null) {
+                payload.seed = redo.seed;
+            }
+        }
         this.submitting = true;
         this.update();
         let entry = { product: this.product ? this.product.name : '', template: template.name || template.id, stage: 'prompt', server: '', taskId: null };
         try {
             let result = await this.api.request('EcomCraftStudioGenerate', payload);
+            if (redo) {
+                this.clearRedo();
+            }
             if (result.prepare_id) {
                 // The language model is writing the prompt (F56): the task is shown at once and starts by itself when the prompt is ready.
                 this.preparing.set(result.prepare_id, { entry, sent });

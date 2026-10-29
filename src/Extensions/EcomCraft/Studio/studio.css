@@ -461,6 +461,7 @@ main:focus:not(:focus-visible) { outline: none; }
 .simple-prompt textarea[hidden] { display: none; }
 .simple-prompt-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--line); background: var(--panel); }
 .simple-prompt-foot .hint { margin-top: 0; }
+.simple-redo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 8px 10px; border-left: 3px solid var(--key); background: var(--key-soft); font-size: var(--fs-13); }
 .simple-prompt-state { display: inline-flex; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-12); background: var(--backdrop); color: var(--ink-2); }
 .simple-prompt-state.is-synced { background: var(--key-soft); color: var(--key); }
 .simple-prompt-state.is-dirty { background: var(--tally-soft); color: var(--tally); }
@@ -584,6 +585,15 @@ main:focus:not(:focus-visible) { outline: none; }
 }
 .search-clear:hover { background: var(--key-soft); color: var(--ink); }
 .sort-wrap select { width: 120px; }
+/* Project archive (F04): the current project picker under the gallery toolbar and the project dialog. */
+.project-bar { margin-top: -6px; }
+.project-wrap { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-13); color: var(--ink-2); }
+.project-wrap select { width: 220px; max-width: 100%; }
+.project-note { flex-basis: 100%; margin: 0; overflow-wrap: anywhere; }
+.project-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.project-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--field); font-size: var(--fs-13); }
+.project-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.project-count { color: var(--ink-2); font-size: var(--fs-12); }
 .selection-bar {
     display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; padding: 8px 12px;
     background: var(--panel); border-left: 3px solid var(--key);

@@ -2423,6 +2423,7 @@
             catch (error) {
                 // The mark is informational; the gallery works without it.
             }
+            await GalleryProjects.load();
             sortGalleryItems();
             renderGallery();
             if (g.revealSrc) {
@@ -2512,6 +2513,9 @@
         if (g.source != 'all') {
             items = items.filter(item => item.source == g.source);
         }
+        if (GalleryProjects.current) {
+            items = items.filter(item => GalleryProjects.has(item));
+        }
         return items;
     }
 
@@ -2531,9 +2535,12 @@
         GallerySelection.updateControls();
         if (!items.length) {
             let filtered = g.items.length > 0 || Boolean(g.search) || g.filter == 'star';
+            let project = g.items.length > 0 && !g.search && g.filter != 'star' && g.source == 'all' && GalleryProjects.current;
             empty.hidden = false;
-            empty.querySelector('h2').textContent = filtered ? '没有符合条件的作品' : '还没有作品';
-            empty.querySelector('p').textContent = filtered
+            empty.querySelector('h2').textContent = project ? '这个项目里还没有作品' : filtered ? '没有符合条件的作品' : '还没有作品';
+            empty.querySelector('p').textContent = project
+                ? '把当前项目切换为“全部作品”，点“选择”选中作品后，点“归入当前项目”。'
+                : filtered
                 ? '换一个关键词，或清空搜索查看全部作品。'
                 : '去“出图”生成第一张商品图。';
             $('gallery-gocreate').hidden = filtered;
@@ -2619,6 +2626,7 @@
             star.disabled = GallerySelection.active;
             star.addEventListener('click', () => toggleStar(item));
             meta.append(star);
+            card.append(el('span', 'sheet-check', '✓'));
             if (GallerySelection.canDelete()) {
                 let remove = el('button', 'sheet-delete');
                 remove.append(svgIcon('M4 7h16', 'M10 11v6M14 11v6', 'M6 7l1 13h10l1-13', 'M9 7V4h6v3'));
@@ -2629,7 +2637,6 @@
                 remove.title = '删除';
                 remove.addEventListener('click', () => GallerySelection.deleteOne(item));
                 meta.append(remove);
-                card.append(el('span', 'sheet-check', '✓'));
             }
             card.prepend(open);
             card.append(meta);
@@ -3166,7 +3173,7 @@
             if (this.deleting) {
                 return;
             }
-            this.active = active && this.canDelete();
+            this.active = active;
             this.selected.clear();
             renderGallery();
         }
@@ -3205,17 +3212,34 @@
                 }
             }
             let allowed = this.canDelete();
-            if (!allowed) {
-                this.active = false;
-            }
-            $('gallery-select').hidden = !allowed || this.active || !state.gallery.items.length;
+            let filing = this.deleting || GalleryProjects.busy;
+            $('gallery-select').hidden = this.active || !state.gallery.items.length;
             $('gallery-select').setAttribute('aria-pressed', String(this.active));
             $('gallery-selection').hidden = !this.active;
             $('gallery-selected-count').textContent = tr('已选 {0} 项', this.selected.size);
-            $('gallery-delete-selected').disabled = this.deleting || !this.selected.size;
+            $('gallery-delete-selected').hidden = !allowed;
+            $('gallery-delete-selected').disabled = filing || !this.selected.size;
+            $('gallery-file-selected').disabled = filing || !this.selected.size || !GalleryProjects.current;
+            $('gallery-file-selected').title = GalleryProjects.current ? '' : tr('先在“当前项目”里选择一个项目');
+            $('gallery-unfile-selected').hidden = !GalleryProjects.current;
+            $('gallery-unfile-selected').disabled = filing || !this.selected.size;
             $('gallery-delete-selected').textContent = this.deleting ? '正在删除…' : '删除所选';
-            $('gallery-select-all').disabled = this.deleting;
-            $('gallery-select-cancel').disabled = this.deleting;
+            $('gallery-select-all').disabled = filing;
+            $('gallery-select-cancel').disabled = filing;
+        }
+
+        /** Files the selection into the current project, or takes it out, then leaves selection mode when it worked. */
+        static async fileSelected(add) {
+            let items = state.gallery.items.filter(item => this.selected.has(item.src));
+            if (this.deleting || !items.length) {
+                return;
+            }
+            let done = add ? await GalleryProjects.file(items) : await GalleryProjects.unfile(items);
+            if (done) {
+                this.active = false;
+                this.selected.clear();
+                renderGallery();
+            }
         }
 
         /** Deletes one item after confirmation, for the card button and the lightbox. */
@@ -3229,6 +3253,9 @@
 
         /** Deletes the current batch selection after confirmation. */
         static async deleteSelected() {
+            if (!this.canDelete()) {
+                return;
+            }
             let items = state.gallery.items.filter(item => this.selected.has(item.src));
             let hasStarred = items.some(item => item.starred);
             if (this.deleting || !items.length || !window.confirm(tr('确定删除选中的 {0} 个作品？', items.length) + (hasStarred ? tr('已收藏的作品会同时删除收藏副本和原始文件。') : '') + tr(this.recycleNote()))) {
@@ -3295,6 +3322,309 @@
             }
             message.hidden = false;
         }
+    }
+
+    /** Project archive in the gallery (F04): the account's projects, the current one (remembered in this browser) and the works filed in it with their recipes.
+     * Projects are only readable by their owner; recipes are read by the server from each work's own metadata, never sent by the page. */
+    class GalleryProjects {
+        static storageKey = 'ecomcraft.project';
+        static projects = [];
+        static current = '';
+        /** Works of the current project by gallery key: the address the server listed and the recipe. */
+        static works = new Map();
+        static busy = false;
+        /** The project being renamed in the dialog, or null when the dialog creates a new one. */
+        static editing = null;
+
+        /** The key that matches a project work to a gallery item: the path below the output root, ignoring the Starred/ folder that starring moves a file into. */
+        static key(path) {
+            return String(path).replace(/^\/?View\/[^/]+\//, '').replace(/^\/?Output\//, '').replace(/^Starred\//, '');
+        }
+
+        /** The current project, or null when the gallery shows all works. */
+        static currentProject() {
+            return this.projects.find(project => project.id == this.current) || null;
+        }
+
+        /** Whether a gallery item is filed in the current project. */
+        static has(item) {
+            return this.works.has(this.key(item.src));
+        }
+
+        /** The recipe of a gallery item filed in the current project, or null. */
+        static recipe(item) {
+            return this.works.get(this.key(item.src))?.recipe || null;
+        }
+
+        /** Reads the account's projects and the works of the current one. Failures leave the gallery showing all works. */
+        static async load() {
+            if (!this.current) {
+                this.current = readStorage(this.storageKey) || '';
+            }
+            try {
+                let result = await request('EcomCraftStudioProjects');
+                this.projects = result.projects || [];
+            }
+            catch (error) {
+                this.projects = [];
+            }
+            if (!this.currentProject()) {
+                this.current = '';
+            }
+            await this.loadWorks();
+            this.renderSelect();
+        }
+
+        /** Reads the works of the current project. */
+        static async loadWorks() {
+            this.works = new Map();
+            if (!this.current) {
+                return;
+            }
+            try {
+                let result = await request('EcomCraftStudioProjectWorks', { project_id: this.current });
+                for (let work of result.works || []) {
+                    this.works.set(this.key(work.image), { image: work.image, recipe: work.recipe || null });
+                }
+            }
+            catch (error) {
+                showGalleryMessage(error.message || tr('无法读取项目里的作品，请稍后刷新。'), true);
+            }
+        }
+
+        /** Fills the project picker and the note under it. */
+        static renderSelect() {
+            let select = $('gallery-project');
+            let options = [new Option(tr('全部作品'), '')];
+            for (let project of this.projects) {
+                options.push(new Option(tr('{0}（{1} 件）', project.name, project.works), project.id));
+            }
+            select.replaceChildren(...options);
+            select.value = this.current;
+            select.disabled = this.busy;
+            let project = this.currentProject();
+            let listed = new Set(state.gallery.items.map(item => this.key(item.src)));
+            let missing = Array.from(this.works.keys()).filter(key => !listed.has(key)).length;
+            let parts = [];
+            if (project?.note) {
+                parts.push(project.note);
+            }
+            if (project && missing > 0) {
+                parts.push(tr('{0} 件作品已从画廊删除，只剩归档记录。', missing));
+            }
+            $('gallery-project-note').textContent = parts.join(' ');
+            $('gallery-project-note').hidden = !parts.length;
+        }
+
+        /** Switches the current project and shows its works. */
+        static async setCurrent(id) {
+            this.current = id;
+            writeStorage(this.storageKey, id);
+            GallerySelection.selected.clear();
+            await this.loadWorks();
+            this.renderSelect();
+            renderGallery();
+        }
+
+        /** Files gallery items into the current project; the server reads each recipe from the work file. */
+        static async file(items) {
+            let project = this.currentProject();
+            if (!project || !items.length || this.busy) {
+                return false;
+            }
+            this.busy = true;
+            GallerySelection.updateControls();
+            let message = null;
+            try {
+                let result = await request('EcomCraftStudioProjectAddWorks', { project_id: project.id, images: items.slice(0, 100).map(item => item.src) });
+                message = [tr('已把 {0} 件作品归入项目“{1}”。', result.added || 0, project.name), false];
+            }
+            catch (error) {
+                message = [error.message || tr('归档失败，请稍后重试。'), true];
+            }
+            this.busy = false;
+            await this.load();
+            renderGallery();
+            showGalleryMessage(message[0], message[1]);
+            return !message[1];
+        }
+
+        /** Removes gallery items from the current project; the works stay in the gallery. */
+        static async unfile(items) {
+            let project = this.currentProject();
+            let images = items.map(item => this.works.get(this.key(item.src))?.image).filter(Boolean);
+            if (!project || !images.length || this.busy) {
+                return false;
+            }
+            this.busy = true;
+            GallerySelection.updateControls();
+            let message = null;
+            try {
+                let result = await request('EcomCraftStudioProjectRemoveWorks', { project_id: project.id, images: images.slice(0, 100) });
+                message = [tr('已把 {0} 件作品移出项目“{1}”，作品仍在画廊。', result.removed || 0, project.name), false];
+            }
+            catch (error) {
+                message = [error.message || tr('移出失败，请稍后重试。'), true];
+            }
+            this.busy = false;
+            await this.load();
+            renderGallery();
+            showGalleryMessage(message[0], message[1]);
+            return !message[1];
+        }
+
+        /** "Make again with the same settings": opens the simple mode filled with the work's template, platform, product, prompt and seed. */
+        static async redo(item) {
+            let recipe = this.recipe(item);
+            if (!recipe?.template) {
+                return;
+            }
+            closeLightbox();
+            if (state.view != 'simple') {
+                location.hash = 'simple';
+            }
+            await SimpleMode.applyRecipe(recipe);
+        }
+
+        /** Opens the project dialog. */
+        static open(opener) {
+            this.edit(null);
+            this.renderList();
+            $('project-modal').hidden = false;
+            DialogFocus.enter($('project-modal'), opener, $('project-name'));
+        }
+
+        /** Closes the project dialog. */
+        static close() {
+            if ($('project-modal').hidden) {
+                return;
+            }
+            $('project-modal').hidden = true;
+            DialogFocus.leave($('project-modal'));
+        }
+
+        /** Lists the projects with rename and delete buttons. */
+        static renderList() {
+            let rows = [];
+            for (let project of this.projects) {
+                let row = el('li', 'project-row');
+                let name = el('span', 'project-name', project.name);
+                name.dataset.i18nSkip = '';
+                row.append(name, el('span', 'project-count', tr('{0} 件', project.works)));
+                let rename = el('button', 'link-btn', '重命名');
+                rename.type = 'button';
+                rename.setAttribute('aria-label', tr('重命名 {0}', project.name));
+                rename.disabled = this.busy;
+                rename.addEventListener('click', () => this.edit(project));
+                let remove = el('button', 'link-btn', '删除');
+                remove.type = 'button';
+                remove.setAttribute('aria-label', tr('删除 {0}', project.name));
+                remove.disabled = this.busy;
+                remove.addEventListener('click', () => this.remove(project));
+                row.append(rename, remove);
+                rows.push(row);
+            }
+            $('project-list').replaceChildren(...rows);
+            $('project-list').hidden = !rows.length;
+            $('project-empty').hidden = rows.length > 0;
+        }
+
+        /** Switches the form between creating a project and renaming one. */
+        static edit(project) {
+            this.editing = project;
+            $('project-name').value = project ? project.name : '';
+            $('project-note').value = project ? (project.note || '') : '';
+            $('project-name-label').textContent = project ? tr('重命名“{0}”', project.name) : tr('新项目名称');
+            $('project-save').textContent = project ? tr('保存') : tr('新建项目');
+            $('project-cancel').hidden = !project;
+            this.message('', false);
+            if (project) {
+                $('project-name').focus();
+            }
+        }
+
+        /** Shows a line under the form. */
+        static message(text, error) {
+            let line = $('project-message');
+            line.textContent = text;
+            line.classList.toggle('is-error', Boolean(error));
+            line.hidden = !text;
+        }
+
+        /** Creates or renames a project. A new project becomes the current one. */
+        static async save() {
+            let name = $('project-name').value.trim();
+            if (!name) {
+                this.message(tr('请填写项目名称。'), true);
+                $('project-name').focus();
+                return;
+            }
+            if (this.busy) {
+                return;
+            }
+            this.busy = true;
+            $('project-save').disabled = true;
+            let editing = this.editing;
+            let result = null;
+            try {
+                let body = { name, note: $('project-note').value.trim() };
+                if (editing) {
+                    body.project_id = editing.id;
+                }
+                result = await request('EcomCraftStudioProjectSave', body);
+            }
+            catch (error) {
+                this.message(error.message || tr('项目保存失败，请稍后重试。'), true);
+            }
+            this.busy = false;
+            $('project-save').disabled = false;
+            if (result) {
+                if (!editing && result.project?.id) {
+                    this.current = result.project.id;
+                    writeStorage(this.storageKey, this.current);
+                }
+                await this.load();
+                renderGallery();
+                this.edit(null);
+                this.message(editing ? tr('已保存项目“{0}”。', name) : tr('已新建项目“{0}”，并设为当前项目。', name), false);
+            }
+            this.renderList();
+        }
+
+        /** Deletes a project's record after confirmation; its works stay in the gallery. */
+        static async remove(project) {
+            if (this.busy || !window.confirm(tr('确定删除项目“{0}”？只删除归档记录，作品仍留在画廊。', project.name))) {
+                return;
+            }
+            this.busy = true;
+            this.renderList();
+            let removed = false;
+            try {
+                await request('EcomCraftStudioProjectDelete', { project_id: project.id });
+                removed = true;
+            }
+            catch (error) {
+                this.message(error.message || tr('项目删除失败，请稍后重试。'), true);
+            }
+            this.busy = false;
+            if (removed) {
+                if (this.editing?.id == project.id) {
+                    this.edit(null);
+                }
+                await this.load();
+                renderGallery();
+                this.message(tr('已删除项目“{0}”。', project.name), false);
+            }
+            this.renderList();
+        }
+    }
+
+    /** Shows a line in the gallery banner. */
+    function showGalleryMessage(text, error) {
+        let message = $('gallery-message');
+        message.textContent = text;
+        message.classList.toggle('error', Boolean(error));
+        message.hidden = !text;
     }
 
     /** Stars or unstars one file, reloads the list (paths move into or out of Starred/), and optionally announces the result. */
@@ -4379,6 +4709,8 @@
             $('lb-delete').hidden = !gallery || !GallerySelection.canDelete();
             $('lb-gallery').hidden = gallery || !item.src;
             $('lb-edit').hidden = Boolean(item.video);
+            $('lb-file').hidden = !gallery || !GalleryProjects.current || GalleryProjects.has(item);
+            $('lb-redo').hidden = !gallery || Boolean(item.video) || !GalleryProjects.recipe(item)?.template;
             $('lb-prev').disabled = this.index == 0;
             $('lb-next').disabled = this.index >= this.items.length - 1;
             $('lb-prev').hidden = this.items.length < 2;
@@ -4861,12 +5193,27 @@
             setGalleryFilter('star');
             renderGallery();
         });
-        $('gallery-clear-filter').addEventListener('click', () => {
+        $('gallery-clear-filter').addEventListener('click', async () => {
             setGallerySearch('');
             setGalleryFilter('all');
             state.gallery.source = 'all';
             $('gallery-source').value = 'all';
+            await GalleryProjects.setCurrent('');
             loadGallery();
+        });
+        $('gallery-project').addEventListener('change', e => GalleryProjects.setCurrent(e.target.value));
+        $('gallery-projects').addEventListener('click', e => GalleryProjects.open(e.currentTarget));
+        $('gallery-file-selected').addEventListener('click', () => GallerySelection.fileSelected(true));
+        $('gallery-unfile-selected').addEventListener('click', () => GallerySelection.fileSelected(false));
+        $('project-close').addEventListener('click', () => GalleryProjects.close());
+        $('project-backdrop').addEventListener('click', () => GalleryProjects.close());
+        $('project-cancel').addEventListener('click', () => GalleryProjects.edit(null));
+        $('project-save').addEventListener('click', () => GalleryProjects.save());
+        $('project-name').addEventListener('keydown', e => {
+            if (e.key == 'Enter') {
+                e.preventDefault();
+                GalleryProjects.save();
+            }
         });
         let searchReload = debounce(() => loadGallery(), 350);
         $('gallery-search').addEventListener('input', () => {
@@ -4966,6 +5313,18 @@
                 GallerySelection.deleteOne(item);
             }
         });
+        $('lb-file').addEventListener('click', async () => {
+            let item = Lightbox.current();
+            if (item && Lightbox.source == 'gallery' && await GalleryProjects.file([item])) {
+                Lightbox.show(Lightbox.index);
+            }
+        });
+        $('lb-redo').addEventListener('click', () => {
+            let item = Lightbox.current();
+            if (item && Lightbox.source == 'gallery') {
+                GalleryProjects.redo(item);
+            }
+        });
         $('lb-edit').addEventListener('click', () => {
             let item = Lightbox.current();
             if (item) {
@@ -4998,6 +5357,15 @@
                 }
                 else {
                     DialogFocus.trap($('brand-modal'), e);
+                }
+                return;
+            }
+            if (!$('project-modal').hidden) {
+                if (e.key == 'Escape') {
+                    GalleryProjects.close();
+                }
+                else {
+                    DialogFocus.trap($('project-modal'), e);
                 }
                 return;
             }

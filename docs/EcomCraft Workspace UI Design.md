@@ -254,7 +254,9 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Search | Filter by file name, 350ms debounce | OK | Kept; own clear button; empty state offers "clear search" |
 | Sort | Newest / name | OK | Kept |
 | Refresh | Reread the list | Icon button | Kept; spins and disables while loading |
-| Batch delete (Select) | Selection mode | Implemented | "Select"; then "Select all visible / Delete selected / Cancel" |
+| Batch delete (Select) | Selection mode | Implemented | "Select", for every account; then "Select all visible / Add to current project / Remove from current project / Delete selected / Cancel"; "Delete selected" only shows for accounts allowed to delete, "Remove from current project" only while a project is chosen |
+| Current project | Switch the current project and view its works (F04) | New | A select on the row below the toolbar: "All works" and the account's projects (with work counts), remembered in this browser; with a project chosen only its works show, with the project note and the number of works deleted from the gallery (records only) below; "Clear search and show all" also returns to "All works" |
+| Manage projects | Create, rename, delete projects (F04) | New | Opens a dialog (Esc closes, focus stays inside); name up to 40 characters, note up to 200; a new project becomes the current one; deleting confirms and only removes the records, the works stay in the gallery |
 | Work card | Open the full-size preview | **Defect: a `div`, not keyboard reachable** | Card body becomes a button, Tab-focusable, Enter opens; in selection mode Enter toggles |
 | Star | Star / unstar | **Defect: a `span`**; hover-only | A button, always visible, `aria-pressed` |
 | Delete button | Delete one work | Implemented, hover-only | Hover or keyboard focus; always on touch |
@@ -300,6 +302,8 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Zoom (− / % / +) | Resize the image or video | None | Wheel, double click, pinch or buttons; `+` / `-` / `0` keys; pan by dragging or arrows when zoomed; Esc resets first, then closes; videos keep native controls; switching resets to 100% |
 | Esc / backdrop | Close | OK | Kept |
 | Opened from results | — | Unsupported | Supported; then only download, continue and view-in-gallery show |
+| Add to current project | File this work into the project chosen in the gallery (F04) | New | Only while a project is chosen and the work is not in it yet |
+| Make again with same settings | Generate again from the filed recipe (F04) | New | Only for images of the current project with a template recipe; opens the simple mode's single-image task filled with the image type, platform, the product from the library and the English prompt, and shows "The next generation reuses the original work's seed … and prompt" (with "Stop reusing"); an untouched prompt is sent as the original prompt, an edited one follows the bilingual panel rules; the seed applies to the next submission only; a disabled image type is explained |
 
 ### 3.7 Setup guide dialog
 

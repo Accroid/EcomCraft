@@ -316,3 +316,54 @@ test('administrators reach the standard workflows from the "Manage" menu; the pa
     let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
     assert.match(studio, /request\('EcomCraftStandardWorkflows', action \? \{ action \} : \{\}\)/, 'no graph or model names are sent from the page');
 });
+
+test('the gallery files works into projects and makes a filed work again with the same settings (F04)', () => {
+    let gallery = section('view-gallery');
+    for (let id of ['gallery-project', 'gallery-projects', 'gallery-file-selected', 'gallery-unfile-selected']) {
+        assert.ok(gallery.includes(`id="${id}"`), `${id} belongs to the gallery`);
+    }
+    assert.match(gallery, /<select id="gallery-project"[^>]*data-i18n-skip/, 'project names are user content and are not translated');
+    assert.ok(html.includes('id="lb-redo"') && html.includes('id="lb-file"'), 'the preview offers redo and filing');
+    assert.match(html, /<div class="modal" id="project-modal" hidden>/, 'projects are managed in a dialog');
+    let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    for (let route of ['EcomCraftStudioProjects', 'EcomCraftStudioProjectWorks', 'EcomCraftStudioProjectSave', 'EcomCraftStudioProjectDelete',
+        'EcomCraftStudioProjectAddWorks', 'EcomCraftStudioProjectRemoveWorks']) {
+        assert.ok(studio.includes(`'${route}'`), `${route} is used`);
+    }
+});
+
+test('a redo sends the filed work\'s own prompt and seed once, and an edited prompt goes through the panel (F04)', async () => {
+    let SimpleMode = loadSimpleMode();
+    let sent = [];
+    SimpleMode.api = {
+        tr: text => text,
+        $: () => ({ value: '', textContent: '', hidden: false }),
+        request: async (route, payload) => {
+            sent.push(payload);
+            return { task_id: sent.length, images: [] };
+        }
+    };
+    for (let name of ['update', 'acceptSubmitted', 'addTask', 'renderRedo', 'renderPromptState']) {
+        SimpleMode[name] = () => {};
+    }
+    SimpleMode.blocker = () => '';
+    SimpleMode.countValue = () => 1;
+    SimpleMode.brandFields = () => ({ brand_kit_id: 'kit' });
+    SimpleMode.data.templates = [{ id: 'scene', name: 'Scene', fields: [] }];
+    SimpleMode.choice.template = 'scene';
+    SimpleMode.setPromptTexts('', 'a red cup on marble');
+    SimpleMode.redo = { template: 'scene', name: 'Scene', seed: 42, prompt: 'a red cup on marble' };
+    await SimpleMode.generate();
+    assert.strictEqual(sent[0].prompt, 'a red cup on marble');
+    assert.strictEqual(sent[0].seed, 42);
+    assert.ok(!('prompt_en' in sent[0]) && !('brand_kit_id' in sent[0]), 'the filed prompt already holds the brand words');
+    assert.strictEqual(SimpleMode.redo, null, 'the seed is only reused once');
+    await SimpleMode.generate();
+    assert.ok(!('seed' in sent[1]) && !('prompt' in sent[1]), 'later generations are new ones');
+    SimpleMode.redo = { template: 'scene', name: 'Scene', seed: 7, prompt: 'a red cup on marble' };
+    SimpleMode.prompt.en = 'a blue cup on marble';
+    await SimpleMode.generate();
+    assert.strictEqual(sent[2].prompt_en, 'a blue cup on marble');
+    assert.strictEqual(sent[2].seed, 7);
+    assert.ok(!('prompt' in sent[2]));
+});

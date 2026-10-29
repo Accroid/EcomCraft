@@ -27,6 +27,7 @@ description: 修改 EcomCraft 工作台页面（src/Extensions/EcomCraft/Studio 
 - **新文字必须走翻译表**：界面原文写中文，中文原文就是翻译 key，英文写进 `Studio/lang/en.js`。固定文字（HTML 中的文字和 `title`、`placeholder`、`aria-label`、`alt`，以及 JS 里直接写入页面的中文字符串）由 `i18n.js` 自动查表；带变量的文字必须写成 `tr('已删除 {0} 个作品。', count)`，不要用带中文的模板字符串或 `+` 拼接中文。`window.confirm`、`document.title` 等不经过页面元素的文字也要用 `tr()`。用户内容（提示词、作品名、工作流名）不翻译，需要排除的元素加 `data-i18n-skip`。服务端错误在英文模式下按错误码显示 `error:<code>` 条目，新增错误码时同步补英文。改完运行 `node --test src/Extensions/EcomCraft/Tests/studio-i18n.test.cjs`：缺译、多余条目、英文里混入中文或占位符不一致都会失败。
 - 管理功能入口（F62）：只给管理员的功能放进顶栏“管理”菜单（`AdminMenu`，`#admin-menu-list` 中的 `.admin-menu-item`，需服务器设置权限的项加 `data-admin-only`），不要再加到导航或各页面页头；原生引擎链接只在该菜单中。
 - 简易模式先选任务（F61）：顶部任务卡片决定 `#view-simple` 的 `data-simple-task`，第 2 步字段用 `data-tasks="..."`（空格分隔的任务名）标记，CSS 隐藏不属于当前任务的字段；新增第 2 步字段时必须标明它属于哪些任务，不属于所有任务的字段才加 `data-tasks`。
+- 画廊（F04）：选择模式对所有账号开放（用于归入或移出项目），只有“删除所选”和删除按钮按 `can_delete_images` 显示；当前项目由 `GalleryProjects` 管理，`visibleGalleryItems()` 按项目过滤，新增画廊筛选时一并考虑。项目名称等用户内容所在元素加 `data-i18n-skip`。
 - 默认视图是 `simple.js` 的三步式简易模式，原创作视图是所有账号可用的“专业模式”（A2），其中有自用工作流的上传与列表（`OwnWorkflows`，F60）。简易模式里唯一的提示词输入是 F54 的中英双语提示词面板（`simple-prompt-zh` / `simple-prompt-en`），不要再加其他提示词框或采样器、LoRA、步数等专业参数（`Tests/simple-mode.test.cjs` 会检查）；发送给引擎的提示词始终是英文，修改过的中文由服务端翻译。`simple.js` 先于 `studio.js` 加载，通过 `SimpleMode.attach()` 拿到 `studio.js` 的工具函数。
 - 切换语言不刷新页面：静态文字由 `i18n.js` 重新翻译；用 `tr()` 生成的动态文字需要在 `studio.js` 的 `onLanguageChange` 中重新渲染。
 - 文案：写用户能看懂的结果（“已删除 3 个作品”），加载状态以“…”结尾，错误说明原因和下一步；不用中点“·”拼接信息，不用全大写标签。
