@@ -461,6 +461,47 @@ public class LLMAPICalls : MagicPromptAPI
         return defaultTimeout;
     }
 
+    /// <summary>What the "auto" device setting learned since start (F71), by vision endpoint and model: true for the CPU after the GPU hung, false once the GPU answered.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> OllamaVisionOnCpu = new();
+
+    /// <summary>The key <see cref="OllamaVisionOnCpu"/> uses for a vision endpoint and model.</summary>
+    private static string PlacementKey(string endpoint, string model) => $"{endpoint}|{model}";
+
+    /// <summary>Whether the configured Ollama vision model was moved to the CPU since start because the GPU hung (F71); false for other services.</summary>
+    /// <param name="settings">The MagicPrompt settings as saved (not the vision view).</param>
+    public static bool VisionMovedToCpu(JObject settings)
+    {
+        if (settings is null || VisionBackend(settings) != "ollama")
+        {
+            return false;
+        }
+        string endpoint = GetEndpoint("ollama", VisionSettings(settings), "vision");
+        return OllamaVisionOnCpu.TryGetValue(PlacementKey(endpoint, settings["visionmodel"]?.ToString() ?? ""), out bool onCpu) && onCpu;
+    }
+
+    /// <summary>Asks Ollama to unload a model (keep_alive 0), which clears the state a hung run leaves behind; failures are only logged.</summary>
+    private static async Task UnloadOllamaModel(JObject settings, Session session, string model, string keyOverride)
+    {
+        string baseUrl = (settings["backends"] as JObject)?["ollama"]?["baseurl"]?.ToString()?.TrimEnd('/');
+        if (string.IsNullOrEmpty(baseUrl))
+        {
+            return;
+        }
+        try
+        {
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(15));
+            using HttpRequestMessage request = new(HttpMethod.Post, $"{baseUrl}/api/generate");
+            ConfigureRequest(request, "ollama", settings, session, out _, keyOverride);
+            request.Content = new StringContent(JsonSerializer.Serialize(new { model, keep_alive = 0 }), Encoding.UTF8, "application/json");
+            using HttpResponseMessage response = await HttpClient.SendAsync(request, timeout.Token);
+            Logs.Info($"EcomCraft.MagicPrompt: asked Ollama to unload {model} (HTTP {(int)response.StatusCode}).");
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or HttpRequestException)
+        {
+            Logs.Warning($"EcomCraft.MagicPrompt: could not unload Ollama model {model}: {ex.GetType().Name}");
+        }
+    }
+
     /// <summary>Sends the prompt to the LLM API and processes the response.</summary>
     /// <returns>Returns a JSON object with success and a rewritten prompt or an error.</returns>
     [API.APIDescription("Returns a JSON object containing the response from the language model API or an error message.",
@@ -589,11 +630,22 @@ public class LLMAPICalls : MagicPromptAPI
                 Logs.Error($"EcomCraft.MagicPrompt: {error}");
                 return CreateErrorResponse(error);
             }
+            // Ollama vision on a GPU it cannot drive (seen with Vulkan on older AMD cards) can hang with no output and leave the model reported as loaded
+            // while holding no memory (F71). With the "auto" device the first request per server and model gets a limited time on the GPU; past it the
+            // model is unloaded and the request retried on the CPU, which is remembered until restart.
+            string placementKey = backend == "ollama" && messageType == MessageType.Vision ? PlacementKey(endpoint, modelId) : null;
+            bool onCpu = false;
+            bool probeGpu = false;
+            if (placementKey is not null)
+            {
+                bool? remembered = OllamaVisionOnCpu.TryGetValue(placementKey, out bool knownCpu) ? knownCpu : null;
+                (onCpu, probeGpu) = VisionDeviceRules.Plan(settings["visiondevice"]?.ToString(), remembered);
+            }
             // Add request body using BackendSchema
             object requestBody;
             try
             {
-                requestBody = GetSchemaType(backend, messageContent, modelId, messageType, seed);
+                requestBody = GetSchemaType(backend, messageContent, modelId, messageType, seed, onCpu);
             }
             catch (ArgumentException ex)
             {
@@ -604,6 +656,11 @@ public class LLMAPICalls : MagicPromptAPI
             string jsonContent = JsonSerializer.Serialize(requestBody);
             request.Content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
             int timeoutSec = GenerationTimeout.Seconds(settings, backend);
+            // A server-side caller may ask for a shorter limit, so a request it stops waiting for does not keep running upstream; never a longer one.
+            if (int.TryParse(requestData["timeout"]?.ToString(), out int requestedLimit) && requestedLimit > 0)
+            {
+                timeoutSec = Math.Min(timeoutSec, requestedLimit);
+            }
             using CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(
                 context?.RequestAborted ?? CancellationToken.None, session?.SessInterrupt.Token ?? CancellationToken.None,
                 Program.GlobalProgramCancel);
@@ -616,7 +673,32 @@ public class LLMAPICalls : MagicPromptAPI
                 // Detailed diagnostics to help trace hanging requests
                 Logs.Debug($"[MagicPrompt] Sending request | backend={backend} | type={(messageType == MessageType.Vision ? "vision" : "chat")} | endpoint={endpoint} | model={modelId}");
                 Logs.Debug($"[MagicPrompt] Using generation timeout of {timeoutSec} seconds for {backend}");
-                using HttpResponseMessage response = await HttpClient.SendAsync(request, deadline.Token);
+                HttpResponseMessage sent;
+                if (probeGpu)
+                {
+                    using CancellationTokenSource probe = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token);
+                    probe.CancelAfter(VisionDeviceRules.GpuProbe);
+                    try
+                    {
+                        sent = await HttpClient.SendAsync(request, probe.Token);
+                        OllamaVisionOnCpu[placementKey] = false;
+                    }
+                    catch (OperationCanceledException) when (!deadline.IsCancellationRequested)
+                    {
+                        Logs.Warning($"EcomCraft.MagicPrompt: Ollama vision model {modelId} gave no answer on the GPU within {VisionDeviceRules.GpuProbe.TotalSeconds:F0} seconds; unloading it and using the CPU until restart.");
+                        OllamaVisionOnCpu[placementKey] = true;
+                        await UnloadOllamaModel(settings, session, modelId, keyOverride);
+                        using HttpRequestMessage retry = new(HttpMethod.Post, endpoint);
+                        ConfigureRequest(retry, backend, settings, session, out _, keyOverride);
+                        retry.Content = new StringContent(JsonSerializer.Serialize(GetSchemaType(backend, messageContent, modelId, messageType, seed, true)), Encoding.UTF8, "application/json");
+                        sent = await HttpClient.SendAsync(retry, deadline.Token);
+                    }
+                }
+                else
+                {
+                    sent = await HttpClient.SendAsync(request, deadline.Token);
+                }
+                using HttpResponseMessage response = sent;
                 string responseContent = await response.Content.ReadAsStringAsync(deadline.Token);
                 // Handle API errors indicated by status code
                 if (!response.IsSuccessStatusCode)
@@ -662,6 +744,11 @@ public class LLMAPICalls : MagicPromptAPI
             catch (OperationCanceledException)
             {
                 Logs.Warning($"EcomCraft.MagicPrompt: Generation timed out | backend={backend} | elapsed_seconds={elapsed.Elapsed.TotalSeconds:F1} | limit_seconds={timeoutSec}");
+                if (placementKey is not null)
+                {
+                    // A hung vision run leaves Ollama blocked for later requests until the model is unloaded.
+                    await UnloadOllamaModel(settings, session, modelId, keyOverride);
+                }
                 return CreateErrorResponse($"提示词优化已等待 {timeoutSec} 秒，模型服务仍未返回完整结果。请检查服务状态或选择响应更快的模型。本次请求未自动重试。");
             }
             catch (HttpRequestException ex)

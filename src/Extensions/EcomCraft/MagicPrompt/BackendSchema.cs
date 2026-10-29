@@ -37,7 +37,8 @@ public static class BackendSchema
     /// <param name="model">Model name to use</param>
     /// <param name="messageType">Type of message (Text or Vision)</param>
     /// <returns>Returns an object with the schema type for the backend.</returns>
-    public static object GetSchemaType(string type, MessageContent content, string model, MessageType messageType = MessageType.Text, long seed = -1)
+    /// <param name="ollamaCpu">Ollama only: run the request on the CPU (num_gpu 0), for GPUs that cannot run the vision model.</param>
+    public static object GetSchemaType(string type, MessageContent content, string model, MessageType messageType = MessageType.Text, long seed = -1, bool ollamaCpu = false)
     {
         if (content == null || string.IsNullOrEmpty(model))
         {
@@ -47,7 +48,7 @@ public static class BackendSchema
         _ = content.KeepAlive;
         return type switch
         {
-            "ollama" => OllamaRequestBody(content, model, messageType, seed),
+            "ollama" => OllamaRequestBody(content, model, messageType, seed, ollamaCpu),
             "grok" => OpenAICompatibleRequestBody(content, model, messageType, preferPngForBase64: true, seed),
             "openai" or "openaiapi" or "openrouter" => OpenAICompatibleRequestBody(content, model, messageType, preferPngForBase64: false, seed),
             "anthropic" => AnthropicRequestBody(content, model, messageType),
@@ -97,7 +98,7 @@ public static class BackendSchema
     }
 
     /// <summary>Generates a request body for Ollama backend.</summary>
-    private static object OllamaRequestBody(MessageContent content, string model, MessageType messageType, long seed = -1)
+    private static object OllamaRequestBody(MessageContent content, string model, MessageType messageType, long seed = -1, bool cpu = false)
     {
         List<object> messages = [];
         if (!string.IsNullOrEmpty(content.Instructions))
@@ -105,12 +106,19 @@ public static class BackendSchema
             messages.Add(new { role = "system", content = content.Instructions });
         }
 
-        object options = seed == -1
-            ? new { temperature = 1.0, top_p = 0.9 }
-            : new { temperature = 1.0, top_p = 0.9, seed };
+        Dictionary<string, object> options = new() { ["temperature"] = 1.0, ["top_p"] = 0.9 };
+        if (seed != -1)
+        {
+            options["seed"] = seed;
+        }
+        if (cpu)
+        {
+            options["num_gpu"] = 0;
+        }
 
         if (messageType == MessageType.Vision && content.Media?.Any() == true)
         {
+            options["num_ctx"] = VisionDeviceRules.VisionContext;
             messages.Add(new
             {
                 role = "user",
@@ -123,6 +131,8 @@ public static class BackendSchema
                 model,
                 messages = messages.ToArray(),
                 stream = false,
+                // Thinking models (qwen3, qwen3-vl) would otherwise reason first, roughly doubling the output for no benefit here.
+                think = false,
                 keep_alive = content.KeepAlive,
                 options
             };
@@ -133,6 +143,7 @@ public static class BackendSchema
             model,
             messages = messages.ToArray(),
             stream = false,
+            think = false,
             keep_alive = content.KeepAlive,
             options
         };

@@ -1637,11 +1637,19 @@
         $('enh-cfg-vision-ollama-url').value = savedVisionUrl('ollama');
         $('enh-cfg-vision-endpoint').value = savedVisionUrl('openaiapi');
         $('enh-cfg-vision-model').value = mpSettings?.visionbackend == 'openaiapi' ? mpSettings.visionmodel || '' : '';
+        $('enh-cfg-vision-device').value = ['gpu', 'cpu'].includes(mpSettings?.visiondevice) ? mpSettings.visiondevice : 'auto';
         $('enh-cfg-vision-key').value = '';
         $('enh-cfg-vision-ollama-model').replaceChildren();
         $('enh-cfg-vision-ollama-model-fld').hidden = true;
         $('enh-cfg-vision-ollama-state').textContent = '';
         applyVisionFields();
+    }
+
+    /** Explains the vision device choice (F71); after "auto" moved the model to the CPU it says why and suggests "CPU only". */
+    function showVisionDeviceNote(movedToCpu) {
+        $('enh-cfg-vision-device-note').textContent = movedToCpu
+            ? tr('这台电脑的显卡跑看图模型时没有响应，本次运行已自动改用 CPU（重启服务后会再试显卡）。如果每次都这样，可以改选“只用 CPU”。')
+            : tr('一般选“自动”。有些显卡（如较老的 AMD 显卡）跑看图模型会卡住，自动模式会在第一次等待约 1 分钟后改用 CPU。');
     }
 
     /** Shows whether the vision service's own key is saved (F68). */
@@ -1814,6 +1822,7 @@
                     ensureVisionBackendOption(visionBackend);
                     $('enh-cfg-vision-backend').value = visionBackend;
                     fillVisionFields();
+                    showVisionDeviceNote(vs.vision_moved_to_cpu === true);
                     applyVisionToggle();
                     $('enh-cfg-vision-fld').hidden = false;
                     loadVisionKeyStatus();
@@ -1853,6 +1862,9 @@
             settings.visionbackend = partial.vision.backend;
             settings.visionmodel = partial.vision.model;
             settings.visionbaseurl = partial.vision.baseurl || '';
+            if (partial.vision.device) {
+                settings.visiondevice = partial.vision.device;
+            }
         }
         let result = await request('SaveMagicPromptSettings', { settings });
         if (!result.success) {
@@ -2195,7 +2207,8 @@
                     showEnhCfgMessage(tr('视觉服务地址需要以 http:// 或 https:// 开头。'), true);
                     return;
                 }
-                vision = { backend: visionBackend, model: visionModel, baseurl: visionUrl };
+                // The device choice (F71) only applies to Ollama; other services keep the saved one.
+                vision = { backend: visionBackend, model: visionModel, baseurl: visionUrl, device: ollama ? $('enh-cfg-vision-device').value : '' };
                 visionKey = ollama ? '' : $('enh-cfg-vision-key').value.trim();
             }
             // 1) Save the key if provided.
