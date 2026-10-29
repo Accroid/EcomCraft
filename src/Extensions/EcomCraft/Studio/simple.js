@@ -2892,13 +2892,14 @@ class SimpleMode {
             }
             item.append(el('span', '', name), el('span', 'simple-job-state', state));
             if (job.state == 'failed' || job.state == 'cancelled') {
-                if (job.error) {
-                    item.title = job.error_id ? this.api.serverErrorText(job.error_id, job.error) : job.error;
-                }
                 let retry = el('button', 'btn btn-sm', tr('重试'));
                 retry.type = 'button';
                 retry.addEventListener('click', () => this.retryJob(job.id));
                 item.append(retry);
+                // The reason stays visible on the card, so users need not hover to learn why a task failed.
+                if (job.error) {
+                    item.append(el('span', 'simple-job-error', job.error_id ? this.api.serverErrorText(job.error_id, job.error) : job.error));
+                }
             }
             items.push(item);
             for (let url of job.images || []) {

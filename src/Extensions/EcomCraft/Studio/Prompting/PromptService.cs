@@ -25,6 +25,9 @@ public static class PromptService
     /// <summary>Longest wait for the language model before falling back.</summary>
     private static readonly TimeSpan ModelTimeout = TimeSpan.FromSeconds(45);
 
+    /// <summary>Longest wait for translating a reference description: the paragraph is long and nothing falls back meanwhile, so a slow cloud model gets more time.</summary>
+    private static readonly TimeSpan DescriptionTranslateTimeout = TimeSpan.FromSeconds(90);
+
     /// <summary>Longest wait for the vision model: a local one may first have to load into memory, reading an image is slower than text,
     /// and a first Ollama request that hangs on the GPU is retried on the CPU.</summary>
     private static readonly TimeSpan VisionTimeout = TimeSpan.FromSeconds(180);
@@ -452,8 +455,8 @@ public static class PromptService
     }
 
     /// <summary>Asks the configured MagicPrompt model; returns the sanitized answer, or an empty string on any failure or timeout. Errors are logged without the text.</summary>
-    private static async Task<string> AskModelAsync(Session session, string instructions, string text, string imageDataUrl) =>
-        PromptRules.Sanitize(await AskModelRawAsync(session, instructions, text, imageDataUrl));
+    private static async Task<string> AskModelAsync(Session session, string instructions, string text, string imageDataUrl, TimeSpan? limit = null) =>
+        PromptRules.Sanitize(await AskModelRawAsync(session, instructions, text, imageDataUrl, limit));
 
     /// <summary>What a reference image may be at most, as a data URL — the same cap as product photos.</summary>
     private const int MaxReferenceImageLength = (5 * 1024 * 1024 + 2) / 3 * 4 + 40;
@@ -500,7 +503,7 @@ public static class PromptService
             {
                 return ("", "");
             }
-            string translated = await AskModelAsync(session, PromptRules.TranslateInstruction("Simplified Chinese"), described, null);
+            string translated = await AskModelAsync(session, PromptRules.TranslateInstruction("Simplified Chinese"), described, null, DescriptionTranslateTimeout);
             // How long one reference takes, for the waiting view (F70); failed descriptions are not counted.
             Generation.TaskTiming.RecordSince(Generation.TaskTiming.Describe, started);
             return (described, translated);
@@ -527,7 +530,7 @@ public static class PromptService
 
     /// <summary>Asks the configured MagicPrompt model and returns its raw answer (at most <see cref="MaxRawAnswerLength"/> characters) for callers that parse
     /// a line format themselves, or an empty string on any failure or timeout. Callers must still clean everything they keep.</summary>
-    private static async Task<string> AskModelRawAsync(Session session, string instructions, string text, string imageDataUrl)
+    private static async Task<string> AskModelRawAsync(Session session, string instructions, string text, string imageDataUrl, TimeSpan? limitOverride = null)
     {
         try
         {
@@ -555,7 +558,7 @@ public static class PromptService
                     ["MediaType"] = imageDataUrl[5..comma].Replace(";base64", "")
                 });
             }
-            TimeSpan limit = vision ? VisionTimeout : ModelTimeout;
+            TimeSpan limit = limitOverride ?? (vision ? VisionTimeout : ModelTimeout);
             // The limit also goes to the call, so a request given up here does not keep the model busy upstream.
             JObject request = new() { ["messageContent"] = content, ["modelId"] = model, ["messageType"] = vision ? "Vision" : "Text", ["action"] = vision ? "vision" : "chat",
                 ["timeout"] = (int)limit.TotalSeconds };
