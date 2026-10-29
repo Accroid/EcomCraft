@@ -1354,7 +1354,8 @@ public static class StudioApi
             }
             if (native)
             {
-                if (!filter.Include(ParseWorkflowObject(workflow.Prompt), metadata, savedValues))
+                // The standard scene and detail workflows share one blueprint, so the duplicate check would hide one of them.
+                if (!filter.Include(ParseWorkflowObject(workflow.Prompt), metadata, savedValues, !StandardWorkflows.IsStandard(workflow.Name)))
                 {
                     continue;
                 }

@@ -20,13 +20,18 @@ public sealed class WorkflowCatalogFilter
         Schemas = schemas.Where(schema => schema is not null).ToList();
     }
 
-    /// <summary>Includes only complete dependency sets and distinct executable graphs with their parameter definitions and defaults.</summary>
-    public bool Include(JObject prompt, JObject metadata, JObject values)
+    /// <summary>Includes only complete dependency sets and distinct executable graphs with their parameter definitions and defaults.
+    /// With distinct false the entry skips the duplicate check, for workflows that are identical on purpose (the standard scene and detail workflows).</summary>
+    public bool Include(JObject prompt, JObject metadata, JObject values, bool distinct = true)
     {
         if (prompt is null || prompt.Count == 0 || metadata is null || values is null
             || !Schemas.Any(schema => NativeWorkflowParameters.Supports(prompt, metadata, values, schema, out _)))
         {
             return false;
+        }
+        if (!distinct)
+        {
+            return true;
         }
         return Seen.Add(Fingerprint(new JObject() { ["prompt"] = prompt, ["parameters"] = metadata, ["values"] = values }));
     }
