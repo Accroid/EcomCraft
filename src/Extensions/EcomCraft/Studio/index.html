@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.51.7">
-    <script src="/EcomCraft/lang/en.js?v=0.51.7" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.51.7" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.51.7" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.51.7" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.51.8">
+    <script src="/EcomCraft/lang/en.js?v=0.51.8" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.51.8" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.51.8" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.51.8" defer></script>
 </head>
 
 <body>
@@ -787,6 +787,15 @@
                         <label for="enh-cfg-vision-ollama-model">视觉模型</label>
                         <select id="enh-cfg-vision-ollama-model" name="enh-vision-ollama-model"></select>
                         <p class="hint">只列出能看图的模型；装了多个时可以在这里切换。</p>
+                    </div>
+                    <div class="fld" id="enh-cfg-vision-device-fld">
+                        <label for="enh-cfg-vision-device">运行设备</label>
+                        <select id="enh-cfg-vision-device" name="enh-vision-device">
+                            <option value="auto">自动（显卡没有响应时改用 CPU）</option>
+                            <option value="gpu">只用显卡</option>
+                            <option value="cpu">只用 CPU</option>
+                        </select>
+                        <p class="hint" id="enh-cfg-vision-device-note" role="status">一般选“自动”。有些显卡（如较老的 AMD 显卡）跑看图模型会卡住，自动模式会在第一次等待约 1 分钟后改用 CPU。</p>
                     </div>
                     <details class="enh-advanced" id="enh-cfg-vision-ollama-advanced">
                         <summary>高级：Ollama 装在局域网的另一台电脑上</summary>

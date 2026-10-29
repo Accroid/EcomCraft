@@ -31,6 +31,7 @@
     <Compile Include="../Studio/OwnWorkflowRules.cs" Link="OwnWorkflowRules.cs" />
     <Compile Include="../Studio/VisionInstallRules.cs" Link="VisionInstallRules.cs" />
     <Compile Include="../Studio/Generation/DurationRules.cs" Link="DurationRules.cs" />
+    <Compile Include="../MagicPrompt/VisionDeviceRules.cs" Link="VisionDeviceRules.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="../Templates/builtin/*.json" LinkBase="builtin" CopyToOutputDirectory="PreserveNewest" />

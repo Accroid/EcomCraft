@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.32 · **Date:** 2026-10-29
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.33 · **Date:** 2026-10-29
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -341,6 +341,7 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Vision model service + address | The service for image description, Ollama or OpenAI-compatible only; its own address when it differs from the prompt service | New | New; the address is required only for an OpenAI-compatible service, Ollama can stay empty (defaults to this machine) |
 | Vision model + fetch | Fetch or enter the vision model name (Qwen3-VL recommended) | New | New |
 | One-click local model install | Installs Ollama and the chosen vision model on the server (F69) | New | Opens the model tiers (Qwen3-VL 2B / 4B / 8B / 30B, Llama 3.2 Vision, with download-size and VRAM hints); clicking one starts the install, the elapsed time and the tail of the script output show while it runs, the dialog can be closed (the install continues) and reopening restores the progress; when it finishes the vision service switches to Ollama with that model preselected for saving; one install at a time |
+| Device (Ollama vision) | Automatic / Graphics card only / CPU only (F71) | New | Shown only when the vision service is Ollama; "Automatic" by default: when the card does not answer within about a minute the first time, the CPU is used; after such a move the note below says why and suggests "CPU only"; saved with "Save settings" |
 | Cancel / save | Close or save | OK; **Esc did not close** | Kept; Esc supported; "Saving…" while busy |
 
 ### 3.9 General requirements (all pages)
@@ -428,3 +429,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-29 | v1.30 | The image-description notice's "prompt enhancement settings" steps now open the dialog directly; the settings dialog gained "One-click local model install" (F69/T71) |
 | 2026-10-29 | v1.31 | "Add a reference" checks the vision model first and shows the guidance when unset; unchecked image description saves without vision fields; the Ollama vision address can stay empty |
 | 2026-10-29 | v1.32 | New startup overlay: while the service or execution servers start, a loading notice covers the page and blocks actions, and disappears once started |
+| 2026-10-29 | v1.33 | The Ollama part of the settings dialog's vision section gained "Device" (F71/T75) |

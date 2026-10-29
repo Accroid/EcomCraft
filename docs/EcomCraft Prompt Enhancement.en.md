@@ -228,8 +228,23 @@ To run Qwen3-VL on a local OpenAI-compatible service such as LM Studio or vLLM, 
 
 Two notes:
 
-- Image description waits at most 120 seconds per image (a local model first has to load into memory the first time it is used). Qwen3-VL 8B usually answers in seconds on a GPU with 8 GB or more; on CPU pick the 2B size — a reference past the limit is marked as failed and can be retried on its own.
+- Image description waits at most 180 seconds per image (a local model first has to load into memory the first time it is used, and a graphics card that does not respond is retried on the CPU), never beyond the generation limit above (120 seconds by default). Qwen3-VL 8B usually answers in seconds on a GPU with 8 GB or more; on CPU pick the 2B size — a reference past the limit is marked as failed and can be retried on its own.
+- Image description turns off the "thinking" step of the Qwen3 family, so answers are shorter and faster.
 - If pulling from Ollama is slow on a restricted network, set an HTTPS_PROXY for the Ollama process, restart it and pull again.
+
+### Vision model device (Ollama)
+
+Customer computers have all kinds of graphics cards, and some hang on vision models: an older AMD card such as the RX 5600 XT on Windows can only be used by Ollama through Vulkan, image requests produce nothing for minutes, and afterwards Ollama reports the model as loaded while it holds no video memory, so text requests hang too. The same computer describes an image in about 8-18 seconds on the CPU.
+
+The Ollama part of the vision settings therefore has a **Device** option:
+
+| Option | Behaviour |
+|---|---|
+| Automatic (default) | The first image request for each "Ollama address + vision model" waits at most 60 seconds on the graphics card; without an answer Ollama is asked to unload the model, the request is retried on the CPU, and the CPU is used for as long as the service runs; the card is tried again after a restart. Computers whose card works (most NVIDIA cards, Apple Silicon Macs) are unaffected |
+| Graphics card only | Ollama always picks the device itself and nothing moves to the CPU |
+| CPU only | Images are always described on the CPU (Ollama `num_gpu 0`), using no video memory; suits computers whose card cannot run the model or whose video memory is kept for generation |
+
+After an automatic move to the CPU, the note in the settings says "the graphics card did not respond, so this run moved to the CPU"; if it happens after every restart, choose "CPU only" to skip the first wait. After any image request times out, EcomCraft asks Ollama to unload the model so the hung state does not affect later requests. The option applies to Ollama only; an OpenAI-compatible service decides its own device.
 
 Note: image description sends the user's uploaded images to the configured vision service. With local Ollama the images never leave the machine; pointing the vision backend at a cloud service sends images off-site — change it only if the team accepts that. The reference images themselves exist briefly in memory only and are never stored on the server.
 
@@ -241,7 +256,8 @@ Note: image description sends the user's uploaded images to the configured visio
 | "Authentication / API Key not found" | Cloud backend without a key, or a wrong key; paste it again in the settings |
 | "401 / session expired" | Login session expired; refresh the page |
 | "Request timeout" | Local models can be slow or the network down; retry — large models on CPU may take a while |
-| Image description empty / status shows the service unavailable | Vision model not pulled, Ollama not running, the wrong vision model selected in the settings, or the model too slow (120 seconds per image at most; pick the 2B size on CPU); see the Qwen3-VL section above |
+| Image description empty / status shows the service unavailable | Vision model not pulled, Ollama not running, the wrong vision model selected in the settings, or the model too slow (pick the 2B size on CPU); see the Qwen3-VL section above |
+| Image description is slow and the first image takes about a minute | The graphics card cannot run the vision model and "Automatic" moved to the CPU; set the device to "CPU only" in the settings to skip that wait, see "Vision model device" above |
 | Model list empty / fetch fails | Check the service is running, the URL path is right and the key is valid |
 | Other computers cannot reach a local service | The local service must listen on `0.0.0.0` and the port must be open in the firewall |
 | Restoring defaults | Reset the MagicPrompt configuration in the native engine's settings, or choose the backend again in the settings |

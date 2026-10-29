@@ -1,6 +1,7 @@
 using System.IO;
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using EcomCraftStudio.MagicPrompt;
 using EcomCraftStudio.MagicPrompt.WebAPI;
 using EcomCraftStudio.MagicPrompt.WebAPI.Models;
 using EcomCraftStudio.Studio.Generation;
@@ -24,8 +25,9 @@ public static class PromptService
     /// <summary>Longest wait for the language model before falling back.</summary>
     private static readonly TimeSpan ModelTimeout = TimeSpan.FromSeconds(45);
 
-    /// <summary>Longest wait for the vision model: a local one may first have to load into memory, and reading an image is slower than text.</summary>
-    private static readonly TimeSpan VisionTimeout = TimeSpan.FromSeconds(120);
+    /// <summary>Longest wait for the vision model: a local one may first have to load into memory, reading an image is slower than text,
+    /// and a first Ollama request that hangs on the GPU is retried on the CPU.</summary>
+    private static readonly TimeSpan VisionTimeout = TimeSpan.FromSeconds(180);
 
     /// <summary>Longest description accepted.</summary>
     public const int MaxDescriptionLength = 500;
@@ -553,9 +555,13 @@ public static class PromptService
                     ["MediaType"] = imageDataUrl[5..comma].Replace(";base64", "")
                 });
             }
-            JObject request = new() { ["messageContent"] = content, ["modelId"] = model, ["messageType"] = vision ? "Vision" : "Text", ["action"] = vision ? "vision" : "chat" };
+            TimeSpan limit = vision ? VisionTimeout : ModelTimeout;
+            // The limit also goes to the call, so a request given up here does not keep the model busy upstream.
+            JObject request = new() { ["messageContent"] = content, ["modelId"] = model, ["messageType"] = vision ? "Vision" : "Text", ["action"] = vision ? "vision" : "chat",
+                ["timeout"] = (int)limit.TotalSeconds };
             Task<JObject> call = LLMAPICalls.MagicPromptPhoneHome(request, session);
-            if (await Task.WhenAny(call, Task.Delay(vision ? VisionTimeout : ModelTimeout)) != call)
+            // A little extra over the call's own limit leaves time to unload a hung Ollama model.
+            if (await Task.WhenAny(call, Task.Delay(limit + TimeSpan.FromSeconds(20))) != call)
             {
                 Logs.Warning("EcomCraft prompt service: the language model did not answer in time; using the template defaults.");
                 return "";
@@ -733,8 +739,8 @@ public static class PromptService
     }
 
     [API.APIDescription("Read or change whether reference images may be described by the configured vision model (on by default) and whether product photos may be sent to it "
-        + "to describe the product (off by default). Returns the provider images would be sent to. Requires the server-settings permission.",
-        "vision_enabled: true, product_vision_enabled: false, vision_provider: \"ollama\"")]
+        + "to describe the product (off by default). Returns the provider images would be sent to, the local vision device choice and whether it was moved to the CPU after the GPU hung. Requires the server-settings permission.",
+        "vision_enabled: true, product_vision_enabled: false, vision_provider: \"ollama\", vision_device: \"auto\", vision_moved_to_cpu: false")]
     public static async Task<JObject> EcomCraftPromptSettings(Session session, string vision_enabled = "", string product_vision_enabled = "")
     {
         if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.EditServerSettings))
@@ -779,7 +785,10 @@ public static class PromptService
             ["vision_enabled"] = VisionEnabled(),
             ["product_vision_enabled"] = ProductVisionEnabled(),
             ["vision_provider"] = settings?["visionbackend"]?.ToString() ?? settings?["backend"]?.ToString() ?? "",
-            ["vision_model"] = settings?["visionmodel"]?.ToString() ?? ""
+            ["vision_model"] = settings?["visionmodel"]?.ToString() ?? "",
+            // The device choice for a local Ollama vision model (F71), and whether "auto" moved it to the CPU because the GPU hung; never the address.
+            ["vision_device"] = VisionDeviceRules.Normalize(settings?["visiondevice"]?.ToString()),
+            ["vision_moved_to_cpu"] = LLMAPICalls.VisionMovedToCpu(settings)
         };
     }
 }
