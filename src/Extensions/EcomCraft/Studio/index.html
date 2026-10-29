@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.51.10">
-    <script src="/EcomCraft/lang/en.js?v=0.51.10" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.51.10" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.51.10" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.51.10" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.51.11">
+    <script src="/EcomCraft/lang/en.js?v=0.51.11" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.51.11" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.51.11" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.51.11" defer></script>
 </head>
 
 <body>
@@ -115,7 +115,12 @@
                     </div>
                     <div class="simple-cutout" id="simple-cutout" hidden>
                         <p class="hint" id="simple-cutout-status"></p>
+                        <div class="simple-ref-place" id="simple-ref-place" data-tasks="reference" hidden>
+                            <div class="inline-row" id="simple-ref-place-btns" role="group" aria-label="按参考图摆放"></div>
+                            <p class="hint">请对照参考图调整商品的位置和大小。</p>
+                        </div>
                         <div class="simple-stage" id="simple-stage" aria-label="商品位置预览，可拖动商品调整位置">
+                            <img class="simple-stage-ref" id="simple-stage-ref" alt="" hidden>
                             <img class="simple-stage-product" id="simple-stage-product" alt="抠图结果" draggable="false" hidden>
                         </div>
                         <label class="simple-size" for="simple-size">商品大小

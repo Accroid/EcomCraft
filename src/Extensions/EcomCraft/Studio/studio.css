@@ -428,6 +428,9 @@ main:focus:not(:focus-visible) { outline: none; }
 .simple-stage { position: relative; width: 100%; aspect-ratio: 1; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; touch-action: none;
     background-color: #fff; background-image: linear-gradient(45deg, #e6e6e6 25%, transparent 25%, transparent 75%, #e6e6e6 75%), linear-gradient(45deg, #e6e6e6 25%, transparent 25%, transparent 75%, #e6e6e6 75%);
     background-size: 16px 16px; background-position: 0 0, 8px 8px; }
+.simple-stage-ref { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.45; pointer-events: none; }
+.simple-ref-place { display: grid; gap: 4px; margin-bottom: 8px; }
+.simple-ref-place .btn[aria-pressed="true"] { border-color: var(--key); box-shadow: inset 0 0 0 1px var(--key); }
 .simple-stage-product { position: absolute; cursor: grab; user-select: none; -webkit-user-drag: none; }
 .simple-stage-product.is-dragging { cursor: grabbing; }
 .simple-size { display: grid; gap: 4px; font-size: var(--fs-13); font-weight: 600; }

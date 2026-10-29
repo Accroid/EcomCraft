@@ -82,6 +82,12 @@ class SimpleMode {
     static starring = new Set();
     static maxProductBytes = 5 * 1024 * 1024;
     static placement = { x: 0.5, y: 0.5, size: 0.7 };
+
+    /** Which reference's placement the preview edits in reference mode (T79), or -1 for the product's own placement. */
+    static placementRef = -1;
+
+    /** The task the placement preview was last shown for, so it is only redrawn when the task changes. */
+    static placementTask = null;
     static cutting = false;
     static drag = null;
     static storageKey = 'ecomcraft.simple';
@@ -227,12 +233,12 @@ class SimpleMode {
         });
         $('simple-cutout-run').addEventListener('click', () => this.runCutout());
         $('simple-placement-reset').addEventListener('click', () => {
-            this.placement = { x: 0.5, y: 0.5, size: 0.7 };
+            this.setActivePlacement({ x: 0.5, y: 0.5, size: 0.7 });
             $('simple-size').value = '70';
             this.renderStage();
         });
         $('simple-size').addEventListener('input', e => {
-            this.placement = this.clampPlacement({ ...this.placement, size: Number(e.target.value) / 100 });
+            this.setActivePlacement(this.clampPlacement({ ...this.activePlacement(), size: Number(e.target.value) / 100 }));
             this.renderStage();
         });
         let product = $('simple-stage-product');
@@ -417,6 +423,11 @@ class SimpleMode {
         }
         let titles = { reference: '选平台和参考图', single: '选平台和图片类型', set: '选平台和产品类型' };
         $('simple-step2-text').textContent = this.api.tr(titles[this.chosenTask]);
+        // Per-reference placements (T79) apply only to "follow a reference": the preview follows the task when it changes.
+        if (this.placementTask != this.chosenTask) {
+            this.placementTask = this.chosenTask;
+            this.choosePlacementRef(this.placementRef);
+        }
     }
 
     /** Remembers the platform, product type, style, task and "More options" state in this browser (never the photo or description). */
@@ -1034,7 +1045,7 @@ class SimpleMode {
         }
         if (saved.placement) {
             this.placement = this.clampPlacement(saved.placement);
-            this.api.$('simple-size').value = String(Math.round(this.placement.size * 100));
+            this.api.$('simple-size').value = String(Math.round(this.activePlacement().size * 100));
         }
         this.products.push(product);
         this.selectProduct(product);
@@ -1447,7 +1458,7 @@ class SimpleMode {
             image.src = this.product.cutout;
         }
         let size = stage.clientWidth || 300;
-        let rect = this.placementRect(size, size, this.product.width || 1, this.product.height || 1, this.placement);
+        let rect = this.placementRect(size, size, this.product.width || 1, this.product.height || 1, this.activePlacement());
         image.style.left = `${rect.x}px`;
         image.style.top = `${rect.y}px`;
         image.style.width = `${rect.width}px`;
@@ -1455,12 +1466,70 @@ class SimpleMode {
         image.hidden = false;
     }
 
+    /** The placement the preview edits: the chosen reference's (T79) once adjusted, otherwise the product's own. */
+    static activePlacement() {
+        let reference = this.referenceMode() ? this.references[this.placementRef] : null;
+        return reference && reference.placement ? reference.placement : this.placement;
+    }
+
+    /** Stores a placement edited on the preview: on the chosen reference in reference mode (T79), otherwise as the product's own. */
+    static setActivePlacement(placement) {
+        let reference = this.referenceMode() ? this.references[this.placementRef] : null;
+        if (reference) {
+            let first = !reference.placement;
+            reference.placement = placement;
+            // Only the first change alters the button label ("adjusted"); dragging calls this on every move.
+            if (first) {
+                this.renderPlacementPicker();
+            }
+        }
+        else {
+            this.placement = placement;
+        }
+    }
+
+    /** Lists "place for reference n" above the preview in reference mode (T79) and shows the chosen reference behind the product. */
+    static renderPlacementPicker() {
+        let tr = this.api.tr;
+        let el = this.api.el;
+        if (this.placementRef >= this.references.length) {
+            this.placementRef = -1;
+        }
+        let box = this.api.$('simple-ref-place');
+        box.hidden = !this.references.length;
+        let buttons = [];
+        for (let index = -1; index < this.references.length; index++) {
+            let reference = this.references[index];
+            let label = index < 0 ? tr('商品自己的摆放') : reference.placement ? tr('参考图 {0}（已调整）', index + 1) : tr('参考图 {0}', index + 1);
+            let button = el('button', 'btn btn-sm', label);
+            button.type = 'button';
+            button.setAttribute('aria-pressed', index == this.placementRef ? 'true' : 'false');
+            button.addEventListener('click', () => this.choosePlacementRef(index));
+            buttons.push(button);
+        }
+        this.api.$('simple-ref-place-btns').replaceChildren(...buttons);
+        let backdrop = this.api.$('simple-stage-ref');
+        let chosen = this.referenceMode() ? this.references[this.placementRef] : null;
+        backdrop.hidden = !chosen;
+        if (chosen && backdrop.getAttribute('src') != chosen.image) {
+            backdrop.src = chosen.image;
+        }
+    }
+
+    /** Makes the preview edit one reference's placement (T79), starting from the product's own until it is adjusted; -1 goes back to the product's. */
+    static choosePlacementRef(index) {
+        this.placementRef = index;
+        this.renderPlacementPicker();
+        this.api.$('simple-size').value = String(Math.round(this.activePlacement().size * 100));
+        this.renderStage();
+    }
+
     /** Starts dragging the product on the preview. */
     static startDrag(event) {
         event.preventDefault();
         event.target.setPointerCapture(event.pointerId);
         event.target.classList.add('is-dragging');
-        this.drag = { startX: event.clientX, startY: event.clientY, origin: { ...this.placement } };
+        this.drag = { startX: event.clientX, startY: event.clientY, origin: { ...this.activePlacement() } };
     }
 
     /** Moves the product with the pointer; the center stays inside the picture. */
@@ -1469,11 +1538,11 @@ class SimpleMode {
             return;
         }
         let size = this.api.$('simple-stage').clientWidth || 300;
-        this.placement = this.clampPlacement({
+        this.setActivePlacement(this.clampPlacement({
             x: this.drag.origin.x + (event.clientX - this.drag.startX) / size,
             y: this.drag.origin.y + (event.clientY - this.drag.startY) / size,
-            size: this.placement.size
-        });
+            size: this.activePlacement().size
+        }));
         this.renderStage();
     }
 
@@ -1484,7 +1553,10 @@ class SimpleMode {
         }
         event.target.classList.remove('is-dragging');
         this.drag = null;
-        this.savePlacement();
+        // A reference's placement lives only in this page (T79); only the product's own one is remembered in the library.
+        if (this.placementRef < 0) {
+            this.savePlacement();
+        }
     }
 
     /** Asks the server to remove the background; the result keeps the original product pixels. */
@@ -2521,7 +2593,9 @@ class SimpleMode {
             remove.setAttribute('aria-label', tr('删除参考图 {0}', index + 1));
             remove.addEventListener('click', () => {
                 this.references.splice(index, 1);
+                this.placementRef = -1;
                 this.renderReferences();
+                this.renderStage();
                 this.update();
             });
             wrap.append(open, remove);
@@ -2571,6 +2645,7 @@ class SimpleMode {
         }
         this.api.$('simple-reference-list').replaceChildren(...rows);
         this.api.$('simple-reference-add').hidden = this.references.length >= 8;
+        this.renderPlacementPicker();
         this.api.$('simple-reference-hint').textContent = tr('参考图只用于借鉴构图与光线，请使用有权使用的图片（自己拍摄、已授权或无版权限制）；生成结果请勿与参考图雷同。');
     }
 
@@ -2642,6 +2717,7 @@ class SimpleMode {
             language: I18n.current,
             platform: this.choice.platform,
             reference_prompts: this.references.map(item => item.promptEn.trim()),
+            reference_placements: this.references.map(item => item.placement ? this.clampPlacement(item.placement) : null),
             products: this.products.map(product => product.id
                 ? { product_id: product.id, placement: this.clampPlacement(this.placement) }
                 : { image: product.cutout || product.data, placement: this.clampPlacement(this.placement) })
