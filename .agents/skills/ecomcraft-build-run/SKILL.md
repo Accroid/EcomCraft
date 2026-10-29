@@ -25,7 +25,7 @@ description: 构建、启动、重启 EcomCraft / SwarmUI 服务时使用，包�
 - 优先正常关闭：`POST http://127.0.0.1:7801/API/GetNewSession`（请求体 `{}`）取得 `session_id`，再 `POST /API/ShutdownServer`（请求体 `{"session_id":"..."}`）。这样 SwarmUI 会先关掉它启动的 ComfyUI 再退出。开启账号登录时这个接口需要管理员会话，拿不到就改用下面的强制结束。
 - 用 `Get-Process SwarmUI | Select-Object Id, Path` 查看。只停止 `Path` 位于当前工作区 `src\bin\live_release\` 下的进程；其他工作区或与本项目无关的进程不要动。
 - 不停止旧进程，`dotnet build` 会因为输出文件被占用而失败。
-- 强制结束 SwarmUI 不会结束它自启动的 ComfyUI（`python.exe ... main.py --port 78xx`）。留下的孤儿进程占着内存、显存和端口，下次启动会改用下一个端口，重启多次后就积累出一串实例。所以停 SwarmUI 后，要同时停止命令行包含当前工作区路径和 `main.py` 的 `python.exe`（用 `Get-CimInstance Win32_Process -Filter "Name='python.exe'"` 查看 `CommandLine`），其他路径的 Python 进程不要动。
+- 强制结束 SwarmUI 不会结束它自启动的 ComfyUI（`python.exe ... main.py --port 78xx`）。留下的孤儿进程占着内存、显存和端口，下次启动会改用下一个端口，重启多次后就积累出一串实例。服务启动时会按数据目录的 `self_start_processes.txt` 自动结束上次残留的 ComfyUI（F72，日志出现 `Ending backend process ... left running by a previous run`），但记录之外的孤儿（F72 之前留下的、记录文件被删的）不会被处理。所以强制停 SwarmUI 后，仍应确认并停止命令行包含当前工作区路径和 `main.py` 的 `python.exe`（用 `Get-CimInstance Win32_Process -Filter "Name='python.exe'"` 查看 `CommandLine`），其他路径的 Python 进程不要动。
 
 ### 两种启动方式和扩展缓存
 

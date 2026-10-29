@@ -2647,6 +2647,7 @@ class SimpleMode {
         this.api.$('simple-reference-add').hidden = this.references.length >= 8;
         this.renderPlacementPicker();
         this.api.$('simple-reference-hint').textContent = tr('参考图只用于借鉴构图与光线，请使用有权使用的图片（自己拍摄、已授权或无版权限制）；生成结果请勿与参考图雷同。');
+        this.api.$('simple-reference-place-note').hidden = !this.references.length;
     }
 
     /** Turns the other step-2 options on or off (F59): in reference mode they do not apply (and are hidden by the task, F61).
@@ -3267,8 +3268,9 @@ class SimpleMode {
             let state = this.stageText(entry.stage, entry.server);
             item.append(el('span', '', this.api.tr('{0}｜{1}', entry.product || this.api.tr('商品'), entry.template)),
                 el('span', 'simple-job-state', waiting ? this.stageWithEstimate(state, entry.eta, entry.etaAt) : state));
+            // The reason stays visible on the card, as for set tasks.
             if (entry.error) {
-                item.title = entry.error;
+                item.append(el('span', 'simple-job-error', entry.error));
             }
             items.push(item);
         }
