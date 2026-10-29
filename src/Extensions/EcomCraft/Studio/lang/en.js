@@ -1107,5 +1107,14 @@ window.EcomCraftLanguages.en = {
     "安装完成，正在保存为视觉模型…": "Install finished; saving it as the vision model…",
     "还没有可选的视觉模型：请先点“一键安装本地模型”，或确认 Ollama 已启动后点“重新检测”。": "There is no vision model to choose yet: click “One-click local model install” first, or make sure Ollama is running and click “Check again”.",
     "视觉服务地址需要以 http:// 或 https:// 开头。": "The vision service address must start with http:// or https://.",
-    "视觉服务 Key 保存失败。": "The vision service key could not be saved."
+    "视觉服务 Key 保存失败。": "The vision service key could not be saved.",
+    "不到 10 秒": "under 10 s",
+    "约 {0} 秒": "about {0} s",
+    "约 {0} 分钟": "about {0} min",
+    "约 {0} 小时 {1} 分钟": "about {0} h {1} min",
+    "已用 {0} 秒": "{0} s elapsed",
+    "{0}后开始": "starts in {0}",
+    "预计还需{0}": "{0} left",
+    "比平时慢，仍在处理…": "slower than usual, still working…",
+    "{0}（{1}）": "{0} ({1})"
 };

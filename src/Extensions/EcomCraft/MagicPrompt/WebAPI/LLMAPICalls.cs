@@ -632,6 +632,11 @@ public class LLMAPICalls : MagicPromptAPI
                     string llmResponse = await DeserializeResponse(response, backend);
                     if (!string.IsNullOrEmpty(llmResponse))
                     {
+                        if (action == "prompt")
+                        {
+                            // How long the professional-mode enhancement takes, for its waiting view (EcomCraft F70); seconds only.
+                            EcomCraftStudio.Studio.Generation.TaskTiming.Record(EcomCraftStudio.Studio.Generation.TaskTiming.Enhance, elapsed.Elapsed.TotalSeconds);
+                        }
                         return CreateSuccessResponse(llmResponse);
                     }
                 }

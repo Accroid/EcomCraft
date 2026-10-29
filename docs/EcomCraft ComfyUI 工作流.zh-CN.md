@@ -169,6 +169,8 @@ EcomCraft 不会把任意 ComfyUI JSON 直接暴露给普通客户机。执行�
 
 运维接口（管理员）：`EcomCraftDiagnostics` 生成诊断包 zip（最近日志、执行服务器状态、版本和脱敏后的配置；密钥、密码、令牌、提示词、图片和会话信息自动去除），返回 `download` 地址（`/EcomCraft/diagnostics/<id>`，仅创建者可下载，保留 1 小时）。`EcomCraftBackupCreate` 把 `Data/EcomCraft` 与账号数据库打包为带 SHA-256 清单的 zip（`/EcomCraft/backup/<id>`，保留 1 天）；`EcomCraftBackupRestore`（`data` 为 base64 的备份内容，必须 `confirm: true`）逐文件校验后恢复，被占用的账号数据库文件放入暂存目录供停机后替换，响应返回 `restored`、`staged` 和 `restart_required`。错误码为 `backup_failed`、`backup_invalid` 和 `backup_confirm_required`。
 
+预计剩余时间（F70）：服务端在内存中记录各类操作最近 20 次的实际耗时（只记秒数，不记提示词、图片或其他内容，重启后清空），按中位数估算。`EcomCraftStudioEstimates` 返回写提示词（`compose`）、AI 扩写（`expand`）、写分镜（`storyboard`）、看图描述一张参考图（`describe`）和专业模式优化提示词（`enhance`）的通常秒数，还没有记录时为 `null`。出图按“工作流或模型 + 尺寸 + 执行服务器”记录单张耗时（提交到出结果的时间除以提交时排在前面的任务数加自己的张数）。`EcomCraftStudioPrepareStatus` 在写提示词阶段返回 `elapsed_seconds`、`estimate_seconds`、`remaining_seconds`；`EcomCraftStudioBatchStatus` 在写提示词时返回 `prompt_` 前缀的同名字段，执行中的任务带 `elapsed_seconds`、`estimate_seconds`、`remaining_seconds`、`start_in_seconds`；`EcomCraftStudioQueue` 只给本账号自己的任务带这些字段。`remaining_seconds` 为 0 表示比平时慢，页面显示“比平时慢，仍在处理…”。
+
 磁盘空间：后台定期检查平台服务器输出目录和作品库的剩余空间（阈值在存储设置中，警告默认 10 GB、严重不足默认 2 GB，填 0 关闭）。严重不足时 `EcomCraftStudioGenerate` 和 `EcomCraftStudioGenerateSet` 直接拒绝并返回 `disk_full`；`EcomCraftStudioQueue` 对管理员额外返回 `disk`（`level`、`output_free_gb`、`library_free_gb`）。
 
 即时完成的任务：完全命中 ComfyUI 缓存的生成可能在提交请求返回前就结束，此时响应不带 `task_id`，而是直接携带 `images`（与纯抠图分支相同）；作品仍会保存到画廊。客户端应同时处理两种返回形式。

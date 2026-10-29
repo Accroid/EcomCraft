@@ -326,7 +326,7 @@ public static class StudioApi
     private static async Task<JObject> ScheduleAndSubmit(Session session, int images, JObject input, int? pinnedId, bool workflow, bool background,
         Func<BackendHandler.T2IBackendData, List<string>> capability, Func<JObject, Task> postProcess = null, bool candidates = false)
     {
-        SchedulerRules.Decision decision = await ExecutionScheduler.PlanAsync(capability, pinnedId);
+        (SchedulerRules.Decision decision, int ahead) = await ExecutionScheduler.PlanWithQueueAsync(capability, pinnedId);
         if (!decision.Success)
         {
             return Error(decision.ErrorText, decision.ErrorCode == SchedulerRules.PinnedUnavailable ? "execution_server_unavailable" : "no_execution_server");
@@ -336,10 +336,14 @@ public static class StudioApi
         meta["ecomcraft_execution_server_name"] = decision.ChosenName;
         input["extra_metadata"] = meta;
         IDisposable assignment = ExecutionScheduler.Track(decision.ChosenId.Value, images);
+        // Time estimate (F70): per-image time is kept by workflow (or model) and size on the chosen server.
+        string workflowKey = $"{meta[PublishedWorkflowScopeKey]?.ToString() ?? input["model"]?.ToString() ?? "standard"}:{input["width"]}x{input["height"]}";
+        TaskTiming.Scheduled timing = new(decision.ChosenId.Value, workflowKey, ahead, images, Environment.TickCount64);
+        TaskTiming.Observer.Value?.Invoke(timing);
         JObject response;
         if (background)
         {
-            response = await SubmitBackgroundGeneration(session, images, input, assignment, workflow, decision.ChosenName, postProcess, candidates);
+            response = await SubmitBackgroundGeneration(session, images, input, assignment, workflow, decision.ChosenName, postProcess, candidates, timing);
         }
         else
         {
@@ -349,6 +353,7 @@ public static class StudioApi
                 response = result.ContainsKey("error") ? GenerationError(result, workflow) : result;
                 if (!result.ContainsKey("error"))
                 {
+                    TaskTiming.Finished(timing);
                     if (postProcess is not null)
                     {
                         await postProcess(result);
@@ -448,7 +453,8 @@ public static class StudioApi
         return compat.IsImage2Video ? null : "image";
     }
 
-    [API.APIDescription("List ComfyUI queue entries on registered execution servers and active SwarmUI generation claims without disclosing prompts, addresses or session IDs.", "backends: [], native_tasks: [], tasks: []")]
+    [API.APIDescription("List ComfyUI queue entries on registered execution servers and active SwarmUI generation claims without disclosing prompts, addresses or session IDs. "
+        + "The current account's own tasks also carry a time estimate (F70): estimate_seconds, remaining_seconds and start_in_seconds, null before the server has a sample.", "backends: [], native_tasks: [], tasks: []")]
     public static async Task<JObject> EcomCraftStudioQueue(Session session)
     {
         if (!CanView(session))
@@ -529,7 +535,7 @@ public static class StudioApi
                     continue;
                 }
                 bool mine = ownerSession.User.UserID == session.User.UserID;
-                tasks.Add(new JObject()
+                JObject task = new()
                 {
                     ["id"] = mine ? claim.ID : null,
                     ["mine"] = mine,
@@ -537,7 +543,13 @@ public static class StudioApi
                     ["count"] = Math.Max(1, waiting),
                     ["elapsed_seconds"] = Math.Max(0, (Environment.TickCount64 - claim.StartTime) / 1000),
                     ["request_id"] = mine && claim.UserRequestId > 0 ? claim.UserRequestId : null
-                });
+                };
+                // Only the owner's own tasks carry a time estimate (F70); it holds seconds only.
+                if (mine && TaskTiming.ForClaim(claim.ID) is TaskTiming.Scheduled timing)
+                {
+                    TaskTiming.AddEstimate(task, timing, live > 0);
+                }
+                tasks.Add(task);
             }
         }
         // Results of this account's recent background tasks (R6); other accounts' results are never listed.
@@ -974,6 +986,9 @@ public static class StudioApi
         /// <summary>When the task started or ended, <see cref="Environment.TickCount64"/>.</summary>
         private long Changed = Environment.TickCount64;
 
+        /// <summary>When the task started, <see cref="Environment.TickCount64"/>, for the prompt time estimate (F70).</summary>
+        public readonly long Started = Environment.TickCount64;
+
         /// <summary>The submit answer (task ID, execution server, prompt fields, or a sanitized error); null while the prompt is written.</summary>
         private JObject Answer;
 
@@ -1032,6 +1047,7 @@ public static class StudioApi
             try
             {
                 PromptService.Composed composed = await compose();
+                TaskTiming.RecordSince(TaskTiming.Compose, task.Started);
                 resolved["prompt"] = TemplateApi.WithTemplatePrompt(templateId, composed.Prompt);
                 answer = await GeneratePublishedWorkflow(session, resolved, resolved.Value<string>("workflow_id"), pinnedServer, templateId, postProcess);
                 if (!answer.ContainsKey("error"))
@@ -1056,7 +1072,8 @@ public static class StudioApi
         return new JObject() { ["queued"] = true, ["task_id"] = null, ["prepare_id"] = id, ["stage"] = "prompt" };
     }
 
-    [API.APIDescription("Stage of one of the current account's submissions whose prompt is written in the background (F56): stage \"prompt\" while the prompt is written, then \"submitted\" with the usual submit answer (task_id, execution_server, images, prompt_used, prompt_notice_code…) or \"failed\" with reason and reason_id (the error text and code).", "stage: \"prompt\"")]
+    [API.APIDescription("Stage of one of the current account's submissions whose prompt is written in the background (F56): stage \"prompt\" while the prompt is written "
+        + "(with elapsed_seconds, estimate_seconds and remaining_seconds, F70), then \"submitted\" with the usual submit answer (task_id, execution_server, images, prompt_used, prompt_notice_code…) or \"failed\" with reason and reason_id (the error text and code).", "stage: \"prompt\"")]
     public static Task<JObject> EcomCraftStudioPrepareStatus(Session session, string prepare_id = "")
     {
         if (!CanView(session))
@@ -1071,7 +1088,9 @@ public static class StudioApi
         JObject answer = task.Result;
         if (answer is null)
         {
-            return Task.FromResult(new JObject() { ["stage"] = "prompt" });
+            JObject waiting = new() { ["stage"] = "prompt" };
+            TaskTiming.AddPromptEstimate(waiting, task.Started);
+            return Task.FromResult(waiting);
         }
         if (answer.ContainsKey("error"))
         {
@@ -1091,6 +1110,9 @@ public static class StudioApi
 
         /// <summary>The SwarmUI claim ID, or 0 before it has been seen.</summary>
         private long TaskId;
+
+        /// <summary>The SwarmUI claim ID, or 0 before it has been seen.</summary>
+        public long ClaimId { get { lock (Lock) { return TaskId; } } }
 
         /// <summary>Whether the generation has ended.</summary>
         public bool Finished { get { lock (Lock) { return Done; } } }
@@ -1152,7 +1174,7 @@ public static class StudioApi
     /// The scheduler assignment is released when the generation ends. The result, success or a sanitized failure (R6.3), is kept briefly for the queue API;
     /// a failure that happens before the caller gets the task ID is returned directly.</summary>
     private static async Task<JObject> SubmitBackgroundGeneration(Session session, int images, JObject input, IDisposable assignment, bool workflow, string server,
-        Func<JObject, Task> postProcess, bool candidates = false)
+        Func<JObject, Task> postProcess, bool candidates, TaskTiming.Scheduled timing)
     {
         HashSet<long> claimsBefore = [.. session.Claims.Keys];
         BackgroundTask task = new(session.User.UserID, server);
@@ -1169,6 +1191,7 @@ public static class StudioApi
                 }
                 else
                 {
+                    TaskTiming.Finished(timing);
                     if (postProcess is not null)
                     {
                         await postProcess(result);
@@ -1194,6 +1217,10 @@ public static class StudioApi
             {
                 assignment.Dispose();
                 task.Finish(failure, outputs);
+                if (task.ClaimId > 0)
+                {
+                    TaskTiming.Forget(task.ClaimId);
+                }
             }
         }, "ecomcraft background generate");
         for (int i = 0; i < 30; i++)
@@ -1202,6 +1229,11 @@ public static class StudioApi
             if (fresh != 0)
             {
                 task.SetTaskId(fresh);
+                // Tracked for the owner's queue estimate (F70) until the generation ends; an end seen just before this expires on its own.
+                if (!task.Finished)
+                {
+                    TaskTiming.Watch(fresh, timing);
+                }
                 if (task.Finished && task.Failure is JObject early)
                 {
                     return (JObject)early.DeepClone();

@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20Architecture.zh-CN.md)
 >
-> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); this document describes the target architecture and marks implemented parts · **Version:** v2.4 · **Date:** 2026-10-29
+> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); this document describes the target architecture and marks implemented parts · **Version:** v2.5 · **Date:** 2026-10-29
 >
 > Related files:
 > - [EcomCraft LAN Multi-Server Platform Requirements](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md): detailed requirements for the platform foundation (execution servers, review, scheduling, storage); it takes precedence.
@@ -245,7 +245,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F54 | Bilingual prompts and AI expansion | Simple mode redesign v3 (implemented, pending acceptance) |
 | F55 | Manual candidate count with a 20-image cap | Simple mode redesign v3 (implemented, pending acceptance) |
 | F56 | Faster generation path (queue on submit) | Simple mode redesign v3 (implemented, pending acceptance) |
-| F57 | Automatic standard workflow creation | Simple mode redesign v3 (T59 code complete, waiting for the blueprint file and acceptance; text-to-image first, image-to-image waits for N10) |
+| F57 | Automatic standard workflow creation | Simple mode redesign v3 (T59 code and blueprint complete, pending build and acceptance; text-to-image first, image-to-image waits for N10) |
 | F58 | Platform presets by slot (per-slot size and ratio, subject fill, size caps, forbidden content, AI labelling) | Enhancement (implemented, pending acceptance, T60; design in [EcomCraft Platform Preset Slots](EcomCraft%20Platform%20Preset%20Slots.md), values pending the N06 check) |
 | F59 | Reference images (one image per reference: borrow the composition and scene reference) | Enhancement (P1 implemented, pending acceptance, T61; P2 scene reference depends on N10, T62; requirements in [EcomCraft Reference Images](EcomCraft%20Reference%20Images.md)) |
 | F60 | Professional mode open to every account (A2), with ComfyUI workflow upload (usable by the uploader at once, by others after review) | UI redesign v4 (T63 opening and own uploads; T73 review and publishing) |
@@ -258,6 +258,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F67 | Star preference analysis and prompt feedback | UI redesign v4 (T70, deferred, design pending) |
 | F68 | Image description on by default, with setup guidance | UI redesign v4 (T71) |
 | F69 | One-click vision model install script | UI redesign v4 (T72, `launchtools/install-vision-model-*`) |
+| F70 | Estimated time remaining (writing prompts, storyboards, image description, prompt enhancement and generation) | Enhancement (T74) |
 | F16 | Per-account licensing (limits the number of accounts only, no feature tiers) | Team and commercial (A12) |
 | F18 | Cloud generation | Reserved (change the rules first) |
 | F17 | Brand-specific model training | Reserved (custom service) |
@@ -297,4 +298,5 @@ For each task's files, dependencies, acceptance criteria and Claude Code prompt,
 | 2026-10-29 | v2.1 | New decision A13, UI and workflow redesign v4 (F60–F67 / T63–T70), requirements in the EcomCraft UI and Workflow Redesign; F60 adds ComfyUI workflow upload in professional mode (published after review) |
 | 2026-10-29 | v2.2 | A5 revised: image description on by default (references only; product photo description still off by default); A13 revised: uploaded ComfyUI workflows are usable by the uploader at once; new F68/T71 setup guidance and F69/T72 one-click install script; AGENTS.md gained the own-workflow rule |
 | 2026-10-29 | v2.3 | UI redesign v4 code complete pending acceptance: F60 (T63, T73), F61–F66, F68, F69 (T64–T69, T71, T72); F67 (T70) deferred |
+| 2026-10-29 | v2.5 | New F70 estimated time remaining (T74): the server keeps the actual durations of the last 20 runs of each kind of operation in memory (seconds only, no content, cleared on restart) and estimates by the median; generation keeps the per-image time by "workflow + size + execution server", and a queued task shows "starts in about …" from the tasks ahead of it; F57 blueprint provided |
 | 2026-10-29 | v2.4 | F04 project archive interface complete pending acceptance (T10): gallery project picker and project manager, adding or removing works in bulk, "Make again with same settings" filling in the template, platform, product, prompt and seed; template generation accepts `seed`, which only sets the snapshot's seed parameter |

@@ -514,7 +514,12 @@ class SimpleMode {
             return;
         }
         this.prompt.expanding = true;
+        this.prompt.started = Date.now();
         this.update();
+        // The button counts down with the usual expansion time (F70).
+        let stopTicker = this.startTicker(() => {
+            this.api.$('simple-expand').textContent = this.waitingLabel(tr('AI 扩写中…'), 'expand', this.prompt.started);
+        });
         try {
             let result = await this.api.request('EcomCraftStudioExpandPrompt', {
                 description: this.api.$('simple-description').value.trim(),
@@ -535,6 +540,7 @@ class SimpleMode {
             this.message(error.message || tr('提示词服务暂时不可用，可直接用一句话出图。'), true);
         }
         finally {
+            stopTicker();
             this.prompt.expanding = false;
             this.update();
         }
@@ -1634,7 +1640,7 @@ class SimpleMode {
             : this.api.tr('勾选后提示词会加入模特描述（初版仅此一项，后续再扩展性别、手模等属性）。');
         let expand = this.api.$('simple-expand');
         expand.disabled = this.prompt.expanding || !this.loaded || !this.api.state.session;
-        expand.textContent = this.prompt.expanding ? this.api.tr('AI 扩写中…') : this.api.tr('AI 扩写');
+        expand.textContent = this.prompt.expanding ? this.waitingLabel(this.api.tr('AI 扩写中…'), 'expand', this.prompt.started) : this.api.tr('AI 扩写');
         this.renderPromptState();
         let blocker = this.blocker();
         this.api.$('simple-generate').disabled = Boolean(blocker);
@@ -1676,7 +1682,8 @@ class SimpleMode {
                 : this.api.tr('为全部 {0} 张商品图 × 套图 {1} 种类型（{2}）× 每种 {3} 张，预计共 {4} 张（上限 20）。',
                     this.products.length, set.length, set.map(template => template.name).join(this.api.tr('、')), count, total));
         this.api.$('simple-storyboard-run').disabled = this.storyboard.running || !this.loaded || !this.api.state.session;
-        this.api.$('simple-storyboard-run').textContent = this.storyboard.running ? this.api.tr('正在生成分镜…') : this.api.tr('生成分镜');
+        this.api.$('simple-storyboard-run').textContent = this.storyboard.running
+            ? this.waitingLabel(this.api.tr('正在生成分镜…'), 'storyboard', this.storyboard.started) : this.api.tr('生成分镜');
         this.api.$('simple-download').disabled = this.selected.size == 0;
         let picked = Array.from(this.selected)[0] || '';
         this.api.$('simple-refine').hidden = this.selected.size != 1 || /\.(mp4|webm)$/i.test(picked) || !this.api.$('nav-create') || this.api.$('nav-create').hidden;
@@ -2077,7 +2084,12 @@ class SimpleMode {
             return;
         }
         this.storyboard.running = true;
+        this.storyboard.started = Date.now();
         this.update();
+        // The button counts down with the usual storyboard time (F70).
+        let stopTicker = this.startTicker(() => {
+            this.api.$('simple-storyboard-run').textContent = this.waitingLabel(tr('正在生成分镜…'), 'storyboard', this.storyboard.started);
+        });
         try {
             let result = await this.api.request('EcomCraftStudioStoryboard', {
                 description: this.api.$('simple-description').value.trim(),
@@ -2100,6 +2112,7 @@ class SimpleMode {
             this.message(error.message || tr('分镜没有生成，请稍后重试。'), true);
         }
         finally {
+            stopTicker();
             this.storyboard.running = false;
             this.renderStoryboard();
             this.update();
@@ -2157,8 +2170,10 @@ class SimpleMode {
     /** Asks the server to describe one reference image (F59); fills the item's prompt unless the user edited it first. */
     static async describeReference(index, item) {
         item.describing = true;
+        item.started = Date.now();
         item.failed = false;
         this.renderReferences();
+        this.ensureDescribeTicker();
         try {
             let result = await this.api.request('EcomCraftStudioReferenceDescribe', { reference_images: [item.image] });
             let answer = (result.items || [])[0] || {};
@@ -2182,6 +2197,30 @@ class SimpleMode {
             this.renderReferences();
             this.update();
         }
+    }
+
+    /** Counts down the reference descriptions in progress every second (F70), updating only their status lines so prompts being edited stay untouched;
+     * stops once none is left. */
+    static ensureDescribeTicker() {
+        if (this.stopDescribeTicker) {
+            return;
+        }
+        this.stopDescribeTicker = this.startTicker(() => {
+            let describing = this.references.filter(item => item.describing);
+            if (!describing.length) {
+                let stop = this.stopDescribeTicker;
+                this.stopDescribeTicker = null;
+                if (stop) {
+                    stop();
+                }
+                return;
+            }
+            for (let item of describing) {
+                if (item.statusEl) {
+                    item.statusEl.textContent = this.waitingLabel(this.api.tr('描述中…'), 'describe', item.started);
+                }
+            }
+        });
     }
 
     /** Asks the server whether image description can work (F68) and shows what is missing for "follow a reference". */
@@ -2339,7 +2378,8 @@ class SimpleMode {
                 this.update();
             });
             let zh = el('p', 'hint simple-ref-zh');
-            zh.textContent = item.describing ? tr('描述中…') : (item.failed ? tr('没有描述成功，可点“重试”。') : (item.promptZh || ''));
+            zh.textContent = item.describing ? this.waitingLabel(tr('描述中…'), 'describe', item.started) : (item.failed ? tr('没有描述成功，可点“重试”。') : (item.promptZh || ''));
+            item.statusEl = zh;
             mid.append(input, zh);
             let retry = el('button', 'link-btn');
             retry.type = 'button';
@@ -2432,6 +2472,7 @@ class SimpleMode {
         try {
             let batch = await this.api.request('EcomCraftStudioGenerateSet', payload);
             this.batch = batch;
+            this.batchAt = Date.now();
             this.batchDone = 0;
             this.api.titleAdd((batch.jobs || []).length);
             this.renderBatch();
@@ -2559,6 +2600,7 @@ class SimpleMode {
         try {
             let batch = await this.api.request('EcomCraftStudioGenerateSet', payload);
             this.batch = batch;
+            this.batchAt = Date.now();
             this.batchDone = 0;
             this.api.titleAdd((batch.jobs || []).length);
             this.renderBatch();
@@ -2590,6 +2632,7 @@ class SimpleMode {
             }
             try {
                 this.batch = await this.api.request('EcomCraftStudioBatchStatus', { batch_id: this.batch.batch_id });
+                this.batchAt = Date.now();
             }
             catch (error) {
                 return;
@@ -2660,6 +2703,13 @@ class SimpleMode {
                 name = tr('商品 {0}｜{1}', job.product + 1, job.purpose || job.template_name || job.template);
             }
             let state = this.stageText(job.state, job.state == 'done' ? job.execution_server : '');
+            // Time estimates (F70): the batch prompt while it is written, and each task while it waits for its images.
+            if (job.state == 'prompt') {
+                state = this.stageWithEstimate(state, { elapsed_seconds: this.batch.prompt_elapsed_seconds, remaining_seconds: this.batch.prompt_remaining_seconds }, this.batchAt);
+            }
+            else if (job.state == 'running') {
+                state = this.stageWithEstimate(state, job, this.batchAt);
+            }
             item.append(el('span', '', name), el('span', 'simple-job-state', state));
             if (job.state == 'failed' || job.state == 'cancelled') {
                 if (job.error) {
@@ -2690,6 +2740,7 @@ class SimpleMode {
     static async retryJob(id) {
         try {
             this.batch = await this.api.request('EcomCraftStudioBatchRetry', { batch_id: this.batch.batch_id, job_id: id });
+            this.batchAt = Date.now();
             this.api.titleAdd();
             this.renderBatch();
             this.trackBatch();
@@ -2706,6 +2757,7 @@ class SimpleMode {
         }
         try {
             this.batch = await this.api.request('EcomCraftStudioBatchCancel', { batch_id: this.batch.batch_id });
+            this.batchAt = Date.now();
             this.renderBatch();
         }
         catch (error) {
@@ -2913,6 +2965,23 @@ class SimpleMode {
         this.renderTasks();
     }
 
+    /** A waiting label with the estimate of an operation of <kind> started at <started> (F70), such as "Writing… (about 20 s left)". */
+    static waitingLabel(base, kind, started) {
+        let estimate = this.api.estimate;
+        return estimate && started ? estimate.label(base, estimate.since(kind, started)) : base;
+    }
+
+    /** Calls <update> every second until the returned function is called (F70); without the estimate helper nothing runs. */
+    static startTicker(update) {
+        return this.api.estimate ? this.api.estimate.tick(update) : () => {};
+    }
+
+    /** A task stage with its time estimate (F70): <fields> holds the server's elapsed, remaining and start-in seconds, received at <receivedAt>. */
+    static stageWithEstimate(stageText, fields, receivedAt) {
+        let estimate = this.api.estimate;
+        return estimate && fields ? estimate.label(stageText, estimate.text(fields, receivedAt)) : stageText;
+    }
+
     /** The plain-language stage of a task (F56): writing the prompt, queued or running on a named server, done or failed. */
     static stageText(stage, server) {
         let tr = this.api.tr;
@@ -2937,7 +3006,10 @@ class SimpleMode {
         let items = [];
         for (let entry of this.tasks) {
             let item = el('li', `simple-job${entry.stage == 'failed' ? ' is-failed' : ''}`);
-            item.append(el('span', '', this.api.tr('{0}｜{1}', entry.product || this.api.tr('商品'), entry.template)), el('span', 'simple-job-state', this.stageText(entry.stage, entry.server)));
+            let waiting = entry.stage == 'prompt' || entry.stage == 'queued' || entry.stage == 'running';
+            let state = this.stageText(entry.stage, entry.server);
+            item.append(el('span', '', this.api.tr('{0}｜{1}', entry.product || this.api.tr('商品'), entry.template)),
+                el('span', 'simple-job-state', waiting ? this.stageWithEstimate(state, entry.eta, entry.etaAt) : state));
             if (entry.error) {
                 item.title = entry.error;
             }
@@ -2963,8 +3035,13 @@ class SimpleMode {
                 result = { stage: 'failed', reason: tr('任务已过期，请重新出图。') };
             }
             if (result.stage == 'prompt') {
+                // How long the prompt usually takes (F70).
+                item.entry.eta = result;
+                item.entry.etaAt = Date.now();
+                this.renderTasks();
                 continue;
             }
+            item.entry.eta = null;
             this.preparing.delete(id);
             if (result.stage == 'failed') {
                 let reason = result.reason_id ? this.api.serverErrorText(result.reason_id, result.reason) : (result.reason || tr('执行服务器没有返回结果。'));
@@ -3028,15 +3105,21 @@ class SimpleMode {
             return;
         }
         let mine = (queue.tasks || []).filter(task => task.mine && task.id != null);
-        let running = new Set(mine.map(task => task.id));
-        let executing = new Set(mine.filter(task => task.state == 'running').map(task => task.id));
+        let active = new Map(mine.map(task => [task.id, task]));
         let finished = new Map((queue.finished_tasks || []).map(task => [task.id, task]));
+        let received = Date.now();
         for (let id of Array.from(this.pending)) {
             let entry = this.tasks.find(task => task.taskId == id);
             let outcome = finished.get(id);
-            if (running.has(id) || !outcome) {
-                if (entry && executing.has(id)) {
-                    entry.stage = 'running';
+            if (active.has(id) || !outcome) {
+                let task = active.get(id);
+                if (entry && task) {
+                    if (task.state == 'running') {
+                        entry.stage = 'running';
+                    }
+                    // The queue's time estimate for this account's own task (F70).
+                    entry.eta = task;
+                    entry.etaAt = received;
                 }
                 continue;
             }

@@ -82,7 +82,12 @@ public static class ExecutionScheduler
 
     /// <summary>Applies Rule 1 to the registered executors. A server is online when it is ready and its ComfyUI queue answers.
     /// <paramref name="capability"/> returns whether an online server can run the request and, if not, what it lacks.</summary>
-    public static async Task<SchedulerRules.Decision> PlanAsync(Func<BackendHandler.T2IBackendData, List<string>> capability, int? pinnedId)
+    public static async Task<SchedulerRules.Decision> PlanAsync(Func<BackendHandler.T2IBackendData, List<string>> capability, int? pinnedId) =>
+        (await PlanWithQueueAsync(capability, pinnedId)).Decision;
+
+    /// <summary>Like <see cref="PlanAsync"/>, also returning the R5.2 queue of the chosen server at decision time (0 without a choice),
+    /// which the time estimates (F70) use as the tasks ahead of the new one.</summary>
+    public static async Task<(SchedulerRules.Decision Decision, int Queue)> PlanWithQueueAsync(Func<BackendHandler.T2IBackendData, List<string>> capability, int? pinnedId)
     {
         List<Executor> executors = [.. ExecutorRegistry.Current().Where(executor => executor.Data is not null)];
         JObject[] queues = await Task.WhenAll(executors.Select(executor => ExecutionServers.IsReady(executor.Data)
@@ -96,6 +101,8 @@ public static class ExecutionScheduler
             candidates.Add(new SchedulerRules.Candidate(data.ID, executors[i].Name, online, online && problems.Count == 0, problems,
                 LoadOf(data, queues[i]).Queue, data.TimeLastRelease));
         }
-        return SchedulerRules.Decide(candidates, pinnedId);
+        SchedulerRules.Decision decision = SchedulerRules.Decide(candidates, pinnedId);
+        int queue = candidates.FirstOrDefault(candidate => candidate.Id == decision.ChosenId)?.Queue ?? 0;
+        return (decision, queue);
     }
 }

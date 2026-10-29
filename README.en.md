@@ -26,7 +26,7 @@ Demo video: (to be added)
 | AI distorts the product, its logo and text | **Product preservation**: the cut-out goes onto the canvas and the original product pixels are pasted back after generation; selling-point text is laid out by the program in fixed layouts, never written by AI |
 | Every platform has its own sizes, white backgrounds and file caps | One-click sets and exports by the platform's **slots**; Amazon white main images use the cut-out only, with a pure-white check and AI metadata |
 | Product photos must not leave the company | Generation runs **only on registered local or LAN** ComfyUI servers, never falling back to the cloud; the vision model defaults to local Ollama |
-| Several GPU computers and nobody to schedule them | Tasks go to idle execution servers automatically; the queue shows progress and lets you stop your own tasks |
+| Several GPU computers and nobody to schedule them | Tasks go to idle execution servers automatically; the queue shows progress and the estimated time left, and lets you stop your own tasks |
 | Building workflows is hard | The built-in templates' workflows are **generated automatically** with the default models; a designer's uploaded workflow works for them at once and is published to everyone after review |
 | Starting from scratch every time | Product library, brand kits (colors, logo, references), starring candidates, and "Refine in professional mode" |
 
