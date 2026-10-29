@@ -2115,6 +2115,7 @@ class SimpleMode {
         if (this.visionGuide()) {
             this.message(this.api.tr('还没有可用的视觉模型。请按下方提示配置（点“打开提示词优化设置”可直接进入），配好后回来添加参考图。'), true);
             this.renderVision();
+            this.api.$('simple-vision').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
             return;
         }
         this.api.$('simple-reference-file').click();
@@ -2236,6 +2237,7 @@ class SimpleMode {
         if (!this.api) {
             return;
         }
+        let tr = this.api.tr;
         let el = this.api.el;
         let box = this.api.$('simple-vision');
         let guide = this.visionGuide();
@@ -2276,7 +2278,7 @@ class SimpleMode {
         }
         let parts = [el('p', 'simple-vision-title', guide.title), list];
         if (this.vision.can_manage) {
-            let again = el('button', 'btn btn-sm', this.api.tr('重新检查'));
+            let again = el('button', 'btn btn-sm', tr('重新检查'));
             again.type = 'button';
             again.addEventListener('click', () => this.loadVision());
             parts.push(again);
