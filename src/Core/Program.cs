@@ -345,6 +345,7 @@ public class Program
         UserSoundHelper.Init();
         timer.Check("Model listing");
         Logs.Init("Loading backends...");
+        NetworkBackendUtils.EndLeftoverProcesses();
         Backends.Load();
         timer.Check("Backends");
         Logs.Init("Prepping API...");

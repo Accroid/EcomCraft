@@ -210,6 +210,125 @@ public static class NetworkBackendUtils
         return true;
     }
 
+    /// <summary>Lock for <see cref="StartedProcessesFile"/>.</summary>
+    public static readonly object StartedProcessesLock = new();
+
+    /// <summary>Lists the self-started backend processes of this data directory (process ID and start time, then the same for the server that started it, one per line), so ones left running after a forced stop,
+    /// crash or power loss can be ended at the next start instead of piling up on ever higher ports (EcomCraft F72).</summary>
+    public static string StartedProcessesFile => $"{Program.DataDir}/self_start_processes.txt";
+
+    /// <summary>Records a self-started backend process in <see cref="StartedProcessesFile"/>. Failures are only logged: the backend still runs.</summary>
+    public static void RecordStartedProcess(Process process)
+    {
+        try
+        {
+            using Process self = Process.GetCurrentProcess();
+            string line = $"{process.Id} {process.StartTime.ToUniversalTime().Ticks} {self.Id} {self.StartTime.ToUniversalTime().Ticks}{Environment.NewLine}";
+            lock (StartedProcessesLock)
+            {
+                File.AppendAllText(StartedProcessesFile, line);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logs.Debug($"Could not record the self-started backend process: {ex.ReadableString()}");
+        }
+    }
+
+    /// <summary>Ends the self-started backend processes recorded by a previous run that are still running, then clears the record. Call once at startup, before backends load.
+    /// A process is only ended when its start time matches the record, so a process ID since reused by another program is left alone, and only when the server that started it
+    /// has exited, so a second server started by mistake on the same data directory does not end the first one's backends; anything unexpected is logged and skipped.</summary>
+    public static void EndLeftoverProcesses()
+    {
+        string[] lines;
+        try
+        {
+            if (!File.Exists(StartedProcessesFile))
+            {
+                return;
+            }
+            lines = File.ReadAllLines(StartedProcessesFile);
+        }
+        catch (Exception ex)
+        {
+            Logs.Warning($"Could not read the list of previously started backend processes: {ex.ReadableString()}");
+            return;
+        }
+        List<string> kept = [];
+        foreach (string line in lines)
+        {
+            string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 4 || !int.TryParse(parts[0], out int id) || !long.TryParse(parts[1], out long ticks)
+                || !int.TryParse(parts[2], out int ownerId) || !long.TryParse(parts[3], out long ownerTicks))
+            {
+                continue;
+            }
+            if (IsRunning(ownerId, ownerTicks))
+            {
+                kept.Add(line);
+                continue;
+            }
+            try
+            {
+                using Process process = Process.GetProcessById(id);
+                if (!SameStart(process, ticks))
+                {
+                    continue;
+                }
+                Logs.Warning($"Ending backend process {id} left running by a previous run of this server.");
+                process.Kill(true);
+                process.WaitForExit(10_000);
+            }
+            catch (ArgumentException)
+            {
+                // Already exited.
+            }
+            catch (Exception ex)
+            {
+                Logs.Warning($"Could not end leftover backend process {id}: {ex.ReadableString()}");
+            }
+        }
+        try
+        {
+            lock (StartedProcessesLock)
+            {
+                if (kept.Count == 0)
+                {
+                    File.Delete(StartedProcessesFile);
+                }
+                else
+                {
+                    File.WriteAllLines(StartedProcessesFile, kept);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logs.Warning($"Could not clear the list of previously started backend processes: {ex.ReadableString()}");
+        }
+    }
+
+    /// <summary>Whether the process is the one started at the recorded time. Start times read on Linux can differ slightly between runs, so a small margin is allowed.</summary>
+    private static bool SameStart(Process process, long ticks) => Math.Abs(process.StartTime.ToUniversalTime().Ticks - ticks) <= TimeSpan.TicksPerSecond * 2;
+
+    /// <summary>Whether the process with this ID and start time is still running. When this cannot be read, the process is treated as running, so nothing is ended by mistake.</summary>
+    private static bool IsRunning(int id, long ticks)
+    {
+        try
+        {
+            using Process process = Process.GetProcessById(id);
+            return SameStart(process, ticks);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (Exception)
+        {
+            return true;
+        }
+    }
+
     /// <summary>Internal tracking value of what port to use next.</summary>
     public static volatile int NextPort = 7820;
 
@@ -418,6 +537,7 @@ public static class NetworkBackendUtils
             takeOutput(port, runningProcess);
             addLoadStatus("Will start process...");
             runningProcess.Start();
+            RecordStartedProcess(runningProcess);
             Logs.Init($"Self-Start {nameSimple} on port {port} is loading...");
             bool everLoaded = false;
             Action onFail = autoRestart ? () =>
