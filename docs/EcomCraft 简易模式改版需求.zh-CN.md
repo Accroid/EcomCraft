@@ -2,7 +2,7 @@
 
 > **语言：** 简体中文 · [English](EcomCraft%20Simple%20Mode%20Redesign.md)
 >
-> **状态：** 开发中（F52–F56 已实现，待编译与人工验收；F57 代码完成，蓝图文件 `Templates/blueprints/text-to-image.json` 待提供） · **版本：** v3.7 · **日期：** 2026-10-29
+> **状态：** 开发中（F52–F56 已实现，待编译与人工验收；F57 代码与蓝图文件 `Templates/blueprints/text-to-image.json` 已完成，待编译与验收） · **版本：** v3.7 · **日期：** 2026-10-29
 >
 > 本文档记录简易模式（三步出图）改版的需求定稿。开发以本文为准，需求变更时先修改本文（中英文同步）并登记文末变更记录，再修改代码。整体架构和 MVP 路线见 [EcomCraft 架构与路线图](EcomCraft%20Architecture.zh-CN.md)；交互原型见 [EcomCraft 简易模式改版原型.html](EcomCraft%20简易模式改版原型.html)（浏览器直接打开）。
 
@@ -191,7 +191,7 @@ MVP 完成后的试用反馈集中在简易模式的易用性和开箱可用性�
 | F55 候选张数与按钮文案 | T57 | **已实现**，已部署，待人工验收 | 0e7c6b3e | 数字输入 1–20；单次与整套共用 20 张总上限（服务端同步拦截）；界面设计文档 v1.14 |
 | F54 双语提示词与 AI 扩写 | T56 | **已实现**，未经编译，待部署与人工验收 | 8124a752 | 新接口 `EcomCraftStudioExpandPrompt`；生成与整套接口新增 `prompt_en` / `prompt_zh`，响应带 `prompt_used` / `prompt_translated`；翻译失败降级码 `prompt_untranslated`；产品类型、模特与风格片段仍由服务端追加；`simple-mode.test.cjs` 改为只允许双语面板两个文本框；界面设计文档 v1.15。翻译目前在提交请求内同步完成，T58 再移到后台 |
 | F56 出图链路提速 | T58 | **已实现**，未经编译，待部署与人工验收 | aee5a0bd | 需要模型时提交立即返回 `prepare_id`，新接口 `EcomCraftStudioPrepareStatus` 查询阶段；每账号最多 5 个任务同时等待提示词；整套任务先处于 `prompt` 状态（可取消）；第 3 步新增单次出图任务列表；界面设计文档 v1.16 |
-| F57 标准工作流自动生成 | T59 | 代码完成，待提供蓝图文件并验收 | — | 生成器、自动发布、状态清单与初始化按钮已实现；蓝图文件 `Templates/blueprints/text-to-image.json` 需由用户提供已验证的 Qwen-Image 2.1 文生图工作流 |
+| F57 标准工作流自动生成 | T59 | 代码与蓝图完成，待编译与验收 | — | 生成器、自动发布、状态清单与初始化按钮已实现；蓝图 `Templates/blueprints/text-to-image.json` 来自用户验证过的 Qwen-Image 2.1 文生图工作流（GGUF UNet、`TextEncodeQwenImage21`），去掉了自定义的分辨率节点，宽高由页面按平台尺寸设置 |
 | F52 上传四入口 | T54 | **已实现**（只改前端），待人工验收 | 01c120e7 | 四个并列按钮；商品库与画廊共用选择弹窗；画廊列出最近 60 张已生成图片，超过 5 MB 时浏览器压缩成 JPEG；缩略图标注来源；界面设计文档 v1.17 |
 
 服务状态：T56（8124a752）、T58（aee5a0bd）与 T54（01c120e7，只改前端）在无 .NET SDK 的开发机上完成，尚未编译和重启服务；部署前需按第 2 步重新构建扩展。
