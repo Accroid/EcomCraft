@@ -120,6 +120,9 @@ public static class BatchService
         /// <summary>English prompt of each reference image (F59), already final and user-edited: reference mode does no background composition.</summary>
         public List<string> ReferencePrompts = [];
 
+        /// <summary>Product placement of each reference (F59, T79), or null where the product's own placement applies.</summary>
+        public List<Placement> ReferencePlacements = [];
+
         /// <summary>Reference images of reference mode (F59), kept in memory only for the batch's lifetime; never written under Data/.</summary>
         public List<string> ReferenceImages = [];
 
@@ -253,6 +256,27 @@ public static class BatchService
                     return StudioApi.Error("参考提示词无效，请修改后重试。", "invalid_prompt");
                 }
                 referencePrompts.Add(cleaned);
+            }
+            // Optional placement per reference (T79): null keeps the product's own placement.
+            if (rawInput["reference_placements"] is JArray placementItems)
+            {
+                if (placementItems.Count != promptItems.Count)
+                {
+                    return StudioApi.Error("参考图摆放的数量与提示词数量不一致。", "invalid_parameters");
+                }
+                foreach (JToken item in placementItems)
+                {
+                    if (item is null || item.Type == JTokenType.Null)
+                    {
+                        batch.ReferencePlacements.Add(null);
+                        continue;
+                    }
+                    if (item is not JObject spot || !Placement.TryCreate(spot.Value<double?>("x"), spot.Value<double?>("y"), spot.Value<double?>("size"), out Placement parsed))
+                    {
+                        return StudioApi.Error("商品位置无效：中心须在画面内，大小在 0.1–1.5 之间。", "invalid_parameters");
+                    }
+                    batch.ReferencePlacements.Add(parsed);
+                }
             }
             // Optional images, kept in memory only for the batch's lifetime (F59); P1 sends prompts alone.
             if (rawInput["reference_images"] is JArray imageItems)
@@ -551,6 +575,8 @@ public static class BatchService
             }
             parameters[template.ImageField] = image;
         }
+        Placement placement = job.Reference >= 0 && job.Reference < batch.ReferencePlacements.Count && batch.ReferencePlacements[job.Reference] is Placement forReference
+            ? forReference : product.Placement;
         JObject payload = new()
         {
             ["source"] = "local",
@@ -562,7 +588,7 @@ public static class BatchService
                 : batch.Prompt,
             ["negativeprompt"] = batch.Negative,
             ["images"] = batch.Candidates,
-            ["placement"] = new JObject() { ["x"] = product.Placement.CenterX, ["y"] = product.Placement.CenterY, ["size"] = product.Placement.Size },
+            ["placement"] = new JObject() { ["x"] = placement.CenterX, ["y"] = placement.CenterY, ["size"] = placement.Size },
             ["platform"] = batch.Platform
         };
         if (job.Reference >= 0)
