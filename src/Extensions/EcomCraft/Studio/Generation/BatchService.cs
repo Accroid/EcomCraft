@@ -507,8 +507,15 @@ public static class BatchService
                 job.Server = result["execution_server"]?.ToString();
                 job.Images = [.. (result["images"] as JArray ?? new JArray()).Select(image => image.Type == JTokenType.String ? image.ToString() : image["image"]?.ToString())
                     .Where(url => url is not null && (url.StartsWith("View/", StringComparison.Ordinal) || url.StartsWith("Output/", StringComparison.Ordinal)))];
-                job.State = "done";
             }
+            // The engine can end without an error yet without images (an image task that threw is only logged); that is a failure, not a finished task.
+            if (job.Images.Count == 0)
+            {
+                Logs.Warning($"EcomCraft batch task ended without images (template {job.Template}).");
+                SetState(batch, job, "failed", "执行服务器没有返回图片，请重试；仍然失败请把服务器日志发给管理员。", "generation_failed");
+                return;
+            }
+            SetState(batch, job, "done", null, null);
         }
         catch (Exception ex)
         {
