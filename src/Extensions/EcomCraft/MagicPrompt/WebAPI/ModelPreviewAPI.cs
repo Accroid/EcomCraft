@@ -11,9 +11,16 @@ namespace EcomCraftStudio.MagicPrompt.WebAPI;
 /// <summary>Lists models using an administrator's unsaved form without persisting configuration or credentials.</summary>
 public class ModelPreviewAPI : LLMAPICalls
 {
-    /// <summary>Previews only the selected text backend; a vision backend failure must not block text model selection.</summary>
+    /// <summary>Most Ollama models checked for image support in one preview; later ones are kept by name only.</summary>
+    private const int MaxCapabilityChecks = 40;
+
+    /// <summary>Name parts of known Ollama vision models, used when the Ollama version does not report model capabilities.</summary>
+    private static readonly string[] VisionNameParts = ["vision", "-vl", "llava", "minicpm-v", "moondream", "gemma3", "bakllava"];
+
+    /// <summary>Previews only the selected backend; a vision backend failure must not block text model selection.
+    /// With purpose "vision" (F68) the saved vision address and key are the comparison point, and an Ollama listing keeps only models that can read images.</summary>
     public static async Task<JObject> PreviewMagicPromptModels(Session session, HttpContext context,
-        string backend, string baseurl = "", string api_key = "")
+        string backend, string baseurl = "", string api_key = "", string purpose = "")
     {
         if (!session.User.HasPermission(MagicPromptPermissions.PermGetModels))
         {
@@ -36,7 +43,20 @@ public class ModelPreviewAPI : LLMAPICalls
             {
                 return Failure("无法读取后端配置，请稍后重试。");
             }
+            bool vision = purpose == "vision";
             JObject settings = (JObject)saved.DeepClone();
+            string savedKey = null;
+            if (vision)
+            {
+                // The saved vision address only belongs to the saved vision backend type; another type compares with its shared address.
+                if (VisionBackend(settings) != backend)
+                {
+                    settings.Remove("visionbaseurl");
+                }
+                settings["visionbackend"] = backend;
+                savedKey = VisionKeyOverride(settings, session);
+                settings = (JObject)VisionSettings(settings).DeepClone();
+            }
             JObject backendConfig = settings["backends"]?[backend] as JObject;
             if (backendConfig is null)
             {
@@ -57,7 +77,7 @@ public class ModelPreviewAPI : LLMAPICalls
             // Never forward a saved credential to a different unsaved destination. A newly entered key is explicit.
             string keyOverride = api_key.Length > 0 ? api_key
                 : Uri.TryCreate(savedEndpoint, UriKind.Absolute, out Uri savedAddress)
-                    && savedAddress == new Uri(endpoint) ? null : "";
+                    && savedAddress == new Uri(endpoint) ? savedKey : "";
             using HttpRequestMessage request = new(HttpMethod.Get, endpoint);
             if (!ConfigureRequest(request, backend, settings, session, out _, keyOverride))
             {
@@ -95,6 +115,12 @@ public class ModelPreviewAPI : LLMAPICalls
                     models.Add(new JObject { ["model"] = id, ["name"] = entry["name"]?.Value<string>() ?? id });
                 }
             }
+            if (vision && backend == "ollama")
+            {
+                int all = models.Count;
+                models = await OllamaVisionModels(models, backendConfig["baseurl"]?.ToString() ?? "", backend, settings, session, keyOverride, timeout.Token);
+                return new JObject { ["success"] = true, ["models"] = models, ["all_count"] = all };
+            }
             return new JObject { ["success"] = true, ["models"] = models };
         }
         catch (OperationCanceledException)
@@ -109,6 +135,67 @@ public class ModelPreviewAPI : LLMAPICalls
         {
             return Failure("无法读取模型列表，请检查后端配置和返回格式。");
         }
+    }
+
+    /// <summary>Keeps the Ollama models that can read images: asks /api/show for each model's capabilities, and falls back to known
+    /// vision model names when the Ollama version does not report capabilities or one check fails.</summary>
+    private static async Task<JArray> OllamaVisionModels(JArray models, string baseUrl, string backend, JObject settings, Session session,
+        string keyOverride, CancellationToken cancel)
+    {
+        string showUrl = $"{baseUrl.TrimEnd('/')}/api/show";
+        List<JObject> entries = [.. models.OfType<JObject>()];
+        Task<bool>[] checks = new Task<bool>[entries.Count];
+        for (int i = 0; i < entries.Count; i++)
+        {
+            string id = entries[i]["model"]?.ToString() ?? "";
+            checks[i] = i < MaxCapabilityChecks ? CanReadImages(id, showUrl, backend, settings, session, keyOverride, cancel) : Task.FromResult(HasVisionName(id));
+        }
+        bool[] results = await Task.WhenAll(checks);
+        JArray kept = new();
+        for (int i = 0; i < entries.Count; i++)
+        {
+            if (results[i])
+            {
+                kept.Add(entries[i]);
+            }
+        }
+        return kept;
+    }
+
+    /// <summary>Whether one Ollama model reports the "vision" capability; known vision names decide when capabilities are not available.</summary>
+    private static async Task<bool> CanReadImages(string model, string showUrl, string backend, JObject settings, Session session, string keyOverride, CancellationToken cancel)
+    {
+        try
+        {
+            using HttpRequestMessage request = new(HttpMethod.Post, showUrl);
+            if (!ConfigureRequest(request, backend, settings, session, out _, keyOverride))
+            {
+                return HasVisionName(model);
+            }
+            request.Content = new StringContent(new JObject { ["model"] = model, ["name"] = model }.ToString(), System.Text.Encoding.UTF8, "application/json");
+            using HttpResponseMessage response = await HttpClient.SendAsync(request, cancel);
+            if (!response.IsSuccessStatusCode)
+            {
+                return HasVisionName(model);
+            }
+            JObject info = JObject.Parse(await response.Content.ReadAsStringAsync(cancel));
+            if (info["capabilities"] is JArray capabilities)
+            {
+                return capabilities.Any(item => item.ToString() == "vision");
+            }
+            return HasVisionName(model);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or Newtonsoft.Json.JsonException)
+        {
+            return HasVisionName(model);
+        }
+    }
+
+    /// <summary>Whether a model name looks like a known vision model.</summary>
+    private static bool HasVisionName(string model)
+    {
+        string name = model.ToLowerFast();
+        return VisionNameParts.Any(part => name.Contains(part));
     }
 
     /// <summary>Returns only a controlled message, never upstream bodies, settings, or keys.</summary>

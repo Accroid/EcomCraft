@@ -36,7 +36,8 @@ public class MagicPromptAPI
         API.RegisterAPICall(LLMAPICalls.GetMagicPromptModels, true, MagicPromptPermissions.PermGetModels);
         API.RegisterAPICall(ModelPreviewAPI.PreviewMagicPromptModels, true, MagicPromptPermissions.PermSaveConfig);
         // All key types must be added to the accepted list first
-        string[] keyTypes = ["openai_api", "anthropic_api", "openrouter_api", "openaiapi_local", "grok_api"];
+        // openaiapi_vision is the vision service's own OpenAI-compatible key (F68); it is set from the EcomCraft settings dialog only.
+        string[] keyTypes = ["openai_api", "anthropic_api", "openrouter_api", "openaiapi_local", "grok_api", LLMAPICalls.VisionKeyType];
         foreach (string keyType in keyTypes)
         {
             BasicAPIFeatures.AcceptedAPIKeyTypes.Add(keyType);

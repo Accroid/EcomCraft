@@ -116,7 +116,7 @@ public class LLMAPICalls : MagicPromptAPI
                 return CreateErrorResponse($"Failed to fetch models for {chatBackend}. Please check your API key and try again.");
             }
             // Get vision models
-            List<ModelData> visionmodels = await GetModelsForBackend(visionBackend, settings, true, session);
+            List<ModelData> visionmodels = await GetModelsForBackend(visionBackend, VisionSettings(settings), true, session, VisionKeyOverride(settings, session));
             if (visionmodels == null || !visionmodels.Any())
             {
                 return CreateErrorResponse($"Failed to fetch vision models for {visionBackend}. Please check your API key and try again.");
@@ -145,7 +145,7 @@ public class LLMAPICalls : MagicPromptAPI
         }
     }
 
-    public static async Task<List<ModelData>> GetModelsForBackend(string backend, JObject settings, bool isVision = false, Session session = null)
+    public static async Task<List<ModelData>> GetModelsForBackend(string backend, JObject settings, bool isVision = false, Session session = null, string apiKeyOverride = null)
     {
         // Fast-fail for unreachable local backends instead of waiting for the full timeout
         if (!await IsServerReachable(backend, settings))
@@ -164,7 +164,7 @@ public class LLMAPICalls : MagicPromptAPI
         }
         // Create and configure request
         HttpRequestMessage request = new(HttpMethod.Get, endpoint);
-        if (!ConfigureRequest(request, backend, settings, session, out string error))
+        if (!ConfigureRequest(request, backend, settings, session, out string error, apiKeyOverride))
         {
             Logs.Error($"EcomCraft.MagicPrompt: {error}");
             return [];
@@ -281,6 +281,48 @@ public class LLMAPICalls : MagicPromptAPI
         }
         string fullUrl = $"{baseUrl}{endpoint}";
         return fullUrl;
+    }
+
+    /// <summary>The key type of the vision service's own API key (F68), kept apart from the prompt service's key.</summary>
+    public const string VisionKeyType = "openaiapi_vision";
+
+    /// <summary>The vision backend type from the settings, lowercase.</summary>
+    public static string VisionBackend(JObject settings)
+    {
+        return (settings["visionbackend"]?.ToString() ?? settings["backend"]?.ToString() ?? "").ToLower();
+    }
+
+    /// <summary>The settings as the vision service sees them (F68): a vision address saved in "visionbaseurl" replaces the shared address
+    /// of the vision backend type, so the prompt and vision services can each use their own server. Without one the shared address applies.</summary>
+    public static JObject VisionSettings(JObject settings)
+    {
+        string backend = VisionBackend(settings);
+        string url = settings["visionbaseurl"]?.ToString()?.Trim();
+        if (string.IsNullOrEmpty(url) || backend is not ("ollama" or "openaiapi") || settings["backends"]?[backend] is not JObject)
+        {
+            return settings;
+        }
+        JObject view = (JObject)settings.DeepClone();
+        view["backends"][backend]["baseurl"] = url.TrimEnd('/');
+        return view;
+    }
+
+    /// <summary>The API key override for a vision request (F68): the vision service's own key when one is saved; otherwise the shared key only while
+    /// the vision service uses the shared address, and no key for a different address, so a prompt service key never reaches another server.</summary>
+    public static string VisionKeyOverride(JObject settings, Session session)
+    {
+        if (VisionBackend(settings) != "openaiapi")
+        {
+            return null;
+        }
+        string own = session?.User?.GetGenericData(VisionKeyType, "key") ?? Program.Sessions.GenericSharedUser.GetGenericData(VisionKeyType, "key");
+        if (!string.IsNullOrEmpty(own))
+        {
+            return own;
+        }
+        string url = settings["visionbaseurl"]?.ToString()?.Trim().TrimEnd('/') ?? "";
+        string shared = settings["backends"]?["openaiapi"]?["baseurl"]?.ToString()?.Trim().TrimEnd('/') ?? "";
+        return url.Length == 0 || string.Equals(url, shared, StringComparison.OrdinalIgnoreCase) ? null : "";
     }
 
     /// <summary>Configures the HTTP request with appropriate headers based on the backend.</summary>
@@ -499,10 +541,16 @@ public class LLMAPICalls : MagicPromptAPI
                 Logs.Error($"EcomCraft.MagicPrompt: Configuration not found. Please check your settings.");
                 return CreateErrorResponse("Configuration not found. Please check your settings.");
             }
-            // Get appropriate backend based on message type
+            // Get appropriate backend based on message type; a vision request uses the vision service's own address and key (F68)
             string backend = messageType == MessageType.Vision
                 ? settings["visionbackend"]?.ToString()?.ToLower() ?? settings["backend"].ToString().ToLower()
                 : settings["backend"].ToString().ToLower();
+            string keyOverride = null;
+            if (messageType == MessageType.Vision)
+            {
+                keyOverride = VisionKeyOverride(settings, session);
+                settings = VisionSettings(settings);
+            }
             // Get appropriate endpoint
             string endpoint = GetEndpoint(backend, settings, messageType == MessageType.Vision ? "vision" : "chat");
             if (string.IsNullOrEmpty(endpoint))
@@ -536,7 +584,7 @@ public class LLMAPICalls : MagicPromptAPI
             messageContent.Text = $"{messageContent.Text}";
             // Create request with proper headers and body
             using HttpRequestMessage request = new(HttpMethod.Post, endpoint);
-            if (!ConfigureRequest(request, backend, settings, session, out string error))
+            if (!ConfigureRequest(request, backend, settings, session, out string error, keyOverride))
             {
                 Logs.Error($"EcomCraft.MagicPrompt: {error}");
                 return CreateErrorResponse(error);

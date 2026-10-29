@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using EcomCraftStudio.MagicPrompt.WebAPI;
 using EcomCraftStudio.Studio.Prompting;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
@@ -162,6 +163,7 @@ public static class VisionModelInstall
             process.EnableRaisingEvents = true;
             process.Exited += (_, _) =>
             {
+                bool succeeded;
                 lock (InstallLock)
                 {
                     if (CurrentProcess != process || State != "running")
@@ -170,24 +172,76 @@ public static class VisionModelInstall
                     }
                     try
                     {
-                        State = process.ExitCode == 0 ? "done" : "failed";
+                        succeeded = process.ExitCode == 0;
                     }
                     catch (Exception)
                     {
-                        State = "failed";
+                        succeeded = false;
                     }
-                    FinishedUtc = DateTime.UtcNow;
+                    if (!succeeded)
+                    {
+                        State = "failed";
+                        FinishedUtc = DateTime.UtcNow;
+                    }
                 }
-                // The newly pulled model changes what the vision status should say, so the cached answer goes away.
-                PromptService.ForgetVisionStatus();
+                if (succeeded)
+                {
+                    // The installed model becomes the vision model before the install reports "done", also when the settings dialog was closed meanwhile.
+                    _ = FinishInstallAsync(process, model);
+                }
+                else
+                {
+                    PromptService.ForgetVisionStatus();
+                }
             };
             started = true;
             return null;
         }
     }
 
+    /// <summary>The address of the Ollama the install script sets up: always this server.</summary>
+    private const string LocalOllamaUrl = "http://localhost:11434";
+
+    /// <summary>Saves a successfully installed model as the vision model, then reports the install as done.</summary>
+    private static async Task FinishInstallAsync(Process process, string model)
+    {
+        await SaveInstalledModelAsync(model);
+        lock (InstallLock)
+        {
+            if (CurrentProcess == process && State == "running")
+            {
+                State = "done";
+                FinishedUtc = DateTime.UtcNow;
+            }
+        }
+    }
+
+    /// <summary>Saves a successfully installed model as the vision model: Ollama on this server and the pulled model (F69).
+    /// The image description switch stays as the administrator set it.</summary>
+    private static async Task SaveInstalledModelAsync(string model)
+    {
+        try
+        {
+            JObject result = await SessionSettings.SaveMagicPromptSettings(new JObject()
+            {
+                ["settings"] = new JObject() { ["visionbackend"] = "ollama", ["visionmodel"] = model, ["visionbaseurl"] = LocalOllamaUrl }
+            });
+            if (result?.Value<bool?>("success") != true)
+            {
+                Logs.Warning("EcomCraft could not save the installed vision model as the vision model.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logs.Warning($"EcomCraft could not save the installed vision model: {ex.GetType().Name}");
+        }
+        // The newly pulled model changes what the vision status should say, so the cached answer goes away.
+        PromptService.ForgetVisionStatus();
+    }
+
     [API.APIDescription("Start the one-click install of the local vision model (F69, administrators): runs the repository install script on this server, "
-        + "which installs Ollama when missing and pulls the chosen model (one of the documented vision models). Only one install runs at a time; "
+        + "which installs Ollama when missing and pulls the chosen model (one of the documented vision models); a successful install saves that model "
+        + "on this server's Ollama as the vision model before reporting done. Only one install runs at a time; "
         + "progress comes from EcomCraftStudioVisionInstallStatus.", "state: \"running\", model: \"qwen3-vl:8b\"")]
     public static Task<JObject> EcomCraftStudioVisionInstall(Session session, string model = "")
     {

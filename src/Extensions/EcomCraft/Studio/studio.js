@@ -1293,13 +1293,16 @@
         static updateControls() {
             let busy = this.loading || this.saving;
             for (let id of ['enh-cfg-backend', 'enh-cfg-endpoint', 'enh-cfg-model', 'enh-cfg-key', 'enh-cfg-save',
-                'enh-cfg-vision-backend', 'enh-cfg-vision-endpoint', 'enh-cfg-vision-model', 'enh-cfg-vision-install']) {
+                'enh-cfg-vision-backend', 'enh-cfg-vision-endpoint', 'enh-cfg-vision-key', 'enh-cfg-vision-model', 'enh-cfg-vision-install',
+                'enh-cfg-vision-ollama-model', 'enh-cfg-vision-ollama-url']) {
                 $(id).disabled = busy;
             }
             $('enh-cfg-fetch-models').disabled = busy || !!this.controller;
             $('enh-cfg-fetch-models').textContent = this.controller ? '拉取中…' : '拉取';
             $('enh-cfg-fetch-vision-models').disabled = busy || !!this.controller;
             $('enh-cfg-fetch-vision-models').textContent = this.controller ? '拉取中…' : '拉取';
+            $('enh-cfg-vision-detect').disabled = busy || !!this.controller;
+            $('enh-cfg-vision-detect').textContent = this.controller ? '检测中…' : '重新检测';
             $('enh-cfg-save').textContent = this.saving ? '保存中…' : '保存设置';
         }
     }
@@ -1418,14 +1421,134 @@
         }
     }
 
-    /** Shows the vision address field only when the vision service differs from the prompt service above
-        and actually has an editable address; a shared or fixed-URL service needs no separate entry. */
+    /** The vision service's own API key type (F68), apart from the prompt service's key; matches LLMAPICalls.VisionKeyType. */
+    let VISION_KEY_TYPE = 'openaiapi_vision';
+
+    /** Shows the fields of the chosen vision service (F68): Ollama shows its detection, model choice and the one-click install;
+        an OpenAI-compatible service shows its own address, optional key and model. */
     function applyVisionFields() {
-        let backend = $('enh-cfg-vision-backend').value;
-        let shared = backend == $('enh-cfg-backend').value;
-        let showUrl = !shared && MP_BACKENDS[backend]?.editableUrl;
-        $('enh-cfg-vision-url-fld').hidden = !showUrl;
-        $('enh-cfg-vision-url-note').hidden = !shared;
+        let ollama = $('enh-cfg-vision-backend').value == 'ollama';
+        $('enh-cfg-vision-ollama').hidden = !ollama;
+        $('enh-cfg-vision-install-fld').hidden = !ollama;
+        $('enh-cfg-vision-openai').hidden = ollama;
+    }
+
+    /** The saved address of one vision service type (F68): the vision service's own address when it was saved for that type,
+        otherwise the shared address of the type or its default. */
+    function savedVisionUrl(backend) {
+        if (mpSettings?.visionbaseurl && (mpSettings.visionbackend || 'ollama') == backend) {
+            return mpSettings.visionbaseurl;
+        }
+        return mpSettings?.backends?.[backend]?.baseurl || MP_BACKENDS[backend]?.url || '';
+    }
+
+    /** Whether text is an absolute http or https address. */
+    function isHttpUrl(text) {
+        try {
+            let url = new URL(text);
+            return url.protocol == 'http:' || url.protocol == 'https:';
+        } catch (err) {
+            return false;
+        }
+    }
+
+    /** Fills the vision fields of both service types from the saved settings. */
+    function fillVisionFields() {
+        $('enh-cfg-vision-ollama-url').value = savedVisionUrl('ollama');
+        $('enh-cfg-vision-endpoint').value = savedVisionUrl('openaiapi');
+        $('enh-cfg-vision-model').value = mpSettings?.visionbackend == 'openaiapi' ? mpSettings.visionmodel || '' : '';
+        $('enh-cfg-vision-key').value = '';
+        $('enh-cfg-vision-ollama-model').replaceChildren();
+        $('enh-cfg-vision-ollama-model-fld').hidden = true;
+        $('enh-cfg-vision-ollama-state').textContent = '';
+        applyVisionFields();
+    }
+
+    /** Shows whether the vision service's own key is saved (F68). */
+    async function loadVisionKeyStatus() {
+        let status = $('enh-cfg-vision-key-status');
+        try {
+            let st = await request('GetAPIKeyStatus', { keyType: VISION_KEY_TYPE });
+            status.textContent = st.status == 'not set'
+                ? tr('尚未保存视觉服务 Key；不需要 Key 的服务留空即可。')
+                : tr('已保存视觉服务 Key（{0}），留空保存会继续使用它。', String(st.status).replace('last updated ', ''));
+        } catch (err) {
+            status.textContent = '';
+        }
+    }
+
+    /** Runs the Ollama detection when the vision section shows Ollama; called after the form is ready or the switch turns on. */
+    function detectVisionIfShown() {
+        if (!$('enh-cfg-vision-fld').hidden && $('enh-cfg-vision').checked && $('enh-cfg-vision-backend').value == 'ollama') {
+            detectOllamaVision();
+        }
+    }
+
+    /** Detects Ollama for image description (F68) at the address in the form: whether it answers, and which installed models can read images.
+        The preview slot is shared with the model fetches, so only one of them runs at a time. */
+    async function detectOllamaVision(preferred = '') {
+        if (PromptSettingsRequests.loading || PromptSettingsRequests.saving || PromptSettingsRequests.controller) {
+            return;
+        }
+        PromptSettingsRequests.invalidate();
+        let revision = PromptSettingsRequests.revision;
+        let controller = new AbortController();
+        PromptSettingsRequests.controller = controller;
+        PromptSettingsRequests.updateControls();
+        let timeout = setTimeout(() => controller.abort(), 25000);
+        $('enh-cfg-vision-ollama-state').textContent = tr('正在检测 Ollama…');
+        try {
+            let baseurl = $('enh-cfg-vision-ollama-url').value.trim() || MP_BACKENDS.ollama.url;
+            let res = await request('PreviewMagicPromptModels', { backend: 'ollama', baseurl, api_key: '', purpose: 'vision' }, controller.signal);
+            if (revision != PromptSettingsRequests.revision) {
+                return;
+            }
+            showOllamaVisionModels(res.models || [], Number(res.all_count || 0), preferred);
+        } catch (err) {
+            if (revision == PromptSettingsRequests.revision) {
+                $('enh-cfg-vision-ollama-model').replaceChildren();
+                $('enh-cfg-vision-ollama-model-fld').hidden = true;
+                $('enh-cfg-vision-install').textContent = tr('一键安装本地模型');
+                $('enh-cfg-vision-ollama-state').textContent = controller.signal.aborted
+                    ? tr('检测超时：Ollama 没有及时响应，请稍后点“重新检测”。')
+                    : tr('没有检测到 Ollama：这台服务器可能还没有安装或启动 Ollama。可以点下方“一键安装本地模型”。');
+            }
+        } finally {
+            clearTimeout(timeout);
+            if (PromptSettingsRequests.controller == controller) {
+                PromptSettingsRequests.controller = null;
+                PromptSettingsRequests.updateControls();
+            }
+        }
+    }
+
+    /** Lists the detected Ollama vision models for switching and explains what is missing when there are none. */
+    function showOllamaVisionModels(models, allCount, preferred) {
+        let select = $('enh-cfg-vision-ollama-model');
+        let saved = mpSettings?.visionbackend == 'ollama' ? mpSettings.visionmodel || '' : '';
+        let wanted = preferred || select.value || saved;
+        select.replaceChildren();
+        let ids = [];
+        for (let model of models) {
+            select.append(new Option(model.name || model.model, model.model));
+            ids.push(model.model);
+        }
+        select.value = ids.includes(wanted) ? wanted : ids[0] || '';
+        $('enh-cfg-vision-ollama-model-fld').hidden = ids.length == 0;
+        $('enh-cfg-vision-install').textContent = ids.length ? tr('安装其他视觉模型') : tr('一键安装本地模型');
+        let state = $('enh-cfg-vision-ollama-state');
+        if (ids.length && saved && !ids.includes(saved)) {
+            state.textContent = tr('已检测到 {0} 个能看图的模型。之前保存的 {1} 没有安装，已改选 {2}，点“保存设置”生效。', ids.length, saved, select.value);
+        }
+        else if (ids.length) {
+            state.textContent = tr('已检测到 {0} 个能看图的模型，可以在下方选择。', ids.length);
+        }
+        else if (allCount > 0) {
+            state.textContent = tr('Ollama 已在运行，但还没有能看图的模型（已有 {0} 个其他模型）。点下方“一键安装本地模型”下载一个。', allCount);
+        }
+        else {
+            state.textContent = tr('Ollama 已在运行，还没有下载任何模型。点下方“一键安装本地模型”下载一个。');
+        }
     }
 
     /** Hides the vision service, model and install fields while "Allow image description" is unchecked,
@@ -1447,14 +1570,16 @@
         }
     }
 
-    /** Loads the selected vision service's saved address and model into the form. */
+    /** Shows the chosen vision service's fields; Ollama is detected right away, an OpenAI-compatible service shows its key status. */
     function onVisionBackendChange() {
         PromptSettingsRequests.invalidate();
-        let backend = $('enh-cfg-vision-backend').value;
-        let meta = MP_BACKENDS[backend];
-        $('enh-cfg-vision-endpoint').value = mpSettings?.backends?.[backend]?.baseurl || meta.url;
-        $('enh-cfg-vision-model').value = mpSettings?.visionbackend == backend ? mpSettings.visionmodel || '' : '';
         applyVisionFields();
+        if ($('enh-cfg-vision-backend').value == 'ollama') {
+            detectOllamaVision();
+        }
+        else {
+            loadVisionKeyStatus();
+        }
     }
 
     /** Loads persisted settings before allowing edits and discards responses for a closed modal. */
@@ -1508,11 +1633,10 @@
                     let visionBackend = mpSettings?.visionbackend || vs.vision_provider || 'ollama';
                     ensureVisionBackendOption(visionBackend);
                     $('enh-cfg-vision-backend').value = visionBackend;
-                    $('enh-cfg-vision-model').value = mpSettings?.visionmodel || vs.vision_model || '';
-                    $('enh-cfg-vision-endpoint').value = mpSettings?.backends?.[visionBackend]?.baseurl || MP_BACKENDS[visionBackend]?.url || '';
-                    applyVisionFields();
+                    fillVisionFields();
                     applyVisionToggle();
                     $('enh-cfg-vision-fld').hidden = false;
+                    loadVisionKeyStatus();
                     checkVisionInstallRunning();
                 }
             } catch (visionErr) {
@@ -1528,6 +1652,7 @@
             if (revision == PromptSettingsRequests.revision) {
                 PromptSettingsRequests.loading = false;
                 PromptSettingsRequests.updateControls();
+                detectVisionIfShown();
             }
         }
     }
@@ -1544,11 +1669,10 @@
             settings.baseurl = partial.baseurl;
         }
         if (partial.vision) {
+            // The vision address is saved on its own (F68), so it never replaces the prompt service's address of the same type.
             settings.visionbackend = partial.vision.backend;
             settings.visionmodel = partial.vision.model;
-            if (partial.vision.baseurl) {
-                settings.backends = { [partial.vision.backend]: { baseurl: partial.vision.baseurl } };
-            }
+            settings.visionbaseurl = partial.vision.baseurl || '';
         }
         let result = await request('SaveMagicPromptSettings', { settings });
         if (!result.success) {
@@ -1620,22 +1744,19 @@
         PromptSettingsRequests.updateControls();
         let timeout = setTimeout(() => controller.abort(), 25000);
         try {
+            // The OpenAI-compatible vision service has its own address and optional key (F68); Ollama is detected separately.
             let backend = $('enh-cfg-vision-backend').value;
-            let meta = MP_BACKENDS[backend];
-            // A shared service uses the address field above; a separate editable or fixed one uses its own.
-            let baseurl;
-            if (!$('enh-cfg-vision-url-fld').hidden) {
-                baseurl = $('enh-cfg-vision-endpoint').value.trim();
-            } else if ($('enh-cfg-backend').value == backend) {
-                baseurl = $('enh-cfg-endpoint').value.trim() || meta.url;
-            } else {
-                baseurl = mpSettings?.backends?.[backend]?.baseurl || meta.url;
-            }
+            let baseurl = $('enh-cfg-vision-endpoint').value.trim();
             if (!baseurl) {
                 showEnhCfgMessage('请先填写视觉服务地址。', true);
                 return;
             }
-            let res = await request('PreviewMagicPromptModels', { backend, baseurl, api_key: '' }, controller.signal);
+            let res = await request('PreviewMagicPromptModels', {
+                backend,
+                baseurl,
+                api_key: $('enh-cfg-vision-key').value.trim(),
+                purpose: 'vision'
+            }, controller.signal);
             if (revision != PromptSettingsRequests.revision) {
                 return;
             }
@@ -1645,7 +1766,7 @@
                 list.append(new Option(model.name || model.model, model.model));
             }
             if (!res.models || res.models.length === 0) {
-                showEnhCfgMessage('未拉取到模型，请确认服务已启动、地址正确。', true);
+                showEnhCfgMessage('未拉取到模型，请确认服务已启动、地址与 Key 正确。', true);
             } else {
                 showEnhCfgMessage(tr('已拉取 {0} 个模型。请在“视觉模型”框中选择或输入，点击“保存”才会应用配置。', res.models.length), false);
             }
@@ -1739,8 +1860,45 @@
         }
     }
 
-    /** Applies one status answer to the progress view; a finished install fills the Ollama fields for saving. */
-    function applyVisionInstallStatus(status) {
+    /** The start time of the install whose model was already saved, so a repeated "done" answer saves only once. */
+    let visionInstallSavedAt = null;
+
+    /** Takes over a completed install (F69): the server already saved the model as the vision model, so the form reloads it
+        and turns image description on when it was still off (the install button only shows with the switch checked). */
+    async function adoptInstalledVisionModel(model) {
+        try {
+            let cfg = await request('GetMagicPromptSettings');
+            mpSettings = cfg.settings;
+            if (!mpVisionEnabled) {
+                await request('EcomCraftPromptSettings', { vision_enabled: 'true' });
+                mpVisionEnabled = true;
+            }
+            $('enh-cfg-vision').checked = true;
+            applyVisionToggle();
+            $('enh-cfg-vision-status').textContent = tr('视觉模型：{0} / {1}', mpSettings?.visionbackend || '', mpSettings?.visionmodel || '');
+            return mpSettings?.visionbackend == 'ollama' && mpSettings?.visionmodel == model;
+        } catch (err) {
+            return false;
+        }
+    }
+
+    /** Finishes a completed install: switches the form to the local Ollama, takes over the saved model, then lists the installed vision models again. */
+    async function finishVisionInstall(status) {
+        let model = String(status.model || '');
+        $('enh-cfg-vision-backend').value = 'ollama';
+        $('enh-cfg-vision-ollama-url').value = MP_BACKENDS.ollama.url;
+        applyVisionFields();
+        let saved = model ? await adoptInstalledVisionModel(model) : false;
+        await detectOllamaVision(model);
+        let text = saved
+            ? tr('本地模型 {0} 已安装并自动保存为视觉模型，现在可以添加参考图了。', model)
+            : tr('本地模型 {0} 已安装，但自动保存没有成功，请点“保存设置”。', model);
+        $('enh-cfg-vision-install-state').textContent = text;
+        showEnhCfgMessage(text, !saved);
+    }
+
+    /** Applies one status answer to the progress view; a finished install is saved as the vision model (F69). */
+    async function applyVisionInstallStatus(status) {
         let state = String(status.state || 'idle');
         if (state === 'idle') {
             return;
@@ -1756,23 +1914,23 @@
         }
         $('enh-cfg-vision-install-spinner').hidden = true;
         $('enh-cfg-vision-install-models').hidden = false;
+        stopVisionInstallPolling();
         if (state === 'done') {
-            $('enh-cfg-vision-install-state').textContent = tr('安装完成。视觉服务已切到 Ollama 并选中该模型，点“保存设置”后生效。');
-            $('enh-cfg-vision-backend').value = 'ollama';
-            $('enh-cfg-vision-endpoint').value = mpSettings?.backends?.ollama?.baseurl || MP_BACKENDS.ollama.url;
-            $('enh-cfg-vision-model').value = status.model || $('enh-cfg-vision-model').value;
-            applyVisionFields();
-            showEnhCfgMessage(tr('本地模型 {0} 已安装。视觉服务已切到 Ollama，点“保存设置”生效。', status.model || ''), false);
+            if (visionInstallSavedAt == status.started_at) {
+                return;
+            }
+            visionInstallSavedAt = status.started_at;
+            $('enh-cfg-vision-install-state').textContent = tr('安装完成，正在保存为视觉模型…');
+            await finishVisionInstall(status);
         } else {
             $('enh-cfg-vision-install-state').textContent = tr('安装失败，可重试或按文档手动安装；以下是脚本输出：');
         }
-        stopVisionInstallPolling();
     }
 
     /** Reads the install progress once; transport problems show in the state line and never break the settings form. */
     async function refreshVisionInstall() {
         try {
-            applyVisionInstallStatus(await request('EcomCraftStudioVisionInstallStatus'));
+            await applyVisionInstallStatus(await request('EcomCraftStudioVisionInstallStatus'));
         } catch (err) {
             $('enh-cfg-vision-install-state').textContent = err.message;
         }
@@ -1800,6 +1958,7 @@
         PromptSettingsRequests.invalidate();
         stopVisionInstallPolling();
         $('enh-cfg-key').value = '';
+        $('enh-cfg-vision-key').value = '';
         let wasOpen = !$('enhancer-modal').hidden;
         $('enhancer-modal').hidden = true;
         if (wasOpen) {
@@ -1830,31 +1989,43 @@
             // The vision model config (F59/F68) is saved with the same request when its section is visible and the switch is on;
             // with the switch off nothing is required or sent, so a stored model survives a save.
             let vision = null;
+            let visionKey = '';
             if (!$('enh-cfg-vision-fld').hidden && $('enh-cfg-vision').checked) {
                 let visionBackend = $('enh-cfg-vision-backend').value;
-                let visionModel = $('enh-cfg-vision-model').value.trim();
+                let ollama = visionBackend == 'ollama';
+                // Ollama's model comes from the detected list; while Ollama is not reachable the saved model is kept, so other settings can still be saved.
+                let savedOllamaModel = mpSettings?.visionbackend == 'ollama' ? mpSettings.visionmodel || '' : '';
+                let visionModel = ollama ? $('enh-cfg-vision-ollama-model').value || savedOllamaModel : $('enh-cfg-vision-model').value.trim();
                 if (!visionModel) {
-                    showEnhCfgMessage('请选择或填写视觉模型。', true);
+                    showEnhCfgMessage(ollama
+                        ? tr('还没有可选的视觉模型：请先点“一键安装本地模型”，或确认 Ollama 已启动后点“重新检测”。')
+                        : '请选择或填写视觉模型。', true);
                     return;
                 }
-                vision = { backend: visionBackend, model: visionModel };
-                if (!$('enh-cfg-vision-url-fld').hidden) {
-                    let visionUrl = $('enh-cfg-vision-endpoint').value.trim();
-                    // Local Ollama has a default address, so an empty entry is fine; an OpenAI-compatible service can be anywhere and needs it.
-                    if (!visionUrl && visionBackend === 'openaiapi') {
-                        showEnhCfgMessage('请填写视觉服务地址。', true);
-                        return;
-                    }
-                    if (visionUrl) {
-                        vision.baseurl = visionUrl;
-                    }
+                // Local Ollama has a default address; an OpenAI-compatible service can be anywhere and needs its own.
+                let visionUrl = ollama ? $('enh-cfg-vision-ollama-url').value.trim() || MP_BACKENDS.ollama.url : $('enh-cfg-vision-endpoint').value.trim();
+                if (!visionUrl) {
+                    showEnhCfgMessage('请填写视觉服务地址。', true);
+                    return;
                 }
+                if (!isHttpUrl(visionUrl)) {
+                    showEnhCfgMessage(tr('视觉服务地址需要以 http:// 或 https:// 开头。'), true);
+                    return;
+                }
+                vision = { backend: visionBackend, model: visionModel, baseurl: visionUrl };
+                visionKey = ollama ? '' : $('enh-cfg-vision-key').value.trim();
             }
             // 1) Save the key if provided.
             const key = $('enh-cfg-key').value.trim();
             if (meta.keyType && key) {
                 const kr = await request('SetAPIKey', { keyType: meta.keyType, key: key });
                 if (!kr.success) { throw new ApiError('Key 保存失败。', 'magicprompt_key'); }
+            }
+            if (visionKey) {
+                let vr = await request('SetAPIKey', { keyType: VISION_KEY_TYPE, key: visionKey });
+                if (!vr.success) {
+                    throw new ApiError(tr('视觉服务 Key 保存失败。'), 'magicprompt_key');
+                }
             }
             // 2) Save backend/model/url settings.
             await saveMpCore({ backend, model, baseurl, vision });
@@ -1882,6 +2053,10 @@
                 showEnhCfgMessage('已保存配置。请确保本地 Ollama 服务已运行，并已拉取所选模型。', false);
             }
             $('enh-cfg-key').value = '';
+            if (visionKey) {
+                $('enh-cfg-vision-key').value = '';
+                loadVisionKeyStatus();
+            }
             await refreshCatalog();
         } catch (err) {
             showEnhCfgMessage(err.message, true);
@@ -5321,9 +5496,13 @@
         $('enh-cfg-vision').addEventListener('change', () => {
             applyVisionToggle();
             $('enh-cfg-message').hidden = true;
+            if (!$('enh-cfg-vision-ollama-model').options.length) {
+                detectVisionIfShown();
+            }
         });
         $('enh-cfg-fetch-models').addEventListener('click', fetchMpModels);
         $('enh-cfg-fetch-vision-models').addEventListener('click', fetchVisionModels);
+        $('enh-cfg-vision-detect').addEventListener('click', () => detectOllamaVision());
         $('enh-cfg-vision-install').addEventListener('click', () => {
             let box = $('enh-cfg-vision-install-box');
             box.hidden = !box.hidden;
@@ -5335,7 +5514,9 @@
         $('enh-cfg-endpoint').addEventListener('input', () => PromptSettingsRequests.invalidate());
         $('enh-cfg-key').addEventListener('input', () => PromptSettingsRequests.invalidate());
         $('enh-cfg-vision-endpoint').addEventListener('input', () => PromptSettingsRequests.invalidate());
+        $('enh-cfg-vision-key').addEventListener('input', () => PromptSettingsRequests.invalidate());
         $('enh-cfg-vision-model').addEventListener('input', () => PromptSettingsRequests.invalidate());
+        $('enh-cfg-vision-ollama-url').addEventListener('input', () => PromptSettingsRequests.invalidate());
 
         $('creation-form').addEventListener('submit', generate);
 
