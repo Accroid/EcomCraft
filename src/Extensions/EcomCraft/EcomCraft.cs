@@ -92,6 +92,8 @@ public class EcomCraft : Extension
         API.RegisterAPICall(PromptService.EcomCraftStudioVisionStatus, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(PromptService.EcomCraftStudioStoryboard, false, Permissions.BasicImageGeneration);
         API.RegisterAPICall(PromptService.EcomCraftPromptSettings, true, Permissions.EditServerSettings);
+        API.RegisterAPICall(VisionModelInstall.EcomCraftStudioVisionInstall, true, Permissions.EditServerSettings);
+        API.RegisterAPICall(VisionModelInstall.EcomCraftStudioVisionInstallStatus, false, Permissions.EditServerSettings);
         API.RegisterAPICall(CutoutService.EcomCraftStudioCutout, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(EcomCraftStudio.Studio.Export.ExportService.EcomCraftStudioExportOptions, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(EcomCraftStudio.Studio.Export.ExportService.EcomCraftStudioExport, true, Permissions.FundamentalGenerateTabAccess);
@@ -150,5 +152,6 @@ public class EcomCraft : Extension
         WorkSync.Shutdown();
         CandidateCleanup.Shutdown();
         DiskMonitor.Shutdown();
+        VisionModelInstall.Shutdown();
     }
 }

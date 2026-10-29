@@ -481,7 +481,8 @@ public class LLMAPICalls : MagicPromptAPI
             {
                 return CreateErrorResponse("Model ID is missing");
             }
-            if (action != "random-prompt" && string.IsNullOrEmpty(messageContent.Text))
+            // A vision request can carry its content as the image, so empty text is only a problem without media.
+            if (action != "random-prompt" && string.IsNullOrEmpty(messageContent.Text) && (messageContent.Media is null || messageContent.Media.Count == 0))
             {
                 return CreateErrorResponse("Message content is missing");
             }

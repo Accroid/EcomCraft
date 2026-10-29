@@ -252,8 +252,8 @@ public static class PromptService
         return (state, provider, model);
     }
 
-    /// <summary>Forgets the cached vision status, after the administrator changed the switch.</summary>
-    private static void ForgetVisionStatus()
+    /// <summary>Forgets the cached vision status, after the administrator changed the switch or an install finished.</summary>
+    public static void ForgetVisionStatus()
     {
         lock (VisionStatusLock)
         {
@@ -404,7 +404,8 @@ public static class PromptService
         // One description per image, in parallel; a failed one comes back empty so the page can retry it alone.
         (string english, string chinese)[] answers = await Task.WhenAll(images.Select(async (image, index) =>
         {
-            string described = await AskModelAsync(session, ReferenceInstruction, "", image.ToString());
+            // A short user text keeps the request valid for every backend (some reject image-only or empty-text messages).
+            string described = await AskModelAsync(session, ReferenceInstruction, "Describe the setup of this product photo.", image.ToString());
             if (described.Length == 0)
             {
                 return ("", "");
