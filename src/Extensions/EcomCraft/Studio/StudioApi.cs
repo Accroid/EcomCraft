@@ -249,7 +249,8 @@ public static class StudioApi
             {
                 if (input.TryGetRaw(T2IParamType.FromNet((JObject)property.Value), out object value))
                 {
-                    values[property.Name] = JToken.FromObject(value);
+                    // Image parameters hold media objects, which cannot be serialized directly; simplify them the way SwarmUI's own ToJSON does.
+                    values[property.Name] = JToken.FromObject(T2IParamInput.SimplifyParamVal(value));
                 }
             }
             allowed = NativeWorkflowParameters.Supports(ParseWorkflowObject(workflow.Prompt), metadata, values,
