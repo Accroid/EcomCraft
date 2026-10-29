@@ -29,6 +29,9 @@ public static class StandardWorkflows
         ("detail", $"{Source}/ecomcraft/detail", "系统按默认模型生成的细节图工作流（文生图，出图后贴回原商品）。")
     ];
 
+    /// <summary>Whether a published ID is one of the generated standard workflows.</summary>
+    public static bool IsStandard(string id) => Kinds.Any(item => item.Id == id);
+
     /// <summary>ID of the product image input added to every generated workflow, so the templates' "@image" field and product preservation work.
     /// The first version is text to image (N01; image to image waits for N10), so the graph does not read it: the product is pasted back after generation.</summary>
     public const string ProductImageParam = "ecproductimage";
