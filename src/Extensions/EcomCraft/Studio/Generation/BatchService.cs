@@ -274,7 +274,11 @@ public static class BatchService
             SetRules.TemplateRef scene = references.FirstOrDefault(template => template.Kind == "scene_main" && template.Sets.Contains(setId) && SetRules.SuitsPlatform(template, platform));
             if (scene is null)
             {
-                return StudioApi.Error("参考模式需要场景类模板：请管理员发布场景模板，或确认执行服务器在线。", "invalid_template");
+                // Say why: the scene template runs on the system-generated scene workflow (F57) unless an administrator published another one.
+                string reason = StandardWorkflows.Unavailable("scene");
+                return StudioApi.Error(reason is null
+                    ? "参考模式需要“场景图”模板，但它现在不可用：执行服务器可能离线，或模板已被停用。请确认执行服务器在线，或请管理员检查模板。"
+                    : $"参考模式需要“场景图”模板，但它用的场景图工作流还不可用：{reason}", "invalid_template");
             }
             batch.ReferencePrompts = referencePrompts;
             batch.Candidates = 1;

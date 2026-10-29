@@ -89,6 +89,35 @@ public static class StandardWorkflows
     /// <summary>Stops the background check.</summary>
     public static void Shutdown() => StopSource.Cancel();
 
+    /// <summary>Why the standard workflow of a kind ("scene" or "detail") cannot be used now, in plain words for the page; null once it is published.
+    /// Names missing nodes or models only, never addresses or graphs.</summary>
+    public static string Unavailable(string kind)
+    {
+        (string Kind, string Id, string Description) entry = Kinds.FirstOrDefault(item => item.Kind == kind);
+        if (entry.Id is null || WorkflowReview.IsPublished(entry.Id))
+        {
+            return null;
+        }
+        (string State, List<string> Problems) known;
+        lock (Lock)
+        {
+            if (!Status.TryGetValue(kind, out known))
+            {
+                known = ("not_checked", new List<string>());
+            }
+        }
+        return known.State switch
+        {
+            "missing_blueprint" => "缺少标准工作流蓝图文件。请管理员更新 EcomCraft 后重启服务。",
+            "unsupported" => "标准工作流蓝图无法转换。请管理员查看服务器日志。",
+            "missing_dependencies" => $"执行服务器缺少它需要的节点或模型：{string.Join("；", known.Problems)}。请管理员安装后在“管理 → 标准工作流”中点“初始化”。",
+            "no_server" => "检查时还没有在线的执行服务器。服务器上线后一分钟内会自动重试，也可以请管理员在“管理 → 标准工作流”中点“初始化”。",
+            "taken_down" => "它已被管理员在工作流审核中下架。",
+            "failed" => "发布没有成功。请管理员在“管理 → 标准工作流”中点“初始化”重试。",
+            _ => "服务刚启动，正在检查执行服务器，请一分钟后再试。"
+        };
+    }
+
     /// <summary>Reads and converts the shipped text-to-image blueprint, with the default models and the product image input.
     /// Returns null and a problem when the file is missing or cannot be converted.</summary>
     private static (JObject Prompt, JObject Metadata, JObject Values, string Canvas, string Problem) Blueprint()
