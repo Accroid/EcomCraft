@@ -60,7 +60,7 @@ description: 简要说明技能的用途及适用场景。
 
 ## 构建与启动
 
-已获授权的代理可以在本地构建和启动项目。构建前检查是否有正在运行的 `SwarmUI` 进程，必要时先停止旧进程以释放输出文件锁；不得停止与本项目无关的进程。
+已获授权的代理可以在本地构建和启动项目。构建前检查是否有正在运行的 `SwarmUI` 进程，必要时先停止旧进程以释放输出文件锁；不得停止与本项目无关的进程。强制结束 SwarmUI 不会结束它自启动的 ComfyUI，应优先用 `ShutdownServer` 接口正常关闭；确需强制结束时，同时清理本工作区的 ComfyUI 孤儿进程（详见 `ecomcraft-build-run` 技能）。
 
 - Windows 开发启动：`launch-windows-dev.ps1`
 - Windows 常规启动：`launch-windows.bat`
