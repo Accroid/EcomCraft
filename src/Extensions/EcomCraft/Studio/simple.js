@@ -51,6 +51,9 @@ class SimpleMode {
     /** Whether image description works (F68): { state, provider, model, can_manage } from the server, state 'unknown' when it could not be asked, null before the first answer. */
     static vision = null;
 
+    /** The vision models an administrator can switch between on this page (F68): { models, loading, saving, message, failed }; null before the first listing. */
+    static visionModels = null;
+
     static exportOptions = { platforms: [], folder_available: false };
     static resultGroups = new Map();
     static taskProducts = new Map();
@@ -2275,6 +2278,119 @@ class SimpleMode {
         }
         this.renderVision();
         this.update();
+        if (this.vision.can_manage && !this.visionModels) {
+            this.loadVisionModels();
+        }
+    }
+
+    /** Lists the models the vision service offers, so an administrator can switch the vision model here (F68); the same setting as in the prompt enhancement settings. */
+    static async loadVisionModels() {
+        if (!this.vision?.can_manage || this.visionModels?.loading) {
+            return;
+        }
+        this.visionModels = { models: this.visionModels?.models || [], loading: true, saving: false, message: '', failed: false };
+        this.renderVisionModel();
+        try {
+            let result = await this.api.request('EcomCraftStudioVisionModels', {});
+            let models = [];
+            for (let name of result.models || []) {
+                models.push(String(name));
+            }
+            this.visionModels.models = models;
+            if (!models.length) {
+                this.visionModels.message = this.api.tr('视觉服务里还没有能看图的模型。');
+                this.visionModels.failed = true;
+            }
+        }
+        catch (error) {
+            this.visionModels.message = error.message;
+            this.visionModels.failed = true;
+        }
+        finally {
+            this.visionModels.loading = false;
+            this.renderVisionModel();
+        }
+    }
+
+    /** Switches the vision model used for the next descriptions (F68); a failure keeps the previous model and says why. */
+    static async switchVisionModel(model) {
+        let models = this.visionModels;
+        if (!models || models.saving || !model || model == this.vision?.model) {
+            return;
+        }
+        models.saving = true;
+        models.failed = false;
+        models.message = this.api.tr('正在切换看图模型…');
+        this.renderVisionModel();
+        let switched = false;
+        try {
+            let result = await this.api.request('EcomCraftStudioSetVisionModel', { model });
+            this.vision.model = String(result.model || model);
+            models.message = this.api.tr('已切换为 {0}，之后描述的参考图都用它。', this.vision.model);
+            switched = true;
+        }
+        catch (error) {
+            models.message = error.message;
+            models.failed = true;
+        }
+        finally {
+            models.saving = false;
+            this.renderVisionModel();
+        }
+        if (switched) {
+            // The new model may not be installed on the vision service yet; the guidance below says so.
+            this.loadVision();
+        }
+    }
+
+    /** Shows the vision model under the references (F68): administrators get a switcher, other accounts only see the model name. */
+    static renderVisionModel() {
+        if (!this.api) {
+            return;
+        }
+        let tr = this.api.tr;
+        let el = this.api.el;
+        let box = this.api.$('simple-vision-model');
+        let vision = this.vision;
+        if (!vision || (!vision.model && !vision.can_manage)) {
+            box.hidden = true;
+            box.replaceChildren();
+            return;
+        }
+        box.hidden = false;
+        if (!vision.can_manage) {
+            let text = el('span', 'hint', tr('看图模型：{0}', vision.model));
+            text.dataset.i18nSkip = '';
+            box.replaceChildren(text);
+            return;
+        }
+        let state = this.visionModels || { models: [], loading: false, saving: false, message: '', failed: false };
+        let label = el('label', '', tr('看图模型'));
+        label.htmlFor = 'simple-vision-model-select';
+        let select = el('select');
+        select.id = 'simple-vision-model-select';
+        select.dataset.i18nSkip = '';
+        let names = [...state.models];
+        // A saved model the service does not list stays visible, so the switcher never pretends another one is in use.
+        if (vision.model && !names.includes(vision.model)) {
+            names.unshift(vision.model);
+        }
+        for (let name of names) {
+            select.append(new Option(name, name));
+        }
+        select.value = vision.model;
+        select.disabled = state.loading || state.saving || names.length < 2;
+        select.addEventListener('change', () => this.switchVisionModel(select.value));
+        let note = el('span', 'hint simple-vision-model-note', state.loading ? tr('正在读取看图模型列表…') : state.message);
+        note.classList.toggle('failed', state.failed);
+        let parts = [label, select, note];
+        if (!state.loading && !state.saving) {
+            let reload = el('button', 'link-btn', tr('刷新列表'));
+            reload.type = 'button';
+            reload.addEventListener('click', () => this.loadVisionModels());
+            parts.push(reload);
+        }
+        box.replaceChildren(...parts);
     }
 
     /** The guidance for an image description problem (F68): a title and the steps; administrators get the steps to fix it, other accounts are asked to contact one. */
@@ -2318,6 +2434,7 @@ class SimpleMode {
         }
         let tr = this.api.tr;
         let el = this.api.el;
+        this.renderVisionModel();
         let box = this.api.$('simple-vision');
         let guide = this.visionGuide();
         box.hidden = !guide;
@@ -2370,6 +2487,15 @@ class SimpleMode {
         return this.chosenTask == 'reference';
     }
 
+    /** Opens the references full size in the gallery viewer, starting at one of them. */
+    static openReference(index, opener) {
+        let items = [];
+        for (let [at, item] of this.references.entries()) {
+            items.push({ url: item.image, name: this.api.tr('参考图 {0}', at + 1) });
+        }
+        this.api.openImages(items, index, opener);
+    }
+
     /** Shows the reference thumbnails and the per-reference prompt list (F59): the English prompt is editable, the Chinese translation read-only. */
     static renderReferences() {
         if (!this.api) {
@@ -2380,9 +2506,15 @@ class SimpleMode {
         let thumbs = [];
         for (let [index, item] of this.references.entries()) {
             let wrap = el('span', 'simple-ref-thumb');
+            // Clicking a reference opens it full size in the same viewer as the gallery, with previous / next across the references.
+            let open = el('button', 'simple-ref-open');
+            open.type = 'button';
+            open.setAttribute('aria-label', tr('放大参考图 {0}', index + 1));
+            open.addEventListener('click', () => this.openReference(index, open));
             let img = el('img');
             img.src = item.image;
             img.alt = tr('参考图 {0}', index + 1);
+            open.append(img);
             let remove = el('button', 'link-btn');
             remove.type = 'button';
             remove.textContent = tr('删除');
@@ -2392,7 +2524,7 @@ class SimpleMode {
                 this.renderReferences();
                 this.update();
             });
-            wrap.append(img, remove);
+            wrap.append(open, remove);
             thumbs.push(wrap);
         }
         this.api.$('simple-references').replaceChildren(...thumbs);

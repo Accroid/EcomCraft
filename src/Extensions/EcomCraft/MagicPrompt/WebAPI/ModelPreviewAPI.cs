@@ -1,3 +1,4 @@
+using EcomCraftStudio.MagicPrompt.WebAPI.Models;
 using FreneticUtilities.FreneticExtensions;
 using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json.Linq;
@@ -135,6 +136,37 @@ public class ModelPreviewAPI : LLMAPICalls
         {
             return Failure("无法读取模型列表，请检查后端配置和返回格式。");
         }
+    }
+
+    /// <summary>The model names the saved vision service offers (F68), for switching the vision model from the reference page:
+    /// an Ollama listing keeps only models that can read images. Null when the service cannot be reached; never returns the address or key.</summary>
+    public static async Task<List<string>> SavedVisionModels(Session session, CancellationToken cancel)
+    {
+        if ((await SessionSettings.GetMagicPromptSettings())["settings"] is not JObject saved)
+        {
+            return null;
+        }
+        string backend = VisionBackend(saved);
+        JObject settings = VisionSettings(saved);
+        string keyOverride = VisionKeyOverride(saved, session);
+        if (!await IsServerReachable(backend, settings))
+        {
+            return null;
+        }
+        JArray models = new();
+        foreach (ModelData item in await GetModelsForBackend(backend, settings, true, session, keyOverride) ?? [])
+        {
+            string id = item.Model ?? item.Id ?? item.Name;
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                models.Add(new JObject { ["model"] = id });
+            }
+        }
+        if (backend == "ollama")
+        {
+            models = await OllamaVisionModels(models, settings["backends"]?[backend]?["baseurl"]?.ToString() ?? "", backend, settings, session, keyOverride, cancel);
+        }
+        return [.. models.Select(item => item["model"].ToString()).Distinct()];
     }
 
     /// <summary>Keeps the Ollama models that can read images: asks /api/show for each model's capabilities, and falls back to known

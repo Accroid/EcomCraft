@@ -247,6 +247,49 @@ test('"follow a reference" explains a missing vision model: steps for administra
     assert.match(SimpleMode.referenceProblem(), /暂不可用/);
 });
 
+test('administrators switch the vision model on the reference page; it is the same setting as the prompt enhancement settings (F68)', async () => {
+    let simple = section('view-simple');
+    assert.match(simple, /id="simple-references-fld" data-tasks="reference">[\s\S]*id="simple-vision-model"/, 'the switcher sits with the references');
+    let SimpleMode = loadSimpleMode();
+    let sent = [];
+    let fail = false;
+    SimpleMode.api = {
+        tr: (text, ...args) => text.replace(/\{(\d+)\}/g, (match, index) => String(args[Number(index)])),
+        request: async (route, body) => {
+            sent.push([route, body]);
+            if (fail) {
+                throw new Error('连不上视觉服务');
+            }
+            return { success: true, model: body.model };
+        }
+    };
+    SimpleMode.renderVisionModel = () => {};
+    SimpleMode.loadVision = () => {};
+    SimpleMode.vision = { state: 'ready', provider: 'ollama', model: 'qwen3-vl:4b', can_manage: true };
+    SimpleMode.visionModels = { models: ['qwen3-vl:2b', 'qwen3-vl:4b'], loading: false, saving: false, message: '', failed: false };
+    await SimpleMode.switchVisionModel('qwen3-vl:2b');
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(sent)), [['EcomCraftStudioSetVisionModel', { model: 'qwen3-vl:2b' }]], 'only the model name is sent');
+    assert.strictEqual(SimpleMode.vision.model, 'qwen3-vl:2b');
+    await SimpleMode.switchVisionModel('qwen3-vl:2b');
+    assert.strictEqual(sent.length, 1, 'choosing the model in use sends nothing');
+    fail = true;
+    await SimpleMode.switchVisionModel('qwen3-vl:4b');
+    assert.strictEqual(SimpleMode.vision.model, 'qwen3-vl:2b', 'a failed switch keeps the previous model');
+    assert.strictEqual(SimpleMode.visionModels.failed, true);
+});
+
+test('a reference thumbnail opens the gallery viewer, stepping across the references (F59)', () => {
+    let SimpleMode = loadSimpleMode();
+    let opened = null;
+    SimpleMode.api = { tr: (text, ...args) => text.replace(/\{(\d+)\}/g, (match, index) => String(args[Number(index)])), openImages: (items, index, opener) => { opened = { items, index, opener }; } };
+    SimpleMode.references = [{ image: 'data:image/png;base64,AA' }, { image: 'data:image/png;base64,BB' }];
+    SimpleMode.openReference(1, 'button');
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(opened)), { items: [{ url: 'data:image/png;base64,AA', name: '参考图 1' }, { url: 'data:image/png;base64,BB', name: '参考图 2' }], index: 1, opener: 'button' });
+    let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    assert.match(studio, /openImages: \(items, index, opener\) => Lightbox\.open\(items, index, 'reference', opener\)/, 'the same viewer as the gallery');
+    assert.match(studio, /\$\('lb-download'\)\.hidden = reference;/, 'references are only viewed, not downloaded');
+});
+
 test('reference mode follows the chosen task and needs at least one reference (F61)', () => {
     let SimpleMode = loadSimpleMode();
     SimpleMode.api = { tr: text => text, state: { session: 'x' } };

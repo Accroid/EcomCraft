@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using System.Text.RegularExpressions;
 using EcomCraftStudio.MagicPrompt.WebAPI;
 using EcomCraftStudio.MagicPrompt.WebAPI.Models;
@@ -285,6 +286,84 @@ public static class PromptService
         };
     }
 
+    /// <summary>Longest wait for listing the vision service's models when switching the vision model.</summary>
+    private static readonly TimeSpan VisionListTimeout = TimeSpan.FromSeconds(25);
+
+    /// <summary>The models the configured vision service offers, or null when it cannot be reached or listed in time.</summary>
+    private static async Task<List<string>> ListVisionModelsAsync(Session session)
+    {
+        using CancellationTokenSource cancel = CancellationTokenSource.CreateLinkedTokenSource(Program.GlobalProgramCancel);
+        Task<List<string>> listing = ModelPreviewAPI.SavedVisionModels(session, cancel.Token);
+        try
+        {
+            if (await Task.WhenAny(listing, Task.Delay(VisionListTimeout)) != listing)
+            {
+                cancel.Cancel();
+                return null;
+            }
+            return await listing;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException or ObjectDisposedException)
+        {
+            return null;
+        }
+    }
+
+    [API.APIDescription("List the vision models the configured vision service offers (administrators, F68), so the reference page can switch the vision model "
+        + "without opening the settings. Only model names and the service type; never the service address or key.",
+        "models: [\"qwen3-vl:2b\", \"qwen3-vl:4b\"], model: \"qwen3-vl:4b\", provider: \"ollama\"")]
+    public static async Task<JObject> EcomCraftStudioVisionModels(Session session)
+    {
+        if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.EditServerSettings))
+        {
+            return StudioApi.Error("只有管理员可以切换看图模型。", "bad_permissions");
+        }
+        List<string> models = await ListVisionModelsAsync(session);
+        if (models is null)
+        {
+            return StudioApi.Error("连不上视觉服务，暂时无法列出看图模型，请确认服务已启动。", "vision_unreachable");
+        }
+        JObject settings = (await SessionSettings.GetMagicPromptSettings())["settings"] as JObject;
+        return new JObject()
+        {
+            ["models"] = new JArray(models),
+            ["model"] = settings?["visionmodel"]?.ToString() ?? "",
+            ["provider"] = settings is null ? "" : LLMAPICalls.VisionBackend(settings)
+        };
+    }
+
+    [API.APIDescription("Switch the vision model used to describe reference images (administrators, F68): the same setting as in the prompt enhancement settings. "
+        + "The model must be one the configured vision service lists.", "success: true, model: \"qwen3-vl:2b\"")]
+    public static async Task<JObject> EcomCraftStudioSetVisionModel(Session session, string model = "")
+    {
+        if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.EditServerSettings))
+        {
+            return StudioApi.Error("只有管理员可以切换看图模型。", "bad_permissions");
+        }
+        model = model?.Trim() ?? "";
+        if (model.Length == 0 || model.Length > 200)
+        {
+            return StudioApi.Error("请选择一个看图模型。", "invalid_vision_model");
+        }
+        List<string> models = await ListVisionModelsAsync(session);
+        if (models is null)
+        {
+            return StudioApi.Error("连不上视觉服务，暂时无法切换看图模型，请确认服务已启动。", "vision_unreachable");
+        }
+        if (!models.Contains(model))
+        {
+            return StudioApi.Error("视觉服务里没有这个模型，请重新选择。", "invalid_vision_model");
+        }
+        JObject result = await SessionSettings.SaveMagicPromptSettings(new JObject() { ["settings"] = new JObject() { ["visionmodel"] = model } });
+        if (result?.Value<bool?>("success") != true)
+        {
+            return StudioApi.Error("看图模型保存失败，请稍后重试。", "prompt_settings_failed");
+        }
+        ForgetVisionStatus();
+        Logs.Info($"EcomCraft vision model switched to {model}.");
+        return new JObject() { ["success"] = true, ["model"] = model };
+    }
+
     /// <summary>Composes the prompt subject for a product type, an optional style, the optional model flag and a description (F37/F53).
     /// The template's own prefix and suffix are added by the template request.
     /// <paramref name="productImage"/> (a data URL) is used only when administrators explicitly allowed product photo description (A5).</summary>
@@ -460,6 +539,8 @@ public static class PromptService
             JObject content = new() { ["text"] = text, ["instructions"] = instructions };
             if (vision)
             {
+                // Names the model actually asked, so administrators can confirm a switch took effect; never the address, key or image.
+                Logs.Info($"EcomCraft is describing an image with {LLMAPICalls.VisionBackend(settings)} / {model}.");
                 int comma = imageDataUrl.IndexOf(',');
                 if (comma < 0 || !imageDataUrl.StartsWith("data:image/", StringComparison.Ordinal))
                 {

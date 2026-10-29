@@ -218,7 +218,7 @@
         'workflow_state','invalid_review','review_save_failed',
         'invalid_storage_path','storage_check_failed','storage_save_failed','invalid_storage_action',
         'invalid_template','template_image_failed','prompt_settings_failed','cutout_failed','product_save_failed','invalid_export','export_failed','diagnostics_failed',
-        'backup_failed','backup_invalid','backup_confirm_required','disk_full','invalid_product_type','prompt_service_unavailable','invalid_brand_kit','brand_kit_save_failed','invalid_selling_text','selling_font_missing','project_save_failed','vision_disabled',
+        'backup_failed','backup_invalid','backup_confirm_required','disk_full','invalid_product_type','prompt_service_unavailable','invalid_brand_kit','brand_kit_save_failed','invalid_selling_text','selling_font_missing','project_save_failed','vision_disabled','vision_unreachable','invalid_vision_model',
         'vision_install_busy','vision_install_unsupported','vision_install_missing','vision_install_start_failed',
         'workflow_too_large','workflow_api_format','workflow_unsupported','workflow_denied','workflow_limit',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
@@ -2170,12 +2170,15 @@
             // with the switch off nothing is required or sent, so a stored model survives a save.
             let vision = null;
             let visionKey = '';
+            let keptVisionModel = '';
             if (!$('enh-cfg-vision-fld').hidden && $('enh-cfg-vision').checked) {
                 let visionBackend = $('enh-cfg-vision-backend').value;
                 let ollama = visionBackend == 'ollama';
                 // Ollama's model comes from the detected list; while Ollama is not reachable the saved model is kept, so other settings can still be saved.
                 let savedOllamaModel = mpSettings?.visionbackend == 'ollama' ? mpSettings.visionmodel || '' : '';
                 let visionModel = ollama ? $('enh-cfg-vision-ollama-model').value || savedOllamaModel : $('enh-cfg-vision-model').value.trim();
+                // Without a detected list the saved model is kept; the result message says so instead of looking like a switch.
+                keptVisionModel = ollama && !$('enh-cfg-vision-ollama-model').value ? savedOllamaModel : '';
                 if (!visionModel) {
                     showEnhCfgMessage(ollama
                         ? tr('还没有可选的视觉模型：请先点“一键安装本地模型”，或确认 Ollama 已启动后点“重新检测”。')
@@ -2231,6 +2234,9 @@
             } else {
                 $('enh-cfg-key-status').textContent = '';
                 showEnhCfgMessage('已保存配置。请确保本地 Ollama 服务已运行，并已拉取所选模型。', false);
+            }
+            if (keptVisionModel) {
+                showEnhCfgMessage(tr('已保存。没有拿到 Ollama 的模型列表，看图模型仍是 {0}；要切换请先点“重新检测”，选好后再保存。', keptVisionModel), true);
             }
             $('enh-cfg-key').value = '';
             if (visionKey) {
@@ -5203,6 +5209,9 @@
             this.resetZoom();
             let position = this.items.length > 1 ? tr('（{0} / {1}）', this.index + 1, this.items.length) : '';
             $('lightbox-name').textContent = `${item.name}${position}`;
+            // References (F59) are the user's own uploads: only viewing, no download or editing.
+            let reference = this.source == 'reference';
+            $('lb-download').hidden = reference;
             $('lb-download').href = item.url;
             $('lb-download').setAttribute('download', item.name);
             $('lb-star').hidden = !gallery;
@@ -5210,7 +5219,7 @@
             $('lb-star').setAttribute('aria-pressed', String(Boolean(item.starred)));
             $('lb-delete').hidden = !gallery || !GallerySelection.canDelete();
             $('lb-gallery').hidden = gallery || !item.src;
-            $('lb-edit').hidden = Boolean(item.video);
+            $('lb-edit').hidden = Boolean(item.video) || reference;
             $('lb-file').hidden = !gallery || !GalleryProjects.current || GalleryProjects.has(item);
             $('lb-redo').hidden = !gallery || Boolean(item.video) || !GalleryProjects.recipe(item)?.template;
             $('lb-prev').disabled = this.index == 0;
@@ -5964,6 +5973,7 @@
     initTheme();
     bind();
     SimpleMode.attach({ $, el, tr, request, readStorage, writeStorage, serverErrorText, state, viewUrl, refineInPro, openEnhancerSettings,
+        openImages: (items, index, opener) => Lightbox.open(items, index, 'reference', opener),
         dialogEnter: (dialog, opener, initial) => DialogFocus.enter(dialog, opener, initial), dialogLeave: dialog => DialogFocus.leave(dialog),
         titleAdd: count => TitleProgress.add(count), titleDone: count => TitleProgress.done(count), estimate: TimeEstimate });
     updateControls();
