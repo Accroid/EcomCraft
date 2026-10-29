@@ -57,6 +57,12 @@ public static class VisionModelInstall
         }
         lock (InstallLock)
         {
+            // A redrawn progress line updates the last one, so the view shows each step once.
+            if (Lines.Count > 0 && VisionInstallRules.Replaces(Lines[^1], line))
+            {
+                Lines[^1] = line;
+                return;
+            }
             Lines.Add(line);
             while (Lines.Count > MaxLines)
             {
@@ -123,6 +129,9 @@ public static class VisionModelInstall
             info.CreateNoWindow = true;
             info.RedirectStandardOutput = true;
             info.RedirectStandardError = true;
+            // Ollama and the script write UTF-8; the system code page (GBK on Chinese Windows) would garble the progress and the Chinese messages.
+            info.StandardOutputEncoding = System.Text.Encoding.UTF8;
+            info.StandardErrorEncoding = System.Text.Encoding.UTF8;
             Process process;
             try
             {

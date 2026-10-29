@@ -7,6 +7,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+# UTF-8 output (without a byte order mark), so the settings page install that reads this output shows the Chinese messages correctly.
+try {
+    [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+}
+catch {
+    # Without a console the default encoding stays; the messages are bilingual anyway.
+}
 
 function Say([string]$zh, [string]$en) {
     Write-Host "$zh / $en"
