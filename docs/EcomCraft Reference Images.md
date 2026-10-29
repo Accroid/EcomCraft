@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20参考图需求.zh-CN.md)
 >
-> **Status:** P1 implemented, pending acceptance (F59 / T61, code complete 2026-10-28); P2 depends on N10 · **Version:** v1.5 · **Date:** 2026-10-29
+> **Status:** P1 implemented, pending acceptance (F59 / T61, code complete 2026-10-28); P2 depends on N10 · **Version:** v1.6 · **Date:** 2026-10-29
 >
 > Related files: [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md) (decision A11, F59) and the [EcomCraft development tracker](EcomCraft%20开发总表.xlsx) (T61, T62; N10; Chinese spreadsheet). When this document changes, update it (Chinese and English together) first, then the code.
 
@@ -88,6 +88,18 @@ The reference image becomes the input of an image-to-image / image-edit workflow
 | P2 | Scene reference: reference mode switches to an image-to-image workflow (the template `reference` slot and validation, each task filling its own reference into the input), dependency-check display | **N10** (the image-to-image plan and model installation), N02 | T62 (L, not started) |
 | P3 (reserved) | Whole-set references -> a whole set: the vision model classifies each reference's image type (white / scene / detail / model) and matches templates automatically, generating the set in one go | The vision classification accuracy after P1, N10, seed-team feedback | Not registered; see section 10 |
 
+### 8.1 Vision Model Device (F71)
+
+Customer computers may have NVIDIA, AMD or Intel graphics, be a Mac, or have no discrete graphics at all. Some cards hang on the vision model: an older AMD card such as the RX 5600 XT on Windows is not on the ROCm support list, so Ollama runs it through Vulkan, image requests produce nothing for minutes, and afterwards Ollama reports the model as loaded while it holds no video memory, so even plain text requests hang until the model is unloaded; the same computer finishes an image in about 8-18 seconds on the CPU. Image description must therefore pick its device per machine instead of assuming the graphics card works.
+
+| Phase | Content | Task |
+|---|---|---|
+| P1 | (1) Turn off thinking for Ollama (qwen3-vl thinks first by default, roughly doubling the output) and limit image requests to a 4096 context; (2) after an image request times out, ask Ollama to unload that model to clear the hung state, and cancel the underlying request when the wait is given up; (3) in "Automatic" mode, the first image request for each "Ollama address + vision model" waits at most 60 seconds on the GPU; without an answer the model is unloaded and the request retried on the CPU, which is remembered while the service runs (decided again after a restart), and machines whose GPU answers are unaffected; (4) administrators can set the device to "Automatic / GPU only / CPU only" in the prompt enhancement settings, and after an automatic move to the CPU the settings say why and suggest choosing "CPU only" | T75 |
+| P2 | Measured self-test: on first setup, a model or Ollama version change, or a graphics change, a built-in test image is run with a time limit on the GPU and on the CPU, the device that answers and is faster is chosen, and the timeout is set from the measured speed; the result is saved in the data folder by "Ollama version + model + graphics name + driver version" (device and seconds only), the settings show "Vision: GPU / CPU, about X s per image" with a re-test button, and automatic moves to the CPU are saved too so a restart does not hang again | T76 |
+| P3 | Starting device and recommended model from the hardware (hardware is read only when Ollama runs on the same computer as this service): NVIDIA recommends 8B / 4B by video memory; AMD cards on the ROCm support list go by video memory while older models and Intel graphics start on the CPU; Apple Silicon goes by memory; no discrete graphics uses the CPU and 2B. When the card is shared with ComfyUI and has little video memory, image description defaults to the CPU or unloads right after describing, so it does not take memory from generation | T77 |
+
+No phase changes the rule that references exist only briefly in memory; saved test results hold only the device choice and timings, never images or prompts; the APIs return only the device choice and status, never the Ollama address.
+
 ## 9. Acceptance Criteria (T61)
 
 - With 3 references and 1 product: 3 images, each matching **its own** reference's composition (not a blend); a 9th upload is refused with a hint.
@@ -109,3 +121,4 @@ The reference image becomes the input of an image-to-image / image-edit workflow
 | 2026-10-28 | v1.3 | P1 implemented pending acceptance (T61): upload with per-reference description, other options disabled, one image per reference per product (fixed scene template, mutually exclusive with storyboards, 20-image cap), reference thumbnails on task cards, reference mode unavailable with vision off; reference prompts are sent as shown (a new internal `raw_prompt` marker skips the template fragments); AGENTS.md gained the reference-image rule |
 | 2026-10-29 | v1.4 | UI redesign v4: reference mode is now entered through the "Follow a reference" task at the top of simple mode (F61, the default task), which shows only the platform and references, hiding rather than disabling other options; uploading references no longer clears the storyboard (storyboards only live in "Make a full set"); image description is on by default and the page explains how to fix a missing vision model (A5, F68) |
 | 2026-10-29 | v1.5 | Several references are now described one at a time in a queue, and the vision call may take up to 120 seconds, fixing later references timing out when described together; descriptions grew from one sentence to a detailed 60-120 word paragraph |
+| 2026-10-29 | v1.6 | New 8.1 vision model device (F71, T75-T77): thinking turned off, the model unloaded after a timeout, automatic move to the CPU when the GPU hangs and a manual choice for administrators (P1), a measured self-test (P2), hardware recommendations and sharing video memory (P3) |
