@@ -53,6 +53,7 @@
         'invalid_storage_path','storage_check_failed','storage_save_failed','invalid_storage_action',
         'invalid_template','template_image_failed','prompt_settings_failed','cutout_failed','product_save_failed','invalid_export','export_failed','diagnostics_failed',
         'backup_failed','backup_invalid','backup_confirm_required','disk_full','invalid_product_type','prompt_service_unavailable','invalid_brand_kit','brand_kit_save_failed','invalid_selling_text','selling_font_missing','project_save_failed','vision_disabled',
+        'vision_install_busy','vision_install_unsupported','vision_install_missing','vision_install_start_failed',
         'workflow_too_large','workflow_api_format','workflow_unsupported','workflow_denied','workflow_limit',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
     const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
@@ -1292,7 +1293,7 @@
         static updateControls() {
             let busy = this.loading || this.saving;
             for (let id of ['enh-cfg-backend', 'enh-cfg-endpoint', 'enh-cfg-model', 'enh-cfg-key', 'enh-cfg-save',
-                'enh-cfg-vision-backend', 'enh-cfg-vision-endpoint', 'enh-cfg-vision-model']) {
+                'enh-cfg-vision-backend', 'enh-cfg-vision-endpoint', 'enh-cfg-vision-model', 'enh-cfg-vision-install']) {
                 $(id).disabled = busy;
             }
             $('enh-cfg-fetch-models').disabled = busy || !!this.controller;
@@ -1427,6 +1428,12 @@
         $('enh-cfg-vision-url-note').hidden = !shared;
     }
 
+    /** Hides the vision service, model and install fields while "Allow image description" is unchecked,
+        so those parameters are never required for saving (F59/F68). */
+    function applyVisionToggle() {
+        $('enh-cfg-vision-detail').hidden = !$('enh-cfg-vision').checked;
+    }
+
     /** Keeps an out-of-list saved vision service visible so saving never silently replaces it. */
     function ensureVisionBackendOption(value) {
         let select = $('enh-cfg-vision-backend');
@@ -1504,7 +1511,9 @@
                     $('enh-cfg-vision-model').value = mpSettings?.visionmodel || vs.vision_model || '';
                     $('enh-cfg-vision-endpoint').value = mpSettings?.backends?.[visionBackend]?.baseurl || MP_BACKENDS[visionBackend]?.url || '';
                     applyVisionFields();
+                    applyVisionToggle();
                     $('enh-cfg-vision-fld').hidden = false;
+                    checkVisionInstallRunning();
                 }
             } catch (visionErr) {
                 if (revision == PromptSettingsRequests.revision) {
@@ -1653,6 +1662,135 @@
         }
     }
 
+    /* ============================================================
+       One-click local vision model install (F69, from the settings page)
+       ============================================================ */
+    // The models the install button offers; ids must match VisionInstallRules.KnownModels on the server.
+    let VISION_INSTALL_MODELS = [
+        { id: 'qwen3-vl:8b', name: 'Qwen3-VL 8B', size: '6.2 GB', vram: '8 GB', recommended: true },
+        { id: 'qwen3-vl:4b', name: 'Qwen3-VL 4B', size: '3.3 GB', vram: '6 GB' },
+        { id: 'qwen3-vl:2b', name: 'Qwen3-VL 2B', size: '1.9 GB', vram: '', cpu: true },
+        { id: 'qwen3-vl:30b-a3b', name: 'Qwen3-VL 30B', size: '20 GB', vram: '24 GB' },
+        { id: 'llama3.2-vision:latest', name: 'Llama 3.2 Vision', size: '7.9 GB', vram: '8 GB' }
+    ];
+    /** Polls a running install while the settings dialog stays open; the install itself keeps going without it. */
+    let visionInstallTimer = null;
+
+    /** Builds one selectable model row for the install chooser. */
+    function renderVisionInstallModels() {
+        let box = $('enh-cfg-vision-install-models');
+        box.replaceChildren();
+        for (let model of VISION_INSTALL_MODELS) {
+            let row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'enh-install-model';
+            row.dataset.model = model.id;
+            let name = el('span', 'enh-install-model-name', model.recommended ? tr('{0}（推荐）', model.name) : model.name);
+            let detail = el('span', 'enh-install-model-detail', model.cpu
+                ? tr('下载约 {0}，4 GB 显存或纯 CPU 即可', model.size)
+                : tr('下载约 {0}，建议显存 {1}', model.size, model.vram));
+            row.append(name, detail);
+            row.addEventListener('click', () => startVisionInstall(model.id));
+            box.append(row);
+        }
+    }
+
+    /** Starts one install; when the server already runs one, its progress shows instead. */
+    async function startVisionInstall(modelId) {
+        try {
+            await request('EcomCraftStudioVisionInstall', { model: modelId });
+        } catch (err) {
+            if (err.code !== 'vision_install_busy') {
+                showEnhCfgMessage(err.message, true);
+                return;
+            }
+        }
+        $('enh-cfg-vision-install-progress').hidden = false;
+        $('enh-cfg-vision-install-models').hidden = true;
+        await refreshVisionInstall();
+        startVisionInstallPolling();
+    }
+
+    /** Polls a running install every few seconds while the dialog is open. */
+    let visionInstallPolling = false;
+    function startVisionInstallPolling() {
+        if (visionInstallTimer) { return; }
+        visionInstallTimer = setInterval(async () => {
+            if ($('enhancer-modal').hidden || visionInstallPolling) {
+                if ($('enhancer-modal').hidden) {
+                    stopVisionInstallPolling();
+                }
+                return;
+            }
+            visionInstallPolling = true;
+            try {
+                await refreshVisionInstall();
+            } finally {
+                visionInstallPolling = false;
+            }
+        }, 2500);
+    }
+
+    /** Stops polling; a still-running install continues on the server without it. */
+    function stopVisionInstallPolling() {
+        if (visionInstallTimer) {
+            clearInterval(visionInstallTimer);
+            visionInstallTimer = null;
+        }
+    }
+
+    /** Applies one status answer to the progress view; a finished install fills the Ollama fields for saving. */
+    function applyVisionInstallStatus(status) {
+        let state = String(status.state || 'idle');
+        if (state === 'idle') {
+            return;
+        }
+        $('enh-cfg-vision-install-progress').hidden = false;
+        $('enh-cfg-vision-install-log').textContent = (status.lines || []).slice(-6).join('\n');
+        if (state === 'running') {
+            let minutes = Math.max(0, Math.round(((Date.now() / 1000) - Number(status.started_at || 0)) / 60));
+            $('enh-cfg-vision-install-state').textContent = tr('正在安装 {0}…（已进行约 {1} 分钟）', status.model || '', minutes);
+            $('enh-cfg-vision-install-spinner').hidden = false;
+            $('enh-cfg-vision-install-models').hidden = true;
+            return;
+        }
+        $('enh-cfg-vision-install-spinner').hidden = true;
+        $('enh-cfg-vision-install-models').hidden = false;
+        if (state === 'done') {
+            $('enh-cfg-vision-install-state').textContent = tr('安装完成。视觉服务已切到 Ollama 并选中该模型，点“保存设置”后生效。');
+            $('enh-cfg-vision-backend').value = 'ollama';
+            $('enh-cfg-vision-endpoint').value = mpSettings?.backends?.ollama?.baseurl || MP_BACKENDS.ollama.url;
+            $('enh-cfg-vision-model').value = status.model || $('enh-cfg-vision-model').value;
+            applyVisionFields();
+            showEnhCfgMessage(tr('本地模型 {0} 已安装。视觉服务已切到 Ollama，点“保存设置”生效。', status.model || ''), false);
+        } else {
+            $('enh-cfg-vision-install-state').textContent = tr('安装失败，可重试或按文档手动安装；以下是脚本输出：');
+        }
+        stopVisionInstallPolling();
+    }
+
+    /** Reads the install progress once; transport problems show in the state line and never break the settings form. */
+    async function refreshVisionInstall() {
+        try {
+            applyVisionInstallStatus(await request('EcomCraftStudioVisionInstallStatus'));
+        } catch (err) {
+            $('enh-cfg-vision-install-state').textContent = err.message;
+        }
+    }
+
+    /** Opens the progress view when an install is already running (dialog open or button click). */
+    async function checkVisionInstallRunning() {
+        try {
+            let status = await request('EcomCraftStudioVisionInstallStatus');
+            if ($('enhancer-modal').hidden || status.state !== 'running') { return; }
+            $('enh-cfg-vision-install-box').hidden = false;
+            applyVisionInstallStatus(status);
+            startVisionInstallPolling();
+        } catch (err) {
+            // The install view is optional; the settings form keeps working without it.
+        }
+    }
+
     /** Cancels preview requests and clears the unsaved credential when closing the form. */
     function closeEnhancerSettings() {
         if (PromptSettingsRequests.saving) {
@@ -1660,6 +1798,7 @@
         }
         PromptSettingsRequests.loading = false;
         PromptSettingsRequests.invalidate();
+        stopVisionInstallPolling();
         $('enh-cfg-key').value = '';
         let wasOpen = !$('enhancer-modal').hidden;
         $('enhancer-modal').hidden = true;
@@ -1688,9 +1827,10 @@
                 showEnhCfgMessage('请填写服务地址。', true);
                 return;
             }
-            // The vision model config (F59/F68) is saved with the same request when its section is visible.
+            // The vision model config (F59/F68) is saved with the same request when its section is visible and the switch is on;
+            // with the switch off nothing is required or sent, so a stored model survives a save.
             let vision = null;
-            if (!$('enh-cfg-vision-fld').hidden) {
+            if (!$('enh-cfg-vision-fld').hidden && $('enh-cfg-vision').checked) {
                 let visionBackend = $('enh-cfg-vision-backend').value;
                 let visionModel = $('enh-cfg-vision-model').value.trim();
                 if (!visionModel) {
@@ -1700,11 +1840,14 @@
                 vision = { backend: visionBackend, model: visionModel };
                 if (!$('enh-cfg-vision-url-fld').hidden) {
                     let visionUrl = $('enh-cfg-vision-endpoint').value.trim();
-                    if (!visionUrl) {
+                    // Local Ollama has a default address, so an empty entry is fine; an OpenAI-compatible service can be anywhere and needs it.
+                    if (!visionUrl && visionBackend === 'openaiapi') {
                         showEnhCfgMessage('请填写视觉服务地址。', true);
                         return;
                     }
-                    vision.baseurl = visionUrl;
+                    if (visionUrl) {
+                        vision.baseurl = visionUrl;
+                    }
                 }
             }
             // 1) Save the key if provided.
@@ -5175,8 +5318,20 @@
         $('enh-cfg-save').addEventListener('click', saveEnhancerSettings);
         $('enh-cfg-backend').addEventListener('change', onBackendChange);
         $('enh-cfg-vision-backend').addEventListener('change', onVisionBackendChange);
+        $('enh-cfg-vision').addEventListener('change', () => {
+            applyVisionToggle();
+            $('enh-cfg-message').hidden = true;
+        });
         $('enh-cfg-fetch-models').addEventListener('click', fetchMpModels);
         $('enh-cfg-fetch-vision-models').addEventListener('click', fetchVisionModels);
+        $('enh-cfg-vision-install').addEventListener('click', () => {
+            let box = $('enh-cfg-vision-install-box');
+            box.hidden = !box.hidden;
+            if (!box.hidden) {
+                renderVisionInstallModels();
+                checkVisionInstallRunning();
+            }
+        });
         $('enh-cfg-endpoint').addEventListener('input', () => PromptSettingsRequests.invalidate());
         $('enh-cfg-key').addEventListener('input', () => PromptSettingsRequests.invalidate());
         $('enh-cfg-vision-endpoint').addEventListener('input', () => PromptSettingsRequests.invalidate());
@@ -5443,7 +5598,7 @@
        ============================================================ */
     initTheme();
     bind();
-    SimpleMode.attach({ $, el, tr, request, readStorage, writeStorage, serverErrorText, state, viewUrl, refineInPro,
+    SimpleMode.attach({ $, el, tr, request, readStorage, writeStorage, serverErrorText, state, viewUrl, refineInPro, openEnhancerSettings,
         dialogEnter: (dialog, opener, initial) => DialogFocus.enter(dialog, opener, initial), dialogLeave: dialog => DialogFocus.leave(dialog),
         titleAdd: count => TitleProgress.add(count), titleDone: count => TitleProgress.done(count) });
     updateControls();

@@ -224,6 +224,24 @@ input[type=range] { width: 100%; accent-color: var(--key); }
 .own-workflow-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .own-workflow-state { font-size: var(--fs-12); color: var(--ink-2); overflow-wrap: anywhere; }
 
+/* One-click local vision model install (F69): a chooser of model rows and a plain-text tail of the install script output. */
+.enh-install { display: grid; gap: 8px; }
+.enh-install-models { display: grid; gap: 4px; }
+.enh-install-model {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-height: 36px; padding: 6px 10px;
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--field); text-align: left;
+}
+.enh-install-model:hover { border-color: var(--key); }
+.enh-install-model-name { font-size: var(--fs-13); font-weight: 600; }
+.enh-install-model-detail { font-size: var(--fs-12); color: var(--ink-2); }
+.enh-install-progress { display: grid; gap: 6px; }
+.enh-install-progress .spinner { margin-right: 6px; vertical-align: -2px; }
+.enh-install-log {
+    margin: 0; padding: 8px 10px; max-height: 120px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--backdrop); font: 12px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
+    color: var(--ink-2);
+}
+
 /* Administrators' "Manage" menu (F62): a disclosure button with a list of administration entries. */
 .admin-menu { position: relative; }
 .admin-menu-list {

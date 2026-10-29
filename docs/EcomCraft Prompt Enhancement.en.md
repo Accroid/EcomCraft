@@ -150,8 +150,8 @@ Then in the EcomCraft settings:
 | Model backend | One of the 6 backends above |
 | Base URL | Editable for Ollama / the compatible backend, local or remote; fixed for the others |
 | Prompt model | **Fetch** lists the backend's models, or type the ID |
-| Vision model service | The service used for image description — Ollama or an OpenAI-compatible one; saved separately from the prompt service |
-| Vision model | The vision service's model name, picked via **Fetch** or typed in; Qwen3-VL recommended |
+| Vision model service | The service used for image description — Ollama or an OpenAI-compatible one; saved separately from the prompt service. The address is required only for an OpenAI-compatible service; Ollama can stay empty (defaults to this machine) |
+| Vision model | The vision service's model name, picked via **Fetch** or typed in; Qwen3-VL recommended. With "Allow image description" unchecked, no vision settings are needed to save |
 | API key | Required for cloud backends; not for Ollama; usually not for local services. Keys are stored safely in SwarmUI user data, never in config files |
 
 Switching backends auto-fills the URL and key state from that backend's saved values or its defaults.
@@ -195,7 +195,9 @@ bash launchtools/install-vision-model-linux.sh llama3.2-vision:latest
 ollama pull llama3.2-vision
 ```
 
-3. Uploaded references are described automatically, one at a time. When image description is off, the vision service cannot be reached, or the vision model has not been pulled, "Follow a reference" says what is missing: administrators see the steps to fix it and other accounts see "ask your administrator"; plain generation is unaffected.
+   To skip the command line entirely, install from **Prompt enhancement settings → Allow image description → One-click local model install** (administrators): pick a model tier (Qwen3-VL 2B / 4B / 8B / 30B or Llama 3.2 Vision, with download size and VRAM hints) and the server runs the same script by itself. While it runs the elapsed time and the script output show, the dialog can be closed (the install continues and the progress reappears when it reopens), and when it finishes the vision service switches to Ollama with that model preselected — click "Save" to apply. Only one install runs at a time and only the tiers listed above can be installed; this works on Windows and Linux, while macOS follows the manual steps above.
+
+3. Uploaded references are described automatically, one at a time. Clicking "Add a reference" first checks whether the vision model is usable: when it is not, the picker stays closed and the image-description guidance shows below instead, whose "Open the prompt enhancement settings" step goes straight to the configuration. When image description is off, the vision service cannot be reached, or the vision model has not been pulled, "Follow a reference" likewise says what is missing: administrators see the steps to fix it and other accounts see "ask your administrator"; plain generation is unaffected.
 
 ### Recommended vision model: Qwen3-VL (much better Chinese image description)
 

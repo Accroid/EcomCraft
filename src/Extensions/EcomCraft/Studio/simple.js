@@ -335,7 +335,7 @@ class SimpleMode {
         });
         $('simple-generate').addEventListener('click', () => this.generate());
         $('simple-generate-set').addEventListener('click', () => this.generateSet());
-        $('simple-reference-add').addEventListener('click', () => this.api.$('simple-reference-file').click());
+        $('simple-reference-add').addEventListener('click', () => this.addReferenceClick());
         $('simple-reference-file').addEventListener('change', e => {
             this.addReferenceFiles(Array.from(e.target.files || []));
             e.target.value = '';
@@ -1643,8 +1643,9 @@ class SimpleMode {
         countHint.textContent = countProblem || this.api.tr('可输入 1–20 的正整数；单次出图和一键出整套最多共 20 张。');
         countHint.classList.toggle('simple-hint-error', Boolean(countProblem));
         let count = countProblem ? 0 : this.countValue();
+        // Reference mode shows its status only on simple-set-hint right under the button; repeating it on simple-hint would render the same message twice.
         this.api.$('simple-hint').textContent = refMode
-            ? (refProblem ? this.api.tr(refProblem) : '')
+            ? ''
             : this.chosenTask == 'set'
             ? this.api.tr(this.setBlocker())
             : blocker
@@ -2105,6 +2106,20 @@ class SimpleMode {
         }
     }
 
+    /** Opens the reference picker only when image description can work (F59/F68): without a usable vision model the guidance
+     * below shows instead — its settings steps open the configuration directly — so references never sit undescribable. */
+    static async addReferenceClick() {
+        if (!this.vision || this.vision.state == 'unknown') {
+            await this.loadVision();
+        }
+        if (this.visionGuide()) {
+            this.message(this.api.tr('还没有可用的视觉模型。请按下方提示配置（点“打开提示词优化设置”可直接进入），配好后回来添加参考图。'), true);
+            this.renderVision();
+            return;
+        }
+        this.api.$('simple-reference-file').click();
+    }
+
     /** Adds reference image files (F59): at most 8 in total, each compressed like a product photo; every new one is described in the background.
      * References only apply to the "follow a reference" task and storyboards only to "make a full set" (F61), so neither clears the other. */
     static async addReferenceFiles(files) {
@@ -2201,19 +2216,19 @@ class SimpleMode {
             };
         }
         if (vision.state == 'off') {
-            return { title: tr('照参考图做需要看图描述，它已在“提示词优化设置”中关闭。'), steps: [tr('打开“提示词优化设置”，勾选“允许看图描述”并保存。'), tr('回到本页点“重新检查”。')] };
+            return { title: tr('照参考图做需要看图描述，它已在“提示词优化设置”中关闭。'), steps: [tr('打开“提示词优化设置”，勾选“允许看图描述”并保存。'), tr('回到本页点“重新检查”。')], settings_steps: [0] };
         }
         if (vision.state == 'no_model') {
-            return { title: tr('还没有为看图描述设置视觉模型。'), steps: [tr('打开“提示词优化设置”，为看图描述选择一个视觉模型并保存。'), tr('回到本页点“重新检查”。')] };
+            return { title: tr('还没有为看图描述设置视觉模型。'), steps: [tr('打开“提示词优化设置”，为看图描述选择一个视觉模型并保存。'), tr('回到本页点“重新检查”。')], settings_steps: [0] };
         }
         if (vision.state == 'unreachable') {
             return ollama
                 ? { title: tr('连不上 Ollama 视觉服务。'), steps: [script, tr('或者手动：在这台服务器上安装 Ollama：打开 https://ollama.com/download 下载并安装，安装后它会在后台自动运行。'), tr('打开命令行运行：ollama pull {0}', vision.model), tr('下载完成后回到本页点“重新检查”。')] }
-                : { title: tr('连不上视觉服务 {0}。', vision.provider), steps: [tr('打开“提示词优化设置”，检查视觉服务的 Key 和模型是否可用。'), tr('也可以改用本机 Ollama：免费，图片不出本机。')] };
+                : { title: tr('连不上视觉服务 {0}。', vision.provider), steps: [tr('打开“提示词优化设置”，检查视觉服务的 Key 和模型是否可用。'), tr('也可以改用本机 Ollama：免费，图片不出本机。')], settings_steps: [0] };
         }
         return ollama
             ? { title: tr('Ollama 已在运行，但还没有视觉模型 {0}。', vision.model), steps: [script, tr('或者在服务器上打开命令行运行：ollama pull {0}', vision.model), tr('下载完成后回到本页点“重新检查”；也可以在“提示词优化设置”中改选已安装的视觉模型。')] }
-            : { title: tr('视觉服务里没有模型 {0}。', vision.model), steps: [tr('打开“提示词优化设置”，改选可用的视觉模型。')] };
+            : { title: tr('视觉服务里没有模型 {0}。', vision.model), steps: [tr('打开“提示词优化设置”，改选可用的视觉模型。')], settings_steps: [0] };
     }
 
     /** Shows the image description guidance under the references (F68); hidden when description works. */
@@ -2230,8 +2245,34 @@ class SimpleMode {
             return;
         }
         let list = el('ol', 'simple-vision-steps');
-        for (let step of guide.steps) {
-            list.append(el('li', '', step));
+        // Steps that open the prompt enhancement settings link exactly those words to the dialog (F68);
+        // a translation that rephrased the name falls back to the whole step being the button.
+        let settingsSteps = new Set(guide.settings_steps || []);
+        let linkName = tr('提示词优化设置');
+        for (let [index, step] of guide.steps.entries()) {
+            let item = el('li');
+            let at = settingsSteps.has(index) && this.vision.can_manage && typeof this.api.openEnhancerSettings == 'function'
+                ? step.toLowerCase().indexOf(linkName.toLowerCase()) : -1;
+            if (at >= 0) {
+                if (at > 0) {
+                    item.append(document.createTextNode(step.slice(0, at)));
+                }
+                let open = el('button', 'link-btn', step.slice(at, at + linkName.length));
+                open.type = 'button';
+                open.setAttribute('aria-label', tr('打开提示词优化设置'));
+                open.addEventListener('click', () => this.api.openEnhancerSettings());
+                item.append(open, document.createTextNode(step.slice(at + linkName.length)));
+            }
+            else if (settingsSteps.has(index) && this.vision.can_manage && typeof this.api.openEnhancerSettings == 'function') {
+                let open = el('button', 'link-btn', step);
+                open.type = 'button';
+                open.addEventListener('click', () => this.api.openEnhancerSettings());
+                item.append(open);
+            }
+            else {
+                item.textContent = step;
+            }
+            list.append(item);
         }
         let parts = [el('p', 'simple-vision-title', guide.title), list];
         if (this.vision.can_manage) {
@@ -2311,12 +2352,14 @@ class SimpleMode {
         this.api.$('simple-reference-hint').textContent = tr('参考图只用于借鉴构图与光线，请使用有权使用的图片（自己拍摄、已授权或无版权限制）；生成结果请勿与参考图雷同。');
     }
 
-    /** Turns the other step-2 options on or off (F59): in reference mode they do not apply (and are hidden by the task, F61). */
+    /** Turns the other step-2 options on or off (F59): in reference mode they do not apply (and are hidden by the task, F61).
+     * The optional-slot box is left out: it already hides itself via data-tasks, and disabling it here would grey out the whole
+     * platform field (its closest .fld), which every task still needs for choosing a platform. */
     static setReferenceOptions() {
         let off = this.referenceMode();
         let ids = ['simple-templates', 'simple-categories', 'simple-subtypes', 'simple-styles', 'simple-model',
             'simple-brand', 'simple-brand-manage', 'simple-description', 'simple-expand', 'simple-prompt-zh', 'simple-prompt-en',
-            'simple-count', 'simple-optional-slots', 'simple-storyboard', 'simple-storyboard-run', 'simple-shot-add'];
+            'simple-count', 'simple-storyboard', 'simple-storyboard-run', 'simple-shot-add'];
         for (let id of ids) {
             let node = this.api.$(id);
             if (!node) {

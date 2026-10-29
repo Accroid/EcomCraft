@@ -59,7 +59,7 @@ The first launch builds the server and takes a few minutes. macOS only gets the 
 1. Open `http://127.0.0.1:7801` and follow the setup to install the **ComfyUI Self-Starting** backend and download models (or skip and configure later).
 2. Open `http://127.0.0.1:7801/EcomCraft` for the workspace; administrators get a setup wizard on first visit (language, storage, execution servers, models, common platforms).
 3. Other GPU computers on the LAN start ComfyUI with `--listen` and are registered under **Server → Backends** in the native engine as **ComfyUI API By URL**; see the [LAN Deployment Guide](docs/EcomCraft%20LAN%20Deployment.md).
-4. "Follow a reference" needs a vision model: administrators can run `launchtools/install-vision-model-windows.ps1` (Linux: `launchtools/install-vision-model-linux.sh`) to install Ollama and the vision model in one go; see the [Prompt Enhancement guide](docs/EcomCraft%20Prompt%20Enhancement.en.md).
+4. "Follow a reference" needs a vision model: administrators can click "One-click local model install" in the workspace's prompt enhancement settings to pick a tier and install it (or run `launchtools/install-vision-model-windows.ps1`, Linux: `launchtools/install-vision-model-linux.sh`); see the [Prompt Enhancement guide](docs/EcomCraft%20Prompt%20Enhancement.en.md).
 
 ## Data and Security
 
