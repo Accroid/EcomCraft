@@ -82,6 +82,9 @@ public static class BatchService
 
         /// <summary>Result URLs.</summary>
         public List<string> Images = [];
+
+        /// <summary>The scheduled generation while the task waits for its result, for the time estimate (F70); null otherwise.</summary>
+        public TaskTiming.Scheduled Timing;
     }
 
     /// <summary>One batch: owner, products, tasks and the shared generation settings.</summary>
@@ -404,6 +407,7 @@ public static class BatchService
             // Storyboard fragments written in Chinese are translated too (F25); one that cannot be translated is left out rather than sent untranslated.
             string[] shotPrompts = await Task.WhenAll(batch.ShotPrompts.Select(async fragment => fragment.Length == 0 || PromptRules.IsAscii(fragment)
                 ? fragment : StoryboardRules.CleanFragment(await PromptService.TranslateToEnglishAsync(session, fragment))));
+            TaskTiming.RecordSince(TaskTiming.Compose, batch.Created);
             List<Job> ready;
             lock (batch.Lock)
             {
@@ -476,7 +480,19 @@ public static class BatchService
                 return;
             }
             SetState(batch, job, "running", null, null);
+            // This task's own async flow learns the scheduled generation, so the status can show how long it still takes (F70).
+            TaskTiming.Observer.Value = timing =>
+            {
+                lock (batch.Lock)
+                {
+                    job.Timing = timing;
+                }
+            };
             JObject result = await GenerateAsync(session, batch, job);
+            lock (batch.Lock)
+            {
+                job.Timing = null;
+            }
             if (result.ContainsKey("error"))
             {
                 SetState(batch, job, "failed", result["error"]?.ToString(), result["error_id"]?.ToString());
@@ -604,6 +620,31 @@ public static class BatchService
         }
     }
 
+    /// <summary>One task as its owner sees it; a task waiting for its generation also carries its time estimate (F70). Callers hold the batch lock.</summary>
+    private static JObject JobStatus(Job job)
+    {
+        JObject status = new()
+        {
+            ["id"] = job.Id,
+            ["product"] = job.Product,
+            ["template"] = job.Template,
+            ["template_name"] = job.TemplateName,
+            ["purpose"] = job.Purpose,
+            ["reference_index"] = job.Reference,
+            ["state"] = job.State,
+            ["error"] = job.Error,
+            ["error_id"] = job.ErrorId,
+            ["execution_server"] = job.Server,
+            ["images"] = new JArray(job.Images)
+        };
+        if (job.Timing is not null && job.State == "running")
+        {
+            // Set tasks wait for their result in one call, so whether the server already runs them is not known here.
+            TaskTiming.AddEstimate(status, job.Timing, false);
+        }
+        return status;
+    }
+
     /// <summary>The batch as its owner sees it. Once the prompt is ready the owner's own answer also carries the prompt used and any fallback notice (F54/F56);
     /// batches are only ever readable by their owner.</summary>
     private static JObject Status(Batch batch)
@@ -615,21 +656,13 @@ public static class BatchService
                 ["prompt_ready"] = batch.Composed is not null,
                 ["batch_id"] = batch.Id,
                 ["products"] = batch.Products.Count,
-                ["jobs"] = new JArray(batch.Jobs.Select(job => new JObject()
-                {
-                    ["id"] = job.Id,
-                    ["product"] = job.Product,
-                    ["template"] = job.Template,
-                    ["template_name"] = job.TemplateName,
-                    ["purpose"] = job.Purpose,
-                    ["reference_index"] = job.Reference,
-                    ["state"] = job.State,
-                    ["error"] = job.Error,
-                    ["error_id"] = job.ErrorId,
-                    ["execution_server"] = job.Server,
-                    ["images"] = new JArray(job.Images)
-                }))
+                ["jobs"] = new JArray(batch.Jobs.Select(JobStatus))
             };
+            if (batch.Composed is null)
+            {
+                // The batch prompt is still being written (F56): how long it usually takes (F70).
+                TaskTiming.AddPromptEstimate(status, batch.Created, "prompt_");
+            }
             if (batch.Composed is PromptService.Composed composed)
             {
                 status["prompt_used"] = composed.Prompt;
@@ -659,7 +692,8 @@ public static class BatchService
         }
     }
 
-    [API.APIDescription("Read the tasks of one of the current account's batches.", "batch_id: \"…\", jobs: []")]
+    [API.APIDescription("Read the tasks of one of the current account's batches. While the prompt is written the batch carries prompt_elapsed_seconds, "
+        + "prompt_estimate_seconds and prompt_remaining_seconds, and a running task carries elapsed_seconds, estimate_seconds, remaining_seconds and start_in_seconds (F70).", "batch_id: \"…\", jobs: []")]
     public static Task<JObject> EcomCraftStudioBatchStatus(Session session, string batch_id)
     {
         Batch batch = StudioApi.CanView(session) ? Find(session, batch_id) : null;

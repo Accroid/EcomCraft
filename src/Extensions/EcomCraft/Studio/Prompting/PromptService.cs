@@ -406,6 +406,7 @@ public static class PromptService
         // One description per image, in parallel; a failed one comes back empty so the page can retry it alone.
         (string english, string chinese)[] answers = await Task.WhenAll(images.Select(async (image, index) =>
         {
+            long started = Environment.TickCount64;
             // A short user text keeps the request valid for every backend (some reject image-only or empty-text messages).
             string described = await AskModelAsync(session, ReferenceInstruction, "Describe the setup of this product photo.", image.ToString());
             if (described.Length == 0)
@@ -413,6 +414,8 @@ public static class PromptService
                 return ("", "");
             }
             string translated = await AskModelAsync(session, PromptRules.TranslateInstruction("Simplified Chinese"), described, null);
+            // How long one reference takes, for the waiting view (F70); failed descriptions are not counted.
+            Generation.TaskTiming.RecordSince(Generation.TaskTiming.Describe, started);
             return (described, translated);
         }));
         JArray items = new();
@@ -563,11 +566,13 @@ public static class PromptService
         {
             return StudioApi.Error("未知的产品类型，请刷新页面后重选。", "invalid_product_type");
         }
+        long started = Environment.TickCount64;
         Expanded expanded = await ExpandAsync(session, style_id, product_type_id, need_model, description);
         if (expanded is null)
         {
             return StudioApi.Error("提示词服务暂时不可用，可直接用一句话出图。", "prompt_service_unavailable");
         }
+        Generation.TaskTiming.RecordSince(Generation.TaskTiming.Expand, started);
         return new JObject() { ["prompt_en"] = expanded.English, ["prompt_zh"] = expanded.Chinese };
     }
 
@@ -605,9 +610,15 @@ public static class PromptService
         string subject = new[] { PromptRules.CleanUserPrompt(prompt_en), PromptRules.CleanUserPrompt(prompt_zh), PromptRules.CleanUserPrompt(description) }
             .FirstOrDefault(part => part.Length > 0) ?? productName ?? "a retail product";
         string text = userPoints.Count > 0 ? $"{subject}\nSelling points: {string.Join("; ", userPoints)}" : subject;
+        long started = Environment.TickCount64;
         string answer = await AskModelRawAsync(session, StoryboardRules.Instruction(language == "en" ? "English" : "Simplified Chinese",
             suitable.Select(template => (template.Id, EcomTemplate.Pick(template.Name, "en"))), productName, style is null ? null : EcomTemplate.Pick(style.Name, "en"), need_model), text, null);
         StoryboardRules.Storyboard parsed = StoryboardRules.Parse(answer, allowed);
+        if (parsed.Shots.Count > 0)
+        {
+            // How long a storyboard takes, for the waiting view (F70); a fallback (no usable answer) is not counted.
+            Generation.TaskTiming.RecordSince(Generation.TaskTiming.Storyboard, started);
+        }
         List<string> points = StoryboardRules.CleanPoints(userPoints.Concat(parsed.Points));
         List<StoryboardRules.Shot> shots = parsed.Shots;
         string source = "model";

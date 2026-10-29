@@ -27,6 +27,90 @@
 
     class ApiError extends Error { constructor(message, code) { super(message); this.code = code; } }
 
+    /** Time estimates (F70): turns the server's typical durations into "about 40 s left", "starts in about 3 min" or "slower than usual",
+     * and counts down between two status polls. The server only knows durations of recent runs, so the first runs show the elapsed time alone. */
+    class TimeEstimate {
+        /** Typical seconds of the operations the page waits for (compose, expand, storyboard, describe, enhance), from EcomCraftStudioEstimates. */
+        static typical = {};
+
+        /** Reads the typical durations again; a failure keeps the previous ones. */
+        static async refresh() {
+            try {
+                let result = await request('EcomCraftStudioEstimates');
+                this.typical = result || {};
+            }
+            catch (error) {
+                // Estimates are optional; the waiting views fall back to the elapsed time.
+            }
+        }
+
+        /** A rounded duration such as "about 40 s" or "about 3 min". */
+        static duration(seconds) {
+            if (seconds < 10) {
+                return tr('不到 10 秒');
+            }
+            if (seconds < 60) {
+                return tr('约 {0} 秒', Math.max(10, Math.round(seconds / 5) * 5));
+            }
+            if (seconds < 3600) {
+                return tr('约 {0} 分钟', Math.ceil(seconds / 60));
+            }
+            return tr('约 {0} 小时 {1} 分钟', Math.floor(seconds / 3600), Math.ceil((seconds % 3600) / 60));
+        }
+
+        /** The elapsed time, such as "12 s so far" or "3 min 5 s so far". */
+        static elapsed(seconds) {
+            let whole = Math.max(0, Math.floor(seconds));
+            return whole < 60 ? tr('已用 {0} 秒', whole) : tr('已用 {0} 分 {1} 秒', Math.floor(whole / 60), whole % 60);
+        }
+
+        /** The estimate text of a server answer received at <receivedAt> (ms): elapsed_seconds, remaining_seconds and start_in_seconds,
+         * counted down by the time since it was received. Empty without any of them. */
+        static text(fields, receivedAt) {
+            if (!fields) {
+                return '';
+            }
+            let drift = Math.max(0, (Date.now() - (receivedAt || Date.now())) / 1000);
+            if (Number.isFinite(fields.start_in_seconds) && fields.start_in_seconds - drift > 0) {
+                return tr('{0}后开始', this.duration(fields.start_in_seconds - drift));
+            }
+            if (Number.isFinite(fields.remaining_seconds)) {
+                let left = fields.remaining_seconds - drift;
+                return left > 0 ? tr('预计还需{0}', this.duration(left)) : tr('比平时慢，仍在处理…');
+            }
+            if (Number.isFinite(fields.elapsed_seconds)) {
+                return this.elapsed(fields.elapsed_seconds + drift);
+            }
+            return '';
+        }
+
+        /** The estimate text of an operation of <kind> started at <started> (ms) in this page. */
+        static since(kind, started) {
+            let elapsed = (Date.now() - started) / 1000;
+            let typical = this.typical[kind];
+            return this.text({ elapsed_seconds: elapsed, remaining_seconds: Number.isFinite(typical) ? Math.max(0, typical - elapsed) : null }, Date.now());
+        }
+
+        /** A waiting label with its estimate in brackets, such as "Writing the storyboard… (about 20 s left)". */
+        static label(base, text) {
+            return text ? tr('{0}（{1}）', base, text) : base;
+        }
+
+        /** Calls <update> every second until the returned function is called (any number of times), which also reads the typical durations again. */
+        static tick(update) {
+            update();
+            let timer = setInterval(update, 1000);
+            return () => {
+                if (timer == null) {
+                    return;
+                }
+                clearInterval(timer);
+                timer = null;
+                this.refresh();
+            };
+        }
+    }
+
     const state = {
         session: null, catalog: null, catalogLoading: false, backendStatusLoading: false,
         userId: null, outputAppendUser: false,
@@ -727,6 +811,7 @@
             if (!Array.isArray(catalog.models)) { throw new ApiError('模型列表格式不兼容，请联系管理员。', 'api_error'); }
             catalog.workflows = Array.isArray(catalog.workflows) ? catalog.workflows : [];
             state.catalog = catalog;
+            TimeEstimate.refresh();
             populateWorkflows();
             ExecutionServerPicker.load(true);
             $('user-name').textContent = catalog.user_name;
@@ -1339,7 +1424,11 @@
         if (enhanceBusy) { return; }
         setEnhanceBusy(true);
         showEnhanceCard('loading');
-        $('enhance-loading').children[1].textContent = '正在调用提示词优化服务…';
+        // The waiting line counts down with the usual enhancement time (F70).
+        let started = Date.now();
+        let stopTicker = TimeEstimate.tick(() => {
+            $('enhance-loading').children[1].textContent = TimeEstimate.label(tr('正在调用提示词优化服务…'), TimeEstimate.since('enhance', started));
+        });
         try {
             const cfg = await request('GetMagicPromptSettings');
             mpSettings = cfg.settings;
@@ -1353,6 +1442,7 @@
                 messageType: 'Text',
                 action: 'prompt'
             });
+            stopTicker();
             enhancedText = res.response;
             if (!enhancedText) {
                 throw new ApiError('优化服务返回为空，请更换模型或稍后重试。', 'magicprompt_empty');
@@ -1360,9 +1450,11 @@
             $('enhance-result').textContent = enhancedText;
             showEnhanceCard('result');
         } catch (err) {
+            stopTicker();
             $('enhance-loading').children[1].textContent = err.message;
             showEnhanceCard('error');
         } finally {
+            stopTicker();
             setEnhanceBusy(false);
         }
     }
@@ -2603,6 +2695,10 @@
             let main = el('div', 'queue-task-main');
             main.append(el('strong', '', task.mine ? tr('我的请求 #{0}', task.request_id || task.id) : '其他用户的请求'));
             main.append(el('span', '', tr('{0}，{1} 张', tr(labels[task.state] || '处理中'), task.count)));
+            // The account's own requests carry a time estimate once the server has run similar ones (F70); the elapsed time is shown beside.
+            if (task.mine && (Number.isFinite(task.remaining_seconds) || Number.isFinite(task.start_in_seconds))) {
+                main.append(el('span', 'queue-task-eta', TimeEstimate.text(task, Date.now())));
+            }
             let age = el('span', 'queue-task-age', tr('已用 {0} 分 {1} 秒', Math.floor(task.elapsed_seconds / 60), task.elapsed_seconds % 60));
             row.append(main, age);
             if (task.mine && task.state != 'stopping') {
@@ -5781,7 +5877,7 @@
     bind();
     SimpleMode.attach({ $, el, tr, request, readStorage, writeStorage, serverErrorText, state, viewUrl, refineInPro, openEnhancerSettings,
         dialogEnter: (dialog, opener, initial) => DialogFocus.enter(dialog, opener, initial), dialogLeave: dialog => DialogFocus.leave(dialog),
-        titleAdd: count => TitleProgress.add(count), titleDone: count => TitleProgress.done(count) });
+        titleAdd: count => TitleProgress.add(count), titleDone: count => TitleProgress.done(count), estimate: TimeEstimate });
     updateControls();
     setType('image');
     setMode('text2img');
