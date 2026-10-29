@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.51.4">
-    <script src="/EcomCraft/lang/en.js?v=0.51.4" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.51.4" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.51.4" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.51.4" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.51.5">
+    <script src="/EcomCraft/lang/en.js?v=0.51.5" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.51.5" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.51.5" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.51.5" defer></script>
 </head>
 
 <body>
@@ -1154,6 +1154,16 @@
                 <button type="button" class="btn" id="wizard-skip">跳过这一步</button>
                 <button type="button" class="btn btn-primary" id="wizard-next">下一步</button>
             </div>
+        </div>
+    </div>
+
+    <div class="startup-overlay" id="startup-overlay" hidden>
+        <div class="startup-card" role="status" aria-live="polite">
+            <span class="spinner startup-spinner" aria-hidden="true"></span>
+            <p class="startup-title" id="startup-title"></p>
+            <p class="hint" id="startup-text"></p>
+            <p class="hint startup-elapsed" id="startup-elapsed"></p>
+            <p class="hint startup-slow" id="startup-slow" hidden></p>
         </div>
     </div>
 

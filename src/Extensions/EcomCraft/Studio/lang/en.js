@@ -1116,5 +1116,13 @@ window.EcomCraftLanguages.en = {
     "{0}后开始": "starts in {0}",
     "预计还需{0}": "{0} left",
     "比平时慢，仍在处理…": "slower than usual, still working…",
-    "{0}（{1}）": "{0} ({1})"
+    "{0}（{1}）": "{0} ({1})",
+    "正在连接 EcomCraft 服务…": "Connecting to the EcomCraft service…",
+    "执行服务器正在启动…": "The execution server is starting…",
+    "服务可能正在启动或重启，连接恢复后即可继续操作。": "The service may be starting or restarting. You can continue once the connection is back.",
+    "启动完成后即可继续操作，通常需要一到几分钟，期间请不要关闭页面。": "You can continue once it has started, which usually takes one to a few minutes. Please keep this page open.",
+    "已等待 {0} 秒": "Waiting for {0} s",
+    "已等待 {0} 分 {1} 秒": "Waiting for {0} min {1} s",
+    "如果一直连不上，请确认 EcomCraft 服务已经启动，或联系管理员。": "If it never connects, make sure the EcomCraft service is running, or contact your administrator.",
+    "启动时间比平时长。如果一直没有完成，请管理员查看执行服务器的日志。": "Starting takes longer than usual. If it never finishes, ask an administrator to check the execution server log."
 };

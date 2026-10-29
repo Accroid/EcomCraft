@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.29 · **Date:** 2026-10-29
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.32 · **Date:** 2026-10-29
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -161,6 +161,7 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | User name / avatar | Current account | Sidebar footer, fixed caption | Top-bar right, account name only |
 | Native engine link | Opens SwarmUI pages | Sidebar link, same tab | Only in the "Manage" menu, administrators only, new tab (F62) |
 | Footer | Version | Hardcoded 0.3.0, stale | The extension's real version |
+| Startup overlay `startup-overlay` | Blocks the page while the service or the execution servers start | New | When the service does not answer (starting or restarting), or no execution server is online and one is starting, a loading notice covers the whole page and blocks every action (the rest of the page is `inert`), showing the waiting time and, after 3 minutes, a hint to check the log; it checks every 2 seconds and disappears once the service answers or a server is online. Another server starting while one is online does not block the page; a failed start or no server at all does not block either and keeps the existing notices |
 
 ### 3.1.1 Create (simple mode, default view)
 
@@ -424,3 +425,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-29 | v1.29 | "Manage" menu gained the "Standard workflows" dialog (F57/T59) |
 | 2026-10-29 | v1.30 | The image-description notice's "prompt enhancement settings" steps now open the dialog directly; the settings dialog gained "One-click local model install" (F69/T71) |
 | 2026-10-29 | v1.31 | "Add a reference" checks the vision model first and shows the guidance when unset; unchecked image description saves without vision fields; the Ollama vision address can stay empty |
+| 2026-10-29 | v1.32 | New startup overlay: while the service or execution servers start, a loading notice covers the page and blocks actions, and disappears once started |

@@ -111,6 +111,88 @@
         }
     }
 
+    /** Blocks the whole page while the service does not answer (it is starting or restarting) or while execution servers start and none is online yet,
+     * and lets go as soon as the service answers and a server is online. The rest of the page is made inert, so neither clicks nor keys reach it. */
+    class StartupOverlay {
+        /** Whether the last catalog or status request could not reach the service at all. */
+        static connectionLost = false;
+
+        /** When the overlay appeared (ms). */
+        static since = 0;
+
+        /** The per-second refresh of the overlay text while it shows. */
+        static timer = null;
+
+        /** The faster status check while it shows, so the page frees up soon after the server is ready. */
+        static pollTimer = null;
+
+        /** Seconds after which the overlay adds a hint that starting takes longer than usual. */
+        static slowAfter = 180;
+
+        /** Why the page is blocked now: "connecting" (the service does not answer), "starting" (an execution server is starting and none is online) or null. */
+        static reason() {
+            if (this.connectionLost) {
+                return 'connecting';
+            }
+            let catalog = state.catalog;
+            if (catalog && !(Number(catalog.local_backends_observed) > 0) && Number(catalog.local_backends_starting) > 0) {
+                return 'starting';
+            }
+            return null;
+        }
+
+        /** Shows or hides the overlay for the current state; called whenever the server state is read again. */
+        static update() {
+            let overlay = $('startup-overlay');
+            let reason = this.reason();
+            let show = reason != null;
+            if (show == !overlay.hidden) {
+                if (show) {
+                    this.render();
+                }
+                return;
+            }
+            overlay.hidden = !show;
+            for (let child of Array.from(document.body.children)) {
+                if (child != overlay && child.tagName != 'SCRIPT' && child.tagName != 'NOSCRIPT') {
+                    child.inert = show;
+                }
+            }
+            if (show) {
+                this.since = Date.now();
+                this.render();
+                this.timer = setInterval(() => this.render(), 1000);
+                this.pollTimer = setInterval(() => pollBackendStatus(), 2000);
+            }
+            else {
+                clearInterval(this.timer);
+                clearInterval(this.pollTimer);
+                this.timer = null;
+                this.pollTimer = null;
+            }
+        }
+
+        /** Writes the title, explanation and waiting time for the current reason. */
+        static render() {
+            let reason = this.reason();
+            if (!reason) {
+                return;
+            }
+            let waited = Math.max(0, Math.floor((Date.now() - this.since) / 1000));
+            let connecting = reason == 'connecting';
+            $('startup-title').textContent = connecting ? tr('正在连接 EcomCraft 服务…') : tr('执行服务器正在启动…');
+            $('startup-text').textContent = connecting
+                ? tr('服务可能正在启动或重启，连接恢复后即可继续操作。')
+                : tr('启动完成后即可继续操作，通常需要一到几分钟，期间请不要关闭页面。');
+            $('startup-elapsed').textContent = waited < 60 ? tr('已等待 {0} 秒', waited) : tr('已等待 {0} 分 {1} 秒', Math.floor(waited / 60), waited % 60);
+            let slow = $('startup-slow');
+            slow.hidden = waited < this.slowAfter;
+            slow.textContent = connecting
+                ? tr('如果一直连不上，请确认 EcomCraft 服务已经启动，或联系管理员。')
+                : tr('启动时间比平时长。如果一直没有完成，请管理员查看执行服务器的日志。');
+        }
+    }
+
     const state = {
         session: null, catalog: null, catalogLoading: false, backendStatusLoading: false,
         userId: null, outputAppendUser: false,
@@ -808,6 +890,7 @@
                 state.outputAppendUser = !!session.output_append_user;
             }
             const catalog = await request('EcomCraftStudioCatalog');
+            StartupOverlay.connectionLost = false;
             if (!Array.isArray(catalog.models)) { throw new ApiError('模型列表格式不兼容，请联系管理员。', 'api_error'); }
             catalog.workflows = Array.isArray(catalog.workflows) ? catalog.workflows : [];
             state.catalog = catalog;
@@ -848,6 +931,8 @@
                 renderGallery();
             }
         } catch (error) {
+            // A service that does not answer at all is starting or restarting: the page waits behind the startup overlay.
+            StartupOverlay.connectionLost = error.code == 'transport_error';
             state.catalog = null;
             state.workflowId = '';
             state.workflowValues = {};
@@ -879,6 +964,7 @@
                 if (!['api_error', 'transport_error'].includes(error.code)) { throw error; }
                 status = await request('EcomCraftStudioCatalog');
             }
+            StartupOverlay.connectionLost = false;
             if (state.catalogLoading || state.busy) { return; }
             const previous = state.catalog.local_backends_observed || 0;
             state.catalog.local_backends_observed = status.local_backends_observed;
@@ -894,6 +980,7 @@
                 await refreshCatalog();
             }
         } catch (error) {
+            StartupOverlay.connectionLost = error.code == 'transport_error';
             if (state.catalog) { state.catalog.local_backends_observed = 0; }
             updateHealth();
             updateControls();
@@ -951,6 +1038,7 @@
         }
         else { h.classList.add('err'); text.textContent = '未连接'; }
         updateSetupGuideStatus();
+        StartupOverlay.update();
     }
 
     /* ============================================================
