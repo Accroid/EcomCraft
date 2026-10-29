@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20参考图需求.zh-CN.md)
 >
-> **Status:** P1 implemented, pending acceptance (F59 / T61, code complete 2026-10-28); P2 depends on N10 · **Version:** v1.7 · **Date:** 2026-10-29
+> **Status:** P1 implemented, pending acceptance (F59 / T61, code complete 2026-10-28); P2 depends on N10 · **Version:** v1.8 · **Date:** 2026-10-30
 >
 > Related files: [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md) (decision A11, F59) and the [EcomCraft development tracker](EcomCraft%20开发总表.xlsx) (T61, T62; N10; Chinese spreadsheet). When this document changes, update it (Chinese and English together) first, then the code.
 
@@ -56,13 +56,14 @@ The reference image becomes the input of an image-to-image / image-edit workflow
 6. **Task cards**: reference-driven tasks show the **thumbnail of their reference** on the card, with the task's actual prompt unfoldable (reusing F56's `prompt_used`).
 7. **Copyright notice**: fixed under the entry — references are used only to borrow layout and light; use only images you have the right to use (self-shot, licensed or restriction-free), and keep results clearly distinct from the references.
 8. **Stronger notice on international platforms**: when the chosen platform's `region` is `global`, an extra notice appears — international platforms review image similarity more strictly; borrow the layout only and make sure results do not resemble the reference before listing.
+9. **Place the product per reference**: in reference mode, "Place for reference 1 / 2 / ..." appears above the product placement preview in step 1; choosing one shows that reference (cropped square like the output, semi-transparent) behind the preview, and dragging and "Product size" then change only that reference's placement; references not adjusted keep the product's own placement. A fixed hint reads "Match the product's position and size to the reference." The system does not infer placements automatically (confirmed 2026-10-30). The reference backdrop is shown in the browser only and is not uploaded again.
 
 ## 5. Data and APIs
 
 | API | Change |
 |---|---|
 | `EcomCraftStudioReferenceDescribe` (new) | `reference_images` (1-8) returns one entry per reference, `[{ index, prompt_en, prompt_zh }]` (that reference's English composition description and Chinese translation); returns `vision_disabled` when vision is off |
-| `EcomCraftStudioGenerateSet` | Reference-mode parameters: `reference_images` (as above) + `reference_prompts` (one English prompt per reference, required, cleaned server-side, edits win) + optional `reference_mode` (`composition` / `scene`, for P2); reference mode always uses the product-preserving scene template — no expansion by set types — and is mutually exclusive with `shots` (submitting both returns `invalid_parameters`); tasks carry `reference_index` so the page can show the reference thumbnail |
+| `EcomCraftStudioGenerateSet` | Reference-mode parameters: `reference_images` (as above) + `reference_prompts` (one English prompt per reference, required, cleaned server-side, edits win) + optional `reference_placements` (as long as `reference_prompts`, each `{ x, y, size }` or `null`, validated like product placements; when not `null`, every task of that reference uses it instead of the product's own placement) + optional `reference_mode` (`composition` / `scene`, for P2); reference mode always uses the product-preserving scene template — no expansion by set types — and is mutually exclusive with `shots` (submitting both returns `invalid_parameters`); tasks carry `reference_index` so the page can show the reference thumbnail |
 | `EcomCraftStudioExpandPrompt` | Unchanged: AI expansion still handles the description and product type (unused in reference mode) |
 | `EcomCraftStudioTemplates` | Template entries gain `reference_slot` (whether the scene-reference slot is declared, P2), so the page can control path 2's availability |
 | Validation | each `reference_images` entry is an image data URL validated like a product photo, count 1-8; every `reference_prompts` entry is non-empty within the prompt length rules; template validation requires `reference.image` to be an image parameter of the snapshot and not the same parameter as the `brand_kit` slot |
@@ -123,3 +124,4 @@ No phase changes the rule that references exist only briefly in memory; saved te
 | 2026-10-29 | v1.5 | Several references are now described one at a time in a queue, and the vision call may take up to 120 seconds, fixing later references timing out when described together; descriptions grew from one sentence to a detailed 60-120 word paragraph |
 | 2026-10-29 | v1.6 | New 8.1 vision model device (F71, T75-T77): thinking turned off, the model unloaded after a timeout, automatic move to the CPU when the GPU hangs and a manual choice for administrators (P1), a measured self-test (P2), hardware recommendations and sharing video memory (P3) |
 | 2026-10-29 | v1.7 | F71 P1 measured (RX 5600 XT, Ollama 0.40.13): the time-limited GPU try, unloading, moving to the CPU and "CPU only" work as designed; the plain qwen3-vl tags are thinking variants that ignore `think:false`, so the recommendations and the one-click install use the `-instruct` tags |
+| 2026-10-30 | v1.9 | New interface item 9 "Place the product per reference" (T79) and the `reference_placements` parameter: each reference has its own placement, the preview shows the reference as a backdrop, hint only with no automatic inference |

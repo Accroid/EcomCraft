@@ -2,7 +2,7 @@
 
 > **语言：** 简体中文 · [English](EcomCraft%20Reference%20Images.md)
 >
-> **状态：** P1 已实现待验收（F59 / T61，2026-10-28 代码完成）；P2 依赖 N10；规范无涉 · **版本：** v1.7 · **日期：** 2026-10-29
+> **状态：** P1 已实现待验收（F59 / T61，2026-10-28 代码完成）；P2 依赖 N10；规范无涉 · **版本：** v1.8 · **日期：** 2026-10-30
 >
 > 相关文件：[EcomCraft 架构与路线图](EcomCraft%20Architecture.zh-CN.md)（决策 A11、F59）、[EcomCraft 开发总表](EcomCraft%20开发总表.xlsx)（T61、T62；N10）。需求有变化先改本文（中英文同步），再改代码。
 
@@ -56,13 +56,14 @@
 6. **任务卡片**：按参考展开的任务在卡片上显示**对应参考图的缩略图**，并可展开查看该任务实际使用的提示词（沿用 F56 的 `prompt_used`）。
 7. **版权提示**：上传入口下方固定提示——参考图只用于借鉴构图与光线，请使用有权使用的图片（自己拍摄、已授权或无版权限制）；生成结果请勿与参考图雷同。
 8. **海外平台加强提示**：所选平台的 `region` 为 `global` 时追加提示——海外平台对图片相似度审核更严格，建议只借鉴构图，上架前自行确认不与参考图雷同。
+9. **按参考图摆放商品**：参考模式下，第 1 步的商品位置预览上方列出“按参考图 1 / 2 / …摆放”，选中某张后预览底图换成该参考图（按出图画面裁成方形，半透明），拖动和“商品大小”只改这张参考的摆放；未单独调整的参考沿用商品自己的摆放。旁边固定提示“请对照参考图调整商品的位置和大小”。系统不自动推算摆放（2026-10-30 用户确认）。参考图底图只在浏览器里显示，不额外上传。
 
 ## 5. 数据与接口
 
 | 接口 | 改动 |
 |---|---|
 | `EcomCraftStudioReferenceDescribe`（新） | `reference_images`（1–8 张）逐张返回 `[{ index, prompt_en, prompt_zh }]`（该参考的英文构图描述与中文译文）；vision 未开启时返回 `vision_disabled` |
-| `EcomCraftStudioGenerateSet` | 参考模式参数：`reference_images`（同上）+ `reference_prompts`（逐张英文提示词，必填、服务端清理，以用户改稿为准）+ 可选 `reference_mode`（`composition` / `scene`，P2 用）；参考模式固定使用保真场景模板，不按套图类型展开，与 `shots` 互斥（同时提交返回 `invalid_parameters`）；任务带 `reference_index` 供前端显示参考缩略图 |
+| `EcomCraftStudioGenerateSet` | 参考模式参数：`reference_images`（同上）+ `reference_prompts`（逐张英文提示词，必填、服务端清理，以用户改稿为准）+ 可选 `reference_placements`（与 `reference_prompts` 等长，每项为 `{ x, y, size }` 或 `null`，校验规则与商品摆放相同，非 `null` 时该参考的所有任务用它代替商品自己的摆放）+ 可选 `reference_mode`（`composition` / `scene`，P2 用）；参考模式固定使用保真场景模板，不按套图类型展开，与 `shots` 互斥（同时提交返回 `invalid_parameters`）；任务带 `reference_index` 供前端显示参考缩略图 |
 | `EcomCraftStudioExpandPrompt` | 不改：AI 扩写仍只处理描述与产品类型（参考模式下不使用） |
 | `EcomCraftStudioTemplates` | 模板条目新增 `reference_slot`（是否声明画面参考槽位，P2），前端据此控制路径二可用性 |
 | 校验 | `reference_images` 每项为图片 data URL，服务端与商品图相同的方式校验大小与格式，数量 1–8；`reference_prompts` 逐张非空、长度上限与提示词规则一致；模板校验 `reference.image` 须为快照图片参数且不与 `brand_kit` 槽位重复 |
@@ -123,3 +124,4 @@
 | 2026-10-29 | v1.5 | 多张参考改为逐张排队描述，看图调用等待上限放宽到 120 秒，修复多张同时描述时后面几张超时失败；描述从一句话改为 60–120 词的详细段落 |
 | 2026-10-29 | v1.6 | 新增 8.1 看图模型运行设备（F71，T75–T77）：关闭思考模式、超时卸载模型、GPU 卡住时自动改用 CPU 与管理员手动选择（P1），实测自检（P2），按硬件推荐与显存共用（P3） |
 | 2026-10-29 | v1.7 | F71 P1 实测（RX 5600 XT、Ollama 0.40.13）：GPU 限时探测、卸载、改用 CPU、“只用 CPU”均按设计工作；qwen3-vl 不带后缀的标签是思考版，`think:false` 无效，推荐与一键安装改用 `-instruct` 标签 |
+| 2026-10-30 | v1.9 | 新增界面第 9 条“按参考图摆放商品”（T79）与 `reference_placements` 参数：每张参考各自摆放，预览以参考图为底图，只做提示、不自动推算 |
