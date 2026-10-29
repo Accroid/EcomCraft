@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20局域网多服务器平台需求.zh-CN.md)
 >
-> **Status:** In development (phase 1 steps 1–7 built and verified on one machine; per architecture decision A10 the MVP runs single-server first, multi-machine tests deferred until a customer asks or N08 is ready) · **Version:** v1.12 · **Date:** 2026-10-28
+> **Status:** In development (phase 1 steps 1–7 built and verified on one machine; per architecture decision A10 the MVP runs single-server first, multi-machine tests deferred until a customer asks or N08 is ready) · **Version:** v1.13 · **Date:** 2026-10-30
 >
 > This document is the reference for further development. When requirements change, update this document first (Chinese and English together), record the change in the change log at the end, and only then change the code. For the e-commerce image layer, the overall architecture and the MVP roadmap, see [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md).
 
@@ -207,6 +207,7 @@ Published + source file changed → Pending re-review (users keep using the old 
 
 - One server going offline does not affect discovery or scheduling on other servers.
 - After the platform restarts, review states, snapshots and server registrations are not lost (they are saved under `Data/EcomCraft/`).
+- The self-started local ComfyUI must not outlive the platform (F72): when the platform is force-killed, crashes or loses power, the ComfyUI it started keeps running, holding memory, video memory and a port, and the next start opens another one. Each time the platform starts ComfyUI it records the process ID and start time (only these two, in the data directory); on the next start it first ends old processes that are still running with the same start time, unless the platform that started them is still running (so a second platform opened by mistake does not end the first one's ComfyUI), and skips any whose ID now belongs to another program, that it may not end, or that already exited, without affecting startup.
 
 ## 7. Development Phases and Tasks
 
@@ -342,3 +343,4 @@ Implementation notes for step 7:
 | 2026-10-28 | v1.11 | All MVP code complete: the extension builds again and was verified on one machine (real generation on local ComfyUI, template-bench small sample, backup/restore, diagnostics, disk monitoring, wizard data sources on a fresh data directory); instantly finished tasks now return their results inline; two-machine testing (N08) is still pending |
 | 2026-10-27 | v1.5 | Static review of steps 1–3 (T33): workflow discovery now refreshes on a background timer started by the extension instead of only when a page is opened; added notes on server names and workflow IDs, and on re-review after conversion logic upgrades |
 | 2026-10-28 | v1.12 | Per architecture decision A10 the MVP runs single-server first: multi-machine testing of steps 1–7 (F28 / T33) and N08 are deferred until a customer asks; the multi-server architecture described here and the implemented code are unchanged |
+| 2026-10-30 | v1.13 | Reliability addition F72: clean up the self-started local ComfyUI left over from the previous run at startup (T78) |
