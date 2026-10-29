@@ -190,7 +190,7 @@ powershell -ExecutionPolicy Bypass -File launchtools\install-vision-model-window
 bash launchtools/install-vision-model-linux.sh llama3.2-vision:latest
 ```
 
-   `-Model` (the first argument on Linux) is the vision model name from the prompt enhancement settings (`qwen3-vl:8b` when switching to Qwen3-VL) and defaults to the default model; on macOS install the Ollama app from the website first. You can also install Ollama by hand and pull the model:
+   `-Model` (the first argument on Linux) is the vision model name from the prompt enhancement settings (`qwen3-vl:8b-instruct` when switching to Qwen3-VL) and defaults to the default model; on macOS install the Ollama app from the website first. You can also install Ollama by hand and pull the model:
 
 ```bash
 ollama pull llama3.2-vision
@@ -210,10 +210,12 @@ The official Ollama library hosts Qwen3-VL. The 2B / 4B / 8B / 30B variants of t
 
 | Command | Model | Download | VRAM | Difference in description quality |
 |---|---|---|---|---|
-| `ollama pull qwen3-vl:2b` | Qwen3-VL 2B | ~1.9 GB | 4 GB, or CPU only | Recognizes the subject and rough composition; small labels get missed; fastest |
-| `ollama pull qwen3-vl:4b` | Qwen3-VL 4B | ~3.3 GB | 6 GB | Accurate for everyday product photos; occasional errors on intricate patterns or dense small text |
-| `ollama pull qwen3-vl:8b` | Qwen3-VL 8B | ~6.2 GB | 8 GB | Clearly steadier and more professional on details, Chinese labels, composition and lighting; **the best pick for most teams** |
-| `ollama pull qwen3-vl:30b-a3b` | Qwen3-VL 30B (MoE) | ~20 GB | 24 GB | Top tier: reads multi-product scenes and dense long-image text fully; MoE keeps it fast |
+| `ollama pull qwen3-vl:2b-instruct` | Qwen3-VL 2B | ~1.9 GB | 4 GB, or CPU only | Recognizes the subject and rough composition; small labels get missed; fastest |
+| `ollama pull qwen3-vl:4b-instruct` | Qwen3-VL 4B | ~3.3 GB | 6 GB | Accurate for everyday product photos; occasional errors on intricate patterns or dense small text |
+| `ollama pull qwen3-vl:8b-instruct` | Qwen3-VL 8B | ~6.2 GB | 8 GB | Clearly steadier and more professional on details, Chinese labels, composition and lighting; **the best pick for most teams** |
+| `ollama pull qwen3-vl:30b-a3b-instruct` | Qwen3-VL 30B (MoE) | ~20 GB | 24 GB | Top tier: reads multi-product scenes and dense long-image text fully; MoE keeps it fast |
+
+Pull the `-instruct` tags: the plain `qwen3-vl:2b`, `4b`, `8b` and so on are the "thinking" variants, which write out reasoning before every description, take about twice as long per image, and cannot be switched off through Ollama (measured on Ollama 0.40.13 on 2026-10-29). When a thinking variant is installed, the settings suggest switching under the vision model; the size is the same, so just install the other tag.
 
 When unsure, choose by VRAM: no discrete GPU → 2B, 6 GB → 4B, 8 GB or more → 8B; pick 30B only with a 24 GB card (e.g. 3090/4090) and the highest quality demands. Pulling also works through the one-click install script above (pass the chosen size as the `-Model` argument).
 
@@ -221,15 +223,15 @@ After pulling the size you picked, select it directly in the settings:
 
 1. Open the workspace's **prompt enhancement settings** (administrators) and make sure **Allow image description** is ticked.
 2. Set **Vision model service** to `Ollama (local, free)`; the dialog detects the local Ollama by itself.
-3. Pick the size you just pulled (e.g. `qwen3-vl:8b`) in the **Vision model** list; if it is missing, click **Check again**.
-4. Click **Save**. The line under the toggle should read `Vision model: ollama / qwen3-vl:8b`.
+3. Pick the size you just pulled (e.g. `qwen3-vl:8b-instruct`) in the **Vision model** list; if it is missing, click **Check again**.
+4. Click **Save**. The line under the toggle should read `Vision model: ollama / qwen3-vl:8b-instruct`.
 
 To run Qwen3-VL on a local OpenAI-compatible service such as LM Studio or vLLM, set **Vision model service** to `OpenAI-compatible service (local / remote)`, fill in that service's Base URL (and an API key when it needs one) and fetch. The vision address and key are saved apart from the prompt service, so Ollama or another compatible server can handle prompt expansion while this one handles image description; when the vision address differs from the prompt service, the prompt service's key is never sent to it.
 
 Two notes:
 
 - Image description waits at most 180 seconds per image (a local model first has to load into memory the first time it is used, and a graphics card that does not respond is retried on the CPU), never beyond the generation limit above (120 seconds by default). Qwen3-VL 8B usually answers in seconds on a GPU with 8 GB or more; on CPU pick the 2B size — a reference past the limit is marked as failed and can be retried on its own.
-- Image description turns off the "thinking" step of the Qwen3 family, so answers are shorter and faster.
+- Requests ask the model to skip its "thinking" step, which works for switchable models such as Qwen3; the Qwen3-VL thinking variants cannot skip it, so use the `-instruct` tags above.
 - If pulling from Ollama is slow on a restricted network, set an HTTPS_PROXY for the Ollama process, restart it and pull again.
 
 ### Vision model device (Ollama)

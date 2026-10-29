@@ -1467,7 +1467,7 @@
             let busy = this.loading || this.saving;
             for (let id of ['enh-cfg-backend', 'enh-cfg-endpoint', 'enh-cfg-model', 'enh-cfg-key', 'enh-cfg-save',
                 'enh-cfg-vision-backend', 'enh-cfg-vision-endpoint', 'enh-cfg-vision-key', 'enh-cfg-vision-model', 'enh-cfg-vision-install',
-                'enh-cfg-vision-ollama-model', 'enh-cfg-vision-ollama-url']) {
+                'enh-cfg-vision-ollama-model', 'enh-cfg-vision-ollama-url', 'enh-cfg-vision-device']) {
                 $(id).disabled = busy;
             }
             $('enh-cfg-fetch-models').disabled = busy || !!this.controller;
@@ -1642,6 +1642,7 @@
         $('enh-cfg-vision-ollama-model').replaceChildren();
         $('enh-cfg-vision-ollama-model-fld').hidden = true;
         $('enh-cfg-vision-ollama-state').textContent = '';
+        showThinkingModelHint();
         applyVisionFields();
     }
 
@@ -1723,6 +1724,7 @@
         }
         select.value = ids.includes(wanted) ? wanted : ids[0] || '';
         $('enh-cfg-vision-ollama-model-fld').hidden = ids.length == 0;
+        showThinkingModelHint();
         $('enh-cfg-vision-install').textContent = ids.length ? tr('安装其他视觉模型') : tr('一键安装本地模型');
         let state = $('enh-cfg-vision-ollama-state');
         if (ids.length && saved && !ids.includes(saved)) {
@@ -1737,6 +1739,19 @@
         else {
             state.textContent = tr('Ollama 已在运行，还没有下载任何模型。点下方“一键安装本地模型”下载一个。');
         }
+    }
+
+    /** Whether an Ollama model is a Qwen3-VL thinking variant (the plain tags or -thinking): it reasons before every description and ignores think:false (F71). */
+    function isThinkingVisionModel(model) {
+        return /^qwen3-vl(:|$)/.test(model || '') && !(model || '').includes('instruct');
+    }
+
+    /** Suggests the instruct tag when the chosen Ollama vision model is a thinking variant, which takes about twice as long per image (F71). */
+    function showThinkingModelHint() {
+        let model = $('enh-cfg-vision-ollama-model').value;
+        let hint = $('enh-cfg-vision-ollama-model-hint');
+        hint.hidden = !isThinkingVisionModel(model);
+        hint.textContent = hint.hidden ? '' : tr('{0} 是“思考版”，每张图都会先推理再描述，耗时约多一倍。建议点“安装其他视觉模型”换成同档的 -instruct 版。', model);
     }
 
     /** Hides the vision service, model and install fields while "Allow image description" is unchecked,
@@ -1980,10 +1995,11 @@
        ============================================================ */
     // The models the install button offers; ids must match VisionInstallRules.KnownModels on the server.
     let VISION_INSTALL_MODELS = [
-        { id: 'qwen3-vl:8b', name: 'Qwen3-VL 8B', size: '6.2 GB', vram: '8 GB', recommended: true },
-        { id: 'qwen3-vl:4b', name: 'Qwen3-VL 4B', size: '3.3 GB', vram: '6 GB' },
-        { id: 'qwen3-vl:2b', name: 'Qwen3-VL 2B', size: '1.9 GB', vram: '', cpu: true },
-        { id: 'qwen3-vl:30b-a3b', name: 'Qwen3-VL 30B', size: '20 GB', vram: '24 GB' },
+        // Qwen3-VL uses the instruct tags: the plain tags are the thinking variants, which reason before every description (F71).
+        { id: 'qwen3-vl:8b-instruct', name: 'Qwen3-VL 8B', size: '6.2 GB', vram: '8 GB', recommended: true },
+        { id: 'qwen3-vl:4b-instruct', name: 'Qwen3-VL 4B', size: '3.3 GB', vram: '6 GB' },
+        { id: 'qwen3-vl:2b-instruct', name: 'Qwen3-VL 2B', size: '1.9 GB', vram: '', cpu: true },
+        { id: 'qwen3-vl:30b-a3b-instruct', name: 'Qwen3-VL 30B', size: '20 GB', vram: '24 GB' },
         { id: 'llama3.2-vision:latest', name: 'Llama 3.2 Vision', size: '7.9 GB', vram: '8 GB' }
     ];
     /** Polls a running install while the settings dialog stays open; the install itself keeps going without it. */
@@ -5709,6 +5725,7 @@
         $('enh-cfg-fetch-models').addEventListener('click', fetchMpModels);
         $('enh-cfg-fetch-vision-models').addEventListener('click', fetchVisionModels);
         $('enh-cfg-vision-detect').addEventListener('click', () => detectOllamaVision());
+        $('enh-cfg-vision-ollama-model').addEventListener('change', showThinkingModelHint);
         $('enh-cfg-vision-install').addEventListener('click', () => {
             let box = $('enh-cfg-vision-install-box');
             box.hidden = !box.hidden;

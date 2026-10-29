@@ -1095,6 +1095,7 @@ window.EcomCraftLanguages.en = {
     "高级：Ollama 装在局域网的另一台电脑上": "Advanced: Ollama runs on another computer in the LAN",
     "Ollama 地址": "Ollama address",
     "运行设备": "Device",
+    "{0} 是“思考版”，每张图都会先推理再描述，耗时约多一倍。建议点“安装其他视觉模型”换成同档的 -instruct 版。": "{0} is a “thinking” variant: it reasons before every description and takes about twice as long per image. Click “Install another vision model” and switch to the -instruct tag of the same size.",
     "自动（显卡没有响应时改用 CPU）": "Automatic (use the CPU when the graphics card does not respond)",
     "只用显卡": "Graphics card only",
     "只用 CPU": "CPU only",

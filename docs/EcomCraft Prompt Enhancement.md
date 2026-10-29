@@ -193,7 +193,7 @@ powershell -ExecutionPolicy Bypass -File launchtools\install-vision-model-window
 bash launchtools/install-vision-model-linux.sh llama3.2-vision:latest
 ```
 
-   `-Model`（Linux 为第一个参数）填提示词优化设置中的视觉模型名称（如换成 Qwen3-VL 时填 `qwen3-vl:8b`），省略时为默认模型；macOS 请先从官网安装 Ollama 应用。也可以手动安装 Ollama 后拉取：
+   `-Model`（Linux 为第一个参数）填提示词优化设置中的视觉模型名称（如换成 Qwen3-VL 时填 `qwen3-vl:8b-instruct`），省略时为默认模型；macOS 请先从官网安装 Ollama 应用。也可以手动安装 Ollama 后拉取：
 
 ```bash
 ollama pull llama3.2-vision
@@ -213,10 +213,12 @@ Ollama 官方库已收录 Qwen3-VL。同一系列里的 2B / 4B / 8B / 30B 只�
 
 | 命令 | 模型 | 下载体积 | 建议显存 | 描述能力的差别 |
 |---|---|---|---|---|
-| `ollama pull qwen3-vl:2b` | Qwen3-VL 2B | ~1.9 GB | 4 GB，或纯 CPU | 能认出主体和大致构图，小字标签容易漏；速度最快 |
-| `ollama pull qwen3-vl:4b` | Qwen3-VL 4B | ~3.3 GB | 6 GB | 日常商品图描述准确，复杂花纹、密集小字偶尔出错 |
-| `ollama pull qwen3-vl:8b` | Qwen3-VL 8B | ~6.2 GB | 8 GB | 细节、中文标签和构图光线的描述明显更稳、更专业；**大多数团队的最佳选择** |
-| `ollama pull qwen3-vl:30b-a3b` | Qwen3-VL 30B（MoE） | ~20 GB | 24 GB | 最强档：多商品同框、长图密集文字也能读全；MoE 结构速度不慢 |
+| `ollama pull qwen3-vl:2b-instruct` | Qwen3-VL 2B | ~1.9 GB | 4 GB，或纯 CPU | 能认出主体和大致构图，小字标签容易漏；速度最快 |
+| `ollama pull qwen3-vl:4b-instruct` | Qwen3-VL 4B | ~3.3 GB | 6 GB | 日常商品图描述准确，复杂花纹、密集小字偶尔出错 |
+| `ollama pull qwen3-vl:8b-instruct` | Qwen3-VL 8B | ~6.2 GB | 8 GB | 细节、中文标签和构图光线的描述明显更稳、更专业；**大多数团队的最佳选择** |
+| `ollama pull qwen3-vl:30b-a3b-instruct` | Qwen3-VL 30B（MoE） | ~20 GB | 24 GB | 最强档：多商品同框、长图密集文字也能读全；MoE 结构速度不慢 |
+
+请拉取带 `-instruct` 的标签：不带后缀的 `qwen3-vl:2b`、`4b`、`8b` 等是“思考版”，每张图都会先输出一段推理再描述，耗时约多一倍，而且 Ollama 无法关掉它（2026-10-29 在 Ollama 0.40.13 上实测）。已经装了思考版时，设置里的视觉模型下方会提示改换，体积相同，换装即可。
 
 拿不准时按显存选即可：无独显选 2B，6 GB 选 4B，8 GB 及以上直接 8B；有 24 GB 大卡（如 3090/4090）且要求最高质量再上 30B。拉取也可以用上面的一键安装脚本完成（把 `-Model` 参数换成所选档位）。
 
@@ -224,15 +226,15 @@ Ollama 官方库已收录 Qwen3-VL。同一系列里的 2B / 4B / 8B / 30B 只�
 
 1. 打开工作台的 **提示词优化设置**（管理员），确认 **允许看图描述** 已勾选。
 2. **视觉模型服务** 选 `Ollama（本地，免费）`，弹窗会自动检测本机 Ollama。
-3. 在 **视觉模型** 下拉框里选择刚拉取的档位（如 `qwen3-vl:8b`）；没有出现时点“重新检测”。
-4. 点击 **保存**。开关下方应显示 `视觉模型：ollama / qwen3-vl:8b`。
+3. 在 **视觉模型** 下拉框里选择刚拉取的档位（如 `qwen3-vl:8b-instruct`）；没有出现时点“重新检测”。
+4. 点击 **保存**。开关下方应显示 `视觉模型：ollama / qwen3-vl:8b-instruct`。
 
 想用 LM Studio、vLLM 等本地 OpenAI 兼容服务跑 Qwen3-VL 时，把 **视觉模型服务** 选为 `OpenAI 兼容服务（本地 / 远程）`，填写该服务的 Base URL（需要时再填 API Key）后拉取选择。视觉服务的地址和 Key 与提示词服务分开保存，可以一边用 Ollama 或另一台兼容服务跑提示词扩写、一边用这台兼容服务跑看图描述；视觉服务地址与提示词服务不同时，不会把提示词服务的 Key 发给视觉服务。
 
 两点提醒：
 
 - 看图描述每张图最多等待 180 秒（本地模型第一次用时要先载入内存，显卡没有响应时还要改用 CPU 重试），实际上限不超过上文的生成时限（默认 120 秒）。Qwen3-VL 8B 在 8 GB 以上显存的 GPU 上通常几秒完成；纯 CPU 请选 2B 档，超时的参考图标为描述失败，可以单独重试。
-- 看图时已关闭 Qwen3 系列的“思考”过程，输出更短、更快。
+- 请求会要求模型不输出“思考”过程，对 Qwen3 这类可开关的模型有效；Qwen3-VL 的思考版关不掉，请用上文的 `-instruct` 标签。
 - 国内网络直接拉取 Ollama 模型较慢时，可为 Ollama 进程设置 HTTPS_PROXY 代理后重启再拉取。
 
 ### 看图模型的运行设备（Ollama）

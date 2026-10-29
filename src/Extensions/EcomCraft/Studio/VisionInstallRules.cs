@@ -6,8 +6,9 @@ namespace EcomCraftStudio.Studio;
 /// script's output is reduced to plain lines the progress view can show.</summary>
 public static class VisionInstallRules
 {
-    /// <summary>The models the button may install (the documented set, in the docs' recommendation order); other models stay with running the script by hand.</summary>
-    public static readonly string[] KnownModels = ["qwen3-vl:8b", "qwen3-vl:4b", "qwen3-vl:2b", "qwen3-vl:30b-a3b", "llama3.2-vision:latest"];
+    /// <summary>The models the button may install (the documented set, in the docs' recommendation order); other models stay with running the script by hand.
+    /// Qwen3-VL uses the instruct tags: the plain tags are the thinking variants, which reason before every description and ignore Ollama's think:false (F71).</summary>
+    public static readonly string[] KnownModels = ["qwen3-vl:8b-instruct", "qwen3-vl:4b-instruct", "qwen3-vl:2b-instruct", "qwen3-vl:30b-a3b-instruct", "llama3.2-vision:latest"];
 
     /// <summary>Longest output line kept, so a stray data blob cannot flood the progress view.</summary>
     public const int MaxLineLength = 300;

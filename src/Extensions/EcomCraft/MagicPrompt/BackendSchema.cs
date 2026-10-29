@@ -131,7 +131,8 @@ public static class BackendSchema
                 model,
                 messages = messages.ToArray(),
                 stream = false,
-                // Thinking models (qwen3, qwen3-vl) would otherwise reason first, roughly doubling the output for no benefit here.
+                // Hybrid models (qwen3) would otherwise reason first, roughly doubling the output for no benefit here. Thinking-only variants
+                // (the plain qwen3-vl tags) ignore it, which is why the instruct tags are the recommended vision models (F71).
                 think = false,
                 keep_alive = content.KeepAlive,
                 options
