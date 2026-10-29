@@ -200,6 +200,8 @@ ollama pull llama3.2-vision
 
 3. Uploaded references are described automatically, one at a time. Clicking "Add a reference" first checks whether the vision model is usable: when it is not, the picker stays closed and the image-description guidance shows below instead, whose "Open the prompt enhancement settings" step goes straight to the configuration. When image description is off, the vision service cannot be reached, or the vision model has not been pulled, "Follow a reference" likewise says what is missing: administrators see the steps to fix it and other accounts see "ask your administrator"; plain generation is unaffected.
 
+4. Administrators can also switch the vision model right on the "Follow a reference" page with the **Vision model** list (the vision service's models that can read images). Picking one saves it as the same vision model the prompt enhancement settings use, and references described from then on use it. To confirm which model is actually asked, look for `EcomCraft is describing an image with <service type> / <model>` in the server log, or run `ollama ps` on the computer running Ollama.
+
 ### Recommended vision model: Qwen3-VL (much better Chinese image description)
 
 The default `llama3.2-vision` is mediocre with Chinese product photos. For image description we recommend Alibaba's open-source **Qwen3-VL** (Apache-2.0): high-quality Chinese and English descriptions, strong OCR for labels, tags and text on product photos, and consistently top download rankings.
@@ -226,7 +228,7 @@ To run Qwen3-VL on a local OpenAI-compatible service such as LM Studio or vLLM, 
 
 Two notes:
 
-- Image description waits at most 45 seconds per image. Qwen3-VL 8B usually answers in seconds on a GPU with 8 GB or more; on CPU pick the 2B size — past the limit, description falls back to the template defaults with a service-unavailable notice.
+- Image description waits at most 120 seconds per image (a local model first has to load into memory the first time it is used). Qwen3-VL 8B usually answers in seconds on a GPU with 8 GB or more; on CPU pick the 2B size — a reference past the limit is marked as failed and can be retried on its own.
 - If pulling from Ollama is slow on a restricted network, set an HTTPS_PROXY for the Ollama process, restart it and pull again.
 
 Note: image description sends the user's uploaded images to the configured vision service. With local Ollama the images never leave the machine; pointing the vision backend at a cloud service sends images off-site — change it only if the team accepts that. The reference images themselves exist briefly in memory only and are never stored on the server.
@@ -239,7 +241,7 @@ Note: image description sends the user's uploaded images to the configured visio
 | "Authentication / API Key not found" | Cloud backend without a key, or a wrong key; paste it again in the settings |
 | "401 / session expired" | Login session expired; refresh the page |
 | "Request timeout" | Local models can be slow or the network down; retry — large models on CPU may take a while |
-| Image description empty / status shows the service unavailable | Vision model not pulled, Ollama not running, the wrong vision model selected in the settings, or the model too slow (45 seconds per image at most; pick the 2B size on CPU); see the Qwen3-VL section above |
+| Image description empty / status shows the service unavailable | Vision model not pulled, Ollama not running, the wrong vision model selected in the settings, or the model too slow (120 seconds per image at most; pick the 2B size on CPU); see the Qwen3-VL section above |
 | Model list empty / fetch fails | Check the service is running, the URL path is right and the key is valid |
 | Other computers cannot reach a local service | The local service must listen on `0.0.0.0` and the port must be open in the firewall |
 | Restoring defaults | Reset the MagicPrompt configuration in the native engine's settings, or choose the backend again in the settings |
