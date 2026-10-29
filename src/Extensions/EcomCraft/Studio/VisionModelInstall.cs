@@ -251,7 +251,7 @@ public static class VisionModelInstall
     [API.APIDescription("Start the one-click install of the local vision model (F69, administrators): runs the repository install script on this server, "
         + "which installs Ollama when missing and pulls the chosen model (one of the documented vision models); a successful install saves that model "
         + "on this server's Ollama as the vision model before reporting done. Only one install runs at a time; "
-        + "progress comes from EcomCraftStudioVisionInstallStatus.", "state: \"running\", model: \"qwen3-vl:8b\"")]
+        + "progress comes from EcomCraftStudioVisionInstallStatus.", "state: \"running\", model: \"qwen3-vl:8b-instruct\"")]
     public static Task<JObject> EcomCraftStudioVisionInstall(Session session, string model = "")
     {
         if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.EditServerSettings))
@@ -272,7 +272,7 @@ public static class VisionModelInstall
 
     [API.APIDescription("The progress of the one-click local vision model install (F69, administrators): state is idle, running, done or failed, "
         + "with the model, unix start and finish times and the last plain lines of the install script output. Requires the server-settings permission.",
-        "state: \"running\", model: \"qwen3-vl:8b\", started_at: 0, finished_at: null, lines: [\"\"]")]
+        "state: \"running\", model: \"qwen3-vl:8b-instruct\", started_at: 0, finished_at: null, lines: [\"\"]")]
     public static Task<JObject> EcomCraftStudioVisionInstallStatus(Session session)
     {
         if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.EditServerSettings))

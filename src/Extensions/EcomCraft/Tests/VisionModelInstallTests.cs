@@ -7,12 +7,13 @@ namespace EcomCraftStudio.Tests;
 public class VisionModelInstallTests
 {
     [Theory]
-    [InlineData("qwen3-vl:8b", true)]
-    [InlineData(" qwen3-vl:4b ", true)]
+    [InlineData("qwen3-vl:8b-instruct", true)]
+    [InlineData(" qwen3-vl:4b-instruct ", true)]
+    [InlineData("qwen3-vl:4b", false)]
     [InlineData("llama3.2-vision:latest", true)]
     [InlineData("", false)]
     [InlineData("gpt-4o", false)]
-    [InlineData("qwen3-vl:8b; ollama serve &", false)]
+    [InlineData("qwen3-vl:8b-instruct; ollama serve &", false)]
     public void AcceptsOnlyTheDocumentedModels(string model, bool expected)
     {
         Assert.Equal(expected, VisionInstallRules.IsKnownModel(model));
