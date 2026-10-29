@@ -503,6 +503,7 @@ window.EcomCraftLanguages.en = {
     "商品自己的摆放": "Product's own placement",
     "参考图 {0}（已调整）": "Reference {0} (adjusted)",
     "请对照参考图调整商品的位置和大小。": "Match the product's position and size to the reference.",
+    "可在第 1 步的商品预览上方选“参考图 n”，对照参考图调整商品的位置和大小。": "Above the product preview in step 1, choose \"Reference n\" to match the product's position and size to that reference.",
     "删除参考图 {0}": "Remove reference {0}",
     "参考图 {0} 的提示词": "Prompt of reference {0}",
     "描述中…": "Describing…",
