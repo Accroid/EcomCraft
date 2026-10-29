@@ -420,9 +420,10 @@ main:focus:not(:focus-visible) { outline: none; }
 .simple-export { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
 .simple-batch { display: grid; gap: 8px; }
 .simple-jobs { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.simple-job { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: var(--fs-13); }
+.simple-job { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: var(--fs-13); }
 .simple-job.is-failed { border-color: var(--tally); }
 .simple-job-state { color: var(--ink-2); white-space: nowrap; }
+.simple-job-error { flex-basis: 100%; color: var(--tally); font-size: var(--fs-12); overflow-wrap: anywhere; }
 .simple-cutout { display: grid; gap: 8px; }
 .simple-stage { position: relative; width: 100%; aspect-ratio: 1; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; touch-action: none;
     background-color: #fff; background-image: linear-gradient(45deg, #e6e6e6 25%, transparent 25%, transparent 75%, #e6e6e6 75%), linear-gradient(45deg, #e6e6e6 25%, transparent 25%, transparent 75%, #e6e6e6 75%);

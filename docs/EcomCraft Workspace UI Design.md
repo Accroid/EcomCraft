@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.34 · **Date:** 2026-10-29
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.35 · **Date:** 2026-10-30
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -195,7 +195,7 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Step 2 Selling points and storyboard | Optional folded section that plans the set (F25) | New | Selling points are single-line inputs (up to 5, add/remove); "Plan the storyboard" calls the prompt service and shows "Planning the storyboard…" while working; each shot's image type (only those of the current platform), purpose and scene description can be edited or removed, "Add an image" allows up to 8, "Clear the storyboard" returns to the ordinary set; a shot with a type the platform lacks disables generation with the reason; no multi-line text boxes or professional parameters |
 | Step 3 Prompt sent to the engine | Folded view of the prompt the latest submission actually used (F54) | New | Collapsible block under the status line showing "Chinese: …" (when Chinese was the source) and "English (sent): …"; white main images (cut-out only) do not update it |
 | Step 3 Generation tasks | Stages of single generations (F56) | New | Under the status line, the last 10 submissions as "Product｜Type: Writing the prompt… / Queued (server) / Running (server) / Done (server) / Failed", hovering a failed one shows why; when the model writes the prompt, the task appears as "Writing the prompt…" right after submitting |
-| Step 3 Task list | State of each set / batch task | New | "Product n｜type: state", failed items retryable with the reason on hover; "Cancel remaining"; finished candidates join the list below; finishing shows a banner and the tab title counts progress in the background (F43) |
+| Step 3 Task list | State of each set / batch task | New | "Product n｜type: state", failed items retryable with the reason shown right below the task; "Cancel remaining"; finished candidates join the list below; finishing shows a banner and the tab title counts progress in the background (F43) |
 | Step 3 Export for platform | Scale and pad to the platform preset, then zip or shared folder | New | Appears with candidates; platform dropdown carries the size; only picked images export, one folder per product; unverified presets warn; the folder option hides without an export location |
 | Step 3 Make a selling-point image | Lays out a title and selling points on one picked candidate in a fixed layout (F47) | New | Folded section shown once there are candidates; title (up to 20 characters), three point inputs (up to 16 characters each, prefilled once from the storyboard), layout chips (bottom banner / left text column / title with badges) and an accent color (defaults to the brand kit's first color); "Make the image" works only with exactly one picked image and shows "Making the image…"; the result goes to the front of the candidates |
 | Step 3 Refine in professional mode | Takes one candidate to professional mode for further work (F64) | New | Shown next to "Download selected" when exactly one image candidate is picked; loads it as the image-to-image start picture and fills in the prompt read from the work's metadata, or asks the user to write one; hidden on narrow screens (≤720px); professional mode never writes back |
@@ -432,3 +432,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-29 | v1.32 | New startup overlay: while the service or execution servers start, a loading notice covers the page and blocks actions, and disappears once started |
 | 2026-10-29 | v1.33 | The Ollama part of the settings dialog's vision section gained "Device" (F71/T75) |
 | 2026-10-29 | v1.34 | The one-click install offers the Qwen3-VL -instruct tags; choosing a thinking variant shows a hint to switch (F71/T75) |
+| 2026-10-30 | v1.35 | A failed set or batch task shows its reason right below the task instead of only on hover |
