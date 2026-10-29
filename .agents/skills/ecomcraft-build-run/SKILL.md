@@ -24,6 +24,7 @@ description: 构建、启动、重启 EcomCraft / SwarmUI 服务时使用，包�
 
 - 用 `Get-Process SwarmUI | Select-Object Id, Path` 查看。只停止 `Path` 位于当前工作区 `src\bin\live_release\` 下的进程；其他工作区或与本项目无关的进程不要动。
 - 不停止旧进程，`dotnet build` 会因为输出文件被占用而失败。
+- 强制结束 SwarmUI 不会结束它自启动的 ComfyUI（`python.exe ... main.py --port 78xx`）。留下的孤儿进程占着内存、显存和端口，下次启动会改用下一个端口，重启多次后就积累出一串实例。所以停 SwarmUI 后，要同时停止命令行包含当前工作区路径和 `main.py` 的 `python.exe`（用 `Get-CimInstance Win32_Process -Filter "Name='python.exe'"` 查看 `CommandLine`），其他路径的 Python 进程不要动。
 
 ### 两种启动方式和扩展缓存
 
@@ -43,6 +44,7 @@ description: 构建、启动、重启 EcomCraft / SwarmUI 服务时使用，包�
 ### 启动后检查
 
 - 后台启动服务，等待后检查：`Invoke-WebRequest http://127.0.0.1:7801/EcomCraft -UseBasicParsing -MaximumRedirection 0` 返回 200（开启账号登录时会返回 302 跳转到 `/Login`，同样说明服务在线；404 说明扩展没加载）；进程过一段时间仍在运行；日志里没有 `Failed to build extension`、`CriticalLoadError` 或未处理异常。
+- 确认本工作区只有一组自启动 ComfyUI 进程（一个端口）；有多组说明之前留下了孤儿进程，按“停止旧进程”一节清理后重启。
 - 确认加载的是新程序集：`src/bin/extensions/SwarmExtensionEcomCraft/` 下 DLL 的修改时间晚于源码改动时间。
 - 沙箱中出现 DPAPI、WMI 或文件访问被拒绝时，不要绕过，请用户批准后在正常用户环境启动。
 
