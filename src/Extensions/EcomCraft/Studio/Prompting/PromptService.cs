@@ -23,6 +23,9 @@ public static class PromptService
     /// <summary>Longest wait for the language model before falling back.</summary>
     private static readonly TimeSpan ModelTimeout = TimeSpan.FromSeconds(45);
 
+    /// <summary>Longest wait for the vision model: a local one may first have to load into memory, and reading an image is slower than text.</summary>
+    private static readonly TimeSpan VisionTimeout = TimeSpan.FromSeconds(120);
+
     /// <summary>Longest description accepted.</summary>
     public const int MaxDescriptionLength = 500;
 
@@ -375,9 +378,12 @@ public static class PromptService
     private const int MaxReferenceImageLength = (5 * 1024 * 1024 + 2) / 3 * 4 + 40;
 
     /// <summary>The instruction for describing one reference image (F59): the setup and style only, never the product, so the description can steer a
-    /// different product into a similar frame without copying it.</summary>
-    private const string ReferenceInstruction = "Describe how this product photo is set up so a similar one can be made with a different product: "
-        + "camera angle, framing, lighting, background and props. Describe the setup and style only, never any product or brand. Reply with one English sentence.";
+    /// different product into a similar frame without copying it. It asks for a detailed paragraph, since a one-sentence answer gives the image model too little to go on.</summary>
+    private const string ReferenceInstruction = "You write prompts for a text-to-image model. Describe how this product photo is set up so a similar photo can be made "
+        + "with a different product. Cover: shot type and camera angle; where the product sits in the frame and how much of it it fills; the surface and background "
+        + "(materials, colors, textures); props and where they are placed; lighting (direction, softness, shadows, highlights); color palette and mood; "
+        + "the overall photographic style. Call the product only \"the product\" and never name its type, brand, logo or any text in the photo. "
+        + "Reply with one English paragraph of 60 to 120 words, without lists or headings.";
 
     [API.APIDescription("Describe reference images for reference mode (F59): one English composition prompt and its Chinese translation per image (1–8), "
         + "for the page to show and the user to edit. Image description is on unless the administrator turned it off.", "items: [{ index: 0, prompt_en: \"\", prompt_zh: \"\" }], failed: 0")]
@@ -468,7 +474,7 @@ public static class PromptService
             }
             JObject request = new() { ["messageContent"] = content, ["modelId"] = model, ["messageType"] = vision ? "Vision" : "Text", ["action"] = vision ? "vision" : "chat" };
             Task<JObject> call = LLMAPICalls.MagicPromptPhoneHome(request, session);
-            if (await Task.WhenAny(call, Task.Delay(ModelTimeout)) != call)
+            if (await Task.WhenAny(call, Task.Delay(vision ? VisionTimeout : ModelTimeout)) != call)
             {
                 Logs.Warning("EcomCraft prompt service: the language model did not answer in time; using the template defaults.");
                 return "";

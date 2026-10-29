@@ -502,6 +502,7 @@ window.EcomCraftLanguages.en = {
     "删除参考图 {0}": "Remove reference {0}",
     "参考图 {0} 的提示词": "Prompt of reference {0}",
     "描述中…": "Describing…",
+    "排队等待描述…": "Waiting to be described…",
     "没有描述成功，可点“重试”。": "The description failed; press Retry.",
     "请先在第 1 步上传商品图。": "Upload a product photo in step 1 first.",
     "还在描述参考图…": "Still describing the references…",

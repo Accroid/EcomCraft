@@ -39,8 +39,14 @@ class SimpleMode {
     /** Whether "More options" (style, model, brand kit, description and prompt) is unfolded; remembered in this browser (F61). */
     static moreOpen = false;
 
-    /** Reference images of reference mode (F59): each { image, promptEn, promptZh, edited, describing, failed }; one image is made per reference. */
+    /** Reference images of reference mode (F59): each { image, promptEn, promptZh, edited, queued, describing, failed }; one image is made per reference. */
     static references = [];
+
+    /** References waiting to be described, in order: a local vision model reads one image at a time, so they are sent one by one rather than all at once. */
+    static describeWaiting = [];
+
+    /** Whether the description queue is being worked through. */
+    static describeRunning = false;
 
     /** Whether image description works (F68): { state, provider, model, can_manage } from the server, state 'unknown' when it could not be asked, null before the first answer. */
     static vision = null;
@@ -2152,7 +2158,7 @@ class SimpleMode {
                 if (file.size > this.maxProductBytes) {
                     data = await this.compressImage(data, this.maxProductBytes);
                 }
-                this.references.push({ image: data, promptEn: '', promptZh: '', edited: false, describing: false, failed: false });
+                this.references.push({ image: data, promptEn: '', promptZh: '', edited: false, queued: false, describing: false, failed: false });
             }
             catch (error) {
                 this.message(tr('有参考图无法读取，请重新选择。'), true);
@@ -2161,14 +2167,48 @@ class SimpleMode {
         this.renderReferences();
         this.update();
         for (let item of this.references) {
-            if (!item.describing && !item.promptEn && !item.failed) {
-                this.describeReference(this.references.indexOf(item), item);
+            if (!item.queued && !item.describing && !item.promptEn && !item.failed) {
+                this.queueDescribe(item);
             }
         }
     }
 
+    /** Puts one reference at the end of the description queue (also used by "Retry") and starts working through the queue if it is idle. */
+    static queueDescribe(item) {
+        if (item.queued || item.describing) {
+            return;
+        }
+        item.queued = true;
+        item.failed = false;
+        this.describeWaiting.push(item);
+        this.renderReferences();
+        this.update();
+        this.runDescribeQueue();
+    }
+
+    /** Describes the queued references one at a time, skipping any the user removed meanwhile. */
+    static async runDescribeQueue() {
+        if (this.describeRunning) {
+            return;
+        }
+        this.describeRunning = true;
+        try {
+            while (this.describeWaiting.length) {
+                let item = this.describeWaiting.shift();
+                item.queued = false;
+                if (!this.references.includes(item)) {
+                    continue;
+                }
+                await this.describeReference(item);
+            }
+        }
+        finally {
+            this.describeRunning = false;
+        }
+    }
+
     /** Asks the server to describe one reference image (F59); fills the item's prompt unless the user edited it first. */
-    static async describeReference(index, item) {
+    static async describeReference(item) {
         item.describing = true;
         item.started = Date.now();
         item.failed = false;
@@ -2367,7 +2407,7 @@ class SimpleMode {
             let mid = el('div', 'simple-ref-item-main');
             let input = document.createElement('textarea');
             input.className = 'simple-ref-prompt';
-            input.rows = 2;
+            input.rows = 4;
             input.maxLength = 1500;
             input.spellcheck = false;
             input.value = item.promptEn;
@@ -2378,14 +2418,22 @@ class SimpleMode {
                 this.update();
             });
             let zh = el('p', 'hint simple-ref-zh');
-            zh.textContent = item.describing ? this.waitingLabel(tr('描述中…'), 'describe', item.started) : (item.failed ? tr('没有描述成功，可点“重试”。') : (item.promptZh || ''));
+            if (item.describing) {
+                zh.textContent = this.waitingLabel(tr('描述中…'), 'describe', item.started);
+            }
+            else if (item.queued) {
+                zh.textContent = tr('排队等待描述…');
+            }
+            else {
+                zh.textContent = item.failed ? tr('没有描述成功，可点“重试”。') : (item.promptZh || '');
+            }
             item.statusEl = zh;
             mid.append(input, zh);
             let retry = el('button', 'link-btn');
             retry.type = 'button';
             retry.textContent = tr('重试');
-            retry.hidden = !(item.failed && !item.describing);
-            retry.addEventListener('click', () => this.describeReference(index, item));
+            retry.hidden = !(item.failed && !item.describing && !item.queued);
+            retry.addEventListener('click', () => this.queueDescribe(item));
             row.append(img, mid, retry);
             rows.push(row);
         }
@@ -2436,7 +2484,7 @@ class SimpleMode {
         if (!this.products.length) {
             return '请先在第 1 步上传商品图。';
         }
-        if (this.references.some(item => item.describing)) {
+        if (this.references.some(item => item.describing || item.queued)) {
             return '还在描述参考图…';
         }
         if (this.references.some(item => !item.promptEn.trim())) {
