@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace EcomCraftStudio.Studio;
 
 /// <summary>Pure rules of the one-click local vision model install (F69): which models the button may install, and how the install
@@ -16,12 +18,45 @@ public static class VisionInstallRules
         return KnownModels.Contains((model ?? "").Trim());
     }
 
-    /// <summary>Normalizes one raw script line for the progress view: carriage-return progress updates become their latest segment,
-    /// empty parts are dropped and the rest is capped at <see cref="MaxLineLength"/> characters.</summary>
+    /// <summary>Terminal control sequences in the script output (Ollama draws its progress with them): CSI sequences such as "ESC[K",
+    /// "ESC[?25h" or "ESC[1G", OSC sequences and other two-character escapes.</summary>
+    private static readonly Regex ControlSequence = new(@"\x1B\[[0-9;?]*[ -/]*[@-~]|\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)|\x1B[@-_]", RegexOptions.Compiled);
+
+    /// <summary>Progress bar drawing characters (the Unicode block elements).</summary>
+    private static readonly Regex Bar = new(@"[▀-▟]+", RegexOptions.Compiled);
+
+    /// <summary>Runs of spaces, such as the ones the removed bar leaves behind.</summary>
+    private static readonly Regex Spaces = new(@"\s{2,}", RegexOptions.Compiled);
+
+    /// <summary>Normalizes one raw script line for the progress view: terminal control sequences are removed, carriage returns and cursor moves
+    /// split redrawn progress into segments, and the latest segment with a percentage wins (else the latest one). The progress bar characters
+    /// are dropped and the rest is capped at <see cref="MaxLineLength"/> characters.</summary>
     public static string CleanLine(string raw)
     {
-        string text = (raw ?? "").Replace('\r', '\n');
-        string latest = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault("") ?? "";
+        // Cursor moves (ESC[A, ESC[1G, …) start a redraw like a carriage return does; other sequences only style the text.
+        string text = ControlSequence.Replace(raw ?? "", match => match.Value.StartsWith("\x1B[", StringComparison.Ordinal) && match.Value[^1] is >= 'A' and <= 'H' ? "\n" : "");
+        List<string> segments = [];
+        foreach (string part in text.Replace('\r', '\n').Split('\n'))
+        {
+            string plain = Spaces.Replace(string.Concat(Bar.Replace(part, " ").Where(c => !char.IsControl(c))), " ").Trim();
+            if (plain.Length > 0)
+            {
+                segments.Add(plain);
+            }
+        }
+        string latest = segments.LastOrDefault(segment => segment.Contains('%')) ?? segments.LastOrDefault("");
         return latest.Length > MaxLineLength ? latest[..MaxLineLength] : latest;
+    }
+
+    /// <summary>Whether a new progress line replaces the previous one instead of being added: the same text again, or a newer percentage
+    /// of the same step (the part before the first colon, such as "pulling ee8b93fa272a").</summary>
+    public static bool Replaces(string previous, string line)
+    {
+        if (previous == line)
+        {
+            return true;
+        }
+        int colon = line.IndexOf(':');
+        return colon > 0 && line.Contains('%') && previous.Contains('%') && previous.StartsWith(line[..(colon + 1)], StringComparison.Ordinal);
     }
 }
