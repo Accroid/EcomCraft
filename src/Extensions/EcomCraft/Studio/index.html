@@ -8,11 +8,11 @@
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 工作台</title>
     <link rel="icon" href="/favicon.ico?v=3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.50.0">
-    <script src="/EcomCraft/lang/en.js?v=0.50.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.50.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.50.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.50.0" defer></script>
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.51.0">
+    <script src="/EcomCraft/lang/en.js?v=0.51.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.51.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.51.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.51.0" defer></script>
 </head>
 
 <body>
@@ -209,6 +209,10 @@
                         <input type="number" id="simple-count" min="1" max="20" step="1" value="4" inputmode="numeric">
                     </div>
                     <p class="hint" id="simple-count-hint" data-tasks="single set">可输入 1–20 的正整数；单次出图和一键出整套最多共 20 张。</p>
+                    <p class="simple-redo" id="simple-redo" data-tasks="single" hidden>
+                        <span id="simple-redo-text" aria-live="polite"></span>
+                        <button type="button" class="link-btn" id="simple-redo-clear">不再沿用</button>
+                    </p>
                     <button type="button" class="btn btn-primary btn-block" id="simple-generate" data-tasks="single" disabled>开始出图</button>
                     <button type="button" class="btn btn-primary btn-block" id="simple-generate-set" data-tasks="set" disabled>一键出整套</button>
                     <button type="button" class="btn btn-primary btn-block" id="simple-generate-reference" data-tasks="reference" disabled>按参考出图</button>
@@ -600,9 +604,20 @@
                 <button type="button" class="btn" id="gallery-select" aria-pressed="false" hidden>选择</button>
             </div>
 
+            <div class="toolbar project-bar">
+                <label class="sort-wrap project-wrap">
+                    <span class="project-label">当前项目</span>
+                    <select id="gallery-project" name="gallery-project" data-i18n-skip></select>
+                </label>
+                <button type="button" class="btn" id="gallery-projects">管理项目</button>
+                <p class="hint project-note" id="gallery-project-note" hidden></p>
+            </div>
+
             <div class="selection-bar" id="gallery-selection" hidden>
                 <span class="selection-count" id="gallery-selected-count">已选 0 项</span>
                 <button type="button" class="btn" id="gallery-select-all">全选当前列表</button>
+                <button type="button" class="btn" id="gallery-file-selected" disabled>归入当前项目</button>
+                <button type="button" class="btn" id="gallery-unfile-selected" hidden disabled>移出当前项目</button>
                 <button type="button" class="btn btn-danger" id="gallery-delete-selected" disabled>删除所选</button>
                 <button type="button" class="btn" id="gallery-select-cancel">取消</button>
             </div>
@@ -691,6 +706,8 @@
                 </div>
                 <button type="button" class="lb-btn" id="lb-star" aria-pressed="false">收藏</button>
                 <a class="lb-btn" id="lb-download" href="#" download>下载</a>
+                <button type="button" class="lb-btn" id="lb-redo" hidden>用相同参数重做</button>
+                <button type="button" class="lb-btn" id="lb-file" hidden>归入当前项目</button>
                 <button type="button" class="lb-btn pro-only" id="lb-edit">以此图创作</button>
                 <button type="button" class="lb-btn" id="lb-gallery" hidden>在画廊查看</button>
                 <button type="button" class="lb-btn lb-danger" id="lb-delete">删除</button>
@@ -974,6 +991,37 @@
             <div class="modal-foot">
                 <button type="button" class="btn" id="submit-cancel">取消</button>
                 <button type="button" class="btn btn-primary" id="submit-confirm">提交审核</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 项目归档（F04）：新建、重命名、删除当前账号的项目 -->
+    <div class="modal" id="project-modal" hidden>
+        <div class="modal-backdrop" id="project-backdrop"></div>
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="project-title">
+            <div class="modal-head">
+                <div>
+                    <h3 id="project-title">管理项目</h3>
+                    <p class="hint">一个项目对应一个客户或一批商品，只有你自己能看到。删除项目只删除归档记录，作品仍留在画廊。</p>
+                </div>
+                <button type="button" class="icon-btn" id="project-close" aria-label="关闭项目管理">✕</button>
+            </div>
+            <div class="modal-body">
+                <ul class="project-list" id="project-list" aria-label="我的项目"></ul>
+                <p class="empty-line" id="project-empty" hidden>还没有项目，在下面填写名称新建一个。</p>
+                <div class="fld">
+                    <label for="project-name" id="project-name-label">新项目名称</label>
+                    <input id="project-name" type="text" maxlength="40" autocomplete="off" placeholder="例如：客户 A 春季新品">
+                </div>
+                <div class="fld">
+                    <label for="project-note">备注<span class="fld-optional">可选</span></label>
+                    <input id="project-note" type="text" maxlength="200" autocomplete="off">
+                </div>
+                <p class="notice" id="project-message" role="status" hidden></p>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn" id="project-cancel" hidden>取消重命名</button>
+                <button type="button" class="btn btn-primary" id="project-save">新建项目</button>
             </div>
         </div>
     </div>
