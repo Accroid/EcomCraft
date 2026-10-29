@@ -150,8 +150,9 @@ Then in the EcomCraft settings:
 | Model backend | One of the 6 backends above |
 | Base URL | Editable for Ollama / the compatible backend, local or remote; fixed for the others |
 | Prompt model | **Fetch** lists the backend's models, or type the ID |
-| Vision model service | The service used for image description — Ollama or an OpenAI-compatible one; saved separately from the prompt service. The address is required only for an OpenAI-compatible service; Ollama can stay empty (defaults to this machine) |
-| Vision model | The vision service's model name, picked via **Fetch** or typed in; Qwen3-VL recommended. With "Allow image description" unchecked, no vision settings are needed to save |
+| Vision model service | The service used for image description — Ollama or an OpenAI-compatible one. Its address (`visionbaseurl`), key (`openaiapi_vision`) and model are saved apart from the prompt service, so both can use the same service type at different addresses without overwriting each other |
+| Vision model (Ollama) | Choosing Ollama detects it right away: when it cannot be reached, the dialog says it is not installed or not running and offers **One-click local model install**; when it runs, only models that can read images are listed (by the vision capability Ollama reports, or by model name on older Ollama versions), and with several installed you can switch. The address defaults to this machine, `http://localhost:11434`; change it under "Advanced" when Ollama runs on another computer in the LAN |
+| Vision model (OpenAI-compatible) | Fill in the vision service address and an optional API key (usually not needed for a local LM Studio or vLLM), then pick via **Fetch** or type the name. With "Allow image description" unchecked, no vision settings are needed to save |
 | API key | Required for cloud backends; not for Ollama; usually not for local services. Keys are stored safely in SwarmUI user data, never in config files |
 
 Switching backends auto-fills the URL and key state from that backend's saved values or its defaults.
@@ -195,7 +196,7 @@ bash launchtools/install-vision-model-linux.sh llama3.2-vision:latest
 ollama pull llama3.2-vision
 ```
 
-   To skip the command line entirely, install from **Prompt enhancement settings → Allow image description → One-click local model install** (administrators): pick a model tier (Qwen3-VL 2B / 4B / 8B / 30B or Llama 3.2 Vision, with download size and VRAM hints) and the server runs the same script by itself. While it runs the elapsed time and the script output show, the dialog can be closed (the install continues and the progress reappears when it reopens), and when it finishes the vision service switches to Ollama with that model preselected — click "Save" to apply. Only one install runs at a time and only the tiers listed above can be installed; this works on Windows and Linux, while macOS follows the manual steps above.
+   To skip the command line entirely, install from **Prompt enhancement settings → Allow image description → One-click local model install** (administrators): pick a model tier (Qwen3-VL 2B / 4B / 8B / 30B or Llama 3.2 Vision, with download size and VRAM hints) and the server runs the same script by itself. While it runs the elapsed time and the script output show, the dialog can be closed (the install continues and the progress reappears when it reopens), and when it succeeds the server saves that model as the vision model (on this server's Ollama) by itself, also when the dialog was closed meanwhile — no need to click "Save". Only one install runs at a time and only the tiers listed above can be installed; this works on Windows and Linux, while macOS follows the manual steps above.
 
 3. Uploaded references are described automatically, one at a time. Clicking "Add a reference" first checks whether the vision model is usable: when it is not, the picker stays closed and the image-description guidance shows below instead, whose "Open the prompt enhancement settings" step goes straight to the configuration. When image description is off, the vision service cannot be reached, or the vision model has not been pulled, "Follow a reference" likewise says what is missing: administrators see the steps to fix it and other accounts see "ask your administrator"; plain generation is unaffected.
 
@@ -217,11 +218,11 @@ When unsure, choose by VRAM: no discrete GPU → 2B, 6 GB → 4B, 8 GB or more �
 After pulling the size you picked, select it directly in the settings:
 
 1. Open the workspace's **prompt enhancement settings** (administrators) and make sure **Allow image description** is ticked.
-2. Set **Vision model service** to `Ollama (local, free)`; when it matches the "Model service" above, the Base URL is shared and needs no re-entry.
-3. In **Vision model**, press **Fetch** and pick the size you just pulled (e.g. `qwen3-vl:8b`), or type it in.
+2. Set **Vision model service** to `Ollama (local, free)`; the dialog detects the local Ollama by itself.
+3. Pick the size you just pulled (e.g. `qwen3-vl:8b`) in the **Vision model** list; if it is missing, click **Check again**.
 4. Click **Save**. The line under the toggle should read `Vision model: ollama / qwen3-vl:8b`.
 
-To run Qwen3-VL on a local OpenAI-compatible service such as LM Studio or vLLM, set **Vision model service** to `OpenAI-compatible service (local / remote)`, fill in that service's Base URL and fetch. The vision service is saved separately from the prompt service, so Ollama can handle prompt expansion while the compatible service handles image description.
+To run Qwen3-VL on a local OpenAI-compatible service such as LM Studio or vLLM, set **Vision model service** to `OpenAI-compatible service (local / remote)`, fill in that service's Base URL (and an API key when it needs one) and fetch. The vision address and key are saved apart from the prompt service, so Ollama or another compatible server can handle prompt expansion while this one handles image description; when the vision address differs from the prompt service, the prompt service's key is never sent to it.
 
 Two notes:
 

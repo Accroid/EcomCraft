@@ -225,9 +225,11 @@ public static class PromptService
             provider = (settings?["visionbackend"]?.ToString() ?? settings?["backend"]?.ToString() ?? "").ToLowerFast();
             model = settings?["visionmodel"]?.ToString() ?? "";
             List<string> available = null;
-            if (VisionEnabled() && !string.IsNullOrWhiteSpace(model) && settings is not null && await LLMAPICalls.IsServerReachable(provider, settings))
+            // The vision service may have its own address and key (F68).
+            JObject visionSettings = settings is null ? null : LLMAPICalls.VisionSettings(settings);
+            if (VisionEnabled() && !string.IsNullOrWhiteSpace(model) && visionSettings is not null && await LLMAPICalls.IsServerReachable(provider, visionSettings))
             {
-                Task<List<ModelData>> listing = LLMAPICalls.GetModelsForBackend(provider, settings, true, session);
+                Task<List<ModelData>> listing = LLMAPICalls.GetModelsForBackend(provider, visionSettings, true, session, LLMAPICalls.VisionKeyOverride(settings, session));
                 if (await Task.WhenAny(listing, Task.Delay(TimeSpan.FromSeconds(10))) == listing)
                 {
                     List<ModelData> models = await listing ?? [];
