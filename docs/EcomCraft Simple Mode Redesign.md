@@ -110,6 +110,16 @@ The six visual styles remain as an **optional** second row: the first card is "A
 
 **Acceptance**: invalid input is blocked with disabled buttons; the set estimate updates live and disables above 20 with the reason; the server rejects over-cap requests; the cutout-only "one image" hint stays correct.
 
+### 5.4 Output size (F73, added 2026-10-30)
+
+- Step 2 has "Output size" under "Platform", chosen **before** generating; there is no size choice after generation any more.
+- The default "By platform" uses the platform slot size of the chosen image type for a single generation (for example Taobao's scene image at 800×800), shown in the option; whole sets and storyboards use each image type's own slot size, and reference mode the scene slot. Without such a slot the size is 1024×1024.
+- Common sizes (800×800, 1000×1000, 1200×1200, 750×1000, 1080×1440, 1080×1920, 1920×1080) or a custom width and height (whole numbers 64–8192; invalid values disable the buttons with a hint) can be picked instead.
+- The model generates at the chosen aspect ratio near one megapixel (each side a multiple of 16, 256–2048), and the product canvas is placed at that size; afterwards the platform scales the works locally to the exact chosen size (cover scaling, then a centered crop of the rounding difference, under 1%) before they are synced and shown. Cut-out-only white main images (no model) are made directly at the chosen size.
+- Downloads: "Download selected" gives the originals at the chosen size; "Download as platform zip" no longer asks for a platform and slot: works keep their size, and only the format, quality and size cap come from the step-2 platform's slot for each image type (API parameter `keep_size: true`).
+
+**Acceptance criteria**: all three ways of generating and reference mode produce files of exactly the chosen size without distortion; an invalid custom size cannot be submitted; the zip download no longer shows a platform and slot picker and keeps the generated size.
+
 ## 6. R5 Faster Generation Path (F56)
 
 Today the server waits for MagicPrompt to compose the prompt (up to 45 s) before queueing, leaving a visible gap between the click and ComfyUI starting.
@@ -223,3 +233,4 @@ Interactive prototype (confirmed; this document governs): [EcomCraft Simple Mode
 | 2026-10-28 | v3.5 | F57 (T59) deferred until N01 picks the default model; the other five features are code complete, pending build and manual acceptance |
 | 2026-10-28 | v3.6 | N01 done: the default text-to-image models are the Qwen-Image 2.1 GGUF set; T59 no longer deferred, first version text-to-image only; image-to-image listed as to-do N10 |
 | 2026-10-29 | v3.7 | F57 (T59) code complete: blueprint conversion with default models, product image parameter, system-generated publishing that can be taken down, startup check and administrators' status list; the blueprint file is still to be provided |
+| 2026-10-30 | v3.8 | New F73 output size chosen before generating (T80, section 5.4): by platform slot by default, common or custom sizes instead; generated at the aspect ratio and scaled to the exact size; no size choice after generation |

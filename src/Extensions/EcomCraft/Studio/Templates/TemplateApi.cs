@@ -96,6 +96,8 @@ public static class TemplateApi
                     ["id"] = slot.Id,
                     ["kind"] = slot.Kind,
                     ["name"] = string.IsNullOrEmpty(slotName) ? slot.Id : slotName,
+                    ["width"] = slot.Preset.Width,
+                    ["height"] = slot.Preset.Height,
                     ["optional"] = slot.Optional,
                     ["position"] = slot.Position
                 });
@@ -163,8 +165,9 @@ public static class TemplateApi
 
     /// <summary>Turns a template request into a published-workflow request: the template's snapshot, its presets, the user's allowed fields
     /// (template_params, by parameter ID) and the prompt with the template's fragments. Returns null with an error response when the template cannot be used.
-    /// Page fields bound to parameters the template does not open to users are removed or overwritten, so only presets, allowed fields and snapshot values apply.</summary>
-    public static JObject Resolve(Session session, JObject rawInput, string templateId, out JObject error, out string preserveToken)
+    /// Page fields bound to parameters the template does not open to users are removed or overwritten, so only presets, allowed fields and snapshot values apply.
+    /// <paramref name="generationSize"/> (from the output size chosen before generating) sets the generated width and height and the product canvas size.</summary>
+    public static JObject Resolve(Session session, JObject rawInput, string templateId, out JObject error, out string preserveToken, (int Width, int Height)? generationSize = null)
     {
         error = null;
         preserveToken = null;
@@ -203,6 +206,7 @@ public static class TemplateApi
         JObject request = (JObject)rawInput.DeepClone();
         request.Remove("template_id");
         request.Remove("template_params");
+        request.Remove("output_size");
         request["workflow_id"] = workflowId;
         request["kind"] = workflow["kind"]?.DeepClone();
         JObject workflowParams = (JObject)plan.Presets.DeepClone();
@@ -271,7 +275,7 @@ public static class TemplateApi
                 error = StudioApi.Error("商品位置无效：中心须在画面内，大小在 0.1–1.5 之间。", "invalid_parameters");
                 return null;
             }
-            (int width, int height) = TargetSize(parameters, workflowParams, workflowId);
+            (int width, int height) = generationSize ?? TargetSize(parameters, workflowParams, workflowId);
             string problem = ProductPreserve.Prepare(session.User.UserID, workflowParams.Value<string>(field), width, height, placement, out string canvas, out preserveToken);
             if (problem is not null)
             {
@@ -298,6 +302,12 @@ public static class TemplateApi
                 request.Remove(form);
             }
         }
+        if (generationSize is (int generateWidth, int generateHeight))
+        {
+            // The output size chosen before generating: generated at its aspect ratio near one megapixel, scaled to the exact size afterwards (OutputResize).
+            request["width"] = generateWidth;
+            request["height"] = generateHeight;
+        }
         // A raw prompt (F59 reference mode) is sent as is: what the user saw and edited is exactly what the engine gets, with no template fragments.
         bool rawPrompt = rawInput["raw_prompt"]?.Type == JTokenType.Boolean && rawInput.Value<bool>("raw_prompt");
         request.Remove("raw_prompt");
@@ -310,7 +320,7 @@ public static class TemplateApi
 
     /// <summary>When the template only places the cut-out on pure white for the requested platform, makes that picture locally and returns the result;
     /// returns null when the normal generation applies. The cut-out comes from the saved product, the request's image (cut out on an execution server when needed).</summary>
-    public static async Task<JObject> TryCutoutOnlyAsync(Session session, JObject rawInput, string templateId)
+    public static async Task<JObject> TryCutoutOnlyAsync(Session session, JObject rawInput, string templateId, (int Width, int Height)? outputSize = null)
     {
         string platform = rawInput["platform"]?.Type == JTokenType.String ? rawInput.Value<string>("platform") : "";
         TemplateStore.Entry entry = TemplateStore.Find(templateId);
@@ -360,6 +370,11 @@ public static class TemplateApi
             }
         }
         ExportImageSize(platform, out int width, out int height);
+        if (outputSize is (int chosenWidth, int chosenHeight))
+        {
+            // Nothing is generated here, so the chosen size is made directly.
+            (width, height) = (chosenWidth, chosenHeight);
+        }
         JObject cutoutResult = CutoutOnly.Create(session.User, cutout, width, height, templateId);
         // The direct cut-out is also a candidate (F39): unpicked copies are cleaned after the retention time.
         CandidateCleanup.Register(session.User, cutoutResult["images"] as JArray);

@@ -60,6 +60,19 @@ public static class ExportService
         return result;
     }
 
+    /// <summary>The size of a platform's slot for an image kind (white_main, scene_main, detail, model; F58), the non-optional slot first; null when the
+    /// platform or the kind has none. It is the output size chosen by default before generating.</summary>
+    public static (int Width, int Height)? SlotSize(string platformId, string kind)
+    {
+        if (string.IsNullOrEmpty(platformId) || string.IsNullOrEmpty(kind))
+        {
+            return null;
+        }
+        PlatformExport match = PlatformPresets().FirstOrDefault(item => item.Platform["id"]?.ToString() == platformId);
+        ExportSlot slot = match?.Slots.Where(item => item.Kind == kind).OrderBy(item => item.Optional).FirstOrDefault();
+        return slot is null ? null : (slot.Preset.Width, slot.Preset.Height);
+    }
+
     /// <summary>Encodes a rendered picture in the preset's format.</summary>
     private static byte[] Encode(Image<Rgb24> image, ExportPreset preset)
     {
@@ -165,6 +178,8 @@ public static class ExportService
             return StudioApi.Error("所选槽位不存在，请重新选择。", "invalid_export");
         }
         string target = rawInput.Value<string>("target") == "folder" ? "folder" : "zip";
+        // Works made at a size chosen before generating are downloaded at that size; only format and size cap follow the platform.
+        bool keepSize = rawInput.Value<bool?>("keep_size") == true;
         string exportRoot = StorageSettings.Get().ExportPath;
         if (target == "folder" && string.IsNullOrEmpty(exportRoot))
         {
@@ -192,7 +207,7 @@ public static class ExportService
                 {
                     return StudioApi.Error("所选槽位不存在，请重新选择。", "invalid_export");
                 }
-                files.Add(new FileEntry(name, path, slot));
+                files.Add(new FileEntry(name, path, slot, keepSize));
             }
         }
         if (files.Count == 0 || files.Count > MaxImages)
@@ -217,8 +232,18 @@ public static class ExportService
         }
     }
 
-    /// <summary>One work to export, with the slot it goes to (F58).</summary>
-    private sealed record class FileEntry(string Group, string Path, ExportSlot Slot);
+    /// <summary>One work to export, with the slot it goes to (F58), and whether it keeps its own size (the size was chosen before generating).</summary>
+    private sealed record class FileEntry(string Group, string Path, ExportSlot Slot, bool KeepSize);
+
+    /// <summary>The slot of a work that keeps its own size: format, quality, size cap and white check come from the platform's slot for the work's image kind
+    /// (read from its template marker), else from <paramref name="fallback"/>; the size is the work's own, so it is not scaled or padded.</summary>
+    private static ExportSlot KeepSizeSlot(PlatformExport platform, ExportSlot fallback, Image<Rgba32> source)
+    {
+        System.Text.RegularExpressions.Match marker = System.Text.RegularExpressions.Regex.Match(MetadataText(source), @"""ecomcraft_template""\s*:\s*""([A-Za-z0-9_.\-]+)""");
+        string kind = marker.Success ? TemplateStore.Find(marker.Groups[1].Value)?.Template?.Kind : null;
+        ExportSlot slot = (string.IsNullOrEmpty(kind) ? null : platform.Slots.Where(item => item.Kind == kind).OrderBy(item => item.Optional).FirstOrDefault()) ?? fallback;
+        return slot with { Preset = slot.Preset with { Width = source.Width, Height = source.Height } };
+    }
 
     /// <summary>Export hints (F58), counted per code and slot; the page words them in the UI language. Codes: size_over (still over the slot's cap after
     /// re-encoding), subject_small (below a white slot's subject fill) and text_image (a selling-point image on a platform that forbids promotional text).</summary>
@@ -289,20 +314,21 @@ public static class ExportService
         {
             int number = counters.GetValueOrDefault(file.Group) + 1;
             counters[file.Group] = number;
-            string name = $"{label}/{file.Group}/{number:D2}.{file.Slot.Preset.Format}";
             using Image<Rgba32> source = ISImage.Load<Rgba32>(file.Path);
-            using Image<Rgb24> rendered = ExportImage.Render(source, file.Slot.Preset);
-            if (file.Slot.RequireWhite && ComplianceRules.NonWhiteBorderFraction(rendered) > 0)
+            ExportSlot slot = file.KeepSize ? KeepSizeSlot(platform, file.Slot, source) : file.Slot;
+            string name = $"{label}/{file.Group}/{number:D2}.{slot.Preset.Format}";
+            using Image<Rgb24> rendered = ExportImage.Render(source, slot.Preset);
+            if (slot.RequireWhite && ComplianceRules.NonWhiteBorderFraction(rendered) > 0)
             {
-                notWhite.Add($"{file.Group}/{number:D2}.{file.Slot.Preset.Format}");
+                notWhite.Add($"{file.Group}/{number:D2}.{slot.Preset.Format}");
             }
-            if (file.Slot.SubjectRatioMin > 0 && file.Slot.Kind == "white_main" && ComplianceRules.SubjectFillFraction(rendered) < file.Slot.SubjectRatioMin)
+            if (slot.SubjectRatioMin > 0 && slot.Kind == "white_main" && ComplianceRules.SubjectFillFraction(rendered) < slot.SubjectRatioMin)
             {
-                warnings.Add("subject_small", file.Slot.Id);
+                warnings.Add("subject_small", slot.Id);
             }
             if (forbidsPromoText && MetadataText(source).Contains("ecomcraft_selling_image", StringComparison.Ordinal))
             {
-                warnings.Add("text_image", file.Slot.Id);
+                warnings.Add("text_image", slot.Id);
             }
             string kind = ComplianceRules.SourceKind(MetadataText(source));
             string type = ComplianceRules.DigitalSourceType(kind);
@@ -317,7 +343,7 @@ public static class ExportService
             byte[] data = Encode(rendered, file.Slot, out bool overCap);
             if (overCap)
             {
-                warnings.Add("size_over", file.Slot.Id);
+                warnings.Add("size_over", slot.Id);
             }
             yield return (name, data);
         }

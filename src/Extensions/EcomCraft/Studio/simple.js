@@ -55,6 +55,10 @@ class SimpleMode {
     static visionModels = null;
 
     static exportOptions = { platforms: [], folder_available: false };
+    /** The output size chosen before generating: 'auto' (the platform's slot size for each image kind), a preset 'WxH' or 'custom' with width and height. */
+    static outputSize = { mode: 'auto', width: 1000, height: 1000 };
+    /** Common output sizes offered besides the platform's own: width, height and the aspect label. */
+    static sizePresets = [[800, 800, '1:1'], [1000, 1000, '1:1'], [1200, 1200, '1:1'], [750, 1000, '3:4'], [1080, 1440, '3:4'], [1080, 1920, '9:16'], [1920, 1080, '16:9']];
     static resultGroups = new Map();
     static taskProducts = new Map();
     static batchProducts = [];
@@ -425,8 +429,21 @@ class SimpleMode {
         $('simple-product-name').addEventListener('change', e => this.renameProduct(e.target.value));
         $('simple-export-zip').addEventListener('click', () => this.exportSelected('zip'));
         $('simple-export-folder').addEventListener('click', () => this.exportSelected('folder'));
-        $('simple-export-platform').addEventListener('change', () => this.renderExport());
-        $('simple-export-slot').addEventListener('change', () => this.renderExport());
+        $('simple-output-size').addEventListener('change', e => {
+            this.outputSize.mode = e.target.value;
+            let preset = /^(\d+)x(\d+)$/.exec(e.target.value);
+            if (preset) {
+                this.outputSize.width = Number(preset[1]);
+                this.outputSize.height = Number(preset[2]);
+            }
+            this.update();
+        });
+        for (let side of ['width', 'height']) {
+            $('simple-output-' + side).addEventListener('input', e => {
+                this.outputSize[side] = Number(String(e.target.value || '').trim());
+                this.update();
+            });
+        }
         $('simple-product-delete').addEventListener('click', () => this.deleteProduct());
         $('simple-size').addEventListener('change', () => this.savePlacement());
         $('simple-download').addEventListener('click', () => this.download());
@@ -708,37 +725,83 @@ class SimpleMode {
         catch (error) {
             this.exportOptions = { platforms: [], folder_available: false };
         }
-        let select = this.api.$('simple-export-platform');
-        let current = select.value || this.choice.platform;
-        let options = (this.exportOptions.platforms || []).map(platform => new Option(this.api.tr('{0}（{1}×{2}）', platform.name, platform.width, platform.height), platform.id));
-        select.replaceChildren(...options);
-        if (options.some(option => option.value == current)) {
-            select.value = current;
-        }
-        this.renderExportSlots();
         this.renderExport();
     }
 
-    /** Fills the export slot picker for the chosen export platform (F58): every slot of the platform, its size in the label; the current choice stays selected when it still exists. */
-    static renderExportSlots() {
-        let select = this.api.$('simple-export-slot');
-        let platform = (this.exportOptions.platforms || []).find(item => item.id == this.api.$('simple-export-platform').value);
-        let slots = platform && platform.slots ? platform.slots : [];
-        let current = select.value;
-        let options = slots.map(slot => new Option(this.api.tr('{0}（{1}×{2}）', slot.name, slot.width, slot.height), slot.id));
-        select.replaceChildren(...options);
-        if (options.some(option => option.value == current)) {
-            select.value = current;
+    /** The export preset of the platform chosen in step 2, or null when it has none: works keep the size chosen before generating, and the
+     * platform only decides format and size caps. */
+    static exportPlatform() {
+        return (this.exportOptions.platforms || []).find(item => item.id == this.choice.platform) || null;
+    }
+
+    /** The platform's slot size for an image kind (F58), the non-optional slot first, or null. */
+    static slotSize(kind) {
+        let platform = this.data.platforms.find(item => item.id == this.choice.platform);
+        let slots = (platform && platform.slots ? platform.slots : []).filter(slot => slot.kind == kind && slot.width && slot.height);
+        slots.sort((a, b) => Number(a.optional) - Number(b.optional));
+        return slots.length ? { width: slots[0].width, height: slots[0].height, name: slots[0].name } : null;
+    }
+
+    /** Why the chosen output size cannot be used, or an empty string. */
+    static outputSizeProblem() {
+        if (this.outputSize.mode != 'custom') {
+            return '';
         }
+        let ok = value => Number.isInteger(value) && value >= 64 && value <= 8192;
+        return ok(this.outputSize.width) && ok(this.outputSize.height) ? '' : '出图尺寸的宽和高须为 64–8192 的整数。';
+    }
+
+    /** The output_size to send: null for "by platform" (the server takes each image kind's slot size), otherwise { width, height }. */
+    static outputSizeField() {
+        return this.outputSize.mode == 'auto' ? null : { width: this.outputSize.width, height: this.outputSize.height };
+    }
+
+    /** Fills the output size picker (the platform's size for the current image type, common sizes, custom) and explains what happens with it. */
+    static renderOutputSize() {
+        let tr = this.api.tr;
+        let select = this.api.$('simple-output-size');
+        let template = this.currentTemplate();
+        let kind = this.referenceMode() ? 'scene_main' : this.chosenTask == 'single' && template ? template.slot_kind : '';
+        let auto = kind ? this.slotSize(kind) : null;
+        let autoLabel = this.chosenTask == 'set' && !this.referenceMode()
+            ? tr('按平台自动（每种图片用平台规定的尺寸）')
+            : auto ? tr('按平台自动（{0} {1}×{2}）', auto.name, auto.width, auto.height) : tr('按平台自动（平台没有规定时为 1024×1024）');
+        let options = [new Option(autoLabel, 'auto')];
+        for (let [width, height, ratio] of this.sizePresets) {
+            options.push(new Option(width + '×' + height + ' (' + ratio + ')', width + 'x' + height));
+        }
+        options.push(new Option(tr('自定义尺寸'), 'custom'));
+        select.replaceChildren(...options);
+        select.value = this.outputSize.mode;
+        if (select.value != this.outputSize.mode) {
+            this.outputSize.mode = 'auto';
+            select.value = 'auto';
+        }
+        let custom = this.outputSize.mode == 'custom';
+        this.api.$('simple-output-custom').hidden = !custom;
+        if (custom) {
+            for (let side of ['width', 'height']) {
+                let input = this.api.$('simple-output-' + side);
+                if (document.activeElement != input) {
+                    input.value = Number.isFinite(this.outputSize[side]) && this.outputSize[side] > 0 ? String(this.outputSize[side]) : '';
+                }
+            }
+        }
+        let problem = this.outputSizeProblem();
+        let note = this.api.$('simple-output-note');
+        let size = this.outputSize.mode == 'auto' ? auto : this.outputSize;
+        note.textContent = problem ? tr(problem)
+            : size ? tr('按 {0}×{1} 的比例出图，出图后自动缩放到这个尺寸，可直接下载使用。', size.width, size.height)
+            : tr('每种图片按平台规定的尺寸出图，出图后自动缩放，可直接下载使用。');
+        note.classList.toggle('simple-hint-error', Boolean(problem));
     }
 
     /** Shows the export panel once there are candidates, with a notice when the chosen preset is not verified yet. */
     static renderExport() {
         let tr = this.api.tr;
-        let platform = (this.exportOptions.platforms || []).find(item => item.id == this.api.$('simple-export-platform').value);
-        this.api.$('simple-export').hidden = !this.results.length || !(this.exportOptions.platforms || []).length;
+        let platform = this.exportPlatform();
+        this.api.$('simple-export').hidden = !this.results.length || !platform;
         this.api.$('simple-export-folder').hidden = !this.exportOptions.folder_available;
-        this.renderExportSlots();
         let ready = Boolean(platform) && this.selected.size > 0 && !this.exporting;
         this.api.$('simple-export-zip').disabled = !ready;
         this.api.$('simple-export-folder').disabled = !ready;
@@ -830,11 +893,10 @@ class SimpleMode {
     /** Exports the selected candidates for the chosen platform, grouped by product, to the chosen slot (F58). */
     static async exportSelected(target) {
         let tr = this.api.tr;
-        let platform = this.api.$('simple-export-platform').value;
-        if (!platform || !this.selected.size || this.exporting) {
+        let platform = this.choice.platform;
+        if (!this.exportPlatform() || !this.selected.size || this.exporting) {
             return;
         }
-        let slot = this.api.$('simple-export-slot').value || '';
         let groups = new Map();
         for (let url of this.selected) {
             let name = this.resultGroups.get(url) || tr('商品');
@@ -846,7 +908,8 @@ class SimpleMode {
         this.exporting = true;
         this.renderExport();
         try {
-            let result = await this.api.request('EcomCraftStudioExport', { platform, slot, target, groups: Array.from(groups, ([name, images]) => ({ name, images })) });
+            // Works already have the size chosen before generating; the platform only decides each image's format and size cap.
+            let result = await this.api.request('EcomCraftStudioExport', { platform, keep_size: true, target, groups: Array.from(groups, ([name, images]) => ({ name, images })) });
             if (result.download) {
                 let link = document.createElement('a');
                 link.href = result.download;
@@ -890,7 +953,7 @@ class SimpleMode {
 
     /** The display name of an export slot ID, from the export platform's slot list. */
     static slotName(id) {
-        let platform = (this.exportOptions.platforms || []).find(item => item.id == this.api.$('simple-export-platform').value);
+        let platform = this.exportPlatform();
         let slot = platform && (platform.slots || []).find(slot => slot.id == id);
         return slot ? slot.name : id;
     }
@@ -1754,6 +1817,10 @@ class SimpleMode {
         if (countProblem) {
             return countProblem;
         }
+        let sizeProblem = this.outputSizeProblem();
+        if (sizeProblem) {
+            return sizeProblem;
+        }
         if (this.submitting) {
             return '提交中…';
         }
@@ -1798,7 +1865,8 @@ class SimpleMode {
         this.api.$('simple-generate').hidden = this.chosenTask != 'single';
         this.api.$('simple-generate-set').hidden = this.chosenTask != 'set';
         this.api.$('simple-generate-reference').hidden = !refMode;
-        this.api.$('simple-generate-reference').disabled = Boolean(refProblem);
+        this.api.$('simple-generate-reference').disabled = Boolean(refProblem || this.outputSizeProblem());
+        this.renderOutputSize();
         // Cut-out-only platforms (white main images) never generate, so the model flag does not apply to them (F53).
         let template = this.currentTemplate();
         let cutoutOnly = Boolean(template && this.choice.platform && (template.cutout_only_platforms || []).includes(this.choice.platform));
@@ -1838,7 +1906,7 @@ class SimpleMode {
         let storyboardProblem = this.storyboardProblem();
         // One shared cap of 20 for single generations and whole sets (F55): products × set types (or storyboard shots, F25) × candidates.
         let total = this.products.length * types * count;
-        let setReady = this.loaded && this.products.length > 0 && types > 0 && !storyboardProblem && Boolean(this.choice.subtype) && !countProblem && total > 0 && total <= 20 && !this.submitting;
+        let setReady = this.loaded && this.products.length > 0 && types > 0 && !storyboardProblem && Boolean(this.choice.subtype) && !countProblem && !this.outputSizeProblem() && total > 0 && total <= 20 && !this.submitting;
         let setButton = this.api.$('simple-generate-set');
         setButton.disabled = !setReady;
         setButton.textContent = shots ? this.api.tr('按分镜出整套') : this.api.tr('一键出整套');
@@ -2812,6 +2880,7 @@ class SimpleMode {
             platform: this.choice.platform,
             reference_prompts: this.references.map(item => item.promptEn.trim()),
             reference_placements: this.references.map(item => item.placement ? this.clampPlacement(item.placement) : null),
+            output_size: this.outputSizeField(),
             products: this.products.map(product => product.id
                 ? { product_id: product.id, placement: this.clampPlacement(this.placement) }
                 : { image: product.cutout || product.data, placement: this.clampPlacement(this.placement) })
@@ -2928,6 +2997,7 @@ class SimpleMode {
             language: I18n.current,
             platform: this.choice.platform,
             optional_slots: Array.from(this.optionalSlots),
+            output_size: this.outputSizeField(),
             set_id: 'standard',
             style_id: this.choice.style,
             product_type_id: this.choice.subtype,
@@ -3218,6 +3288,7 @@ class SimpleMode {
             ...this.brandFields(),
             images: this.countValue(),
             platform: this.choice.platform,
+            output_size: this.outputSizeField(),
             async: true
         };
         if (field && this.product && this.product.id) {

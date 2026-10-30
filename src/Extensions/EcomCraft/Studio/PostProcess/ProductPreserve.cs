@@ -133,7 +133,7 @@ public static class ProductPreserve
     }
 
     /// <summary>Waits until SwarmUI has finished writing the file.</summary>
-    private static async Task<bool> WaitForSave(string path)
+    internal static async Task<bool> WaitForSave(string path)
     {
         long deadline = Environment.TickCount64 + (long)SaveWait.TotalMilliseconds;
         while (Environment.TickCount64 < deadline)
