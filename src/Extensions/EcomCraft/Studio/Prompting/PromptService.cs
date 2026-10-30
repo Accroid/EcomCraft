@@ -252,7 +252,7 @@ public static class PromptService
             state = PromptRules.VisionState(VisionEnabled(), model, available);
             if (state == "ready")
             {
-                StartVisionCheck(settings);
+                await StartVisionCheckAsync(settings);
             }
         }
         catch (Exception ex)
@@ -267,24 +267,18 @@ public static class PromptService
         return (state, provider, model);
     }
 
-    /// <summary>Starts the vision device self-test (F71 P2) in the background when image description is on and the current Ollama version, model and graphics have no result yet.</summary>
-    private static void StartVisionCheck(JObject settings)
+    /// <summary>Starts the vision device self-test (F71 P2), which then runs in the background, when the vision model is ready and the current Ollama version,
+    /// model and graphics have no result yet. Only called once the status check found the model installed, so a missing model is not tested.</summary>
+    private static async Task StartVisionCheckAsync(JObject settings)
     {
-        if (settings is null || !VisionEnabled())
+        try
         {
-            return;
+            await VisionDeviceCheck.StartAsync(settings, false);
         }
-        _ = Task.Run(async () =>
+        catch (Exception ex)
         {
-            try
-            {
-                await VisionDeviceCheck.StartAsync(settings, false);
-            }
-            catch (Exception ex)
-            {
-                Logs.Debug($"EcomCraft could not start the vision device self-test: {ex.GetType().Name}");
-            }
-        });
+            Logs.Debug($"EcomCraft could not start the vision device self-test: {ex.GetType().Name}");
+        }
     }
 
     [API.APIDescription("Test again whether the local Ollama vision model runs faster on the GPU or the CPU (administrators, F71 P2). The test runs in the background with a built-in image; "
@@ -315,6 +309,8 @@ public static class PromptService
         {
             LastVisionStatus = default;
         }
+        // A changed model or a finished install may make a test that failed before work now.
+        VisionDeviceCheck.ClearFailure();
     }
 
     [API.APIDescription("Whether image description for reference images (F59) can work now (F68), so the page can explain what is missing. "
@@ -828,10 +824,11 @@ public static class PromptService
             }
         }
         JObject settings = (await SessionSettings.GetMagicPromptSettings())["settings"] as JObject;
-        if (VisionEnabled())
+        bool visionOn = VisionEnabled();
+        if (visionOn)
         {
-            // Opening the settings tests a new model, Ollama version or graphics card right away, so the result shows while they are open.
-            await VisionDeviceCheck.StartAsync(settings, false);
+            // Opening the settings tests a new model, Ollama version or graphics card right away (once the model is found installed), so the result shows while they are open.
+            await CheckVisionAsync(session);
         }
         return new JObject()
         {
@@ -843,7 +840,7 @@ public static class PromptService
             ["vision_device"] = VisionDeviceRules.Normalize(settings?["visiondevice"]?.ToString()),
             ["vision_moved_to_cpu"] = LLMAPICalls.VisionMovedToCpu(settings),
             // The self-test result (F71 P2): state, device and seconds only.
-            ["vision_check"] = await VisionDeviceCheck.StatusAsync(settings)
+            ["vision_check"] = visionOn ? await VisionDeviceCheck.StatusAsync(settings) : new JObject() { ["state"] = "none" }
         };
     }
 }
