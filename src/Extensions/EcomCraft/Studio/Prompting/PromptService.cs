@@ -468,7 +468,7 @@ public static class PromptService
         {
             return new Composed(PromptRules.Compose(chinese, "", fragment), "panel", null, null);
         }
-        string english = await AskModelAsync(session, PromptRules.TranslateInstruction("English"), chinese, null);
+        string english = await TranslateAsync(session, "English", chinese);
         if (english.Length > 0)
         {
             return new Composed(PromptRules.Compose(english, "", fragment), "translated", null, null, english);
@@ -491,7 +491,7 @@ public static class PromptService
         {
             return null;
         }
-        string chinese = await AskModelAsync(session, PromptRules.TranslateInstruction("Simplified Chinese"), english, null);
+        string chinese = await TranslateAsync(session, "Simplified Chinese", english);
         return new Expanded(english, chinese);
     }
 
@@ -544,11 +544,11 @@ public static class PromptService
             {
                 return ("", "");
             }
-            string translated = await AskModelAsync(session, PromptRules.TranslateInstruction("Simplified Chinese"), described, null, DescriptionTranslateTimeout);
-            // The first translation after a description often fails while the text model is still loading next to the vision model; one retry fixes it.
+            string translated = await TranslateAsync(session, "Simplified Chinese", described, DescriptionTranslateTimeout);
+            // A translation can fail once on a passing connection error (seen as a TLS handshake failure with a remote text model); one retry fixes it.
             if (translated.Length == 0)
             {
-                translated = await AskModelAsync(session, PromptRules.TranslateInstruction("Simplified Chinese"), described, null, DescriptionTranslateTimeout);
+                translated = await TranslateAsync(session, "Simplified Chinese", described, DescriptionTranslateTimeout);
             }
             // How long one reference takes, for the waiting view (F70); failed descriptions are not counted.
             Generation.TaskTiming.RecordSince(Generation.TaskTiming.Describe, started);
@@ -569,26 +569,39 @@ public static class PromptService
 
     /// <summary>Translates a user's prompt text into English (F25/F54); an empty string when the model is unavailable.</summary>
     public static Task<string> TranslateToEnglishAsync(Session session, string text) =>
-        AskModelAsync(session, PromptRules.TranslateInstruction("English"), text, null);
+        TranslateAsync(session, "English", text);
+
+    /// <summary>Translates text into a target language on the vision model when one is set, otherwise the text model (sanitized; empty on any failure).</summary>
+    private static async Task<string> TranslateAsync(Session session, string targetLanguage, string text, TimeSpan? limit = null) =>
+        PromptRules.Sanitize(await AskModelRawAsync(session, PromptRules.TranslateInstruction(targetLanguage), text, null, limit, true));
 
     /// <summary>Longest raw model answer kept for line-based parsing.</summary>
     private const int MaxRawAnswerLength = 8000;
 
     /// <summary>Asks the configured MagicPrompt model and returns its raw answer (at most <see cref="MaxRawAnswerLength"/> characters) for callers that parse
     /// a line format themselves, or an empty string on any failure or timeout. Callers must still clean everything they keep.</summary>
-    private static async Task<string> AskModelRawAsync(Session session, string instructions, string text, string imageDataUrl, TimeSpan? limitOverride = null)
+    private static async Task<string> AskModelRawAsync(Session session, string instructions, string text, string imageDataUrl, TimeSpan? limitOverride = null, bool translate = false)
     {
         try
         {
             JObject settings = (await SessionSettings.GetMagicPromptSettings())["settings"] as JObject;
-            bool vision = imageDataUrl is not null;
+            bool image = imageDataUrl is not null;
+            bool vision = image;
             string model = settings?[vision ? "visionmodel" : "model"]?.ToString();
+            // Translations run on the vision model when image description is on and a vision model is set, so they use the same service and model size
+            // as the descriptions (a local Ollama vision model keeps them on this network); text-only, through the vision service's own address and key.
+            string visionModel = settings?["visionmodel"]?.ToString();
+            if (translate && !string.IsNullOrWhiteSpace(visionModel) && VisionEnabled())
+            {
+                vision = true;
+                model = visionModel;
+            }
             if (string.IsNullOrWhiteSpace(model))
             {
                 return "";
             }
             JObject content = new() { ["text"] = text, ["instructions"] = instructions };
-            if (vision)
+            if (image)
             {
                 // Names the model actually asked, so administrators can confirm a switch took effect; never the address, key or image.
                 Logs.Info($"EcomCraft is describing an image with {LLMAPICalls.VisionBackend(settings)} / {model}.");
@@ -604,9 +617,9 @@ public static class PromptService
                     ["MediaType"] = imageDataUrl[5..comma].Replace(";base64", "")
                 });
             }
-            TimeSpan limit = limitOverride ?? (vision ? VisionTimeout : ModelTimeout);
+            TimeSpan limit = limitOverride ?? (image ? VisionTimeout : ModelTimeout);
             // The limit also goes to the call, so a request given up here does not keep the model busy upstream.
-            JObject request = new() { ["messageContent"] = content, ["modelId"] = model, ["messageType"] = vision ? "Vision" : "Text", ["action"] = vision ? "vision" : "chat",
+            JObject request = new() { ["messageContent"] = content, ["modelId"] = model, ["messageType"] = vision ? "Vision" : "Text", ["action"] = image ? "vision" : "chat",
                 ["timeout"] = (int)limit.TotalSeconds };
             Task<JObject> call = LLMAPICalls.MagicPromptPhoneHome(request, session);
             // A little extra over the call's own limit leaves time to unload a hung Ollama model.
