@@ -218,7 +218,7 @@
         'workflow_state','invalid_review','review_save_failed',
         'invalid_storage_path','storage_check_failed','storage_save_failed','invalid_storage_action',
         'invalid_template','template_image_failed','prompt_settings_failed','cutout_failed','product_save_failed','invalid_export','export_failed','diagnostics_failed',
-        'backup_failed','backup_invalid','backup_confirm_required','disk_full','invalid_product_type','prompt_service_unavailable','invalid_brand_kit','brand_kit_save_failed','invalid_selling_text','selling_font_missing','project_save_failed','vision_disabled','vision_unreachable','invalid_vision_model',
+        'backup_failed','backup_invalid','backup_confirm_required','disk_full','invalid_product_type','prompt_service_unavailable','invalid_brand_kit','brand_kit_save_failed','invalid_selling_text','selling_font_missing','project_save_failed','vision_disabled','vision_unreachable','invalid_vision_model','vision_check_unavailable',
         'vision_install_busy','vision_install_unsupported','vision_install_missing','vision_install_start_failed',
         'workflow_too_large','workflow_api_format','workflow_unsupported','workflow_denied','workflow_limit',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
@@ -1649,8 +1649,75 @@
     /** Explains the vision device choice (F71); after "auto" moved the model to the CPU it says why and suggests "CPU only". */
     function showVisionDeviceNote(movedToCpu) {
         $('enh-cfg-vision-device-note').textContent = movedToCpu
-            ? tr('这台电脑的显卡跑看图模型时没有响应，本次运行已自动改用 CPU（重启服务后会再试显卡）。如果每次都这样，可以改选“只用 CPU”。')
-            : tr('一般选“自动”。有些显卡（如较老的 AMD 显卡）跑看图模型会卡住，自动模式会在第一次等待约 1 分钟后改用 CPU。');
+            ? tr('这台电脑的显卡跑看图模型时没有响应，已自动改用 CPU 并记住了这个结果；更换模型、Ollama 版本或显卡驱动后会重新检测。也可以改选“只用 CPU”。')
+            : tr('一般选“自动”：会用一张测试图分别在显卡和 CPU 上实测，选更快的那个并记住结果。有些显卡（如较老的 AMD 显卡）跑看图模型会卡住，自动模式会改用 CPU。');
+    }
+
+    /** Polls the vision device self-test (F71 P2) while it runs and the settings are open. */
+    let visionCheckTimer = null;
+
+    /** Stops polling the vision device self-test. */
+    function stopVisionCheckPolling() {
+        clearTimeout(visionCheckTimer);
+        visionCheckTimer = null;
+    }
+
+    /** Shows the vision device self-test result under the device choice: only for Ollama with the saved device on "auto", the only case it runs in.
+        While the test runs it is read again every few seconds. */
+    function showVisionCheck(check) {
+        stopVisionCheckPolling();
+        let row = $('enh-cfg-vision-check-row');
+        let auto = !['gpu', 'cpu'].includes(mpSettings?.visiondevice);
+        row.hidden = !auto || mpSettings?.visionbackend != 'ollama' || !$('enh-cfg-vision').checked;
+        let info = check || { state: 'none' };
+        let text = $('enh-cfg-vision-check');
+        let button = $('enh-cfg-vision-check-btn');
+        button.disabled = info.state == 'running';
+        if (info.state == 'running') {
+            text.textContent = tr('正在检测看图运行设备：先用测试图试显卡，再试 CPU，最多约 3 分钟…');
+            visionCheckTimer = setTimeout(refreshVisionCheck, 4000);
+        }
+        else if (info.state == 'done') {
+            text.textContent = tr('看图：{0}，单张约 {1} 秒（实测）。', info.device == 'gpu' ? tr('显卡') : 'CPU', info.seconds);
+        }
+        else if (info.state == 'failed') {
+            text.textContent = tr('检测时显卡和 CPU 都没有按时给出结果，请确认 Ollama 正常运行后点“重新检测运行设备”。');
+        }
+        else {
+            text.textContent = tr('还没有检测运行设备；连上 Ollama 后会自动检测。');
+        }
+    }
+
+    /** Reads the self-test state again while the settings are open. */
+    async function refreshVisionCheck() {
+        visionCheckTimer = null;
+        if ($('enhancer-modal').hidden) {
+            return;
+        }
+        try {
+            let vs = await request('EcomCraftPromptSettings');
+            if (!$('enhancer-modal').hidden) {
+                showVisionCheck(vs.vision_check);
+                showVisionDeviceNote(vs.vision_moved_to_cpu === true);
+            }
+        }
+        catch (err) {
+            $('enh-cfg-vision-check').textContent = err.message;
+        }
+    }
+
+    /** Starts a new vision device self-test at the administrator's request. */
+    async function startVisionCheck() {
+        let button = $('enh-cfg-vision-check-btn');
+        button.disabled = true;
+        try {
+            let res = await request('EcomCraftStudioVisionDeviceCheck');
+            showVisionCheck(res.vision_check);
+        }
+        catch (err) {
+            button.disabled = false;
+            $('enh-cfg-vision-check').textContent = err.message;
+        }
     }
 
     /** Shows whether the vision service's own key is saved (F68). */
@@ -1838,6 +1905,7 @@
                     $('enh-cfg-vision-backend').value = visionBackend;
                     fillVisionFields();
                     showVisionDeviceNote(vs.vision_moved_to_cpu === true);
+                    showVisionCheck(vs.vision_check);
                     applyVisionToggle();
                     $('enh-cfg-vision-fld').hidden = false;
                     loadVisionKeyStatus();
@@ -2165,6 +2233,7 @@
         PromptSettingsRequests.loading = false;
         PromptSettingsRequests.invalidate();
         stopVisionInstallPolling();
+        stopVisionCheckPolling();
         $('enh-cfg-key').value = '';
         $('enh-cfg-vision-key').value = '';
         let wasOpen = !$('enhancer-modal').hidden;
@@ -5726,6 +5795,7 @@
         $('enh-cfg-fetch-vision-models').addEventListener('click', fetchVisionModels);
         $('enh-cfg-vision-detect').addEventListener('click', () => detectOllamaVision());
         $('enh-cfg-vision-ollama-model').addEventListener('change', showThinkingModelHint);
+        $('enh-cfg-vision-check-btn').addEventListener('click', startVisionCheck);
         $('enh-cfg-vision-install').addEventListener('click', () => {
             let box = $('enh-cfg-vision-install-box');
             box.hidden = !box.hidden;

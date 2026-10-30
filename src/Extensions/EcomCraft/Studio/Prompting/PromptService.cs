@@ -250,6 +250,10 @@ public static class PromptService
                 }
             }
             state = PromptRules.VisionState(VisionEnabled(), model, available);
+            if (state == "ready")
+            {
+                StartVisionCheck(settings);
+            }
         }
         catch (Exception ex)
         {
@@ -261,6 +265,47 @@ public static class PromptService
             LastVisionStatus = (DateTime.UtcNow, state, provider, model);
         }
         return (state, provider, model);
+    }
+
+    /// <summary>Starts the vision device self-test (F71 P2) in the background when image description is on and the current Ollama version, model and graphics have no result yet.</summary>
+    private static void StartVisionCheck(JObject settings)
+    {
+        if (settings is null || !VisionEnabled())
+        {
+            return;
+        }
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await VisionDeviceCheck.StartAsync(settings, false);
+            }
+            catch (Exception ex)
+            {
+                Logs.Debug($"EcomCraft could not start the vision device self-test: {ex.GetType().Name}");
+            }
+        });
+    }
+
+    [API.APIDescription("Test again whether the local Ollama vision model runs faster on the GPU or the CPU (administrators, F71 P2). The test runs in the background with a built-in image; "
+        + "read the result from vision_check of EcomCraftPromptSettings. Only for an Ollama vision service with the device set to automatic.",
+        "vision_check: { state: \"running\", device: null, seconds: null }")]
+    public static async Task<JObject> EcomCraftStudioVisionDeviceCheck(Session session)
+    {
+        if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.EditServerSettings))
+        {
+            return StudioApi.Error("只有管理员可以检测看图运行设备。", "bad_permissions");
+        }
+        if (!VisionEnabled())
+        {
+            return StudioApi.Error("看图描述已被管理员关闭，无法检测。", "vision_disabled");
+        }
+        JObject settings = (await SessionSettings.GetMagicPromptSettings())["settings"] as JObject;
+        if (!await VisionDeviceCheck.StartAsync(settings, true))
+        {
+            return StudioApi.Error("只有看图服务是 Ollama、运行设备为“自动”且 Ollama 正在运行时才能检测。", "vision_check_unavailable");
+        }
+        return new JObject() { ["vision_check"] = await VisionDeviceCheck.StatusAsync(settings) };
     }
 
     /// <summary>Forgets the cached vision status, after the administrator changed the switch or an install finished.</summary>
@@ -742,8 +787,8 @@ public static class PromptService
     }
 
     [API.APIDescription("Read or change whether reference images may be described by the configured vision model (on by default) and whether product photos may be sent to it "
-        + "to describe the product (off by default). Returns the provider images would be sent to, the local vision device choice and whether it was moved to the CPU after the GPU hung. Requires the server-settings permission.",
-        "vision_enabled: true, product_vision_enabled: false, vision_provider: \"ollama\", vision_device: \"auto\", vision_moved_to_cpu: false")]
+        + "to describe the product (off by default). Returns the provider images would be sent to, the local vision device choice, whether it was moved to the CPU after the GPU hung and the self-test result (state none / running / done / failed, device, seconds). Requires the server-settings permission.",
+        "vision_enabled: true, product_vision_enabled: false, vision_provider: \"ollama\", vision_device: \"auto\", vision_moved_to_cpu: false, vision_check: { state: \"done\", device: \"cpu\", seconds: 15.2 }")]
     public static async Task<JObject> EcomCraftPromptSettings(Session session, string vision_enabled = "", string product_vision_enabled = "")
     {
         if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.EditServerSettings))
@@ -783,6 +828,11 @@ public static class PromptService
             }
         }
         JObject settings = (await SessionSettings.GetMagicPromptSettings())["settings"] as JObject;
+        if (VisionEnabled())
+        {
+            // Opening the settings tests a new model, Ollama version or graphics card right away, so the result shows while they are open.
+            await VisionDeviceCheck.StartAsync(settings, false);
+        }
         return new JObject()
         {
             ["vision_enabled"] = VisionEnabled(),
@@ -791,7 +841,9 @@ public static class PromptService
             ["vision_model"] = settings?["visionmodel"]?.ToString() ?? "",
             // The device choice for a local Ollama vision model (F71), and whether "auto" moved it to the CPU because the GPU hung; never the address.
             ["vision_device"] = VisionDeviceRules.Normalize(settings?["visiondevice"]?.ToString()),
-            ["vision_moved_to_cpu"] = LLMAPICalls.VisionMovedToCpu(settings)
+            ["vision_moved_to_cpu"] = LLMAPICalls.VisionMovedToCpu(settings),
+            // The self-test result (F71 P2): state, device and seconds only.
+            ["vision_check"] = await VisionDeviceCheck.StatusAsync(settings)
         };
     }
 }
