@@ -25,15 +25,16 @@ public static class StandardWorkflows
     /// Scene and detail share the text-to-image blueprint; the templates differ by prompt, and "with a model" is a prompt fragment (F53).</summary>
     private static readonly (string Kind, string Id, string Description)[] Kinds =
     [
-        ("scene", $"{Source}/ecomcraft/scene", "系统按默认模型生成的场景图工作流（文生图，出图后贴回原商品）。"),
-        ("detail", $"{Source}/ecomcraft/detail", "系统按默认模型生成的细节图工作流（文生图，出图后贴回原商品）。")
+        ("scene", $"{Source}/ecomcraft/scene", "系统按默认模型生成的场景图工作流（围绕放好的商品重绘场景，出图后贴回原商品）。"),
+        ("detail", $"{Source}/ecomcraft/detail", "系统按默认模型生成的细节图工作流（围绕放好的商品重绘场景，出图后贴回原商品）。")
     ];
 
     /// <summary>Whether a published ID is one of the generated standard workflows.</summary>
     public static bool IsStandard(string id) => Kinds.Any(item => item.Id == id);
 
     /// <summary>ID of the product image input added to every generated workflow, so the templates' "@image" field and product preservation work.
-    /// The first version is text to image (N01; image to image waits for N10), so the graph does not read it: the product is pasted back after generation.</summary>
+    /// The graph loads it (N10): the product canvas is transparent around the product, its alpha becomes the mask, and only the scene around the product
+    /// is generated, so surface, shadows and scale follow the real product. The product is still pasted back after generation.</summary>
     public const string ProductImageParam = "ecproductimage";
 
     /// <summary>Loader inputs that take the default model names from the settings.</summary>
@@ -163,9 +164,35 @@ public static class StandardWorkflows
         metadata[ProductImageParam] = new JObject()
         {
             ["id"] = ProductImageParam, ["name"] = "商品图", ["type"] = "image", ["default"] = "", ["visible"] = true, ["form"] = null,
-            ["description"] = "商品图（初版为文生图：出图后由平台把原商品贴回画面）。"
+            ["description"] = "放好商品的透明画布：只重绘商品以外的场景，出图后由平台把原商品贴回画面。"
         };
+        if (!AddProductInpaint(prompt))
+        {
+            return (null, null, null, null, "unsupported");
+        }
         return (prompt, metadata, values, json, null);
+    }
+
+    /// <summary>Node IDs of the inpainting nodes, above the converter's numbering (at most 2000).</summary>
+    private const string LoadNode = "9001", EncodeNode = "9002", MaskNode = "9003";
+
+    /// <summary>Turns the converted text-to-image graph into generation around the product (N10): the product canvas is loaded (the backend uploads the
+    /// image parameter and fills in the file name), encoded with the graph's own VAE, and its alpha (LoadImage's mask: 1 where transparent) limits
+    /// sampling to the scene; the sampler starts from it instead of the empty latent. False when the graph has no single sampler and decoder to rewire.</summary>
+    private static bool AddProductInpaint(JObject prompt)
+    {
+        List<JObject> samplers = [.. prompt.Properties().Select(property => property.Value).OfType<JObject>().Where(node => node["class_type"]?.ToString() is "KSampler" or "KSamplerAdvanced")];
+        List<JObject> decoders = [.. prompt.Properties().Select(property => property.Value).OfType<JObject>().Where(node => node["class_type"]?.ToString() == "VAEDecode")];
+        if (samplers.Count != 1 || decoders.Count != 1 || decoders[0]["inputs"]?["vae"] is not JArray vae || samplers[0]["inputs"] is not JObject samplerInputs)
+        {
+            return false;
+        }
+        prompt[LoadNode] = new JObject() { ["class_type"] = "LoadImage", ["inputs"] = new JObject() { ["image"] = "${" + ProductImageParam + "}" } };
+        prompt[EncodeNode] = new JObject() { ["class_type"] = "VAEEncode", ["inputs"] = new JObject() { ["pixels"] = new JArray(LoadNode, 0), ["vae"] = vae.DeepClone() } };
+        prompt[MaskNode] = new JObject() { ["class_type"] = "SetLatentNoiseMask", ["inputs"] = new JObject() { ["samples"] = new JArray(EncodeNode, 0), ["mask"] = new JArray(LoadNode, 1) } };
+        // The empty latent stays in the graph, unconnected, so the width and height parameters keep setting the canvas size.
+        samplerInputs["latent_image"] = new JArray(MaskNode, 0);
+        return true;
     }
 
     /// <summary>Generates and publishes the standard workflows that are missing or out of date. <paramref name="force"/> (the administrator's

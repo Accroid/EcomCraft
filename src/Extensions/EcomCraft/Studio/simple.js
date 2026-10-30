@@ -104,6 +104,61 @@ class SimpleMode {
         return { x: Math.round(placement.x * canvasWidth - width / 2), y: Math.round(placement.y * canvasHeight - height / 2), width, height };
     }
 
+    /** The bounds of a cut-out's product plus a small transparent margin, the same math as ProductComposite.Trim on the server, so a placement's size
+     * is the product's own size and not that of the photo's empty border: { x, y, width, height }, or null when nothing is visible. */
+    static trimBounds(imageData) {
+        let width = imageData.width, height = imageData.height, data = imageData.data;
+        let left = width, top = height, right = -1, bottom = -1;
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                if (data[(y * width + x) * 4 + 3] >= 16) {
+                    left = Math.min(left, x);
+                    right = Math.max(right, x);
+                    top = Math.min(top, y);
+                    bottom = Math.max(bottom, y);
+                }
+            }
+        }
+        if (right < 0) {
+            return null;
+        }
+        let margin = Math.max(2, Math.round(Math.max(right - left + 1, bottom - top + 1) * 0.02));
+        left = Math.max(0, left - margin);
+        top = Math.max(0, top - margin);
+        right = Math.min(width - 1, right + margin);
+        bottom = Math.min(height - 1, bottom + margin);
+        return { x: left, y: top, width: right - left + 1, height: bottom - top + 1 };
+    }
+
+    /** Makes the preview image of a product's cut-out: trimmed like the server does, so the preview matches the result. The cut-out itself is sent unchanged.
+     * Without a readable cut-out the preview is the cut-out as it is. */
+    static async makePreview(product) {
+        product.preview = product.cutout;
+        try {
+            let image = await this.loadImage(product.cutout);
+            let canvas = document.createElement('canvas');
+            canvas.width = image.naturalWidth;
+            canvas.height = image.naturalHeight;
+            let context = canvas.getContext('2d');
+            context.drawImage(image, 0, 0);
+            let bounds = this.trimBounds(context.getImageData(0, 0, canvas.width, canvas.height));
+            product.width = image.naturalWidth;
+            product.height = image.naturalHeight;
+            if (bounds && (bounds.width < canvas.width || bounds.height < canvas.height)) {
+                let trimmed = document.createElement('canvas');
+                trimmed.width = bounds.width;
+                trimmed.height = bounds.height;
+                trimmed.getContext('2d').drawImage(canvas, bounds.x, bounds.y, bounds.width, bounds.height, 0, 0, bounds.width, bounds.height);
+                product.preview = trimmed.toDataURL('image/png');
+                product.width = bounds.width;
+                product.height = bounds.height;
+            }
+        }
+        catch (error) {
+            // The untrimmed cut-out still shows; only its size on the preview is less exact.
+        }
+    }
+
     /** Keeps a placement inside the ranges the server accepts: center 0–1, size 0.1–1.5. */
     static clampPlacement(placement) {
         let clamp = (value, min, max) => Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
@@ -1055,6 +1110,9 @@ class SimpleMode {
             let image = await this.loadImage(product.cutout || product.source);
             product.width = image.naturalWidth;
             product.height = image.naturalHeight;
+            if (product.cutout) {
+                await this.makePreview(product);
+            }
         }
         catch (error) {
             this.message(this.api.tr('商品图暂时无法读取：作品库位置可能离线，请稍后重试。'), true);
@@ -1429,6 +1487,7 @@ class SimpleMode {
             }
             if (transparent) {
                 product.cutout = product.data;
+                await this.makePreview(product);
                 product.qualityIssues = product.qualityIssues.concat(this.cutoutIssues(imageData, this.quality));
             }
         }
@@ -1485,8 +1544,9 @@ class SimpleMode {
             image.hidden = true;
             return;
         }
-        if (image.getAttribute('src') != this.product.cutout) {
-            image.src = this.product.cutout;
+        let preview = this.product.preview || this.product.cutout;
+        if (image.getAttribute('src') != preview) {
+            image.src = preview;
         }
         let size = stage.clientWidth || 300;
         let rect = this.placementRect(size, size, this.product.width || 1, this.product.height || 1, this.activePlacement());
@@ -1604,6 +1664,7 @@ class SimpleMode {
             let source = product.data || await this.toDataUrl(product.source);
             let result = await this.api.request('EcomCraftStudioCutout', { product_image: source });
             product.cutout = result.cutout;
+            await this.makePreview(product);
             // A tiny cut-out means the photo was taken too far away (F38): suggest getting closer, but let the user continue.
             try {
                 let image = await this.loadImage(product.cutout);

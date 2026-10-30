@@ -110,4 +110,15 @@ public class PromptRulesTests
         Assert.Equal("ready", PromptRules.VisionState(true, "llama3.2-vision:latest", ["llama3.2-vision"]));
         Assert.Equal("model_missing", PromptRules.VisionState(true, "llama3.2-vision:11b", ["llama3.2-vision:latest"]));
     }
+
+    [Fact]
+    public void WithoutProductDropsWhatWouldDrawASecondProduct()
+    {
+        string text = "This is a product shot taken from a slightly elevated angle. The bottle is placed centrally on a smooth surface, with a gentle reflection visible. "
+            + "The lighting is diffused and soft, with gentle highlights on the bottle, and the mood is calm.";
+        Assert.Equal("This is a still life shot taken from a slightly elevated angle. With a gentle reflection visible. The lighting is diffused and soft, and the mood is calm.",
+            PromptRules.WithoutProduct(text));
+        Assert.Equal("", PromptRules.WithoutProduct("A bottle and a jar."));
+        Assert.Equal("Soft light on marble.", PromptRules.WithoutProduct("Soft light on marble."));
+    }
 }

@@ -245,7 +245,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F54 | Bilingual prompts and AI expansion | Simple mode redesign v3 (implemented, pending acceptance) |
 | F55 | Manual candidate count with a 20-image cap | Simple mode redesign v3 (implemented, pending acceptance) |
 | F56 | Faster generation path (queue on submit) | Simple mode redesign v3 (implemented, pending acceptance) |
-| F57 | Automatic standard workflow creation | Simple mode redesign v3 (T59 code and blueprint complete, pending build and acceptance; text-to-image first, image-to-image waits for N10) |
+| F57 | Automatic standard workflow creation | Simple mode redesign v3 (T59 code and blueprint complete, pending build and acceptance; text-to-image first; since 2026-10-30 the scene and detail workflows generate only around the placed product (inpainting with the product canvas's alpha as the mask), full image-to-image still waits for N10) |
 | F58 | Platform presets by slot (per-slot size and ratio, subject fill, size caps, forbidden content, AI labelling) | Enhancement (implemented, pending acceptance, T60; design in [EcomCraft Platform Preset Slots](EcomCraft%20Platform%20Preset%20Slots.md), values pending the N06 check) |
 | F59 | Reference images (one image per reference: borrow the composition and scene reference) | Enhancement (P1 implemented, pending acceptance, T61; P2 scene reference depends on N10, T62; requirements in [EcomCraft Reference Images](EcomCraft%20Reference%20Images.md)) |
 | F60 | Professional mode open to every account (A2), with ComfyUI workflow upload (usable by the uploader at once, by others after review) | UI redesign v4 (T63 opening and own uploads; T73 review and publishing) |

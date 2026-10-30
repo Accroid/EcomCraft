@@ -25,9 +25,6 @@ public static class BatchService
     /// <summary>Largest product photo, as a data URL.</summary>
     private const int MaxImageDataLength = (5 * 1024 * 1024 + 2) / 3 * 4 + 40;
 
-    /// <summary>Added to the negative prompt of reference tasks (F59): the real product is pasted in afterwards, so the scene must not get a product of its own.</summary>
-    private const string ReferenceNegative = "product, duplicate product, bottle, jar, tube, box, packaging, container, product copies";
-
     /// <summary>One product photo of a batch, with its cut-out once made and the placement used for product preservation.</summary>
     private sealed class Product
     {
@@ -589,7 +586,7 @@ public static class BatchService
                 : job.Shot >= 0 && job.Shot < batch.ShotPrompts.Count && batch.ShotPrompts[job.Shot].Length > 0
                 ? string.Join(", ", new[] { batch.Prompt, batch.ShotPrompts[job.Shot] }.Where(part => !string.IsNullOrEmpty(part)))
                 : batch.Prompt,
-            ["negativeprompt"] = job.Reference >= 0 ? string.Join(", ", new[] { batch.Negative, ReferenceNegative }.Where(part => !string.IsNullOrEmpty(part))) : batch.Negative,
+            ["negativeprompt"] = batch.Negative,
             ["images"] = batch.Candidates,
             ["placement"] = new JObject() { ["x"] = placement.CenterX, ["y"] = placement.CenterY, ["size"] = placement.Size },
             ["platform"] = batch.Platform

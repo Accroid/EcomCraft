@@ -17,7 +17,7 @@
   ],
   "kind": "scene_main",
   "prompt": {
-    "prefix": "commercial photography of a realistic scene with a clear, empty spot on the surface in the foreground,",
+    "prefix": "commercial photography of a realistic scene, the subject resting naturally on the surface with soft contact shadows and reflections,",
     "suffix": "photorealistic lighting that matches the scene, shallow depth of field",
     "negative": "text, watermark, product, bottle, jar, tube, box, packaging, container, cluttered composition"
   },

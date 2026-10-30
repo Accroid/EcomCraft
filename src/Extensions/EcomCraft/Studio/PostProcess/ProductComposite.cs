@@ -53,6 +53,48 @@ public static class ProductComposite
         return stream.ToArray();
     }
 
+    /// <summary>Transparent margin kept around a trimmed cut-out, as a fraction of its longer side, so it still counts as a cut-out.</summary>
+    public const double TrimMargin = 0.02;
+
+    /// <summary>The cut-out cropped to the product plus a small transparent margin, so a placement's size is the product's size and not that of the
+    /// photo's empty border; null when it is already tight or has no visible pixel. The page trims the same way (simple.js trimCutout).</summary>
+    public static Image<Rgba32> Trim(Image<Rgba32> cutout)
+    {
+        int left = cutout.Width, top = cutout.Height, right = -1, bottom = -1;
+        cutout.ProcessPixelRows(rows =>
+        {
+            for (int y = 0; y < rows.Height; y++)
+            {
+                Span<Rgba32> row = rows.GetRowSpan(y);
+                for (int x = 0; x < row.Length; x++)
+                {
+                    if (row[x].A >= TransparentAlpha)
+                    {
+                        left = Math.Min(left, x);
+                        right = Math.Max(right, x);
+                        top = Math.Min(top, y);
+                        bottom = Math.Max(bottom, y);
+                    }
+                }
+            }
+        });
+        if (right < 0)
+        {
+            return null;
+        }
+        int margin = Math.Max(2, (int)Math.Round(Math.Max(right - left + 1, bottom - top + 1) * TrimMargin));
+        left = Math.Max(0, left - margin);
+        top = Math.Max(0, top - margin);
+        right = Math.Min(cutout.Width - 1, right + margin);
+        bottom = Math.Min(cutout.Height - 1, bottom + margin);
+        if (left == 0 && top == 0 && right == cutout.Width - 1 && bottom == cutout.Height - 1)
+        {
+            return null;
+        }
+        Rectangle crop = new(left, top, right - left + 1, bottom - top + 1);
+        return cutout.Clone(context => context.Crop(crop));
+    }
+
     /// <summary>Whether the image is a cut-out: at least 2% of its pixels are transparent.</summary>
     public static bool HasTransparency(Image<Rgba32> image)
     {
@@ -77,13 +119,14 @@ public static class ProductComposite
     private static Image<Rgba32> Scaled(Image<Rgba32> cutout, (int X, int Y, int Width, int Height) rect) =>
         rect.Width == cutout.Width && rect.Height == cutout.Height ? cutout.Clone() : cutout.Clone(context => context.Resize(rect.Width, rect.Height));
 
-    /// <summary>The generation input: the product placed on a plain white canvas of the output size.</summary>
-    public static Image<Rgba32> BuildCanvas(Image<Rgba32> cutout, int width, int height, Placement placement)
+    /// <summary>The product placed on a white canvas of the output size. A <paramref name="transparent"/> canvas (the generation input, N10) keeps the white
+    /// but makes it fully transparent and keeps the product's own alpha, so the workflow can load the alpha as the mask of what to generate.</summary>
+    public static Image<Rgba32> BuildCanvas(Image<Rgba32> cutout, int width, int height, Placement placement, bool transparent = false)
     {
-        Image<Rgba32> canvas = new(width, height, new Rgba32(255, 255, 255, 255));
+        Image<Rgba32> canvas = new(width, height, new Rgba32(255, 255, 255, transparent ? (byte)0 : (byte)255));
         (int X, int Y, int Width, int Height) rect = placement.Rect(width, height, cutout.Width, cutout.Height);
         using Image<Rgba32> product = Scaled(cutout, rect);
-        Blend(canvas, product, rect.X, rect.Y, null);
+        Blend(canvas, product, rect.X, rect.Y, null, transparent);
         return canvas;
     }
 
@@ -93,7 +136,7 @@ public static class ProductComposite
     {
         (int X, int Y, int Width, int Height) rect = placement.Rect(generated.Width, generated.Height, cutout.Width, cutout.Height);
         using Image<Rgba32> product = Scaled(cutout, rect);
-        Blend(generated, product, rect.X, rect.Y, FeatheredAlpha(product, feather));
+        Blend(generated, product, rect.X, rect.Y, FeatheredAlpha(product, feather), false);
     }
 
     /// <summary>Alpha of the product with its edge softened inwards: a box blur of the alpha, never above the original alpha.</summary>
@@ -151,8 +194,8 @@ public static class ProductComposite
     }
 
     /// <summary>Draws <paramref name="top"/> over <paramref name="target"/> at the offset, clipped to the target, using the given alpha (or the top image's own).
-    /// Fully opaque pixels are copied exactly; the target stays opaque.</summary>
-    private static void Blend(Image<Rgba32> target, Image<Rgba32> top, int offsetX, int offsetY, byte[] alphaOverride)
+    /// Fully opaque pixels are copied exactly; the target stays opaque, unless <paramref name="keepAlpha"/> copies the top image's alpha onto a transparent target.</summary>
+    private static void Blend(Image<Rgba32> target, Image<Rgba32> top, int offsetX, int offsetY, byte[] alphaOverride, bool keepAlpha)
     {
         int topWidth = top.Width;
         int topHeight = top.Height;
@@ -181,9 +224,9 @@ public static class ProductComposite
                     {
                         continue;
                     }
-                    if (a == 255)
+                    if (a == 255 || keepAlpha)
                     {
-                        row[x] = new Rgba32(source.R, source.G, source.B, 255);
+                        row[x] = new Rgba32(source.R, source.G, source.B, (byte)a);
                         continue;
                     }
                     Rgba32 below = row[x];

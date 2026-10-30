@@ -52,12 +52,16 @@ public static class ProductPreserve
             {
                 return "商品图尺寸过大，请缩小到 1 亿像素以内。";
             }
-            using Image<Rgba32> cutout = ISImage.Load<Rgba32>(bytes);
-            if (!ProductComposite.HasTransparency(cutout))
+            using Image<Rgba32> loaded = ISImage.Load<Rgba32>(bytes);
+            if (!ProductComposite.HasTransparency(loaded))
             {
                 return "这个模板会把原商品像素贴回成图，需要去掉背景的商品图（透明背景的 PNG 或 WebP）。请先抠图后再上传。";
             }
-            using Image<Rgba32> canvas = ProductComposite.BuildCanvas(cutout, width, height, placement);
+            // The placement size is the product's own size, not that of the photo's empty border.
+            using Image<Rgba32> trimmed = ProductComposite.Trim(loaded);
+            Image<Rgba32> cutout = trimmed ?? loaded;
+            // Transparent around the product: the standard workflows load its alpha as the mask and generate only the scene around it (N10).
+            using Image<Rgba32> canvas = ProductComposite.BuildCanvas(cutout, width, height, placement, true);
             using MemoryStream canvasStream = new();
             canvas.Save(canvasStream, new PngEncoder());
             using MemoryStream cutoutStream = new();

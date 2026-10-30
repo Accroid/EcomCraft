@@ -17,7 +17,7 @@
   ],
   "kind": "white_main",
   "prompt": {
-    "prefix": "professional e-commerce studio shot of an empty pure white background,",
+    "prefix": "professional e-commerce studio shot on a pure white seamless background,",
     "suffix": "evenly lit, soft natural shadow, centered composition, high detail",
     "negative": "text, watermark, logo overlay, props, product, bottle, jar, box, packaging, container, colored background, busy background"
   },

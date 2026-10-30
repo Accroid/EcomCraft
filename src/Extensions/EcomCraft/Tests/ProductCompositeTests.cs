@@ -105,4 +105,25 @@ public class ProductCompositeTests
         Assert.Equal(new Rgba32(255, 255, 255, 255), canvas[2, 2]);
         Assert.Equal(new Rgba32(200, 20, 20, 255), canvas[35, 35]);
     }
+
+    [Fact]
+    public void TransparentCanvasKeepsProductAlphaForTheMask()
+    {
+        using Image<Rgba32> cutout = Cutout();
+        using Image<Rgba32> canvas = ProductComposite.BuildCanvas(cutout, 80, 80, new Placement(0.5, 0.5, 0.5), true);
+        Assert.Equal(new Rgba32(255, 255, 255, 0), canvas[2, 2]);
+        Assert.Equal(new Rgba32(200, 20, 20, 255), canvas[35, 35]);
+    }
+
+    [Fact]
+    public void TrimCropsToTheProductWithAMargin()
+    {
+        using Image<Rgba32> cutout = Cutout();
+        using Image<Rgba32> trimmed = ProductComposite.Trim(cutout);
+        // The red square is 20x20 at (10, 10); the margin is 2 pixels on each side.
+        Assert.Equal((24, 24), (trimmed.Width, trimmed.Height));
+        Assert.Equal(new Rgba32(200, 20, 20, 255), trimmed[2, 2]);
+        Assert.Null(ProductComposite.Trim(trimmed));
+        Assert.True(ProductComposite.HasTransparency(trimmed));
+    }
 }

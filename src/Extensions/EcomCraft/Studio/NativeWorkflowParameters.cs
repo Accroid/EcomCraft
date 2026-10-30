@@ -119,6 +119,12 @@ public static class NativeWorkflowParameters
                 {
                     continue;
                 }
+                // An image parameter (the standard workflows' product canvas, N10) is uploaded by the backend at generation time, so it is never in the file list.
+                string raw = input.Value.Type == JTokenType.String ? input.Value.ToString() : "";
+                if (raw.StartsWith("${", StringComparison.Ordinal) && raw.EndsWith('}') && metadata[raw[2..^1]]?["type"]?.ToString() == "image")
+                {
+                    continue;
+                }
                 JProperty binding = metadata.Properties().FirstOrDefault(parameter =>
                     parameter.Value["native_node"]?.ToString() == property.Name && parameter.Value["native_input"]?.ToString() == input.Name);
                 string value = (binding is null ? input.Value : values[binding.Name] ?? binding.Value["default"])?.ToString();
