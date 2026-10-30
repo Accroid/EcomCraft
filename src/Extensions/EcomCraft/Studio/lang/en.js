@@ -509,6 +509,7 @@ window.EcomCraftLanguages.en = {
     "描述中…": "Describing…",
     "排队等待描述…": "Waiting to be described…",
     "没有描述成功，可点“重试”。": "The description failed; press Retry.",
+    "中文翻译没有完成，不影响出图；英文提示词可以直接使用。": "The Chinese translation did not finish. This does not affect generation; the English prompt can be used as is.",
     "请先在第 1 步上传商品图。": "Upload a product photo in step 1 first.",
     "还在描述参考图…": "Still describing the references…",
     "还有参考图没有提示词，请等待描述完成、重试或手动填写。": "Some references have no prompt yet; wait for the description, retry, or write it yourself.",

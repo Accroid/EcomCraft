@@ -426,6 +426,7 @@ class SimpleMode {
         // Per-reference placements (T79) apply only to "follow a reference": the preview follows the task when it changes.
         if (this.placementTask != this.chosenTask) {
             this.placementTask = this.chosenTask;
+            this.renderCutout();
             this.choosePlacementRef(this.placementRef);
         }
     }
@@ -1428,11 +1429,12 @@ class SimpleMode {
         });
     }
 
-    /** Shows the cut-out panel only for templates that keep the original product pixels, and explains what is missing. */
+    /** Shows the cut-out panel only for templates that keep the original product pixels, and explains what is missing.
+     * Reference mode always runs the scene template, which keeps the product, so the panel (with "place for reference n", T79) follows the product alone. */
     static renderCutout() {
         let tr = this.api.tr;
         let template = this.currentTemplate();
-        let needed = Boolean(template && template.preserve_product && this.product);
+        let needed = Boolean(this.product && (this.referenceMode() || (template && template.preserve_product)));
         this.api.$('simple-cutout').hidden = !needed;
         if (!needed) {
             return;
@@ -2631,7 +2633,8 @@ class SimpleMode {
                 zh.textContent = tr('排队等待描述…');
             }
             else {
-                zh.textContent = item.failed ? tr('没有描述成功，可点“重试”。') : (item.promptZh || '');
+                zh.textContent = item.failed ? tr('没有描述成功，可点“重试”。')
+                    : item.promptZh || (item.promptEn && !item.edited ? tr('中文翻译没有完成，不影响出图；英文提示词可以直接使用。') : '');
             }
             item.statusEl = zh;
             mid.append(input, zh);

@@ -545,6 +545,11 @@ public static class PromptService
                 return ("", "");
             }
             string translated = await AskModelAsync(session, PromptRules.TranslateInstruction("Simplified Chinese"), described, null, DescriptionTranslateTimeout);
+            // The first translation after a description often fails while the text model is still loading next to the vision model; one retry fixes it.
+            if (translated.Length == 0)
+            {
+                translated = await AskModelAsync(session, PromptRules.TranslateInstruction("Simplified Chinese"), described, null, DescriptionTranslateTimeout);
+            }
             // How long one reference takes, for the waiting view (F70); failed descriptions are not counted.
             Generation.TaskTiming.RecordSince(Generation.TaskTiming.Describe, started);
             return (described, translated);
