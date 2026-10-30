@@ -503,14 +503,14 @@ public static class PromptService
     private const int MaxReferenceImageLength = (5 * 1024 * 1024 + 2) / 3 * 4 + 40;
 
     /// <summary>The instruction for describing one reference image (F59): the setup and style only, never the product, so the description can steer a
-    /// different product into a similar frame without copying it. The real product is pasted in afterwards, so the prompt must not make the image model draw
-    /// one of its own: the product is only an empty spot, never described, and no other containers or packages may appear. It asks for a detailed paragraph,
+    /// different product into a similar frame without copying it. The scene workflow is text to image and the real product is pasted in afterwards, so any
+    /// product named in the prompt gets drawn as a second one: the product is only an empty spot, never mentioned, and no containers or packages may appear. It asks for a detailed paragraph,
     /// since a one-sentence answer gives the image model too little to go on.</summary>
     private const string ReferenceInstruction = "You write prompts for a text-to-image model. The product will be added to the picture later, so the prompt must describe "
         + "only the scene around it. Describe how this product photo is set up: shot type and camera angle; the surface and background (materials, colors, textures); "
         + "props and where they are placed; lighting (direction, softness, shadows, highlights); color palette and mood; the overall photographic style. "
-        + "Never describe the product itself: not its type, shape, color, material, packaging, brand, logo or any text. Mention it at most once, as \"a single product\", "
-        + "only to say where it stands and the shadow it casts. Do not mention any other bottles, jars, tubes, boxes, packages or product copies, even if the photo has them; "
+        + "Never mention the product or describe it: not its type, shape, color, material, packaging, brand, logo or any text. Where it stands, describe "
+        + "an empty, clear spot on the surface instead. Do not mention any bottles, jars, tubes, boxes, packages or containers, even if the photo has them; "
         + "props must be things that are not products, such as plants, fabric, stones, water or fruit. "
         + "Reply with one English paragraph of 60 to 120 words, without lists or headings.";
 

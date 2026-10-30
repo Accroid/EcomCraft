@@ -26,7 +26,7 @@ public static class BatchService
     private const int MaxImageDataLength = (5 * 1024 * 1024 + 2) / 3 * 4 + 40;
 
     /// <summary>Added to the negative prompt of reference tasks (F59): the real product is pasted in afterwards, so the scene must not get a product of its own.</summary>
-    private const string ReferenceNegative = "duplicate product, second product, extra bottles, extra jars, extra tubes, extra boxes, extra packaging, product copies";
+    private const string ReferenceNegative = "product, duplicate product, bottle, jar, tube, box, packaging, container, product copies";
 
     /// <summary>One product photo of a batch, with its cut-out once made and the placement used for product preservation.</summary>
     private sealed class Product

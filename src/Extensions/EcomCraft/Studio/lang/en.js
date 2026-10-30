@@ -471,7 +471,7 @@ window.EcomCraftLanguages.en = {
     "按参考出图": "Generate by reference",
     "参考图只用于借鉴构图与光线，请使用有权使用的图片（自己拍摄、已授权或无版权限制）；生成结果请勿与参考图雷同。": "References are used only to borrow layout and light; use only images you have the right to use (self-shot, licensed or restriction-free), and keep results clearly distinct from the references.",
     "参考提示词": "Reference prompts",
-    "英文可修改，以修改后的为准；每张参考出一张图": "English is editable and edits win; one image per reference",
+    "英文可修改，以修改后的为准；不要写商品本身，商品会在出图后合成进去；每张参考出一张图": "English is editable and edits win; leave the product itself out, it is composited in after generation; one image per reference",
     "照参考图做需要看图描述，管理员已关闭这项功能。": "Follow a reference needs image description, which the administrator turned off.",
     "照参考图做需要视觉模型，服务器还没有配置好。": "Follow a reference needs a vision model, which the server does not have set up yet.",
     "请联系管理员按页面提示配置；期间可以先用“做一张图”或“出一整套”。": "Ask your administrator to set it up as this page describes; meanwhile you can use \"Make one image\" or \"Make a full set\".",
