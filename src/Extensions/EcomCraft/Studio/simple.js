@@ -436,11 +436,13 @@ class SimpleMode {
                 this.outputSize.width = Number(preset[1]);
                 this.outputSize.height = Number(preset[2]);
             }
+            this.remember();
             this.update();
         });
         for (let side of ['width', 'height']) {
             $('simple-output-' + side).addEventListener('input', e => {
                 this.outputSize[side] = Number(String(e.target.value || '').trim());
+                this.remember();
                 this.update();
             });
         }
@@ -467,6 +469,10 @@ class SimpleMode {
                     this.chosenTask = parsed.task;
                 }
                 this.moreOpen = parsed.more_open == true;
+                let size = parsed.output_size;
+                if (size && typeof size.mode == 'string' && Number.isInteger(size.width) && Number.isInteger(size.height)) {
+                    this.outputSize = { mode: size.mode, width: size.width, height: size.height };
+                }
             }
             catch (error) {
                 // A damaged preference only resets the remembered choice.
@@ -506,7 +512,7 @@ class SimpleMode {
     /** Remembers the platform, product type, style, task and "More options" state in this browser (never the photo or description). */
     static remember() {
         this.api.writeStorage(this.storageKey, JSON.stringify({ platform: this.choice.platform, style: this.choice.style, category: this.choice.category, subtype: this.choice.subtype, brand_kit: this.choice.brandKit,
-            task: this.chosenTask, more_open: this.moreOpen }));
+            task: this.chosenTask, more_open: this.moreOpen, output_size: this.outputSize }));
     }
 
     /** Called when the view opens; loads platforms, templates and styles once per language. */
@@ -794,6 +800,7 @@ class SimpleMode {
             : size ? tr('按 {0}×{1} 的比例出图，出图后自动缩放到这个尺寸，可直接下载使用。', size.width, size.height)
             : tr('每种图片按平台规定的尺寸出图，出图后自动缩放，可直接下载使用。');
         note.classList.toggle('simple-hint-error', Boolean(problem));
+        this.renderStage();
     }
 
     /** Shows the export panel once there are candidates, with a notice when the chosen preset is not verified yet. */
@@ -1611,13 +1618,32 @@ class SimpleMode {
         if (image.getAttribute('src') != preview) {
             image.src = preview;
         }
-        let size = stage.clientWidth || 300;
-        let rect = this.placementRect(size, size, this.product.width || 1, this.product.height || 1, this.activePlacement());
+        // The preview has the output's aspect ratio, so the placement looks the way it will be generated (F73).
+        let aspect = this.stageAspect();
+        let ratio = aspect.width + ' / ' + aspect.height;
+        if (stage.style.aspectRatio != ratio) {
+            stage.style.aspectRatio = ratio;
+        }
+        let width = stage.clientWidth || 300;
+        let height = stage.clientHeight || Math.round(width * aspect.height / aspect.width);
+        let rect = this.placementRect(width, height, this.product.width || 1, this.product.height || 1, this.activePlacement());
         image.style.left = `${rect.x}px`;
         image.style.top = `${rect.y}px`;
         image.style.width = `${rect.width}px`;
         image.style.height = `${rect.height}px`;
         image.hidden = false;
+    }
+
+    /** The output size the preview stands for: the chosen size, or with "by platform" the slot size of the current image type (the scene slot in
+     * reference mode); square when it is unknown, as for whole sets whose image types differ. */
+    static stageAspect() {
+        if (this.outputSize.mode != 'auto') {
+            return this.outputSizeProblem() ? { width: 1, height: 1 } : { width: this.outputSize.width, height: this.outputSize.height };
+        }
+        let template = this.currentTemplate();
+        let kind = this.referenceMode() ? 'scene_main' : this.chosenTask == 'single' && template ? template.slot_kind : '';
+        let slot = kind ? this.slotSize(kind) : null;
+        return slot || { width: 1, height: 1 };
     }
 
     /** The placement the preview edits: the chosen reference's (T79) once adjusted, otherwise the product's own. */
@@ -1691,10 +1717,12 @@ class SimpleMode {
         if (!this.drag) {
             return;
         }
-        let size = this.api.$('simple-stage').clientWidth || 300;
+        let stage = this.api.$('simple-stage');
+        let width = stage.clientWidth || 300;
+        let height = stage.clientHeight || width;
         this.setActivePlacement(this.clampPlacement({
-            x: this.drag.origin.x + (event.clientX - this.drag.startX) / size,
-            y: this.drag.origin.y + (event.clientY - this.drag.startY) / size,
+            x: this.drag.origin.x + (event.clientX - this.drag.startX) / width,
+            y: this.drag.origin.y + (event.clientY - this.drag.startY) / height,
             size: this.activePlacement().size
         }));
         this.renderStage();

@@ -763,23 +763,24 @@ public static class StudioApi
             {
                 return templateError;
             }
-            // Local postprocessing (R10.3): paste the original product pixels back, then scale to the chosen size, before the works are synced or shown.
+            // Local postprocessing (R10.3): scale to the chosen size first, then paste the original product pixels back at that size, so scaling never
+            // blurs the product's logo or text; both happen before the works are synced or shown.
             Func<JObject, Task> postProcess = preserveToken is null && outputSize is null ? null : async result =>
             {
-                if (preserveToken is not null)
-                {
-                    int failed = await PostProcess.ProductPreserve.ApplyAsync(preserveToken, session.User, result);
-                    if (failed > 0)
-                    {
-                        result["preserve_failed"] = failed;
-                    }
-                }
                 if (outputSize is (int finalWidth, int finalHeight))
                 {
                     int failed = await PostProcess.OutputResize.ApplyAsync(session.User, result, finalWidth, finalHeight);
                     if (failed > 0)
                     {
                         result["resize_failed"] = failed;
+                    }
+                }
+                if (preserveToken is not null)
+                {
+                    int failed = await PostProcess.ProductPreserve.ApplyAsync(preserveToken, session.User, result);
+                    if (failed > 0)
+                    {
+                        result["preserve_failed"] = failed;
                     }
                 }
             };
