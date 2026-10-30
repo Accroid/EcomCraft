@@ -776,6 +776,8 @@ public class LLMAPICalls : MagicPromptAPI
             using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
             deadline.CancelAfter(TimeSpan.FromSeconds(timeoutSec));
             System.Diagnostics.Stopwatch elapsed = System.Diagnostics.Stopwatch.StartNew();
+            // Whether this request is counted as a running vision request for the self-test (F71 P2).
+            bool countedRequest = false;
             try
             {
                 // Send request and handle response
@@ -783,6 +785,11 @@ public class LLMAPICalls : MagicPromptAPI
                 Logs.Debug($"[MagicPrompt] Sending request | backend={backend} | type={(messageType == MessageType.Vision ? "vision" : "chat")} | endpoint={endpoint} | model={modelId}");
                 Logs.Debug($"[MagicPrompt] Using generation timeout of {timeoutSec} seconds for {backend}");
                 HttpResponseMessage sent;
+                if (placementKey is not null)
+                {
+                    VisionDeviceCheck.RequestStarted();
+                    countedRequest = true;
+                }
                 if (probeGpu)
                 {
                     using CancellationTokenSource probe = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token);
@@ -827,7 +834,7 @@ public class LLMAPICalls : MagicPromptAPI
                     string llmResponse = await DeserializeResponse(response, backend);
                     if (!string.IsNullOrEmpty(llmResponse))
                     {
-                        if (learned is not null && deviceKey is not null)
+                        if (learned is not null && deviceKey is not null && !VisionDeviceCheck.Running)
                         {
                             VisionDeviceCheck.Save(deviceKey, learned, learnedTime.Elapsed.TotalSeconds);
                         }
@@ -882,6 +889,13 @@ public class LLMAPICalls : MagicPromptAPI
             {
                 Logs.Error($"EcomCraft.MagicPrompt: Error in MagicPromptPhoneHome: {ex.Message}");
                 return CreateErrorResponse(ErrorHandler.FormatErrorMessage(ErrorType.GenericException, ex.Message, backend));
+            }
+            finally
+            {
+                if (countedRequest)
+                {
+                    VisionDeviceCheck.RequestEnded();
+                }
             }
         }
         catch (Exception ex)

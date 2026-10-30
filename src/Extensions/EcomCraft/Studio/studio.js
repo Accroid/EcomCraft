@@ -2342,6 +2342,8 @@
                 loadVisionKeyStatus();
             }
             await refreshCatalog();
+            // The saved device or model may change whether and what the self-test shows (F71 P2).
+            refreshVisionCheck();
         } catch (err) {
             showEnhCfgMessage(err.message, true);
         } finally {

@@ -48,8 +48,57 @@ public static class VisionDeviceCheck
     /// <summary>The key being tested now, or null.</summary>
     private static string RunningKey;
 
-    /// <summary>The key whose last test got no answer on either device; it is not tested again automatically until an administrator asks.</summary>
+    /// <summary>The key whose last test got no answer on either device; it is not tested again automatically until an administrator asks or the vision settings change.</summary>
     private static string FailedKey;
+
+    /// <summary>Ollama vision requests running now. A test that overlaps one is not saved: Ollama queues the requests, so neither time would be the device's own.</summary>
+    private static int ActiveRequests;
+
+    /// <summary>Whether a vision request ran during the current test.</summary>
+    private static bool Disturbed;
+
+    /// <summary>Whether a test is running now, so requests meanwhile do not save what they learn from times the test distorts.</summary>
+    public static bool Running
+    {
+        get
+        {
+            lock (RunLock)
+            {
+                return RunningKey is not null;
+            }
+        }
+    }
+
+    /// <summary>Marks the start of an Ollama vision request; pair with <see cref="RequestEnded"/>.</summary>
+    public static void RequestStarted()
+    {
+        lock (RunLock)
+        {
+            ActiveRequests++;
+            if (RunningKey is not null)
+            {
+                Disturbed = true;
+            }
+        }
+    }
+
+    /// <summary>Marks the end of an Ollama vision request.</summary>
+    public static void RequestEnded()
+    {
+        lock (RunLock)
+        {
+            ActiveRequests = Math.Max(0, ActiveRequests - 1);
+        }
+    }
+
+    /// <summary>Lets a combination whose test failed be tested automatically again, after the vision settings changed or a model was installed.</summary>
+    public static void ClearFailure()
+    {
+        lock (RunLock)
+        {
+            FailedKey = null;
+        }
+    }
 
     /// <summary>The instruction for the test image: close to a real reference description, so the measured time is representative.</summary>
     private const string TestInstruction = "You write prompts for a text-to-image model. Describe how this product photo is set up: shot type and camera angle, "
@@ -68,6 +117,11 @@ public static class VisionDeviceCheck
         if (Keys.TryGetValue(cacheKey, out (DateTime Checked, string Key) cached) && DateTime.UtcNow - cached.Checked < KeyTtl)
         {
             return cached.Key;
+        }
+        // A stopped local Ollama is noticed by the quick cached probe instead of waiting for the version request.
+        if (!await LLMAPICalls.IsServerReachable("ollama", settings))
+        {
+            return null;
         }
         string version = await LLMAPICalls.OllamaVersionAsync(settings, keyOverride);
         string key = version is null ? null : VisionDeviceRules.Key(version, model, Graphics(baseUrl));
@@ -306,6 +360,7 @@ public static class VisionDeviceCheck
                 return false;
             }
             RunningKey = key;
+            Disturbed = ActiveRequests > 0;
         }
         _ = Task.Run(() => RunAsync(settings, view, model, key, keyOverride));
         return true;
@@ -326,6 +381,17 @@ public static class VisionDeviceCheck
             double? gpu = await LLMAPICalls.TimeOllamaVisionAsync(view, model, content, false, VisionDeviceRules.GpuProbe, keyOverride);
             double? cpu = await LLMAPICalls.TimeOllamaVisionAsync(view, model, content, true, VisionDeviceRules.CpuTest, keyOverride);
             string device = VisionDeviceRules.Choose(gpu, cpu);
+            bool disturbed;
+            lock (RunLock)
+            {
+                disturbed = Disturbed;
+            }
+            if (disturbed)
+            {
+                // Not saved and not counted as a failure: the next status check tests again.
+                Logs.Info($"EcomCraft vision self-test for {model} is discarded because image descriptions ran at the same time; it is repeated later.");
+                return;
+            }
             Logs.Info($"EcomCraft vision self-test for {model}: GPU {(gpu is null ? "no answer" : $"{gpu:F1} s")}, CPU {(cpu is null ? "no answer" : $"{cpu:F1} s")}; using {device?.ToUpperInvariant() ?? "neither"}.");
             if (device is null)
             {
