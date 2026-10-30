@@ -83,9 +83,10 @@ public static class StoryboardRules
         + "Choose each image's template only from this list (id: name): "
         + string.Join("; ", templates.Select(template => $"{template.Id}: {template.Name}")) + ". "
         + (string.IsNullOrWhiteSpace(productName) ? "" : $"The product is: {productName}. ")
-        + (needModel ? "A model presents the product. " : "")
+        + (needModel ? "A model appears in the scene. " : "")
         + (string.IsNullOrWhiteSpace(styleName) ? "" : $"The chosen visual style is: {styleName}. ")
-        + "Do not invent brand names or text on the product. Answer only with lines in exactly this format and nothing else:\n"
+        + "The real product is already in each picture, so the prompt fragments never describe the product or name its type, and never add bottles, jars, "
+        + "tubes, boxes, packaging or other products. Answer only with lines in exactly this format and nothing else:\n"
         + $"POINT: <selling point in {languageName}>\n"
         + $"SHOT: <template id> | <short English prompt fragment describing scene, props, lighting and composition> | <purpose of the image in {languageName}>";
 

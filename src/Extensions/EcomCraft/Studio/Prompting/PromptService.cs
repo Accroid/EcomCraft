@@ -783,7 +783,8 @@ public static class PromptService
             Generation.TaskTiming.RecordSince(Generation.TaskTiming.Storyboard, started);
         }
         List<string> points = StoryboardRules.CleanPoints(userPoints.Concat(parsed.Points));
-        List<StoryboardRules.Shot> shots = parsed.Shots;
+        // Shot fragments are model-written like the composed prompt, so what they say about the product is removed too; a shot left empty keeps only the batch prompt.
+        List<StoryboardRules.Shot> shots = [.. parsed.Shots.Select(shot => shot with { Prompt = PromptRules.WithoutProduct(shot.Prompt) })];
         string source = "model";
         if (shots.Count == 0)
         {

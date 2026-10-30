@@ -1711,6 +1711,10 @@ public static class StudioApi
                 }
             }
         }
+        if (native && StandardWorkflows.IsStandard(workflow.Name) && !StandardCanvasUsable(input[StandardWorkflows.ProductImageParam]?.ToString()))
+        {
+            return Error("标准工作流只重绘商品周围的场景，商品图需要是透明背景的商品画布。请通过“场景图”或“细节图”模板出图，或上传已抠图的透明 PNG。", "invalid_reference");
+        }
         input["prompt"] = prompt;
         input["negativeprompt"] = negative;
         input["width"] = width;
@@ -1980,6 +1984,30 @@ public static class StudioApi
         }
         target[key] = token.DeepClone();
         return true;
+    }
+
+    /// <summary>Whether an image given to a standard workflow can be its product canvas (N10): the workflow generates only where the image is transparent,
+    /// so an opaque photo would come back unchanged. Images from the user's own outputs ("inputs/", "raw/", "Starred/") are resolved later and allowed.</summary>
+    private static bool StandardCanvasUsable(string data)
+    {
+        if (string.IsNullOrWhiteSpace(data))
+        {
+            return false;
+        }
+        if (!data.StartsWith("data:", StringComparison.Ordinal))
+        {
+            return true;
+        }
+        try
+        {
+            using SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32> image =
+                SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(Convert.FromBase64String(data[(data.IndexOf(',') + 1)..]));
+            return PostProcess.ProductComposite.HasTransparency(image);
+        }
+        catch (Exception ex) when (ex is FormatException or SixLabors.ImageSharp.UnknownImageFormatException or SixLabors.ImageSharp.InvalidImageContentException or NotSupportedException)
+        {
+            return false;
+        }
     }
 
     private static bool ValidReference(string data)
