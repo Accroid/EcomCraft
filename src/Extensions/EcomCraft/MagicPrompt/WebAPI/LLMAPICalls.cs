@@ -882,7 +882,9 @@ public class LLMAPICalls : MagicPromptAPI
             }
             catch (HttpRequestException ex)
             {
-                Logs.Error($"EcomCraft.MagicPrompt: HTTP request error: {ex.Message}");
+                // The inner exception says why (for example a TLS handshake failure); only its message is logged, never the request.
+                string inner = ex.InnerException is null ? "" : $" ({ex.InnerException.GetType().Name}: {ex.InnerException.Message})";
+                Logs.Error($"EcomCraft.MagicPrompt: HTTP request error with {backend}: {ex.Message}{inner}");
                 return CreateErrorResponse(ErrorHandler.FormatErrorMessage(ErrorType.HttpRequestError, ex.Message, backend));
             }
             catch (Exception ex)
