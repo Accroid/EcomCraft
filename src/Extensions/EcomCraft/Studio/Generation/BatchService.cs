@@ -617,7 +617,12 @@ public static class BatchService
             {
                 return product.Cutout;
             }
-            byte[] bytes = Convert.FromBase64String(product.Image[(product.Image.IndexOf(',') + 1)..]);
+            byte[] bytes = ProductComposite.FitForWork(Convert.FromBase64String(product.Image[(product.Image.IndexOf(',') + 1)..]));
+            if (bytes is null)
+            {
+                product.CutoutError = "商品图尺寸过大，请缩小到 1 亿像素以内。";
+                return null;
+            }
             using (Image<Rgba32> image = ISImage.Load<Rgba32>(bytes))
             {
                 if (ProductComposite.HasTransparency(image))

@@ -1468,6 +1468,8 @@ class SimpleMode {
         }
         let status = this.cutting ? tr('正在抠图…')
             : this.product.cutout ? tr('确认抠图结果，可拖动商品调整位置，或用滑块调整大小。不满意可以重新上传。')
+            // Reference mode cuts the product out by itself when generating; the preview needs the cut-out only for placing it.
+            : this.referenceMode() ? tr('出图时会自动抠图。想对照参考图调整商品的位置和大小，请先点“自动抠图”。')
             : tr('这个图片类型会保留原商品的像素，需要先去掉商品图的背景。点“自动抠图”，或上传透明背景的 PNG。');
         this.api.$('simple-cutout-status').textContent = status;
         this.api.$('simple-cutout-run').hidden = Boolean(this.product.cutout);
