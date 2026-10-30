@@ -1000,6 +1000,22 @@ class SimpleMode {
         return Math.min(1, Math.sqrt(16000000 / pixels));
     }
 
+    /** Scales a loaded image down to at most 16 megapixels: a transparent one stays a PNG (falling back to JPEG only when the PNG passes 5 MB), others become JPEG within 5 MB. */
+    static async shrinkImage(image, transparent) {
+        if (transparent) {
+            let scale = this.compressionScale(image.naturalWidth, image.naturalHeight);
+            let canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+            canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+            let blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            if (blob && blob.size <= this.maxProductBytes) {
+                return await this.blobToDataUrl(blob);
+            }
+        }
+        return await this.compressImage(image.src, this.maxProductBytes);
+    }
+
     /** Re-encodes an image as JPEG on a white background, lowering the quality and then the size until it fits in maxBytes. */
     static async compressImage(dataUrl, maxBytes) {
         let image = await this.loadImage(dataUrl);
@@ -1400,7 +1416,18 @@ class SimpleMode {
             let imageData = context.getImageData(0, 0, canvas.width, canvas.height);
             // Quality checks (F38): warnings with suggestions, never a block; the photo is usable anyway.
             product.qualityIssues = this.uploadIssues(image.naturalWidth, image.naturalHeight, imageData, this.quality);
-            if (this.hasTransparency(imageData)) {
+            let transparent = this.hasTransparency(imageData);
+            // A phone photo can pass 40 megapixels while staying under 5 MB; the server's cut-out and product compositing refuse that, so shrink it here.
+            if (this.compressionScale(image.naturalWidth, image.naturalHeight) < 1) {
+                product.data = await this.shrinkImage(image, transparent);
+                product.source = product.data;
+                let shrunk = await this.loadImage(product.data);
+                product.width = shrunk.naturalWidth;
+                product.height = shrunk.naturalHeight;
+                // A transparent photo too big for a 5 MB PNG came back as JPEG on white and needs cutting out again.
+                transparent = transparent && product.data.startsWith('data:image/png');
+            }
+            if (transparent) {
                 product.cutout = product.data;
                 product.qualityIssues = product.qualityIssues.concat(this.cutoutIssues(imageData, this.quality));
             }
