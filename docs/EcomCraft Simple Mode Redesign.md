@@ -43,7 +43,7 @@ Gallery-picked images:
 
 ### 3.1 Product type (two levels, primary)
 
-The former "style" cards become a two-level "product type": pick a category, then a subtype card. Subtypes carry English prompt fragments merged into the prompt at generation time.
+The former "style" cards become a two-level "product type": pick a category, then a subtype card. Subtypes carry English prompt fragments merged into the prompt at generation time; a fragment describes a scene that suits the product, never the product itself (the product is pasted back after generation, so a described one would be drawn a second time).
 
 | Category | Subtypes |
 |---|---|

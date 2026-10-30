@@ -38,14 +38,16 @@ public static class PromptService
     /// <summary>One visual style users can pick: names, description and the English prompt fragment it adds.</summary>
     public sealed record class Style(string Id, Dictionary<string, string> Name, Dictionary<string, string> Description, string Prompt);
 
-    /// <summary>One product subtype users can pick (F53): names and the English prompt fragment it adds.</summary>
+    /// <summary>One product subtype users can pick (F53): names and the English prompt fragment it adds, which describes a fitting scene and never the product itself
+    /// (the product is pasted in after generation, so a described one would be drawn as a second one).</summary>
     public sealed record class ProductType(string Id, Dictionary<string, string> Name, string Prompt);
 
     /// <summary>One product-type category (F53) holding its subtypes.</summary>
     public sealed record class ProductCategory(string Id, Dictionary<string, string> Name, List<ProductType> Subtypes);
 
-    /// <summary>The fixed prompt fragment added when "needs a model" is checked (F53); gender or hand-model choices may extend it later.</summary>
-    public const string ModelFragment = "an elegant model presenting the product, natural pose, shallow depth of field";
+    /// <summary>The fixed prompt fragment added when "needs a model" is checked (F53); gender or hand-model choices may extend it later.
+    /// It does not mention the product: preserved products are pasted in after generation, and a product in the prompt would be drawn as a second one.</summary>
+    public const string ModelFragment = "an elegant model in the scene, natural pose, shallow depth of field";
 
     /// <summary>The result of composing: the prompt subject, where it came from ("model", "template", "panel", "translated"), and when the model was not used a plain notice
     /// with a code the client can translate ("description_used" when the English description was used as is, "description_unused" otherwise,

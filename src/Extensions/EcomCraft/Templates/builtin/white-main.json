@@ -17,9 +17,9 @@
   ],
   "kind": "white_main",
   "prompt": {
-    "prefix": "professional e-commerce product photo on a pure white background,",
+    "prefix": "professional e-commerce studio shot of an empty pure white background,",
     "suffix": "evenly lit, soft natural shadow, centered composition, high detail",
-    "negative": "text, watermark, logo overlay, props, colored background, busy background"
+    "negative": "text, watermark, logo overlay, props, product, bottle, jar, box, packaging, container, colored background, busy background"
   },
   "preserve_product": true,
   "categories": [],
