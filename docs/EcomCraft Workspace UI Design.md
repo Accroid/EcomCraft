@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20工作台界面设计.zh-CN.md)
 >
-> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.35 · **Date:** 2026-10-30
+> **Status:** Implemented, pending real-environment acceptance · **Version:** v1.36 · **Date:** 2026-10-30
 >
 > Confirmed: the "gray-card neutral + chroma-key action color + backdrop preview" direction; generation count became an editable number; "continue from this image" and "view in gallery" were added under creation results; the full-size preview supports previous / next and arrow keys. No dedicated mobile layout for now (narrow screens only need to stay usable).
 >
@@ -341,7 +341,7 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | Vision model service + address | The service for image description, Ollama or OpenAI-compatible only; its own address when it differs from the prompt service | New | New; the address is required only for an OpenAI-compatible service, Ollama can stay empty (defaults to this machine) |
 | Vision model + fetch | Fetch or enter the vision model name (Qwen3-VL recommended) | New | New |
 | One-click local model install | Installs Ollama and the chosen vision model on the server (F69) | New | Opens the model tiers (Qwen3-VL 2B / 4B / 8B / 30B, Llama 3.2 Vision, with download-size and VRAM hints); clicking one starts the install, the elapsed time and the tail of the script output show while it runs, the dialog can be closed (the install continues) and reopening restores the progress; when it finishes the vision service switches to Ollama with that model preselected for saving; one install at a time |
-| Device (Ollama vision) | Automatic / Graphics card only / CPU only (F71) | New | Shown only when the vision service is Ollama; "Automatic" by default: when the card does not answer within about a minute the first time, the CPU is used; after such a move the note below says why and suggests "CPU only"; saved with "Save settings" |
+| Device (Ollama vision) | Automatic / Graphics card only / CPU only (F71) | New | Shown only when the vision service is Ollama; "Automatic" by default: the card and the CPU are measured in the background and the faster one is remembered; until then, when the card does not answer within about a minute the first time, the CPU is used; below it "Vision: graphics card / CPU, about X s per image (measured)" and a "Test the device again" button (shown only for Ollama saved as "Automatic", refreshed every 4 seconds while testing); saved with "Save settings" |
 | Thinking-variant hint | When the chosen Ollama vision model is a Qwen3-VL thinking variant (no -instruct), a note under the model list suggests installing the -instruct tag of the same size (F71) | New | Shown only when needed |
 | Cancel / save | Close or save | OK; **Esc did not close** | Kept; Esc supported; "Saving…" while busy |
 
@@ -433,3 +433,4 @@ Notes: "current" lists present behavior and found defects; "after" is the implem
 | 2026-10-29 | v1.33 | The Ollama part of the settings dialog's vision section gained "Device" (F71/T75) |
 | 2026-10-29 | v1.34 | The one-click install offers the Qwen3-VL -instruct tags; choosing a thinking variant shows a hint to switch (F71/T75) |
 | 2026-10-30 | v1.35 | A failed single, set or batch task shows its reason right below the task instead of only on hover; in reference mode step 2 notes that the product placement can be matched to each reference in step 1 (T79) |
+| 2026-10-30 | v1.36 | Below the device choice the settings dialog shows the measured result with a "Test the device again" button (F71/T76) |
