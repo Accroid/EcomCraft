@@ -87,14 +87,19 @@ public static class PromptRules
         return !string.IsNullOrWhiteSpace(description);
     }
 
+    /// <summary>What prompts must leave out: the standard workflows are text to image and the real product is pasted in after generation (F02),
+    /// so a product named or described in the prompt gets drawn as a second one next to it.</summary>
+    private const string SceneOnly = "The real product photo is added to the picture afterwards, so never describe the product or name its type, and never add "
+        + "bottles, jars, tubes, boxes, packaging or other products; where it stands, describe a clear, empty spot instead. ";
+
     /// <summary>The instruction for "AI expand" (F54): turn the one-line description (or, without one, the product type) into a fuller English description
     /// of the product photo. The product-type, model and style fragments are still added by the server, so the answer only has to describe the picture.</summary>
     public static string ExpandInstruction(string styleName, string productTypeName, bool needModel) =>
         "You write prompts for an e-commerce product photo generator. Expand the user's short description (which may be Chinese or English, or may only name the product) "
-        + "into one detailed English prompt of about 30 to 60 words describing the product, scene, props, lighting and composition. "
-        + "Keep the product itself unchanged and do not invent brand names or text on the product. "
-        + (string.IsNullOrWhiteSpace(productTypeName) ? "" : $"The product is: {productTypeName}. ")
-        + (needModel ? "A model presents the product. " : "")
+        + "into one detailed English prompt of about 30 to 60 words describing the scene, props, lighting and composition. "
+        + SceneOnly
+        + (string.IsNullOrWhiteSpace(productTypeName) ? "" : $"The product, only for choosing a fitting scene, is: {productTypeName}. ")
+        + (needModel ? "A model appears in the scene. " : "")
         + (string.IsNullOrWhiteSpace(styleName) ? "" : $"The chosen visual style is: {styleName}. ")
         + "Reply with the prompt only, on one line, without quotes, labels or explanations.";
 
@@ -140,7 +145,7 @@ public static class PromptRules
     /// <summary>The instruction sent with the user's description: write a short English product-photo prompt and nothing else.</summary>
     public static string Instruction(string styleName) =>
         "You write prompts for an e-commerce product photo generator. Rewrite the user's description (which may be Chinese or English) into one concise English prompt "
-        + "describing the product, scene, lighting and composition. Keep the product itself unchanged and do not invent brand names or text on the product. "
+        + "describing the scene, lighting and composition. " + SceneOnly
         + (string.IsNullOrWhiteSpace(styleName) ? "" : $"The chosen visual style is: {styleName}. ")
         + "Reply with the prompt only, on one line, without quotes, labels or explanations.";
 }

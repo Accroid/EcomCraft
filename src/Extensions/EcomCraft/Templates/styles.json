@@ -5,7 +5,7 @@
       "id": "studio-clean",
       "name": { "zh-CN": "简洁棚拍", "en": "Clean studio" },
       "description": { "zh-CN": "浅色背景、柔和布光，突出商品本身", "en": "Light backdrop and soft lighting that keep the focus on the product" },
-      "prompt": "clean seamless studio backdrop, soft diffused lighting, subtle shadow, high detail commercial product photography"
+      "prompt": "clean seamless studio backdrop, soft diffused lighting, subtle shadow, high detail commercial photography"
     },
     {
       "id": "lifestyle-natural",
@@ -35,7 +35,7 @@
       "id": "festive",
       "name": { "zh-CN": "节日氛围", "en": "Festive" },
       "description": { "zh-CN": "节日装饰与暖色灯光，适合大促", "en": "Holiday decorations and warm lights for sales events" },
-      "prompt": "festive holiday atmosphere, warm bokeh lights, tasteful seasonal decorations, celebratory mood, product as the hero"
+      "prompt": "festive holiday atmosphere, warm bokeh lights, tasteful seasonal decorations, celebratory mood"
     }
   ]
 }

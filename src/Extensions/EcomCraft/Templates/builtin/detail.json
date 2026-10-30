@@ -17,9 +17,9 @@
   ],
   "kind": "detail",
   "prompt": {
-    "prefix": "macro close-up product photography highlighting texture and craftsmanship,",
+    "prefix": "macro close-up photography highlighting fine textures and materials,",
     "suffix": "crisp focus, soft studio lighting, clean background",
-    "negative": "text, watermark, blur, noise, deformed details"
+    "negative": "text, watermark, product, bottle, jar, box, packaging, container, blur, noise, deformed details"
   },
   "preserve_product": true,
   "categories": [],

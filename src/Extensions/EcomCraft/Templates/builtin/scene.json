@@ -17,9 +17,9 @@
   ],
   "kind": "scene_main",
   "prompt": {
-    "prefix": "commercial product photography, the product placed naturally in a realistic scene,",
+    "prefix": "commercial photography of a realistic scene with a clear, empty spot on the surface in the foreground,",
     "suffix": "photorealistic lighting that matches the scene, shallow depth of field",
-    "negative": "text, watermark, distorted product, extra products, cluttered composition"
+    "negative": "text, watermark, product, bottle, jar, tube, box, packaging, container, cluttered composition"
   },
   "preserve_product": true,
   "categories": [],
