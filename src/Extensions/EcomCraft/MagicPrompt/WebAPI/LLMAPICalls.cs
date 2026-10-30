@@ -834,7 +834,8 @@ public class LLMAPICalls : MagicPromptAPI
                     string llmResponse = await DeserializeResponse(response, backend);
                     if (!string.IsNullOrEmpty(llmResponse))
                     {
-                        if (learned is not null && deviceKey is not null && !VisionDeviceCheck.Running)
+                        // A text-only request (a translation on the vision model) still learns the device, but its time is not a description's, so it is not saved.
+                        if (learned is not null && deviceKey is not null && !VisionDeviceCheck.Running && messageContent.Media?.Count > 0)
                         {
                             VisionDeviceCheck.Save(deviceKey, learned, learnedTime.Elapsed.TotalSeconds);
                         }
