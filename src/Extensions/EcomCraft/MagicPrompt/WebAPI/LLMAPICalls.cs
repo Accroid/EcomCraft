@@ -479,6 +479,86 @@ public class LLMAPICalls : MagicPromptAPI
         return OllamaVisionOnCpu.TryGetValue(PlacementKey(endpoint, settings["visionmodel"]?.ToString() ?? ""), out bool onCpu) && onCpu;
     }
 
+    /// <summary>Forgets what "auto" learned since start for the configured Ollama vision model, so the saved self-test result (F71 P2) applies from the next request.</summary>
+    /// <param name="settings">The MagicPrompt settings as saved (not the vision view).</param>
+    public static void ForgetLearnedVisionDevice(JObject settings)
+    {
+        if (settings is null || VisionBackend(settings) != "ollama")
+        {
+            return;
+        }
+        string endpoint = GetEndpoint("ollama", VisionSettings(settings), "vision");
+        OllamaVisionOnCpu.TryRemove(PlacementKey(endpoint, settings["visionmodel"]?.ToString() ?? ""), out _);
+    }
+
+    /// <summary>The version an Ollama server reports, or null when it does not answer within a few seconds.</summary>
+    /// <param name="settings">The vision view of the settings.</param>
+    public static async Task<string> OllamaVersionAsync(JObject settings, string keyOverride)
+    {
+        string baseUrl = (settings["backends"] as JObject)?["ollama"]?["baseurl"]?.ToString()?.TrimEnd('/');
+        if (string.IsNullOrEmpty(baseUrl))
+        {
+            return null;
+        }
+        try
+        {
+            using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(Program.GlobalProgramCancel);
+            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+            using HttpRequestMessage request = new(HttpMethod.Get, $"{baseUrl}/api/version");
+            ConfigureRequest(request, "ollama", settings, null, out _, keyOverride);
+            using HttpResponseMessage response = await HttpClient.SendAsync(request, timeout.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+            string version = JObject.Parse(await response.Content.ReadAsStringAsync(timeout.Token))["version"]?.ToString()?.Trim();
+            return string.IsNullOrEmpty(version) || version.Length > 64 ? null : version;
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or HttpRequestException or Newtonsoft.Json.JsonException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Sends one image to an Ollama vision model on the GPU or the CPU and returns how many seconds the answer took, or null when there was no answer
+    /// within the limit (F71 P2 self-test). The model is unloaded afterwards, which also clears the state a hung GPU run leaves behind.</summary>
+    /// <param name="settings">The vision view of the settings.</param>
+    public static async Task<double?> TimeOllamaVisionAsync(JObject settings, string model, MessageContent content, bool cpu, TimeSpan limit, string keyOverride)
+    {
+        string endpoint = GetEndpoint("ollama", settings, "vision");
+        if (string.IsNullOrEmpty(endpoint))
+        {
+            return null;
+        }
+        using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(Program.GlobalProgramCancel);
+        deadline.CancelAfter(limit);
+        System.Diagnostics.Stopwatch elapsed = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            using HttpRequestMessage request = new(HttpMethod.Post, endpoint);
+            ConfigureRequest(request, "ollama", settings, null, out _, keyOverride);
+            request.Content = new StringContent(JsonSerializer.Serialize(GetSchemaType("ollama", content, model, MessageType.Vision, -1, cpu)), Encoding.UTF8, "application/json");
+            using HttpResponseMessage response = await HttpClient.SendAsync(request, deadline.Token);
+            await response.Content.LoadIntoBufferAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                Logs.Warning($"EcomCraft.MagicPrompt: the vision self-test on the {(cpu ? "CPU" : "GPU")} got HTTP {(int)response.StatusCode}.");
+                return null;
+            }
+            string answer = await DeserializeResponse(response, "ollama");
+            return string.IsNullOrWhiteSpace(answer) ? null : elapsed.Elapsed.TotalSeconds;
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or HttpRequestException or ObjectDisposedException)
+        {
+            Logs.Warning($"EcomCraft.MagicPrompt: the vision self-test on the {(cpu ? "CPU" : "GPU")} gave no answer within {limit.TotalSeconds:F0} seconds ({ex.GetType().Name}).");
+            return null;
+        }
+        finally
+        {
+            await UnloadOllamaModel(settings, null, model, keyOverride);
+        }
+    }
+
     /// <summary>Asks Ollama to unload a model (keep_alive 0), which clears the state a hung run leaves behind; failures are only logged.</summary>
     private static async Task UnloadOllamaModel(JObject settings, Session session, string model, string keyOverride)
     {
@@ -636,11 +716,35 @@ public class LLMAPICalls : MagicPromptAPI
             string placementKey = backend == "ollama" && messageType == MessageType.Vision ? PlacementKey(endpoint, modelId) : null;
             bool onCpu = false;
             bool probeGpu = false;
+            // The saved self-test result for this Ollama version, model and graphics (F71 P2), so a restart does not wait on a hung GPU again.
+            string deviceKey = null;
+            VisionDeviceRules.Record saved = null;
             if (placementKey is not null)
             {
-                bool? remembered = OllamaVisionOnCpu.TryGetValue(placementKey, out bool knownCpu) ? knownCpu : null;
+                bool auto = VisionDeviceRules.Normalize(settings["visiondevice"]?.ToString()) == VisionDeviceRules.Auto;
+                if (auto)
+                {
+                    deviceKey = await VisionDeviceCheck.KeyAsync(settings, modelId, keyOverride);
+                    saved = VisionDeviceCheck.Find(deviceKey);
+                }
+                bool? remembered = null;
+                if (OllamaVisionOnCpu.TryGetValue(placementKey, out bool knownCpu))
+                {
+                    remembered = knownCpu;
+                }
+                else if (saved is not null)
+                {
+                    remembered = saved.Device == VisionDeviceRules.Cpu;
+                }
                 (onCpu, probeGpu) = VisionDeviceRules.Plan(settings["visiondevice"]?.ToString(), remembered);
+                if (saved is not null && saved.Device != (onCpu ? VisionDeviceRules.Cpu : VisionDeviceRules.Gpu))
+                {
+                    saved = null;
+                }
             }
+            // The device this request learns by trying the GPU first, saved with its time once the answer is complete.
+            string learned = null;
+            System.Diagnostics.Stopwatch learnedTime = null;
             // Add request body using BackendSchema
             object requestBody;
             try
@@ -661,6 +765,11 @@ public class LLMAPICalls : MagicPromptAPI
             {
                 timeoutSec = Math.Min(timeoutSec, requestedLimit);
             }
+            if (saved is not null)
+            {
+                // With a measured speed, a hung run is noticed sooner.
+                timeoutSec = VisionDeviceRules.TimeoutFor(saved.Seconds, timeoutSec);
+            }
             using CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(
                 context?.RequestAborted ?? CancellationToken.None, session?.SessInterrupt.Token ?? CancellationToken.None,
                 Program.GlobalProgramCancel);
@@ -678,16 +787,20 @@ public class LLMAPICalls : MagicPromptAPI
                 {
                     using CancellationTokenSource probe = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token);
                     probe.CancelAfter(VisionDeviceRules.GpuProbe);
+                    learnedTime = System.Diagnostics.Stopwatch.StartNew();
                     try
                     {
                         sent = await HttpClient.SendAsync(request, probe.Token);
                         OllamaVisionOnCpu[placementKey] = false;
+                        learned = VisionDeviceRules.Gpu;
                     }
                     catch (OperationCanceledException) when (!deadline.IsCancellationRequested)
                     {
-                        Logs.Warning($"EcomCraft.MagicPrompt: Ollama vision model {modelId} gave no answer on the GPU within {VisionDeviceRules.GpuProbe.TotalSeconds:F0} seconds; unloading it and using the CPU until restart.");
+                        Logs.Warning($"EcomCraft.MagicPrompt: Ollama vision model {modelId} gave no answer on the GPU within {VisionDeviceRules.GpuProbe.TotalSeconds:F0} seconds; unloading it and using the CPU.");
                         OllamaVisionOnCpu[placementKey] = true;
+                        learned = VisionDeviceRules.Cpu;
                         await UnloadOllamaModel(settings, session, modelId, keyOverride);
+                        learnedTime.Restart();
                         using HttpRequestMessage retry = new(HttpMethod.Post, endpoint);
                         ConfigureRequest(retry, backend, settings, session, out _, keyOverride);
                         retry.Content = new StringContent(JsonSerializer.Serialize(GetSchemaType(backend, messageContent, modelId, messageType, seed, true)), Encoding.UTF8, "application/json");
@@ -714,6 +827,10 @@ public class LLMAPICalls : MagicPromptAPI
                     string llmResponse = await DeserializeResponse(response, backend);
                     if (!string.IsNullOrEmpty(llmResponse))
                     {
+                        if (learned is not null && deviceKey is not null)
+                        {
+                            VisionDeviceCheck.Save(deviceKey, learned, learnedTime.Elapsed.TotalSeconds);
+                        }
                         if (action == "prompt")
                         {
                             // How long the professional-mode enhancement takes, for its waiting view (EcomCraft F70); seconds only.
@@ -748,6 +865,11 @@ public class LLMAPICalls : MagicPromptAPI
                 {
                     // A hung vision run leaves Ollama blocked for later requests until the model is unloaded.
                     await UnloadOllamaModel(settings, session, modelId, keyOverride);
+                    if (saved is not null)
+                    {
+                        // The saved device no longer answers in time, so the next request decides again.
+                        VisionDeviceCheck.Forget(deviceKey);
+                    }
                 }
                 return CreateErrorResponse($"提示词优化已等待 {timeoutSec} 秒，模型服务仍未返回完整结果。请检查服务状态或选择响应更快的模型。本次请求未自动重试。");
             }

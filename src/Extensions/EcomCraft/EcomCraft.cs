@@ -93,6 +93,7 @@ public class EcomCraft : Extension
         API.RegisterAPICall(PromptService.EcomCraftStudioVisionStatus, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(PromptService.EcomCraftStudioVisionModels, false, Permissions.EditServerSettings);
         API.RegisterAPICall(PromptService.EcomCraftStudioSetVisionModel, true, Permissions.EditServerSettings);
+        API.RegisterAPICall(PromptService.EcomCraftStudioVisionDeviceCheck, true, Permissions.EditServerSettings);
         API.RegisterAPICall(PromptService.EcomCraftStudioStoryboard, false, Permissions.BasicImageGeneration);
         API.RegisterAPICall(PromptService.EcomCraftPromptSettings, true, Permissions.EditServerSettings);
         API.RegisterAPICall(VisionModelInstall.EcomCraftStudioVisionInstall, true, Permissions.EditServerSettings);
