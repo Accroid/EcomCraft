@@ -41,6 +41,39 @@ public static class PromptRules
         return paragraph;
     }
 
+    /// <summary>Photo-type phrases that name the product, kept as a neutral photo type ("product shot" becomes "still life shot").</summary>
+    private static readonly Regex ProductPhotoPhrase = new(@"\bproduct\s+(shot|photo|photograph|photography|image|display|showcase)s?\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>Words that make the image model draw a product of its own.</summary>
+    private static readonly Regex ProductWord = new(@"\b(products?|bottles?|jars?|tubes?|box|boxes|packages?|packaging|containers?|pumps?|dispensers?|caps?|lids?|labels?|logos?|brands?)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>Removes what would make the image model draw a product of its own from model-written prompt text (F02/F59): the real product is
+    /// pasted in after generation, and small models often ignore the instruction not to describe it. Product photo phrases become "still life",
+    /// and every comma clause that still names a product, container or label is dropped. Returns an empty string when nothing is left.</summary>
+    public static string WithoutProduct(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return "";
+        }
+        text = ProductPhotoPhrase.Replace(text, match => "still life " + match.Groups[1].Value.ToLowerInvariant());
+        List<string> sentences = [];
+        foreach (string sentence in Regex.Split(text.Trim(), @"(?<=[.!?])\s+", RegexOptions.CultureInvariant))
+        {
+            string body = sentence.TrimEnd('.', '!', '?', ' ');
+            List<string> clauses = [.. body.Split(',').Select(clause => clause.Trim()).Where(clause => clause.Length > 0 && !ProductWord.IsMatch(clause))];
+            if (clauses.Count == 0)
+            {
+                continue;
+            }
+            // Joining clauses can leave a sentence starting with "and"/"with"; it still reads well enough for the image model.
+            string kept = string.Join(", ", clauses);
+            sentences.Add(char.ToUpperInvariant(kept[0]) + kept[1..] + ".");
+        }
+        return string.Join(" ", sentences);
+    }
+
     /// <summary>Whether text is plain ASCII, so it can be used as an English prompt without translation.</summary>
     public static bool IsAscii(string text) => !string.IsNullOrEmpty(text) && text.All(c => c < 128);
 
@@ -87,10 +120,10 @@ public static class PromptRules
         return !string.IsNullOrWhiteSpace(description);
     }
 
-    /// <summary>What prompts must leave out: the standard workflows are text to image and the real product is pasted in after generation (F02),
+    /// <summary>What prompts must leave out: the real product is already in the picture and is pasted back after generation (F02),
     /// so a product named or described in the prompt gets drawn as a second one next to it.</summary>
-    private const string SceneOnly = "The real product photo is added to the picture afterwards, so never describe the product or name its type, and never add "
-        + "bottles, jars, tubes, boxes, packaging or other products; where it stands, describe a clear, empty spot instead. ";
+    private const string SceneOnly = "The real product is already in the picture, so never describe the product or name its type, and never add "
+        + "bottles, jars, tubes, boxes, packaging or other products; describe only the surface it stands on and everything around it. ";
 
     /// <summary>The instruction for "AI expand" (F54): turn the one-line description (or, without one, the product type) into a fuller English description
     /// of the product photo. The product-type, model and style fragments are still added by the server, so the answer only has to describe the picture.</summary>

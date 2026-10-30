@@ -431,7 +431,7 @@ public static class PromptService
             return new Composed(PromptRules.Compose("", "", fragment), "template", null, null);
         }
         string text = string.Join(". ", new[] { productHint, description }.Where(part => part.Length > 0));
-        string answer = await AskModelAsync(session, PromptRules.Instruction(style is null ? null : EcomTemplate.Pick(style.Name, "en")), text, null);
+        string answer = PromptRules.WithoutProduct(await AskModelAsync(session, PromptRules.Instruction(style is null ? null : EcomTemplate.Pick(style.Name, "en")), text, null));
         if (answer.Length > 0)
         {
             return new Composed(PromptRules.Compose(answer, "", fragment), "model", null, null);
@@ -488,7 +488,7 @@ public static class PromptService
         string productName = productType is null || string.IsNullOrEmpty(productType.Prompt) ? null : EcomTemplate.Pick(productType.Name, "en");
         description = description?.Trim() ?? "";
         string text = description.Length > 0 ? description : (productName ?? "a retail product");
-        string english = await AskModelAsync(session, PromptRules.ExpandInstruction(style is null ? null : EcomTemplate.Pick(style.Name, "en"), productName, needModel), text, null);
+        string english = PromptRules.WithoutProduct(await AskModelAsync(session, PromptRules.ExpandInstruction(style is null ? null : EcomTemplate.Pick(style.Name, "en"), productName, needModel), text, null));
         if (english.Length == 0)
         {
             return null;
@@ -505,14 +505,15 @@ public static class PromptService
     private const int MaxReferenceImageLength = (5 * 1024 * 1024 + 2) / 3 * 4 + 40;
 
     /// <summary>The instruction for describing one reference image (F59): the setup and style only, never the product, so the description can steer a
-    /// different product into a similar frame without copying it. The scene workflow is text to image and the real product is pasted in afterwards, so any
-    /// product named in the prompt gets drawn as a second one: the product is only an empty spot, never mentioned, and no containers or packages may appear. It asks for a detailed paragraph,
+    /// different product into a similar frame without copying it. The real product is already on the generation canvas and is pasted back afterwards, so any
+    /// product named in the prompt gets drawn as a second one: the product is never mentioned, and no containers or packages may appear.
+    /// Small vision models still slip, so the answer also goes through <see cref="PromptRules.WithoutProduct"/>. It asks for a detailed paragraph,
     /// since a one-sentence answer gives the image model too little to go on.</summary>
-    private const string ReferenceInstruction = "You write prompts for a text-to-image model. The product will be added to the picture later, so the prompt must describe "
+    private const string ReferenceInstruction = "You write prompts for an image model. The product is already in the picture, so the prompt must describe "
         + "only the scene around it. Describe how this product photo is set up: shot type and camera angle; the surface and background (materials, colors, textures); "
         + "props and where they are placed; lighting (direction, softness, shadows, highlights); color palette and mood; the overall photographic style. "
-        + "Never mention the product or describe it: not its type, shape, color, material, packaging, brand, logo or any text. Where it stands, describe "
-        + "an empty, clear spot on the surface instead. Do not mention any bottles, jars, tubes, boxes, packages or containers, even if the photo has them; "
+        + "Never mention the product or describe it: not its type, shape, color, material, packaging, brand, logo or any text. Describe only "
+        + "the surface it stands on and everything around it. Do not mention any bottles, jars, tubes, boxes, packages or containers, even if the photo has them; "
         + "props must be things that are not products, such as plants, fabric, stones, water or fruit. "
         + "Reply with one English paragraph of 60 to 120 words, without lists or headings.";
 
@@ -545,7 +546,8 @@ public static class PromptService
         {
             long started = Environment.TickCount64;
             // A short user text keeps the request valid for every backend (some reject image-only or empty-text messages).
-            string described = await AskModelAsync(session, ReferenceInstruction, "Describe the setup of this product photo.", image.ToString());
+            // Small vision models often still name the product; what they wrote about it is removed, or the image model draws a second one.
+            string described = PromptRules.WithoutProduct(await AskModelAsync(session, ReferenceInstruction, "Describe the setup of this product photo.", image.ToString()));
             if (described.Length == 0)
             {
                 return ("", "");

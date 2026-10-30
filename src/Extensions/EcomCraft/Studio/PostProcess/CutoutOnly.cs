@@ -35,7 +35,8 @@ public static class CutoutOnly
             {
                 return StudioApi.Error("纯白主图需要去掉背景的商品图，请先完成抠图。", "invalid_reference");
             }
-            using Image<Rgba32> canvas = ProductComposite.BuildCanvas(cutout, width, height, new Placement(0.5, 0.5, ProductSize));
+            using Image<Rgba32> trimmed = ProductComposite.Trim(cutout);
+            using Image<Rgba32> canvas = ProductComposite.BuildCanvas(trimmed ?? cutout, width, height, new Placement(0.5, 0.5, ProductSize));
             JObject metadata = new()
             {
                 ["sui_extra_data"] = new JObject()
