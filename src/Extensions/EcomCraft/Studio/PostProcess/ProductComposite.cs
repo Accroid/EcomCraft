@@ -14,6 +14,45 @@ public static class ProductComposite
     /// <summary>A pixel counts as transparent below this alpha.</summary>
     private const byte TransparentAlpha = 16;
 
+    /// <summary>Largest product image used for cut-out and generation, in pixels: a phone photo can pass 40 megapixels while staying under 5 MB.
+    /// Bigger ones are scaled down, which results never show, since the product is resized to its placement anyway.</summary>
+    public const long WorkPixels = 16_000_000;
+
+    /// <summary>Largest product image decoded at all, in pixels; the size is checked before decoding.</summary>
+    public const long MaxPixels = 100_000_000;
+
+    /// <summary>An encoded product image scaled down to at most <paramref name="workPixels"/>: the same bytes when already small enough,
+    /// re-encoded as JPEG when the source was JPEG and as PNG otherwise (so transparency stays), or null when it is over <see cref="MaxPixels"/>.
+    /// Throws the ImageSharp format exceptions for unreadable data.</summary>
+    public static byte[] FitForWork(byte[] bytes, long workPixels = WorkPixels)
+    {
+        ImageInfo info = Image.Identify(bytes);
+        long pixels = (long)info.Width * info.Height;
+        if (pixels > MaxPixels)
+        {
+            return null;
+        }
+        if (pixels <= workPixels)
+        {
+            return bytes;
+        }
+        double scale = Math.Sqrt((double)workPixels / pixels);
+        int width = Math.Max(1, (int)(info.Width * scale));
+        int height = Math.Max(1, (int)(info.Height * scale));
+        using Image<Rgba32> image = Image.Load<Rgba32>(bytes);
+        image.Mutate(context => context.Resize(width, height));
+        using System.IO.MemoryStream stream = new();
+        if (info.Metadata.DecodedImageFormat is SixLabors.ImageSharp.Formats.Jpeg.JpegFormat)
+        {
+            image.SaveAsJpeg(stream, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder() { Quality = 92 });
+        }
+        else
+        {
+            image.SaveAsPng(stream);
+        }
+        return stream.ToArray();
+    }
+
     /// <summary>Whether the image is a cut-out: at least 2% of its pixels are transparent.</summary>
     public static bool HasTransparency(Image<Rgba32> image)
     {

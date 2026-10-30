@@ -82,6 +82,22 @@ public class ProductCompositeTests
     }
 
     [Fact]
+    public void FitForWorkKeepsSmallImagesAndShrinksLargeOnesAsPng()
+    {
+        using Image<Rgba32> cutout = Cutout();
+        using System.IO.MemoryStream stream = new();
+        cutout.SaveAsPng(stream);
+        byte[] png = stream.ToArray();
+        Assert.Same(png, ProductComposite.FitForWork(png, 1600));
+        byte[] shrunk = ProductComposite.FitForWork(png, 400);
+        ImageInfo info = Image.Identify(shrunk);
+        Assert.Equal((20, 20), (info.Width, info.Height));
+        Assert.IsType<SixLabors.ImageSharp.Formats.Png.PngFormat>(info.Metadata.DecodedImageFormat);
+        using Image<Rgba32> back = Image.Load<Rgba32>(shrunk);
+        Assert.True(ProductComposite.HasTransparency(back));
+    }
+
+    [Fact]
     public void CanvasPlacesProductOnWhite()
     {
         using Image<Rgba32> cutout = Cutout();

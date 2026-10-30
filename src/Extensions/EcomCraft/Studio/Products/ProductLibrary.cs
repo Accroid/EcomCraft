@@ -112,7 +112,20 @@ public static class ProductLibrary
         {
             string extension = Path.GetExtension(file).TrimStart('.');
             string mime = extension == "jpg" ? "image/jpeg" : $"image/{extension}";
-            return $"data:{mime};base64," + Convert.ToBase64String(File.ReadAllBytes(Path.Combine(record.Folder, file)));
+            byte[] bytes = File.ReadAllBytes(Path.Combine(record.Folder, file));
+            // Products saved before uploads were shrunk in the browser can pass 40 megapixels, which generation refuses; they are scaled down here
+            // (JPEG stays JPEG, anything else becomes PNG). Absurd sizes are passed on unchanged for generation to refuse with its own message.
+            byte[] fitted = PostProcess.ProductComposite.FitForWork(bytes);
+            if (fitted is not null && fitted != bytes)
+            {
+                bytes = fitted;
+                mime = extension == "jpg" ? "image/jpeg" : "image/png";
+            }
+            return $"data:{mime};base64," + Convert.ToBase64String(bytes);
+        }
+        catch (Exception ex) when (ex is SixLabors.ImageSharp.UnknownImageFormatException or SixLabors.ImageSharp.InvalidImageContentException)
+        {
+            return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

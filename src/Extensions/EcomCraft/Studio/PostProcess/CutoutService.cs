@@ -29,11 +29,8 @@ public static class CutoutService
     /// <summary>Longest time for one cut-out.</summary>
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(90);
 
-    /// <summary>Largest photo accepted, in bytes and pixels.</summary>
+    /// <summary>Largest photo accepted, in bytes; its size in pixels is limited by <see cref="ProductComposite.FitForWork"/>.</summary>
     private const int MaxBytes = 5 * 1024 * 1024;
-
-    /// <summary>Largest photo accepted, in pixels.</summary>
-    private const long MaxPixels = 40_000_000;
 
     /// <summary>What a server lacks to run the cut-out, or an empty list.</summary>
     private static List<string> Capability(BackendHandler.T2IBackendData data)
@@ -58,11 +55,11 @@ public static class CutoutService
         byte[] bytes;
         try
         {
-            bytes = Convert.FromBase64String(product_image[(comma + 1)..]);
-            ImageInfo info = ISImage.Identify(bytes);
-            if ((long)info.Width * info.Height > MaxPixels)
+            // A big photo is scaled down before cutting out (the cut-out comes back at the smaller size); only absurd sizes are refused.
+            bytes = ProductComposite.FitForWork(Convert.FromBase64String(product_image[(comma + 1)..]));
+            if (bytes is null)
             {
-                return StudioApi.Error("商品图尺寸过大，请缩小到 4000 万像素以内。", "invalid_reference");
+                return StudioApi.Error("商品图尺寸过大，请缩小到 1 亿像素以内。", "invalid_reference");
             }
         }
         catch (Exception ex) when (ex is FormatException or UnknownImageFormatException or InvalidImageContentException)

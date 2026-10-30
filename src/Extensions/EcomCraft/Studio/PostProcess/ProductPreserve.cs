@@ -7,7 +7,6 @@ using ISImage = SixLabors.ImageSharp.Image;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
 using SwarmUI.Accounts;
 using SwarmUI.Utils;
 
@@ -20,13 +19,6 @@ public static class ProductPreserve
 {
     /// <summary>Longest time a prepared cut-out waits for its generation.</summary>
     private const long KeepMs = 2 * 60 * 60 * 1000;
-
-    /// <summary>Largest product photo accepted, in pixels; it is decoded only after this check.</summary>
-    private const long MaxPixels = 100_000_000;
-
-    /// <summary>Largest cut-out kept for compositing, in pixels: bigger ones (a phone photo can pass 40 megapixels under 5 MB) are scaled down first,
-    /// which the result never shows, since the product is resized to its placement anyway.</summary>
-    private const long WorkPixels = 16_000_000;
 
     /// <summary>Longest wait for a saved work to appear on disk.</summary>
     private static readonly TimeSpan SaveWait = TimeSpan.FromSeconds(60);
@@ -54,19 +46,13 @@ public static class ProductPreserve
         }
         try
         {
-            byte[] bytes = Convert.FromBase64String(productDataUrl[(comma + 1)..]);
-            ImageInfo info = ISImage.Identify(bytes);
-            if ((long)info.Width * info.Height > MaxPixels)
+            // A big cut-out (a phone photo can pass 40 megapixels under 5 MB) is scaled down first; only absurd sizes are refused.
+            byte[] bytes = ProductComposite.FitForWork(Convert.FromBase64String(productDataUrl[(comma + 1)..]));
+            if (bytes is null)
             {
                 return "商品图尺寸过大，请缩小到 1 亿像素以内。";
             }
             using Image<Rgba32> cutout = ISImage.Load<Rgba32>(bytes);
-            long pixels = (long)cutout.Width * cutout.Height;
-            if (pixels > WorkPixels)
-            {
-                double scale = Math.Sqrt((double)WorkPixels / pixels);
-                cutout.Mutate(context => context.Resize(Math.Max(1, (int)(cutout.Width * scale)), Math.Max(1, (int)(cutout.Height * scale))));
-            }
             if (!ProductComposite.HasTransparency(cutout))
             {
                 return "这个模板会把原商品像素贴回成图，需要去掉背景的商品图（透明背景的 PNG 或 WebP）。请先抠图后再上传。";
