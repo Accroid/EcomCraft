@@ -144,6 +144,9 @@ public static class BatchService
         /// <summary>Target platform, so main-image templates can take the cut-out-only branch.</summary>
         public string Platform = "";
 
+        /// <summary>The output size chosen before generating, as { width, height } for every task; null where each task takes the platform's slot size for its image kind.</summary>
+        public JObject OutputSize;
+
         /// <summary>Cancels tasks still waiting; replaced when a task is retried after cancelling.</summary>
         public CancellationTokenSource Cancel = new();
 
@@ -412,6 +415,14 @@ public static class BatchService
             }
         }
         batch.Negative = rawInput["negativeprompt"]?.Type == JTokenType.String ? rawInput.Value<string>("negativeprompt") : "";
+        if (rawInput["output_size"] is JObject)
+        {
+            if (!OutputSizeRules.TryParse(rawInput["output_size"], out int outputWidth, out int outputHeight))
+            {
+                return StudioApi.Error($"出图尺寸须为 {OutputSizeRules.MinSide}–{OutputSizeRules.MaxSide} 像素的整数。", "invalid_parameters");
+            }
+            batch.OutputSize = new JObject() { ["width"] = outputWidth, ["height"] = outputHeight };
+        }
         foreach (Job job in batch.Jobs)
         {
             job.State = referencePrompts is null ? "prompt" : "queued";
@@ -591,6 +602,10 @@ public static class BatchService
             ["placement"] = new JObject() { ["x"] = placement.CenterX, ["y"] = placement.CenterY, ["size"] = placement.Size },
             ["platform"] = batch.Platform
         };
+        if (batch.OutputSize is not null)
+        {
+            payload["output_size"] = batch.OutputSize.DeepClone();
+        }
         if (job.Reference >= 0)
         {
             // A reference task's prompt is final and user-edited (F59): it is sent as is, without the template's own fragments.

@@ -686,6 +686,22 @@ public static class StudioApi
             // so the model's answer can only become prompt text (F37).
             JObject templateInput = rawInput;
             PromptService.Composed composed = null;
+            // The output size is chosen before generating: given as { width, height }, or by default the platform's slot size for the template's image kind.
+            (int Width, int Height)? outputSize = null;
+            if (rawInput["output_size"] is JObject)
+            {
+                if (!OutputSizeRules.TryParse(rawInput["output_size"], out int outputWidth, out int outputHeight))
+                {
+                    return Error($"出图尺寸须为 {OutputSizeRules.MinSide}–{OutputSizeRules.MaxSide} 像素的整数。", "invalid_parameters");
+                }
+                outputSize = (outputWidth, outputHeight);
+            }
+            else
+            {
+                outputSize = Export.ExportService.SlotSize(rawInput["platform"]?.Type == JTokenType.String ? rawInput.Value<string>("platform") : "",
+                    TemplateStore.Find(requestedTemplate)?.Template?.Kind);
+            }
+            (int Width, int Height)? generationSize = outputSize is (int sizeWidth, int sizeHeight) ? OutputSizeRules.GenerationSize(sizeWidth, sizeHeight) : null;
             string description = rawInput["description"]?.Type == JTokenType.String ? rawInput.Value<string>("description").Trim() : "";
             string styleId = rawInput["style_id"]?.Type == JTokenType.String ? rawInput.Value<string>("style_id") : "";
             string productTypeId = rawInput["product_type_id"]?.Type == JTokenType.String ? rawInput.Value<string>("product_type_id") : "";
@@ -716,7 +732,7 @@ public static class StudioApi
                 brandFragment = fragment;
             }
             // Main images for platforms such as Amazon skip generation entirely (F22), so they never wait for the language model.
-            JObject cutoutOnly = await TemplateApi.TryCutoutOnlyAsync(session, rawInput, requestedTemplate);
+            JObject cutoutOnly = await TemplateApi.TryCutoutOnlyAsync(session, rawInput, requestedTemplate, outputSize);
             if (cutoutOnly is not null)
             {
                 return cutoutOnly;
@@ -742,18 +758,29 @@ public static class StudioApi
             }
             // The template decides the workflow and presets; the client's own workflow_id and workflow_params are replaced.
             // A background submission is resolved now with an empty subject, so invalid requests still fail at once; the prompt is filled in later.
-            JObject resolved = TemplateApi.Resolve(session, templateInput, requestedTemplate, out JObject templateError, out string preserveToken);
+            JObject resolved = TemplateApi.Resolve(session, templateInput, requestedTemplate, out JObject templateError, out string preserveToken, generationSize);
             if (resolved is null)
             {
                 return templateError;
             }
-            // Local postprocessing (R10.3): paste the original product pixels back before the works are synced or shown.
-            Func<JObject, Task> postProcess = preserveToken is null ? null : async result =>
+            // Local postprocessing (R10.3): paste the original product pixels back, then scale to the chosen size, before the works are synced or shown.
+            Func<JObject, Task> postProcess = preserveToken is null && outputSize is null ? null : async result =>
             {
-                int failed = await PostProcess.ProductPreserve.ApplyAsync(preserveToken, session.User, result);
-                if (failed > 0)
+                if (preserveToken is not null)
                 {
-                    result["preserve_failed"] = failed;
+                    int failed = await PostProcess.ProductPreserve.ApplyAsync(preserveToken, session.User, result);
+                    if (failed > 0)
+                    {
+                        result["preserve_failed"] = failed;
+                    }
+                }
+                if (outputSize is (int finalWidth, int finalHeight))
+                {
+                    int failed = await PostProcess.OutputResize.ApplyAsync(session.User, result, finalWidth, finalHeight);
+                    if (failed > 0)
+                    {
+                        result["resize_failed"] = failed;
+                    }
                 }
             };
             if (background)
