@@ -42,3 +42,23 @@ jobs:
           with:
             dotnet-version: '8.x'
         - run: ./launch-linux.sh --ci-test true --ci-test-extensions true --launch_mode none --loglevel debug
+
+    ecomcraft:
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [windows-latest, macos-latest]
+        runs-on: ${{ matrix.os }}
+        steps:
+        - uses: actions/checkout@v6
+        - uses: actions/setup-dotnet@v5
+          with:
+            dotnet-version: '8.x'
+        - uses: actions/setup-node@v4
+          with:
+            node-version: '22'
+        # The extension references bin/live_release/SwarmUI.dll (SwarmUI.extension.props), so the main project builds first.
+        - run: dotnet build src/SwarmUI.csproj -c Debug -o src/bin/live_release
+        - run: dotnet build src/Extensions/EcomCraft/EcomCraft.csproj -c Debug -o ${{ runner.temp }}/ecomcraft-extension
+        - run: dotnet test src/Extensions/EcomCraft/Tests/EcomCraft.Tests.csproj
+        - run: node --test "src/Extensions/EcomCraft/Tests/*.test.cjs"
