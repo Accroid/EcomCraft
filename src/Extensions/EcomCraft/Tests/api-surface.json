@@ -1,0 +1,290 @@
+[
+  {
+    "name": "EcomCraftBackupCreate",
+    "permission": "EditServerSettings"
+  },
+  {
+    "name": "EcomCraftBackupRestore",
+    "permission": "EditServerSettings"
+  },
+  {
+    "name": "EcomCraftDiagnostics",
+    "permission": "EditServerSettings"
+  },
+  {
+    "name": "EcomCraftPromptSettings",
+    "permission": "EditServerSettings"
+  },
+  {
+    "name": "EcomCraftStandardWorkflows",
+    "permission": "EditServerSettings"
+  },
+  {
+    "name": "EcomCraftStorageMigrate",
+    "permission": "EditServerSettings"
+  },
+  {
+    "name": "EcomCraftStoragePending",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStorageSave",
+    "permission": "EditServerSettings"
+  },
+  {
+    "name": "EcomCraftStorageSettings",
+    "permission": "EditServerSettings"
+  },
+  {
+    "name": "EcomCraftStudioBackendStatus",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioBatchCancel",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioBatchRetry",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioBatchStatus",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioBrandKitDelete",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioBrandKitSave",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioBrandKits",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioCancelTask",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioCatalog",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioComposePrompt",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioCutout",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioEstimates",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioExpandPrompt",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioExport",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioExportOptions",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioGenerate",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioGenerateSet",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioMarkKept",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioMyWorkflows",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioPlatforms",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioPrepareStatus",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioProductDelete",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioProductSave",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioProductTypes",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioProductUpdate",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioProducts",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioProjectAddWorks",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioProjectDelete",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioProjectRemoveWorks",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioProjectSave",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioProjectWorks",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioProjects",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioQueue",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioReferenceDescribe",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioReviewDecide",
+    "permission": "PermReviewWorkflows"
+  },
+  {
+    "name": "EcomCraftStudioReviewDetail",
+    "permission": "PermReviewWorkflows"
+  },
+  {
+    "name": "EcomCraftStudioReviewList",
+    "permission": "PermReviewWorkflows"
+  },
+  {
+    "name": "EcomCraftStudioSellingImage",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioSetVisionModel",
+    "permission": "EditServerSettings"
+  },
+  {
+    "name": "EcomCraftStudioStoryboard",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioStyles",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioSubmitWorkflow",
+    "permission": "PermSubmitWorkflows"
+  },
+  {
+    "name": "EcomCraftStudioTemplates",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioVisionDeviceCheck",
+    "permission": "EditServerSettings"
+  },
+  {
+    "name": "EcomCraftStudioVisionInstall",
+    "permission": "EditServerSettings"
+  },
+  {
+    "name": "EcomCraftStudioVisionInstallStatus",
+    "permission": "EditServerSettings"
+  },
+  {
+    "name": "EcomCraftStudioVisionModels",
+    "permission": "EditServerSettings"
+  },
+  {
+    "name": "EcomCraftStudioVisionStatus",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioWorkRecipe",
+    "permission": "FundamentalGenerateTabAccess"
+  },
+  {
+    "name": "EcomCraftStudioWorkflowDelete",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftStudioWorkflowSubmissions",
+    "permission": "PermSubmitWorkflows"
+  },
+  {
+    "name": "EcomCraftStudioWorkflowSubmitOwn",
+    "permission": "PermSubmitWorkflows"
+  },
+  {
+    "name": "EcomCraftStudioWorkflowUpload",
+    "permission": "BasicImageGeneration"
+  },
+  {
+    "name": "EcomCraftTemplateAdminList",
+    "permission": "PermReviewWorkflows"
+  },
+  {
+    "name": "EcomCraftTemplateDelete",
+    "permission": "PermReviewWorkflows"
+  },
+  {
+    "name": "EcomCraftTemplateRequirements",
+    "permission": "PermReviewWorkflows"
+  },
+  {
+    "name": "EcomCraftTemplateSave",
+    "permission": "PermReviewWorkflows"
+  },
+  {
+    "name": "GetMagicPromptModels",
+    "permission": "PermGetModels"
+  },
+  {
+    "name": "GetMagicPromptSettings",
+    "permission": "PermReadConfig"
+  },
+  {
+    "name": "MagicPromptPhoneHome",
+    "permission": "PermPhoneHome"
+  },
+  {
+    "name": "PreviewMagicPromptModels",
+    "permission": "PermSaveConfig"
+  },
+  {
+    "name": "ResetMagicPromptSettings",
+    "permission": "PermResetConfig"
+  },
+  {
+    "name": "SaveMagicPromptSettings",
+    "permission": "PermSaveConfig"
+  }
+]
