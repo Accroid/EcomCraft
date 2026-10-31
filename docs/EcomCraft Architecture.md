@@ -101,7 +101,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators,
 6. Scheduling: dispatched to the execution servers with the shortest queues that have the required
    nodes and models (several run in parallel)
 7. ComfyUI outputs the generated image → returned to the platform server (the input canvas is built locally by the platform from the cut-out and product placement)
-8. Post-processing: the original product pixels are pasted back at the same placement, using the local cut-out as the mask → saved locally
+8. Post-processing: the original product pixels are pasted back at the same placement, using the local cut-out as the mask (standard workflows: details from the original, light from the generated picture, plus a contact shadow) → saved locally
    first, then synced to the work library → gallery
 9. The operator picks images → export: platform sizes, pure-white check, AI metadata → download
    zip or export to the shared folder
@@ -185,7 +185,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F01 | E-commerce scene templates | Built on published snapshots; 4 built in: white-background main image, scene, detail, model or hand-held |
 | F37 | Prompt service | One-sentence description + style → MagicPrompt enhancement; image description on by default (references only), product photo description off by default |
 | F07 | Three-step simple mode | The default interface; no prompt box, styles are options with sample images |
-| F02 | Product preservation | Composite the original product pixels back into the generated image, using the local cut-out as the mask (workflows need not output a mask) |
+| F02 | Product preservation | Composite the original product pixels back into the generated image, using the local cut-out as the mask; the standard workflows also harmonize once, taking details from the original and light from the generated picture, with a contact shadow (workflows need not output a mask) |
 | F35 | Background-removal confirmation and product positioning | Confirm the cut-out before generating; drag or scale the product |
 | F03 | One-click image sets and batches | Full image set per platform; several GPUs in parallel; per-user limits |
 | F36 | Product library (basic) | Upload once; cache the original and cut-out for reuse |
@@ -306,4 +306,5 @@ For each task's files, dependencies, acceptance criteria and Claude Code prompt,
 | 2026-10-30 | v2.7 | New F72 cleanup of leftover local ComfyUI at startup (T78): force-killing the platform does not end the ComfyUI it started, and repeated restarts once left 17 instances on one server; the platform now records the process ID and start time of the ComfyUI it starts and ends leftovers on the next start |
 | 2026-10-30 | v2.7 | F59 adds placing the product per reference (T79): in reference mode each reference has its own product position and size, adjusted against the reference shown behind the preview, with no automatic inference; requirements in EcomCraft Reference Images, section 4 item 9 |
 | 2026-10-30 | v2.8 | New F73 output size chosen before generating (T80): the size is picked in step 2, the model generates at its aspect ratio near one megapixel and the platform scales locally to the exact size; zip downloads keep the generated size, the platform only decides format and size cap |
+| 2026-10-30 | v2.9 | Better compositing in the standard workflows: after the product is put on the scene the whole picture is sampled again at low strength, the paste becomes a frequency-separated blend (details from the original, light from the generated picture, with a limit on tone changes) with a contact shadow; the canvas's transparent part is neutral gray and the repainted area reaches slightly into the product; the default placement is a little below the middle at size 0.55; the default seed is random |
 | 2026-10-29 | v2.4 | F04 project archive interface complete pending acceptance (T10): gallery project picker and project manager, adding or removing works in bulk, "Make again with same settings" filling in the template, platform, product, prompt and seed; template generation accepts `seed`, which only sets the snapshot's seed parameter |

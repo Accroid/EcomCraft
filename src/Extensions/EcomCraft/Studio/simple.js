@@ -85,7 +85,7 @@ class SimpleMode {
     /** Candidates whose star request is still running, so a second click waits. */
     static starring = new Set();
     static maxProductBytes = 5 * 1024 * 1024;
-    static placement = { x: 0.5, y: 0.5, size: 0.7 };
+    static placement = { x: 0.5, y: 0.56, size: 0.55 };
 
     /** Which reference's placement the preview edits in reference mode (T79), or -1 for the product's own placement. */
     static placementRef = -1;
@@ -292,8 +292,8 @@ class SimpleMode {
         });
         $('simple-cutout-run').addEventListener('click', () => this.runCutout());
         $('simple-placement-reset').addEventListener('click', () => {
-            this.setActivePlacement({ x: 0.5, y: 0.5, size: 0.7 });
-            $('simple-size').value = '70';
+            this.setActivePlacement({ x: 0.5, y: 0.56, size: 0.55 });
+            $('simple-size').value = '55';
             this.renderStage();
         });
         $('simple-size').addEventListener('input', e => {

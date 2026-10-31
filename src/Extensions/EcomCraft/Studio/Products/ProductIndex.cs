@@ -28,10 +28,10 @@ public sealed class ProductRecord
     public double X = 0.5;
 
     /// <summary>Confirmed product center, fraction of the picture height.</summary>
-    public double Y = 0.5;
+    public double Y = 0.56;
 
     /// <summary>Confirmed product size, fraction of the picture's shorter side.</summary>
-    public double Size = 0.7;
+    public double Size = 0.55;
 }
 
 /// <summary>The product index with per-account isolation, independent of SwarmUI so isolation and deletion can be unit tested.

@@ -6,8 +6,8 @@ namespace EcomCraftStudio.Studio.PostProcess;
 /// so the two always line up. Clients only send these three numbers, checked by <see cref="TryCreate"/>.</summary>
 public sealed record class Placement(double CenterX, double CenterY, double Size)
 {
-    /// <summary>Default placement: centered, product's longer side at 70% of the canvas's shorter side.</summary>
-    public static readonly Placement Default = new(0.5, 0.5, 0.7);
+    /// <summary>Default placement: centered and a little low so the product stands on the scene's surface, its longer side at 55% of the canvas's shorter side.</summary>
+    public static readonly Placement Default = new(0.5, 0.56, 0.55);
 
     /// <summary>Smallest allowed size.</summary>
     public const double MinSize = 0.1;

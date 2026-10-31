@@ -24,7 +24,7 @@ public static class ProductPreserve
     private static readonly TimeSpan SaveWait = TimeSpan.FromSeconds(60);
 
     /// <summary>A prepared request: owner, the cut-out as PNG, the placement and when it was made.</summary>
-    private sealed record class Job(string UserId, byte[] CutoutPng, Placement Placement, long Created);
+    private sealed record class Job(string UserId, byte[] CutoutPng, Placement Placement, long Created, bool Blend);
 
     /// <summary>Saved image types the product can be pasted into; videos and animations are skipped.</summary>
     private static readonly HashSet<string> PastableExtensions = [".png", ".jpg", ".jpeg", ".webp"];
@@ -33,8 +33,10 @@ public static class ProductPreserve
     private static readonly ConcurrentDictionary<string, Job> Jobs = new();
 
     /// <summary>Builds the input canvas for a product photo with a transparent background and remembers the cut-out for the postprocessing.
-    /// Returns a user-facing error, or null with the canvas as a PNG data URL and the token to pass to <see cref="ApplyAsync"/>.</summary>
-    public static string Prepare(string userId, string productDataUrl, int width, int height, Placement placement, out string canvasDataUrl, out string token)
+    /// Returns a user-facing error, or null with the canvas as a PNG data URL and the token to pass to <see cref="ApplyAsync"/>.
+    /// <paramref name="blend"/> (the standard workflows, which repaint around the product) fills the canvas with neutral gray and blends the product into the scene afterwards;
+    /// otherwise the canvas stays white and the original pixels are pasted back exactly.</summary>
+    public static string Prepare(string userId, string productDataUrl, int width, int height, Placement placement, bool blend, out string canvasDataUrl, out string token)
     {
         canvasDataUrl = null;
         token = null;
@@ -61,14 +63,14 @@ public static class ProductPreserve
             using Image<Rgba32> trimmed = ProductComposite.Trim(loaded);
             Image<Rgba32> cutout = trimmed ?? loaded;
             // Transparent around the product: the standard workflows load its alpha as the mask and generate only the scene around it (N10).
-            using Image<Rgba32> canvas = ProductComposite.BuildCanvas(cutout, width, height, placement, true);
+            using Image<Rgba32> canvas = ProductComposite.BuildCanvas(cutout, width, height, placement, true, blend ? ProductComposite.NeutralFill : (byte)255);
             using MemoryStream canvasStream = new();
             canvas.Save(canvasStream, new PngEncoder());
             using MemoryStream cutoutStream = new();
             cutout.Save(cutoutStream, new PngEncoder());
             canvasDataUrl = "data:image/png;base64," + Convert.ToBase64String(canvasStream.ToArray());
             token = Guid.NewGuid().ToString("N");
-            Jobs[token] = new Job(userId, cutoutStream.ToArray(), placement, Environment.TickCount64);
+            Jobs[token] = new Job(userId, cutoutStream.ToArray(), placement, Environment.TickCount64, blend);
             return null;
         }
         catch (Exception ex) when (ex is FormatException or UnknownImageFormatException or InvalidImageContentException or NotSupportedException)
@@ -152,7 +154,14 @@ public static class ProductPreserve
     {
         using Image<Rgba32> generated = ISImage.Load<Rgba32>(path);
         using Image<Rgba32> cutout = ISImage.Load<Rgba32>(job.CutoutPng);
-        ProductComposite.PasteBack(generated, cutout, job.Placement);
+        if (job.Blend)
+        {
+            ProductComposite.PasteBlended(generated, cutout, job.Placement);
+        }
+        else
+        {
+            ProductComposite.PasteBack(generated, cutout, job.Placement);
+        }
         IImageFormat format = generated.Metadata.DecodedImageFormat ?? throw new NotSupportedException("Unknown image format.");
         string temp = $"{path}.ecomcraft-tmp";
         using (FileStream stream = File.Create(temp))

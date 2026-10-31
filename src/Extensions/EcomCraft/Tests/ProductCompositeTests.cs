@@ -116,6 +116,41 @@ public class ProductCompositeTests
     }
 
     [Fact]
+    public void BlendedPasteTakesToneFromTheSceneAndKeepsDetails()
+    {
+        using Image<Rgba32> cutout = Cutout();
+        using Image<Rgba32> generated = new(40, 40, new Rgba32(100, 100, 100, 255));
+        ProductComposite.PasteBlended(generated, cutout, new Placement(0.5, 0.5, 1.0));
+        Rgba32 body = generated[20, 15];
+        Rgba32 logo = generated[20, 20];
+        // Pulled towards the scene, but at most by the limit.
+        Assert.InRange(body.R, 160, 199);
+        Assert.InRange(body.G, 21, 60);
+        // The logo stays brighter than the body around it.
+        Assert.True(logo.G > body.G + 150);
+        Assert.Equal(new Rgba32(100, 100, 100, 255), generated[2, 2]);
+    }
+
+    [Fact]
+    public void BlendedPasteDrawsAContactShadowUnderTheProduct()
+    {
+        using Image<Rgba32> cutout = Cutout();
+        using Image<Rgba32> generated = new(40, 40, new Rgba32(100, 100, 100, 255));
+        ProductComposite.PasteBlended(generated, cutout, new Placement(0.5, 0.5, 1.0));
+        // Just below the red square, which ends at row 29.
+        Assert.True(generated[20, 30].R < 100);
+        Assert.Equal(100, generated[20, 38].R);
+    }
+
+    [Fact]
+    public void NeutralCanvasFillStaysTransparent()
+    {
+        using Image<Rgba32> cutout = Cutout();
+        using Image<Rgba32> canvas = ProductComposite.BuildCanvas(cutout, 80, 80, new Placement(0.5, 0.5, 0.5), true, ProductComposite.NeutralFill);
+        Assert.Equal(new Rgba32(128, 128, 128, 0), canvas[2, 2]);
+    }
+
+    [Fact]
     public void TrimCropsToTheProductWithAMargin()
     {
         using Image<Rgba32> cutout = Cutout();

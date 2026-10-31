@@ -160,6 +160,12 @@ public static class StandardWorkflows
                 property.Value["default"] = pick(settings).Trim();
                 property.Value["values"] = new JArray(pick(settings).Trim());
             }
+            // The blueprint's saved seed would make every generation with the same prompt the same image; -1 picks a new one each time, and a redo still sets its own.
+            if (property.Value.Value<bool?>("native_seed") == true)
+            {
+                values[property.Name] = -1;
+                property.Value["default"] = -1;
+            }
         }
         metadata[ProductImageParam] = new JObject()
         {
@@ -173,25 +179,63 @@ public static class StandardWorkflows
         return (prompt, metadata, values, json, null);
     }
 
-    /// <summary>Node IDs of the inpainting nodes, above the converter's numbering (at most 2000).</summary>
-    private const string LoadNode = "9001", EncodeNode = "9002", MaskNode = "9003";
+    /// <summary>Node IDs of the added nodes, above the converter's numbering (at most 2000).</summary>
+    private const string LoadNode = "9001", EncodeNode = "9002", MaskNode = "9003", GrowNode = "9004", InvertNode = "9005", CompositeNode = "9006",
+        HarmonizeEncodeNode = "9007", HarmonizeNode = "9008", HarmonizeDecodeNode = "9009";
+
+    /// <summary>How far the repainted area reaches into the product's edge, in pixels, so the canvas fill around the product cannot leave a halo.</summary>
+    private const int MaskGrowPx = 12;
+
+    /// <summary>Strength of the second pass over the whole picture: enough to unify light and edges, little enough to keep the composition.</summary>
+    private const double HarmonizeDenoise = 0.35;
+
+    /// <summary>Steps the second pass really runs. KSampler runs its full step count whatever the denoise, so reusing the first pass's steps would double the time.</summary>
+    private const int HarmonizeSteps = 10;
 
     /// <summary>Turns the converted text-to-image graph into generation around the product (N10): the product canvas is loaded (the backend uploads the
-    /// image parameter and fills in the file name), encoded with the graph's own VAE, and its alpha (LoadImage's mask: 1 where transparent) limits
-    /// sampling to the scene; the sampler starts from it instead of the empty latent. False when the graph has no single sampler and decoder to rewire.</summary>
+    /// image parameter and fills in the file name), encoded with the graph's own VAE, and its alpha (LoadImage's mask: 1 where transparent), grown a little
+    /// into the product, limits sampling to the scene; the sampler starts from it instead of the empty latent. Then the product is put on the decoded scene and
+    /// the whole picture is sampled again at low strength, so product and scene share their light; the restored details come from the local paste afterwards.
+    /// False when the graph has no single sampler and decoder to rewire.</summary>
     private static bool AddProductInpaint(JObject prompt)
     {
-        List<JObject> samplers = [.. prompt.Properties().Select(property => property.Value).OfType<JObject>().Where(node => node["class_type"]?.ToString() is "KSampler" or "KSamplerAdvanced")];
-        List<JObject> decoders = [.. prompt.Properties().Select(property => property.Value).OfType<JObject>().Where(node => node["class_type"]?.ToString() == "VAEDecode")];
-        if (samplers.Count != 1 || decoders.Count != 1 || decoders[0]["inputs"]?["vae"] is not JArray vae || samplers[0]["inputs"] is not JObject samplerInputs)
+        List<JObject> samplers = [.. prompt.Properties().Select(property => property.Value).OfType<JObject>().Where(node => node["class_type"]?.ToString() == "KSampler")];
+        List<JProperty> decoders = [.. prompt.Properties().Where(property => property.Value["class_type"]?.ToString() == "VAEDecode")];
+        if (samplers.Count != 1 || decoders.Count != 1 || decoders[0].Value["inputs"]?["vae"] is not JArray vae || samplers[0]["inputs"] is not JObject samplerInputs)
         {
             return false;
         }
+        string decoder = decoders[0].Name;
+        // What saved the first pass's picture now saves the second pass's.
+        foreach (JProperty input in prompt.Properties().Select(property => property.Value["inputs"]).OfType<JObject>().SelectMany(inputs => inputs.Properties()))
+        {
+            if (input.Value is JArray link && link.Count == 2 && link[0].ToString() == decoder)
+            {
+                input.Value = new JArray(HarmonizeDecodeNode, link[1].DeepClone());
+            }
+        }
         prompt[LoadNode] = new JObject() { ["class_type"] = "LoadImage", ["inputs"] = new JObject() { ["image"] = "${" + ProductImageParam + "}" } };
         prompt[EncodeNode] = new JObject() { ["class_type"] = "VAEEncode", ["inputs"] = new JObject() { ["pixels"] = new JArray(LoadNode, 0), ["vae"] = vae.DeepClone() } };
-        prompt[MaskNode] = new JObject() { ["class_type"] = "SetLatentNoiseMask", ["inputs"] = new JObject() { ["samples"] = new JArray(EncodeNode, 0), ["mask"] = new JArray(LoadNode, 1) } };
+        prompt[GrowNode] = new JObject() { ["class_type"] = "GrowMask", ["inputs"] = new JObject() { ["mask"] = new JArray(LoadNode, 1), ["expand"] = MaskGrowPx, ["tapered_corners"] = true } };
+        prompt[MaskNode] = new JObject() { ["class_type"] = "SetLatentNoiseMask", ["inputs"] = new JObject() { ["samples"] = new JArray(EncodeNode, 0), ["mask"] = new JArray(GrowNode, 0) } };
         // The empty latent stays in the graph, unconnected, so the width and height parameters keep setting the canvas size.
+        JObject harmonizeInputs = (JObject)samplerInputs.DeepClone();
         samplerInputs["latent_image"] = new JArray(MaskNode, 0);
+        prompt[InvertNode] = new JObject() { ["class_type"] = "InvertMask", ["inputs"] = new JObject() { ["mask"] = new JArray(LoadNode, 1) } };
+        prompt[CompositeNode] = new JObject()
+        {
+            ["class_type"] = "ImageCompositeMasked",
+            ["inputs"] = new JObject()
+            {
+                ["destination"] = new JArray(decoder, 0), ["source"] = new JArray(LoadNode, 0), ["x"] = 0, ["y"] = 0, ["resize_source"] = false, ["mask"] = new JArray(InvertNode, 0)
+            }
+        };
+        prompt[HarmonizeEncodeNode] = new JObject() { ["class_type"] = "VAEEncode", ["inputs"] = new JObject() { ["pixels"] = new JArray(CompositeNode, 0), ["vae"] = vae.DeepClone() } };
+        harmonizeInputs["latent_image"] = new JArray(HarmonizeEncodeNode, 0);
+        harmonizeInputs["denoise"] = HarmonizeDenoise;
+        harmonizeInputs["steps"] = HarmonizeSteps;
+        prompt[HarmonizeNode] = new JObject() { ["class_type"] = "KSampler", ["inputs"] = harmonizeInputs };
+        prompt[HarmonizeDecodeNode] = new JObject() { ["class_type"] = "VAEDecode", ["inputs"] = new JObject() { ["samples"] = new JArray(HarmonizeNode, 0), ["vae"] = vae.DeepClone() } };
         return true;
     }
 
