@@ -16,6 +16,17 @@ public class SetRulesTests
     ];
 
     [Fact]
+    public void FinishedBatchesExpireAfterSixHoursAndRunningOnesAreKeptUpToADay()
+    {
+        long hour = 60 * 60 * 1000;
+        Assert.False(SetRules.BatchExpired(6 * hour, false));
+        Assert.True(SetRules.BatchExpired(6 * hour + 1, false));
+        Assert.False(SetRules.BatchExpired(6 * hour + 1, true));
+        Assert.False(SetRules.BatchExpired(24 * hour, true));
+        Assert.True(SetRules.BatchExpired(24 * hour + 1, true));
+    }
+
+    [Fact]
     public void SetKeepsTemplatesOfTheSetThatSuitThePlatform()
     {
         Assert.Equal(new List<string> { "white-main", "scene" }, SetRules.SetTemplates(Templates(), "taobao", "standard").Select(template => template.Id).ToList());

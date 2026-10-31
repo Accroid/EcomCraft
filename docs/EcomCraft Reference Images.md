@@ -89,7 +89,7 @@ The route, model and quantization follow the G1 conclusion (trial schemes R0–R
 
 ## 7. Storage and Privacy
 
-- References **exist only inside the request and the in-memory batch**: kept in memory like product photos for the batch's lifetime (six hours), **never written under `Data/`**, and never entering the product library (F36), the project archive (F04), the candidate-cleanup registry (F39), diagnostics (F44) or backups (F45).
+- References **exist only inside the request and the in-memory batch**: kept in memory like product photos for the batch's lifetime (six hours, up to 24 hours while tasks are unfinished, cleaned in the background every 10 minutes), **never written under `Data/`**, and never entering the product library (F36), the project archive (F04), the candidate-cleanup registry (F39), diagnostics (F44) or backups (F45).
 - Visible only to the submitter; shared queue and progress APIs never return references.
 - Implementation adds the matching rule to AGENTS.md (as F04 did).
 
