@@ -887,6 +887,7 @@ window.EcomCraftLanguages.en = {
     "error:backup_failed": "The backup was not created. Try again later.",
     "error:backup_invalid": "The backup package is not valid or failed its integrity check; nothing was changed. Export a fresh backup and try again.",
     "error:backup_confirm_required": "Restoring overwrites the current system data; read the upgrade guide and confirm first.",
+    "error:data_file_unreadable": "A data file cannot be read right now, so this change was not saved and your existing data is untouched. Try again later or contact your administrator.",
     "error:disk_full": "Disk space is critically low, so new generations are paused. Ask your administrator to free space (or adjust the threshold) and try again.",
     "磁盘空间警告阈值（GB）": "Disk space warning threshold (GB)",
     "严重不足阈值（GB）": "Critical threshold (GB)",

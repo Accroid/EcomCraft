@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.RegularExpressions;
+using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.PostProcess;
 using EcomCraftStudio.Studio.Storage;
 using Newtonsoft.Json;
@@ -30,44 +31,53 @@ public static class ProductLibrary
     /// <summary>Index file.</summary>
     private static string IndexFile => Path.Combine(Program.DataDir, "EcomCraft", "products.json");
 
-    /// <summary>Loads the index once. Callers hold <see cref="Lock"/>. An unreadable file starts empty and is not overwritten until a change is made.</summary>
+    /// <summary>Whether the index file exists but could not be read. It is then never overwritten, and each use tries to read it again, so a temporary problem clears by itself.</summary>
+    private static bool Unreadable;
+
+    /// <summary>Loads the index once. Callers hold <see cref="Lock"/>. While the file is unreadable the index is empty and <see cref="Save"/> refuses.</summary>
     private static ProductIndex Loaded()
     {
-        if (Index is not null)
+        if (Index is not null && !Unreadable)
         {
             return Index;
         }
         Index = new ProductIndex();
-        try
+        JsonFileState state = JsonFile.TryRead<List<ProductRecord>>(IndexFile, root => root["products"]?.ToObject<List<ProductRecord>>()?.Where(item => item is not null).ToList() ?? [], out List<ProductRecord> items, out string error);
+        if (state == JsonFileState.Unreadable && !Unreadable)
         {
-            if (File.Exists(IndexFile))
-            {
-                Index.Items = JObject.Parse(File.ReadAllText(IndexFile))["products"]?.ToObject<List<ProductRecord>>()?.Where(item => item is not null).ToList() ?? [];
-            }
+            Logs.Error($"EcomCraft could not read the product index: {error}");
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        Unreadable = state == JsonFileState.Unreadable;
+        if (state == JsonFileState.Ok)
         {
-            Logs.Error($"EcomCraft could not read the product index: {ex.Message}");
+            Index.Items = items;
         }
         return Index;
     }
 
-    /// <summary>Writes the index through a temporary file. Callers hold <see cref="Lock"/>.</summary>
+    /// <summary>Writes the index through a temporary file. Callers hold <see cref="Lock"/>. Refuses while the original file is unreadable.</summary>
     private static bool Save()
     {
-        try
+        if (Unreadable)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(IndexFile));
-            string temp = $"{IndexFile}.tmp";
-            File.WriteAllText(temp, new JObject() { ["version"] = 1, ["products"] = JArray.FromObject(Index.Items) }.ToString(Formatting.Indented));
-            File.Move(temp, IndexFile, true);
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            Logs.Error($"EcomCraft could not save the product index: {ex.Message}");
             return false;
         }
+        if (!JsonFile.TryWriteAtomic(IndexFile, new JObject() { ["version"] = 1, ["products"] = JArray.FromObject(Index.Items) }.ToString(Formatting.Indented), out string error))
+        {
+            Logs.Error($"EcomCraft could not save the product index: {error}");
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>The answer after <see cref="Save"/> returned false.</summary>
+    private static JObject SaveFailed()
+    {
+        if (Unreadable)
+        {
+            return StudioApi.Error("商品库文件暂时读不了，这次没有保存，原有数据没有动。请稍后重试或联系管理员。", "data_file_unreadable");
+        }
+        return StudioApi.Error("商品库索引无法保存到服务器数据目录。", "product_save_failed");
     }
 
     /// <summary>Folder for a new product: the work library when set, otherwise the platform server's data folder.</summary>
@@ -259,7 +269,8 @@ public static class ProductLibrary
             if (error is null && !Save())
             {
                 Index.Items.Remove(record);
-                error = "商品库索引无法保存到服务器数据目录。";
+                TryDeleteFolder(record.Folder);
+                return Task.FromResult(SaveFailed());
             }
             if (error is not null)
             {
@@ -322,7 +333,7 @@ public static class ProductLibrary
             }
             if (!Save())
             {
-                return Task.FromResult(StudioApi.Error("商品库索引无法保存到服务器数据目录。", "product_save_failed"));
+                return Task.FromResult(SaveFailed());
             }
             return Task.FromResult(new JObject() { ["product"] = Json(record) });
         }
@@ -345,7 +356,7 @@ public static class ProductLibrary
             if (!Save())
             {
                 Index.Items.Add(record);
-                return Task.FromResult(StudioApi.Error("商品库索引无法保存到服务器数据目录。", "product_save_failed"));
+                return Task.FromResult(SaveFailed());
             }
             TryDeleteFolder(record.Folder);
         }

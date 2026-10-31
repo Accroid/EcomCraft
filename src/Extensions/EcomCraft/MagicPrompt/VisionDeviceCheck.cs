@@ -2,6 +2,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using EcomCraftStudio.MagicPrompt.WebAPI;
+using EcomCraftStudio.Studio.Common;
 using FreneticUtilities.FreneticExtensions;
 using Microsoft.Win32;
 using Newtonsoft.Json;
@@ -289,16 +290,9 @@ public static class VisionDeviceCheck
         {
             return;
         }
-        try
+        if (!JsonFile.TryWriteAtomic(RecordsFile, VisionDeviceRules.Serialize(Records), out string error))
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(RecordsFile));
-            string temp = $"{RecordsFile}.tmp";
-            File.WriteAllText(temp, VisionDeviceRules.Serialize(Records));
-            File.Move(temp, RecordsFile, true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            Logs.Warning($"EcomCraft could not save the vision device results: {ex.Message}");
+            Logs.Warning($"EcomCraft could not save the vision device results: {error}");
         }
     }
 

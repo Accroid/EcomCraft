@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
+using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.Storage;
 using EcomCraftStudio.Studio.Templates;
 using Newtonsoft.Json;
@@ -42,17 +43,15 @@ public static class ProjectLibrary
             return Index;
         }
         Index = new ProjectIndex();
-        try
+        JsonFileState state = JsonFile.TryRead<List<ProjectRecord>>(IndexFile, root => root["projects"]?.ToObject<List<ProjectRecord>>()?.Where(item => item is not null).ToList() ?? [], out List<ProjectRecord> items, out string error);
+        if (state == JsonFileState.Unreadable)
         {
-            if (File.Exists(IndexFile))
-            {
-                Index.Items = JObject.Parse(File.ReadAllText(IndexFile))["projects"]?.ToObject<List<ProjectRecord>>()?.Where(item => item is not null).ToList() ?? [];
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            Logs.Error($"EcomCraft could not read the project index: {ex.Message}");
+            Logs.Error($"EcomCraft could not read the project index: {error}");
             Unreadable = true;
+        }
+        else if (state == JsonFileState.Ok)
+        {
+            Index.Items = items;
         }
         return Index;
     }
@@ -67,19 +66,12 @@ public static class ProjectLibrary
         {
             return false;
         }
-        try
+        if (!JsonFile.TryWriteAtomic(IndexFile, new JObject() { ["version"] = 1, ["projects"] = JArray.FromObject(Index.Items) }.ToString(Formatting.Indented), out string error))
         {
-            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(IndexFile));
-            string temp = $"{IndexFile}.tmp";
-            File.WriteAllText(temp, new JObject() { ["version"] = 1, ["projects"] = JArray.FromObject(Index.Items) }.ToString(Formatting.Indented));
-            File.Move(temp, IndexFile, true);
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            Logs.Error($"EcomCraft could not save the project index: {ex.Message}");
+            Logs.Error($"EcomCraft could not save the project index: {error}");
             return false;
         }
+        return true;
     }
 
     /// <summary>The result URL prefix of the account's works.</summary>

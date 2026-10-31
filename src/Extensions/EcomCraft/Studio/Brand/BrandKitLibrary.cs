@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.RegularExpressions;
+using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.Prompting;
 using EcomCraftStudio.Studio.Storage;
 using Newtonsoft.Json;
@@ -30,44 +31,53 @@ public static class BrandKitLibrary
     /// <summary>Index file.</summary>
     private static string IndexFile => Path.Combine(Program.DataDir, "EcomCraft", "brand-kits.json");
 
-    /// <summary>Loads the index once. Callers hold <see cref="Lock"/>. An unreadable file starts empty and is not overwritten until a change is made.</summary>
+    /// <summary>Whether the index file exists but could not be read. It is then never overwritten, and each use tries to read it again, so a temporary problem clears by itself.</summary>
+    private static bool Unreadable;
+
+    /// <summary>Loads the index once. Callers hold <see cref="Lock"/>. While the file is unreadable the index is empty and <see cref="Save"/> refuses.</summary>
     private static BrandKitIndex Loaded()
     {
-        if (Index is not null)
+        if (Index is not null && !Unreadable)
         {
             return Index;
         }
         Index = new BrandKitIndex();
-        try
+        JsonFileState state = JsonFile.TryRead<List<BrandKitRecord>>(IndexFile, root => root["kits"]?.ToObject<List<BrandKitRecord>>()?.Where(item => item is not null).ToList() ?? [], out List<BrandKitRecord> items, out string error);
+        if (state == JsonFileState.Unreadable && !Unreadable)
         {
-            if (File.Exists(IndexFile))
-            {
-                Index.Items = JObject.Parse(File.ReadAllText(IndexFile))["kits"]?.ToObject<List<BrandKitRecord>>()?.Where(item => item is not null).ToList() ?? [];
-            }
+            Logs.Error($"EcomCraft could not read the brand kit index: {error}");
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        Unreadable = state == JsonFileState.Unreadable;
+        if (state == JsonFileState.Ok)
         {
-            Logs.Error($"EcomCraft could not read the brand kit index: {ex.Message}");
+            Index.Items = items;
         }
         return Index;
     }
 
-    /// <summary>Writes the index through a temporary file. Callers hold <see cref="Lock"/>.</summary>
+    /// <summary>Writes the index through a temporary file. Callers hold <see cref="Lock"/>. Refuses while the original file is unreadable.</summary>
     private static bool Save()
     {
-        try
+        if (Unreadable)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(IndexFile));
-            string temp = $"{IndexFile}.tmp";
-            File.WriteAllText(temp, new JObject() { ["version"] = 1, ["kits"] = JArray.FromObject(Index.Items) }.ToString(Formatting.Indented));
-            File.Move(temp, IndexFile, true);
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            Logs.Error($"EcomCraft could not save the brand kit index: {ex.Message}");
             return false;
         }
+        if (!JsonFile.TryWriteAtomic(IndexFile, new JObject() { ["version"] = 1, ["kits"] = JArray.FromObject(Index.Items) }.ToString(Formatting.Indented), out string error))
+        {
+            Logs.Error($"EcomCraft could not save the brand kit index: {error}");
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>The answer after <see cref="Save"/> returned false.</summary>
+    private static JObject SaveFailed()
+    {
+        if (Unreadable)
+        {
+            return StudioApi.Error("品牌资料包文件暂时读不了，这次没有保存，原有数据没有动。请稍后重试或联系管理员。", "data_file_unreadable");
+        }
+        return StudioApi.Error("品牌资料包索引无法保存到服务器数据目录。", "brand_kit_save_failed");
     }
 
     /// <summary>Folder for a new kit: the work library when set, otherwise the platform server's data folder.</summary>
@@ -309,15 +319,16 @@ public static class BrandKitLibrary
             string error = created ? index.Add(record) : null;
             if (error is null && !Save())
             {
-                error = "品牌资料包索引无法保存到服务器数据目录。";
                 if (created)
                 {
                     index.Items.Remove(record);
+                    TryDelete(folder, null);
                 }
                 else
                 {
                     (record.Name, record.Colors, record.Background, record.BackgroundPrompt, record.Logo, record.References) = (before.Name, before.Colors, before.Background, before.BackgroundPrompt, before.Logo, before.References);
                 }
+                return SaveFailed();
             }
             if (error is not null)
             {
@@ -357,7 +368,7 @@ public static class BrandKitLibrary
             if (!Save())
             {
                 Index.Items.Add(record);
-                return Task.FromResult(StudioApi.Error("品牌资料包索引无法保存到服务器数据目录。", "brand_kit_save_failed"));
+                return Task.FromResult(SaveFailed());
             }
             TryDelete(record.Folder, null);
         }
