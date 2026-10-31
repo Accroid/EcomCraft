@@ -1,197 +1,194 @@
-# EcomCraft 提示词优化（MagicPrompt）使用与部署指南
+# EcomCraft Prompt Enhancement (MagicPrompt) Setup and Deployment Guide
 
-> **语言：** 简体中文 · [English](EcomCraft%20Prompt%20Enhancement.en.md)
+> **Language:** English · [简体中文](EcomCraft%20提示词优化指南.zh-CN.md)
 
-EcomCraft 创作工作台的「✦ 优化提示词」按钮，会把你输入的简短描述，交给大语言模型（LLM）改写成一段细节更丰富、更适合生图的提示词，再回填到描述框，可直接用于生成。
+The **✦ Enhance prompt** button in the EcomCraft workspace sends your short description to a large language model (LLM), which rewrites it into a richer, generation-ready prompt and fills it back into the description box.
 
-该功能**内置 MagicPrompt**（源自开源项目 [HartsyAI/SwarmUI-MagicPromptExtension](https://github.com/HartsyAI/SwarmUI-MagicPromptExtension)，MIT 协议，随 EcomCraft 安装即默认启用，无需另行安装扩展）。
+MagicPrompt is **built in** (from the open-source [HartsyAI/SwarmUI-MagicPromptExtension](https://github.com/HartsyAI/SwarmUI-MagicPromptExtension), MIT licence) and enabled by default with EcomCraft — no separate installation.
 
-它支持 **6 类后端**，你可以按是否有 GPU、是否愿意付费自由选择：
+It supports **6 kinds of backends**, so you can choose freely based on whether you have a GPU and whether you are willing to pay:
 
-| 后端 | 类型 | 是否需要 API Key | 说明 |
+| Backend | Type | API key needed | Notes |
 |---|---|---|---|
-| **Ollama** | 本地 | 否 | 最简单的本地免费方案，一条命令装好模型 |
-| **OpenAI 兼容服务（本地 / 远程）** | 本地或远程 | 取决于服务 | LM Studio、LocalAI、vLLM、自建服务及远程兼容接口 |
-| **OpenRouter** | 云端 | 是 | 一个 Key 接入数百种模型，**含免费模型** |
-| **OpenAI** | 云端 | 是 | ChatGPT（GPT-4o / GPT-4.1 等） |
-| **Anthropic** | 云端 | 是 | Claude（Sonnet / Opus 等） |
-| **Grok** | 云端 | 是 | xAI 的 Grok 模型 |
+| **Ollama** | Local | No | The simplest local, free option — one command per model |
+| **OpenAI-compatible service (local / remote)** | Local or remote | Depends | LM Studio, LocalAI, vLLM, self-hosted services and remote compatible APIs |
+| **OpenRouter** | Cloud | Yes | One key, hundreds of models, **including free ones** |
+| **OpenAI** | Cloud | Yes | ChatGPT (GPT-4o / GPT-4.1 etc.) |
+| **Anthropic** | Cloud | Yes | Claude (Sonnet / Opus etc.) |
+| **Grok** | Cloud | Yes | xAI's Grok models |
 
 ---
 
-## 方案一：Ollama 本地免费（最推荐，数据不出本机）
+## Option 1: local and free with Ollama (most recommended)
 
-适合：有一台普通电脑，希望零成本、离线使用。
+For: any ordinary computer, zero cost, fully offline.
 
-### 1. 安装 Ollama
+### 1. Install Ollama
 
-到 [https://ollama.com/download](https://ollama.com/download) 下载并安装（支持 Windows / macOS / Linux）。安装后 Ollama 会在后台运行，默认地址 `http://localhost:11434`。
+Download from [https://ollama.com/download](https://ollama.com/download) (Windows / macOS / Linux). Ollama runs in the background at `http://localhost:11434` by default.
 
-### 2. 拉取一个模型
+### 2. Pull a model
 
-打开终端（Windows 用 PowerShell / CMD），执行：
+In a terminal (PowerShell / CMD on Windows) run:
 
 ```bash
-# 轻量、足够做提示词扩写（约 2GB，3B 参数）
+# Light and enough for prompt expansion (about 2 GB, 3B parameters)
 ollama pull llama3.2
 ```
 
-其他可选模型：
+Other options:
 
-| 命令 | 模型 | 大小 | 适用 |
+| Command | Model | Size | Best for |
 |---|---|---|---|
-| `ollama pull llama3.2` | Llama 3.2（3B） | ~2 GB | 速度快，够用 |
-| `ollama pull qwen2.5` | Qwen2.5（7B） | ~4.7 GB | 效果更好，需要更多内存/显存 |
-| `ollama pull phi3` | Phi-3（3.8B） | ~2.3 GB | 轻量备选 |
+| `ollama pull llama3.2` | Llama 3.2 (3B) | ~2 GB | Fast, sufficient |
+| `ollama pull qwen2.5` | Qwen2.5 (7B) | ~4.7 GB | Better quality, needs more memory/VRAM |
+| `ollama pull phi3` | Phi-3 (3.8B) | ~2.3 GB | Light alternative |
 
-> 没有独显也能用：Ollama 会自动用 CPU + 内存运行，3B 模型在普通电脑上一条提示词通常几秒到十几秒。
+> Works without a discrete GPU: Ollama falls back to CPU + RAM, and a 3B model usually answers a prompt in seconds on an ordinary machine.
 
-### 3. 在 EcomCraft 中配置
+### 3. Configure EcomCraft
 
-1. 打开 EcomCraft 创作工作台，点击「创作描述」下方的 **设置**（管理员）。
-2. 选择：
-   - **模型后端**：`Ollama（本地，免费）`
-   - **服务地址**：`http://localhost:11434`（同机默认，无需改）
-   - **提示词模型**：点「拉取」从列表选择，或手动填 `llama3.2:latest`
-3. 点击 **保存**。
+1. Open the EcomCraft workspace and click **Settings** under the creation description (administrators).
+2. Choose:
+   - **Model backend**: `Ollama (local, free)`
+   - **Base URL**: `http://localhost:11434` (same machine, no change needed)
+   - **Prompt model**: press **Fetch** and pick from the list, or type `llama3.2:latest`
+3. Click **Save**.
 
 ---
 
-## 方案二：OpenRouter 云端（含免费模型，无需好硬件）
+## Option 2: OpenRouter cloud (free models, no good hardware needed)
 
-适合：本机配置较低、不想本地跑模型，又希望有免费额度。
+For: low-spec machines, no local models, free quota wanted.
 
-1. 到 [https://openrouter.ai](https://openrouter.ai) 注册。
-2. 进入 [https://openrouter.ai/keys](https://openrouter.ai/keys) 创建一个 API Key（`sk-or-...`）。
-3. 在 EcomCraft 设置中：
-   - **模型后端**：`OpenRouter（含免费模型）`
-   - **API Key**：粘贴 Key
-   - **提示词模型**：可填免费模型，例如：
+1. Register at [https://openrouter.ai](https://openrouter.ai).
+2. Create an API key at [https://openrouter.ai/keys](https://openrouter.ai/keys) (`sk-or-...`).
+3. In the EcomCraft settings:
+   - **Model backend**: `OpenRouter (free models included)`
+   - **API key**: paste the key
+   - **Prompt model**: free models work, for example:
      - `meta-llama/llama-3.3-70b-instruct:free`
      - `google/gemini-2.0-flash-exp:free`
      - `qwen/qwen-2.5-7b-instruct:free`
-4. 点击 **保存**。
+4. Click **Save**.
 
-> 免费模型可能有速率限制；具体可用模型以 OpenRouter 页面标注 `:free` 的为准。
-
----
-
-## 方案三：OpenAI / Claude / Grok 等付费云端
-
-适合：已经在用这些服务、追求稳定和高质量。
-
-1. 在对应平台创建 API Key：
-   - OpenAI：[https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-   - Anthropic Claude：[https://console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
-   - Grok（xAI）：[https://console.x.ai](https://console.x.ai)
-2. EcomCraft 设置中选择对应后端，粘贴 API Key。
-3. 模型名可在该平台文档中查到（如 OpenAI 的 `gpt-4o-mini`、Anthropic 的 `claude-3-5-sonnet-latest`），也可点「拉取」。
+> Free models may be rate-limited; treat the `:free` badge on OpenRouter as the source of truth.
 
 ---
 
-## 方案四：其他本地 OpenAI 兼容服务（LM Studio / vLLM 等）
+## Option 3: paid clouds — OpenAI / Claude / Grok
 
-「OpenAI 兼容服务（本地 / 远程）」后端可对接实现了 OpenAI `/v1/chat/completions` 与 `/v1/models` 接口的服务，包括以下本地程序：
+For: already using these services, wanting stability and quality.
 
-- **LM Studio**：图形界面，加载模型后开启「Local Server」，默认地址 `http://localhost:1234/v1`。
-- **vLLM**：`vllm serve <模型> --port 8000`，地址 `http://localhost:8000/v1`。
-- **text-generation-webui / LocalAI / 自建 FastAPI**：同理。
-
-配置时：
-- **模型后端**：`OpenAI 兼容服务（本地 / 远程）`
-- **服务地址**：填该服务的 Base URL（根地址或包含 `/v1` 均可，以实际为准）
-- **API Key**：本地服务一般无需 Key，留空即可；若服务设置了 Key 则填写。
-- **提示词模型**：点「拉取」选择。
+1. Create an API key on the platform:
+   - OpenAI: [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+   - Anthropic Claude: [https://console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
+   - Grok (xAI): [https://console.x.ai](https://console.x.ai)
+2. Pick the backend in the EcomCraft settings and paste the key.
+3. Model names come from each platform's docs (e.g. OpenAI's `gpt-4o-mini`, Anthropic's `claude-3-5-sonnet-latest`); **Fetch** also lists them.
 
 ---
 
-## 方案五：自托管专用提示词模型 BeautifulPrompt（pai-bloom）
+## Option 4: other local OpenAI-compatible services (LM Studio / vLLM etc.)
 
-EcomCraft 还随附了一个脚本，可部署阿里 PAI 开源的**提示词专用模型** BeautifulPrompt（`pai-bloom-1b1-text2prompt-sd`），并把它包装成 OpenAI 兼容接口，然后用「OpenAI 兼容服务（本地 / 远程）」后端接入。
+The `OpenAI-compatible service (local / remote)` backend works with anything implementing the OpenAI `/v1/chat/completions` and `/v1/models` endpoints, including:
 
-### 硬件要求
+- **LM Studio**: graphical app; load a model and enable "Local Server", default `http://localhost:1234/v1`.
+- **vLLM**: `vllm serve <model> --port 8000`, URL `http://localhost:8000/v1`.
+- **text-generation-webui / LocalAI / self-built FastAPI**: same idea.
 
-模型为 BLOOM 1.1B（约 11 亿参数），体量很小：
+Configuration:
+- **Model backend**: `OpenAI-compatible service (local / remote)`
+- **Base URL**: the service's base URL (with or without `/v1`, whatever the service uses)
+- **API key**: usually empty for local services; fill it in if the service requires one.
+- **Prompt model**: pick via **Fetch**.
 
-| 项目 | 最低 | 推荐 | 说明 |
+---
+
+## Option 5: self-hosting the dedicated prompt model BeautifulPrompt (pai-bloom)
+
+EcomCraft also ships a script that deploys Alibaba PAI's open-source prompt model BeautifulPrompt (`pai-bloom-1b1-text2prompt-sd`) behind an OpenAI-compatible API, to be used with the `OpenAI-compatible service` backend.
+
+### Hardware requirements
+
+The model is a BLOOM 1.1B:
+
+| Item | Minimum | Recommended | Notes |
 |---|---|---|---|
-| GPU 显存（F16） | ~3 GB | ≥ 4 GB | 权重 F16 约 2.1 GB |
-| GPU 显存（8/4-bit 量化） | ~2 GB / ~1.5 GB | ≥ 3 GB / ≥ 2 GB | 需自行用量化方式加载 |
-| 纯 CPU | 8 GB 内存 | 16 GB 内存 | FP32 权重约 4.2 GB |
-| 磁盘 | 5 GB | 10 GB | 模型约 2.1 GB + Python/torch 依赖 |
-| 网络 | 首次需联网 | — | 首次下载模型后可离线 |
+| GPU VRAM (F16) | ~3 GB | ≥ 4 GB | F16 weights about 2.1 GB |
+| GPU VRAM (8/4-bit quantized) | ~2 GB / ~1.5 GB | ≥ 3 GB / ≥ 2 GB | Quantize yourself |
+| CPU only | 8 GB RAM | 16 GB RAM | FP32 weights about 4.2 GB |
+| Disk | 5 GB | 10 GB | Model ~2.1 GB + Python/torch |
 
-### 部署步骤
+### Steps
 
 ```bash
-# 1. 准备 Python 3.10–3.12 环境并安装依赖
+# 1. Python 3.10–3.12 and dependencies
 pip install -r src/Extensions/EcomCraft/deploy/requirements.txt
 
-# 2. 启动（自动选择 CUDA / Apple MPS / CPU）
+# 2. Start (auto-selects CUDA / Apple MPS / CPU)
 python src/Extensions/EcomCraft/deploy/serve_prompt_enhancer.py --host 0.0.0.0 --port 8000
 
-# 3. 自检
+# 3. Self-check
 curl http://localhost:8000/v1/models
 ```
 
-然后在 EcomCraft 设置中：
-- **模型后端**：`OpenAI 兼容服务（本地 / 远程）`
-- **服务地址**：`http://localhost:8000`（脚本根路径即兼容入口；按实际拼接到 `/v1`）
-- **提示词模型**：`alibaba-pai/pai-bloom-1b1-text2prompt-sd`
-- 无需 Key。
+Then in the EcomCraft settings:
+- **Model backend**: `OpenAI-compatible service (local / remote)`
+- **Base URL**: `http://localhost:8000` (the script's root is the compatible entry; join `/v1` as needed)
+- **Prompt model**: `alibaba-pai/pai-bloom-1b1-text2prompt-sd`
+- No key needed.
 
-> 注：pai-bloom 是较早的通用 SD 提示词模型，输出偏艺术化；若追求电商产品摄影的干净描述，优先使用方案一（Ollama 拉取较新的模型）或云端模型。
+> pai-bloom is an older general SD prompt model with an artistic lean; for clean e-commerce product descriptions prefer Option 1 (a newer model via Ollama) or a cloud model.
 
 ---
 
-## 配置字段说明
+## Configuration fields
 
-| 字段 | 说明 |
+| Field | Notes |
 |---|---|
-| 模型后端 | 选择上面 6 类后端之一 |
-| 服务地址（Base URL） | Ollama / OpenAI 兼容后端可编辑，支持本地或远程地址；其他后端地址固定 |
-| 提示词模型 | 点「拉取」自动列出该后端的可用模型，也可手动填写模型 ID |
-| 视觉模型服务 | 看图描述用的服务，仅 Ollama / OpenAI 兼容两类。视觉服务的地址（`visionbaseurl`）、Key（`openaiapi_vision`）和模型与提示词服务分开保存，即使两边选同一类服务、用不同地址也互不覆盖 |
-| 视觉模型（Ollama） | 选 Ollama 时自动检测：连不上时提示没有安装或没有启动，显示“一键安装本地模型”；已运行时只列出能看图的模型（按 Ollama 报告的 vision 能力，旧版 Ollama 按模型名判断），装了多个可以切换。地址默认本机 `http://localhost:11434`，Ollama 在局域网另一台电脑上时在“高级”里修改 |
-| 视觉模型（OpenAI 兼容） | 填写视觉服务地址、可选的 API Key（本机 LM Studio、vLLM 一般不需要）后点「拉取」选择，或手动填写。不勾选“允许看图描述”时无需填写视觉参数即可保存 |
-| API Key | 云后端必填；Ollama 无需；本地兼容服务一般无需。Key 安全存储在 SwarmUI 用户数据中，不会写入配置文件 |
+| Model backend | One of the 6 backends above |
+| Base URL | Editable for Ollama / the compatible backend, local or remote; fixed for the others |
+| Prompt model | **Fetch** lists the backend's models, or type the ID |
+| Vision model service | The service used for image description — Ollama or an OpenAI-compatible one. Its address (`visionbaseurl`), key (`openaiapi_vision`) and model are saved apart from the prompt service, so both can use the same service type at different addresses without overwriting each other |
+| Vision model (Ollama) | Choosing Ollama detects it right away: when it cannot be reached, the dialog says it is not installed or not running and offers **One-click local model install**; when it runs, only models that can read images are listed (by the vision capability Ollama reports, or by model name on older Ollama versions), and with several installed you can switch. The address defaults to this machine, `http://localhost:11434`; change it under "Advanced" when Ollama runs on another computer in the LAN |
+| Vision model (OpenAI-compatible) | Fill in the vision service address and an optional API key (usually not needed for a local LM Studio or vLLM), then pick via **Fetch** or type the name. With "Allow image description" unchecked, no vision settings are needed to save |
+| API key | Required for cloud backends; not for Ollama; usually not for local services. Keys are stored safely in SwarmUI user data, never in config files |
 
-切换后端时，服务地址和 Key 状态会自动更新为该后端的已保存值或默认值。
+Switching backends auto-fills the URL and key state from that backend's saved values or its defaults.
 
-### 生成等待时间
+### Generation wait time
 
-拉取模型列表仍限时 20 秒。提示词优化需要等待完整回答，独立默认超时为 120 秒；已有配置中的旧默认 `timeout: 20` 自动按此生成时限处理，不改写用户配置。其他自定义旧时限继续生效。管理员可通过现有设置 API 的 `backends.<后端>.generation_timeout` 显式设置 1–600 秒的生成时限，该值优先于旧 `timeout`。配置无效时使用 120 秒。
+Fetching the model list stays limited to 20 seconds. Prompt enhancement waits for a full answer with its own default timeout of 120 seconds; an old `timeout: 20` in existing configs is treated as this generation limit without rewriting user settings. Other custom limits keep applying. Administrators can set an explicit 1–600 second generation limit via the existing settings API's `backends.<backend>.generation_timeout`, which wins over the old `timeout`. Invalid values fall back to 120 seconds.
 
-请求取消、会话中断或服务关闭会取消上游等待；超时提示包含实际等待上限，不自动重试。拉取成功不代表模型能在时限内生成；第三方服务自身的网关超时也不受本地等待上限控制。
+Cancelled requests, broken sessions or a shutting-down service cancel the upstream wait; timeout notices name the actual wait limit and never retry silently. A successful fetch does not guarantee the model answers in time; gateway timeouts of third-party services are outside the local limit.
 
-### 输入 Key 后直接拉取模型
+### Fetching models right after entering a key
 
-拉取到的提示词模型直接作为原“提示词模型”输入框的下拉候选，不再额外显示第二个选择框；可输入模型名称筛选或手动填写。拉取不覆盖当前输入，选定后点击“保存”才应用。
+Fetched models become the dropdown candidates of the prompt-model input; there is no second selector. Fetching never overwrites the current input, and only **Save** applies it.
 
-1. 选择模型后端，填写服务地址（可编辑的后端）和 API Key。
-2. 直接点击“拉取”，无需先保存。拉取使用当前表单中的后端、地址和新 Key；不会更改全局配置或保存 Key。Key 留空时，仅在请求地址与此后端已保存的地址一致时沿用已保存的 Key，修改地址后需重新填写所需的 Key。
-3. 选择模型后点击“保存”，才会保存 Key 和提示词后端配置；不会改动独立的视觉模型配置。拉取成功仅表示模型列表可读取，实际优化仍取决于模型权限和服务支持。
+1. Pick a backend and fill in the URL (for editable backends) and the key.
+2. Click **Fetch** — no need to save first. Fetching uses the form's backend, URL and new key; it changes no global config and saves no key. With an empty key it reuses the saved key only when the request URL matches that backend's saved address; after changing the address, enter the key again.
+3. Click **Save** to persist the key and the prompt backend; the separate vision-model configuration is never touched. A successful fetch only means the model list is readable — actual enhancement still depends on model permissions and service support.
 
-关闭或取消设置会丢弃未保存的 Key；切换后端、修改地址或 Key 会取消进行中的拉取并清除旧列表。拉取失败或超时后可修改表单重试。OpenAI 兼容地址可填写服务根地址或带 `/v1` 的地址，系统不会重复拼接 `/v1`。
+Closing or cancelling the settings discards the unsaved key; switching backend, URL or key cancels a running fetch and clears the old list. A failed or timed-out fetch can be retried after editing the form. OpenAI-compatible URLs may be the service root or include `/v1`; the path is never doubled.
 
-工作台通过 `PreviewMagicPromptModels` 临时拉取所选后端的文本模型，需要配置保存和模型列表权限。此接口不调用配置或 Key 保存逻辑，不返回上游错误正文或凭据。
+The workspace fetches text models of the chosen backend temporarily through `PreviewMagicPromptModels`, which needs configuration-save and model-list permissions. It calls no config or key saving and returns no upstream error bodies or credentials.
 
----
+## Image description (the vision model, on by default)
 
-## 看图描述（视觉模型，默认开启）
+The reference-image feature (F59) sends reference images to a vision model that reads out composition descriptions, one prompt per reference. Image description is **on by default** (decision A5) and used for references only; administrators can turn it off. Sending product photos to the vision model to describe products stays off by default.
 
-参考图功能（F59）需要把参考图发给视觉模型，读出构图描述后逐张生成提示词。看图描述**默认开启**（决策 A5），只用于参考图；管理员可以关闭。把商品图发给视觉模型描述商品仍默认关闭。
+**Translation uses the vision model by default**: with image description on and a vision model set, Chinese–English translation (the Chinese version of reference descriptions and of AI expand, edited Chinese prompts and preferred brand backgrounds into English, the Chinese shot descriptions of a storyboard) sends text only to the same vision service and model — a 2B vision model translates with 2B, a 4B one with 4B, and a local Ollama keeps translation on this computer. With image description off or no vision model, translation uses the prompt model. A failed reference-description translation is retried once; if it still fails, the page says the Chinese translation did not finish, which does not affect generation.
 
-**翻译默认使用看图模型**：看图描述开启并配置了视觉模型时，中英翻译（参考图描述的中文版、AI 扩写的中文版、改过的中文提示词和品牌偏好背景译成英文、分镜的中文画面描述）都只发文字给同一个视觉服务和模型——看图用 2B 就用 2B 翻译，用 4B 就用 4B；本机 Ollama 时翻译也留在本机。关闭看图描述或没有视觉模型时，翻译改用提示词模型。翻译失败时自动重试一次（只限参考图描述），仍失败时页面提示中文翻译没有完成，不影响出图。
+**Normal prompts cover the scene too**: the scene, white-background main and detail templates all keep the original product. The standard workflows give the model the transparent canvas with the product already placed and generate only the scene around it (N10, first step), then paste the original product back; a product named in the prompt gets drawn as a second one next to it. So normal mode never writes the product into the prompt either: the product-type fragments (`Templates/product-types.json`) describe a scene that suits the product (for shampoo, a bathroom vanity with water droplets), the AI expand and description rewrite instructions forbid describing the product or adding bottles and packaging, and the "needs a model" fragment no longer says the model presents the product. Small models often ignore the instruction, so the server also filters model-written prompts (`PromptRules.WithoutProduct`): phrases like "product shot" become "still life shot", and every comma clause that still names a product, bottle, jar, box, packaging, label or brand is dropped; prompts the user edited are used as they are. The standard workflows run at CFG 1, where the negative prompt has no effect, so nothing relies on it. The product-type name is only used to pick a fitting scene. Administrators' own templates are unchanged; a custom template that keeps the product should also leave the product out of its prefix.
 
-**普通出图的提示词同样只写场景**：场景图、白底主图和细节图都保留原商品。标准工作流把放好商品的透明画布交给模型，只重绘商品周围的场景（N10 第一步），出图后再贴回原商品；提示词里写了商品，模型就会在旁边再画一个。所以普通模式也不在提示词里写商品：产品类型片段（`Templates/product-types.json`）改为适合该商品的场景（例如洗发水是浴室台面和水珠），AI 扩写和描述改写的指令要求不描述商品、不加瓶罐包装，勾选“需要模特”时的片段也不再写“模特展示商品”。小模型常常不听指令，所以服务器还会过滤模型写出的提示词（`PromptRules.WithoutProduct`）：“product shot”一类改成“still life shot”，仍提到商品、瓶罐、盒子、包装、标签或品牌的逗号分句整句删掉；用户自己改过的提示词原样使用。标准工作流的 CFG 是 1，排除内容不起作用，所以不靠排除内容。产品类型名称只用于挑选合适的场景。管理员自建模板不受影响，自建模板保留商品时应同样避免在前缀里写商品。
+**The product is placed at its own size**: cut-outs often have wide transparent borders, and the placement size used to apply to the whole picture, so the product looked too small. The server (`ProductComposite.Trim`) and the page preview now crop to the product first (keeping a 2% transparent margin), so the placement size is the product's own longer side as a share of the picture's shorter side.
 
-**商品按自身大小摆放**：抠图结果四周常有大片透明边，摆放大小以前按整张图计算，商品显得偏小。现在服务器（`ProductComposite.Trim`）和页面预览都先裁到商品本身（四周留 2% 透明边），摆放大小就是商品自身最长边占画面短边的比例。
+**Reference descriptions cover the scene, not the product**: a reference description only covers the surface, background, props, lighting and style, never mentions the product and only describes the surface it stands on; bottles, jars, boxes and packages in the reference are left out too (props are non-product things such as plants, fabric, stones, water or fruit). The description goes through the same filter; when nothing is left it counts as a failed description that can be retried. The page tells users not to write the product itself when editing the English prompt.
 
-**参考图描述只写场景，不写商品**：参考图描述只写台面、背景、道具、光线和风格，不提商品，商品所在的位置只写它立着的台面；参考图里的瓶罐、盒子和包装也不写（道具只写植物、布料、石头、水、水果等非商品物件）。描述结果同样经过上面的过滤；过滤后什么都不剩时按描述失败处理，可以重试。页面提示用户修改英文提示词时不要写商品本身。
-
-1. 管理员可以在工作台的 **提示词优化设置** 中取消勾选 **允许看图描述** 来关闭它。开关下方会显示当前配置的视觉模型。
-2. 视觉模型与提示词模型是两份独立配置，在同一弹窗里分别设置：视觉服务提供 Ollama 和 OpenAI 兼容两类，默认同为 Ollama，视觉模型默认 `llama3.2-vision:latest`。最省事的做法是在服务器的 EcomCraft 目录运行一键安装脚本（F69）：没有 Ollama 时自动安装（Windows 优先用 winget，否则下载官方安装包并校验数字签名后才运行；Linux 用官方安装脚本），启动服务并拉取视觉模型，失败时给出原因和手动步骤：
+1. Administrators turn it off by unticking **Allow image description** in the workspace's **prompt enhancement settings**. The line under the toggle shows the configured vision model.
+2. The vision model is a separate configuration from the prompt model, set in the same dialog: the vision service is either Ollama or an OpenAI-compatible one, both default to Ollama, and the vision model defaults to `llama3.2-vision:latest`. The easiest way is the one-click install script (F69), run in the EcomCraft folder on the server: it installs Ollama when missing (on Windows through winget, or else the official installer, run only after its code signature checks out; on Linux the official install script), starts the service and pulls the vision model, and on failure says why and gives the manual steps:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File launchtools\install-vision-model-windows.ps1 -Model llama3.2-vision:latest
@@ -201,78 +198,78 @@ powershell -ExecutionPolicy Bypass -File launchtools\install-vision-model-window
 bash launchtools/install-vision-model-linux.sh llama3.2-vision:latest
 ```
 
-   `-Model`（Linux 为第一个参数）填提示词优化设置中的视觉模型名称（如换成 Qwen3-VL 时填 `qwen3-vl:8b-instruct`），省略时为默认模型；macOS 请先从官网安装 Ollama 应用。也可以手动安装 Ollama 后拉取：
+   `-Model` (the first argument on Linux) is the vision model name from the prompt enhancement settings (`qwen3-vl:8b-instruct` when switching to Qwen3-VL) and defaults to the default model; on macOS install the Ollama app from the website first. You can also install Ollama by hand and pull the model:
 
 ```bash
 ollama pull llama3.2-vision
 ```
 
-   不想碰命令行时，也可以在 **提示词优化设置 → 允许看图描述 → 一键安装本地模型**（管理员）里直接安装：选择模型档位（Qwen3-VL 2B / 4B / 8B / 30B 或 Llama 3.2 Vision，附下载体积与显存建议）后，服务器会运行同一个脚本自动安装；进行中显示已用时和脚本输出，可以关闭弹窗（安装会继续，重开时自动恢复进度），安装成功后服务器会把该模型自动保存为视觉模型（本机 Ollama），即使中途关闭了弹窗也一样，无需再点“保存设置”。同一时间只允许一个安装，也只允许安装上面列出的档位；Windows 和 Linux 可用，macOS 请按上文手动安装。
+   To skip the command line entirely, install from **Prompt enhancement settings → Allow image description → One-click local model install** (administrators): pick a model tier (Qwen3-VL 2B / 4B / 8B / 30B or Llama 3.2 Vision, with download size and VRAM hints) and the server runs the same script by itself. While it runs the elapsed time and the script output show, the dialog can be closed (the install continues and the progress reappears when it reopens), and when it succeeds the server saves that model as the vision model (on this server's Ollama) by itself, also when the dialog was closed meanwhile — no need to click "Save". Only one install runs at a time and only the tiers listed above can be installed; this works on Windows and Linux, while macOS follows the manual steps above.
 
-3. 参考图上传后会自动逐张描述。点“添加参考图”时会先检查视觉模型是否可用：未配置时不打开选图，改为在下方显示看图描述指引，点“打开提示词优化设置”步骤可直接进入配置。关闭看图描述、视觉服务连不上或没有拉取视觉模型时，“照参考图做”也会同样说明缺什么：管理员看到具体处理步骤，其他账号看到“请联系管理员”；普通出图不受影响。
+3. Uploaded references are described automatically, one at a time. Clicking "Add a reference" first checks whether the vision model is usable: when it is not, the picker stays closed and the image-description guidance shows below instead, whose "Open the prompt enhancement settings" step goes straight to the configuration. When image description is off, the vision service cannot be reached, or the vision model has not been pulled, "Follow a reference" likewise says what is missing: administrators see the steps to fix it and other accounts see "ask your administrator"; plain generation is unaffected.
 
-4. 管理员也可以直接在“照参考图做”页面的 **看图模型** 下拉框里切换视觉模型（列出视觉服务中能看图的模型），选中即保存，和提示词优化设置里的视觉模型是同一项，之后描述的参考图都用新模型。想确认实际调用的是哪个模型，可以看服务日志中的`EcomCraft is describing an image with <服务类型> / <模型名>`，或在 Ollama 所在电脑运行 `ollama ps`。
+4. Administrators can also switch the vision model right on the "Follow a reference" page with the **Vision model** list (the vision service's models that can read images). Picking one saves it as the same vision model the prompt enhancement settings use, and references described from then on use it. To confirm which model is actually asked, look for `EcomCraft is describing an image with <service type> / <model>` in the server log, or run `ollama ps` on the computer running Ollama.
 
-### 推荐视觉模型：Qwen3-VL（中文图生文效果更好）
+### Recommended vision model: Qwen3-VL (much better Chinese image description)
 
-默认的 `llama3.2-vision` 对中文商品图的理解一般。做看图描述（图生文）建议改用阿里开源的视觉模型 **Qwen3-VL**（Apache-2.0 协议）：中英文描述质量高，能读出商品图上的文字、标签和吊牌（OCR 能力强），下载量和口碑都长期靠前。
+The default `llama3.2-vision` is mediocre with Chinese product photos. For image description we recommend Alibaba's open-source **Qwen3-VL** (Apache-2.0): high-quality Chinese and English descriptions, strong OCR for labels, tags and text on product photos, and consistently top download rankings.
 
-Ollama 官方库已收录 Qwen3-VL。同一系列里的 2B / 4B / 8B / 30B 只是“脑容量”不同：数字越大，认得越准、描述越细、图上文字识别越稳，但也更吃显存、单张稍慢；用法完全一样，随时可以再拉一档换用（下表为默认 4-bit 量化版的下载体积）：
+The official Ollama library hosts Qwen3-VL. The 2B / 4B / 8B / 30B variants of the family differ only in "brain size": the bigger the number, the more accurate the recognition, the richer the description and the more reliable the text reading — at the cost of more VRAM and slightly slower per image. Usage is identical, and you can pull another size and switch at any time (sizes below are the default 4-bit quantized downloads):
 
-| 命令 | 模型 | 下载体积 | 建议显存 | 描述能力的差别 |
+| Command | Model | Download | VRAM | Difference in description quality |
 |---|---|---|---|---|
-| `ollama pull qwen3-vl:2b-instruct` | Qwen3-VL 2B | ~1.9 GB | 4 GB，或纯 CPU | 能认出主体和大致构图，小字标签容易漏；速度最快 |
-| `ollama pull qwen3-vl:4b-instruct` | Qwen3-VL 4B | ~3.3 GB | 6 GB | 日常商品图描述准确，复杂花纹、密集小字偶尔出错 |
-| `ollama pull qwen3-vl:8b-instruct` | Qwen3-VL 8B | ~6.2 GB | 8 GB | 细节、中文标签和构图光线的描述明显更稳、更专业；**大多数团队的最佳选择** |
-| `ollama pull qwen3-vl:30b-a3b-instruct` | Qwen3-VL 30B（MoE） | ~20 GB | 24 GB | 最强档：多商品同框、长图密集文字也能读全；MoE 结构速度不慢 |
+| `ollama pull qwen3-vl:2b-instruct` | Qwen3-VL 2B | ~1.9 GB | 4 GB, or CPU only | Recognizes the subject and rough composition; small labels get missed; fastest |
+| `ollama pull qwen3-vl:4b-instruct` | Qwen3-VL 4B | ~3.3 GB | 6 GB | Accurate for everyday product photos; occasional errors on intricate patterns or dense small text |
+| `ollama pull qwen3-vl:8b-instruct` | Qwen3-VL 8B | ~6.2 GB | 8 GB | Clearly steadier and more professional on details, Chinese labels, composition and lighting; **the best pick for most teams** |
+| `ollama pull qwen3-vl:30b-a3b-instruct` | Qwen3-VL 30B (MoE) | ~20 GB | 24 GB | Top tier: reads multi-product scenes and dense long-image text fully; MoE keeps it fast |
 
-请拉取带 `-instruct` 的标签：不带后缀的 `qwen3-vl:2b`、`4b`、`8b` 等是“思考版”，每张图都会先输出一段推理再描述，耗时约多一倍，而且 Ollama 无法关掉它（2026-10-29 在 Ollama 0.40.13 上实测）。已经装了思考版时，设置里的视觉模型下方会提示改换，体积相同，换装即可。
+Pull the `-instruct` tags: the plain `qwen3-vl:2b`, `4b`, `8b` and so on are the "thinking" variants, which write out reasoning before every description, take about twice as long per image, and cannot be switched off through Ollama (measured on Ollama 0.40.13 on 2026-10-29). When a thinking variant is installed, the settings suggest switching under the vision model; the size is the same, so just install the other tag.
 
-拿不准时按显存选即可：无独显选 2B，6 GB 选 4B，8 GB 及以上直接 8B；有 24 GB 大卡（如 3090/4090）且要求最高质量再上 30B。拉取也可以用上面的一键安装脚本完成（把 `-Model` 参数换成所选档位）。
+When unsure, choose by VRAM: no discrete GPU → 2B, 6 GB → 4B, 8 GB or more → 8B; pick 30B only with a 24 GB card (e.g. 3090/4090) and the highest quality demands. Pulling also works through the one-click install script above (pass the chosen size as the `-Model` argument).
 
-装好所选档位后，在设置里直接选择即可：
+After pulling the size you picked, select it directly in the settings:
 
-1. 打开工作台的 **提示词优化设置**（管理员），确认 **允许看图描述** 已勾选。
-2. **视觉模型服务** 选 `Ollama（本地，免费）`，弹窗会自动检测本机 Ollama。
-3. 在 **视觉模型** 下拉框里选择刚拉取的档位（如 `qwen3-vl:8b-instruct`）；没有出现时点“重新检测”。
-4. 点击 **保存**。开关下方应显示 `视觉模型：ollama / qwen3-vl:8b-instruct`。
+1. Open the workspace's **prompt enhancement settings** (administrators) and make sure **Allow image description** is ticked.
+2. Set **Vision model service** to `Ollama (local, free)`; the dialog detects the local Ollama by itself.
+3. Pick the size you just pulled (e.g. `qwen3-vl:8b-instruct`) in the **Vision model** list; if it is missing, click **Check again**.
+4. Click **Save**. The line under the toggle should read `Vision model: ollama / qwen3-vl:8b-instruct`.
 
-想用 LM Studio、vLLM 等本地 OpenAI 兼容服务跑 Qwen3-VL 时，把 **视觉模型服务** 选为 `OpenAI 兼容服务（本地 / 远程）`，填写该服务的 Base URL（需要时再填 API Key）后拉取选择。视觉服务的地址和 Key 与提示词服务分开保存，可以一边用 Ollama 或另一台兼容服务跑提示词扩写、一边用这台兼容服务跑看图描述；视觉服务地址与提示词服务不同时，不会把提示词服务的 Key 发给视觉服务。
+To run Qwen3-VL on a local OpenAI-compatible service such as LM Studio or vLLM, set **Vision model service** to `OpenAI-compatible service (local / remote)`, fill in that service's Base URL (and an API key when it needs one) and fetch. The vision address and key are saved apart from the prompt service, so Ollama or another compatible server can handle prompt expansion while this one handles image description; when the vision address differs from the prompt service, the prompt service's key is never sent to it.
 
-两点提醒：
+Two notes:
 
-- 看图描述每张图最多等待 180 秒（本地模型第一次用时要先载入内存，显卡没有响应时还要改用 CPU 重试），实际上限不超过上文的生成时限（默认 120 秒）。Qwen3-VL 8B 在 8 GB 以上显存的 GPU 上通常几秒完成；纯 CPU 请选 2B 档，超时的参考图标为描述失败，可以单独重试。
-- 请求会要求模型不输出“思考”过程，对 Qwen3 这类可开关的模型有效；Qwen3-VL 的思考版关不掉，请用上文的 `-instruct` 标签。
-- 国内网络直接拉取 Ollama 模型较慢时，可为 Ollama 进程设置 HTTPS_PROXY 代理后重启再拉取。
+- Image description waits at most 180 seconds per image (a local model first has to load into memory the first time it is used, and a graphics card that does not respond is retried on the CPU), never beyond the generation limit above (120 seconds by default). Qwen3-VL 8B usually answers in seconds on a GPU with 8 GB or more; on CPU pick the 2B size — a reference past the limit is marked as failed and can be retried on its own.
+- Requests ask the model to skip its "thinking" step, which works for switchable models such as Qwen3; the Qwen3-VL thinking variants cannot skip it, so use the `-instruct` tags above.
+- If pulling from Ollama is slow on a restricted network, set an HTTPS_PROXY for the Ollama process, restart it and pull again.
 
-### 看图模型的运行设备（Ollama）
+### Vision model device (Ollama)
 
-客户电脑的显卡各不相同。有些显卡跑看图模型会卡住：例如 Windows 上 RX 5600 XT 这类较老的 AMD 显卡，Ollama 只能通过 Vulkan 使用它，看图请求会长时间没有结果，之后 Ollama 显示模型“已加载”却不占显存，连文字请求也一起卡住。同一台电脑改用 CPU，一张图大约 8–18 秒就能描述完。
+Customer computers have all kinds of graphics cards, and some hang on vision models: an older AMD card such as the RX 5600 XT on Windows can only be used by Ollama through Vulkan, image requests produce nothing for minutes, and afterwards Ollama reports the model as loaded while it holds no video memory, so text requests hang too. The same computer describes an image in about 8-18 seconds on the CPU.
 
-为此，提示词优化设置的 Ollama 看图部分有一个 **运行设备** 选项：
+The Ollama part of the vision settings therefore has a **Device** option:
 
-| 选项 | 行为 |
+| Option | Behaviour |
 |---|---|
-| 自动（默认） | 第一次连上 Ollama、更换视觉模型、Ollama 版本或显卡驱动后，EcomCraft 在后台用一张内置测试图实测：先在显卡上最多等 60 秒，再卸载模型在 CPU 上最多等 120 秒，选能出结果且更快的设备并记住，重启后直接使用，不再等待；看图的等待上限按实测速度设定（单张秒数的 5 倍，至少 90 秒）。检测完成之前的第一次看图仍按“先在显卡上最多等 60 秒，没有结果就改用 CPU”处理，学到的结果同样记住。显卡正常的电脑（多数 NVIDIA 显卡、Apple Silicon Mac）不受影响 |
-| 只用显卡 | 一直交给 Ollama 自动选择设备，不改用 CPU |
-| 只用 CPU | 一直用 CPU 看图（Ollama 的 `num_gpu 0`），不占用显存，适合显卡跑不动或要把显存留给出图的电脑 |
+| Automatic (default) | When Ollama is first reached, and after a change of vision model, Ollama version or graphics driver, EcomCraft tests in the background with a built-in test image: at most 60 seconds on the graphics card, then the model is unloaded and the CPU gets at most 120 seconds; the device that answers and is faster is remembered and used right away after restarts, with no more waiting, and the wait for an image is set from the measured speed (5 times the seconds per image, at least 90 seconds). Until the test has finished, the first image request still waits at most 60 seconds on the card and then moves to the CPU, and what it learns is remembered too. Computers whose card works (most NVIDIA cards, Apple Silicon Macs) are unaffected |
+| Graphics card only | Ollama always picks the device itself and nothing moves to the CPU |
+| CPU only | Images are always described on the CPU (Ollama `num_gpu 0`), using no video memory; suits computers whose card cannot run the model or whose video memory is kept for generation |
 
-设置里的运行设备下方会显示检测结果“看图：显卡 / CPU，单张约 X 秒（实测）”，换了显卡或觉得结果不对时可以点 **重新检测运行设备**（约 1–3 分钟，期间可以继续使用）。检测结果保存在 `Data/EcomCraft/vision-device.json`，只有“Ollama 版本 | 模型 | 显卡名称和驱动版本”、设备和秒数；Ollama 在局域网另一台电脑上时读不到它的显卡，改用地址的不可逆摘要区分服务器，不保存地址本身。记录的设备后来看图超时时，记录会被删除，下一次重新判断。任何一次看图超时后，EcomCraft 都会让 Ollama 卸载该模型，避免卡住的状态影响后面的请求。这个选项只对 Ollama 生效；OpenAI 兼容服务的运行设备由该服务自己决定。
+Below the device choice the settings show the result, "Vision: graphics card / CPU, about X s per image (measured)"; after changing the card, or when the result looks wrong, click **Test the device again** (about 1-3 minutes; the workspace stays usable meanwhile). Results are saved in `Data/EcomCraft/vision-device.json` with only "Ollama version | model | graphics names and driver versions", the device and the seconds; when Ollama runs on another computer on the LAN its graphics cannot be read, so a one-way digest of the address tells servers apart and the address itself is not saved. When the recorded device later times out on an image, the record is removed and the next request decides again. After any image request times out, EcomCraft asks Ollama to unload the model so the hung state does not affect later requests. The option applies to Ollama only; an OpenAI-compatible service decides its own device.
 
-注意：看图描述会把用户上传的图片发送到所配置的视觉模型服务。使用本地 Ollama 时图片不出本机；若把视觉后端改为云端服务，图片会离开本机，请管理员确认团队可接受后再改。参考图本身只在内存中短暂存在，不会保存到服务器。
+Note: image description sends the user's uploaded images to the configured vision service. With local Ollama the images never leave the machine; pointing the vision backend at a cloud service sends images off-site — change it only if the team accepts that. The reference images themselves exist briefly in memory only and are never stored on the server.
 
-## 验证与排错
+## Verifying and troubleshooting
 
-| 现象 | 原因 / 处理 |
+| Symptom | Cause / fix |
 |---|---|
-| 「Ollama Connection Error / Cannot connect to the Ollama server」 | Ollama 未安装或未运行；确认已启动 `ollama serve`，地址端口正确，并已 `ollama pull` 模型 |
-| 「Authentication / API Key not found」 | 云后端未设置 Key 或 Key 错误；在设置中重新粘贴 |
-| 「401 / 账号会话已失效」 | 登录会话过期，刷新页面重新连接 |
-| 「Request timeout」 | 本地模型较慢或网络不通，可重试；CPU 跑大模型可能较慢 |
-| 看图描述无结果 / 状态显示服务不可用 | 视觉模型未拉取、Ollama 未运行、设置里未选对视觉模型，或模型太慢（纯 CPU 请用 2B 档）；参考上方 Qwen3-VL 小节 |
-| 看图很慢、第一张约 1 分钟后才出结果 | 显卡跑不动看图模型，“自动”模式已改用 CPU；在设置里把运行设备改为“只用 CPU”可省掉这段等待，见上方“看图模型的运行设备” |
-| 拉取模型列表为空 / 失败 | 检查服务是否运行、地址是否含正确路径、Key 是否有效 |
-| 其他电脑无法访问本地服务 | 本地服务需监听 `0.0.0.0`，并在防火墙放行对应端口 |
-| 想恢复默认设置 | 在原生引擎/配置中重置 MagicPrompt 配置，或重新在设置中选择后端 |
+| "Ollama Connection Error / Cannot connect to the Ollama server" | Ollama not installed or not running; start `ollama serve`, check the address and port, and `ollama pull` a model |
+| "Authentication / API Key not found" | Cloud backend without a key, or a wrong key; paste it again in the settings |
+| "401 / session expired" | Login session expired; refresh the page |
+| "Request timeout" | Local models can be slow or the network down; retry — large models on CPU may take a while |
+| Image description empty / status shows the service unavailable | Vision model not pulled, Ollama not running, the wrong vision model selected in the settings, or the model too slow (pick the 2B size on CPU); see the Qwen3-VL section above |
+| Image description is slow and the first image takes about a minute | The graphics card cannot run the vision model and "Automatic" moved to the CPU; set the device to "CPU only" in the settings to skip that wait, see "Vision model device" above |
+| Model list empty / fetch fails | Check the service is running, the URL path is right and the key is valid |
+| Other computers cannot reach a local service | The local service must listen on `0.0.0.0` and the port must be open in the firewall |
+| Restoring defaults | Reset the MagicPrompt configuration in the native engine's settings, or choose the backend again in the settings |
 
-后端配置（后端类型、模型名、服务地址）为全局共享，保存在 SwarmUI 的用户数据中；API Key 按用户隔离保存。升级 EcomCraft 时这些配置会保留，不会被覆盖。
+Backend configuration (backend type, model name, base URL) is global and stored in SwarmUI's user data; API keys are stored per user. Upgrading EcomCraft preserves them.

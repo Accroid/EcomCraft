@@ -26,7 +26,7 @@
 - [HTTP 与 WebSocket API（中文）](API.zh-CN.md) · [English](API.md)
 - [扩展开发指南（中文）](Making%20Extensions.zh-CN.md) · [English](Making%20Extensions.md)
 - [图像元数据格式（中文）](Image%20Metadata%20Format.zh-CN.md) · [English](Image%20Metadata%20Format.md)
-- [EcomCraft 提示词优化与部署指南（中文）](EcomCraft%20Prompt%20Enhancement.md)（[English](EcomCraft%20Prompt%20Enhancement.en.md)）：后端配置、输入 Key 后直接拉取模型、保存流程、生成超时设置及看图描述（视觉模型）开关。
+- [EcomCraft 提示词优化与部署指南（中文）](EcomCraft%20提示词优化指南.zh-CN.md)（[English](EcomCraft%20Prompt%20Enhancement.md)）：后端配置、输入 Key 后直接拉取模型、保存流程、生成超时设置及看图描述（视觉模型）开关。
 - [EcomCraft ComfyUI 工作流调用](EcomCraft%20ComfyUI%20工作流.zh-CN.md)（[English](EcomCraft%20ComfyUI%20Workflows.md)）：本机安装与局域网执行服务器的工作流自动发现、局域网 ComfyUI 接入、执行服务器调度、工作流与子图蓝图导入、重复项合并与依赖过滤、批量出图种子递增、Windows AMD 连续生成排查、共享模型目录接入、模型和参数默认值读取、修改回传及客户端调用。
 - [EcomCraft 局域网部署指南](EcomCraft%20局域网部署指南.zh-CN.md)（[English](EcomCraft%20LAN%20Deployment.md)）：多人使用时开启账号登录、按角色设置排队上限、执行服务器防火墙、共享存储上作品的可见性，以及 `http://` 局域网地址下的浏览器限制。
 - [EcomCraft 升级与数据说明](EcomCraft%20Upgrade.zh-CN.md)（[English](EcomCraft%20Upgrade.md)）：升级时哪些数据会保留，系统数据备份与恢复的操作步骤。

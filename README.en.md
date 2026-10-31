@@ -68,7 +68,7 @@ The first launch builds the server and takes a few minutes. macOS only gets the 
 1. Open `http://127.0.0.1:7801` and follow the setup to install the **ComfyUI Self-Starting** backend and download models (or skip and configure later).
 2. Open `http://127.0.0.1:7801/EcomCraft` for the workspace; administrators get a setup wizard on first visit (language, storage, execution servers, models, common platforms).
 3. Other GPU computers on the LAN start ComfyUI with `--listen` and are registered under **Server → Backends** in the native engine as **ComfyUI API By URL**; see the [LAN Deployment Guide](docs/EcomCraft%20LAN%20Deployment.md).
-4. "Follow a reference" needs a vision model: administrators can click "One-click local model install" in the workspace's prompt enhancement settings to pick a tier and install it (or run `launchtools/install-vision-model-windows.ps1`, Linux: `launchtools/install-vision-model-linux.sh`); see the [Prompt Enhancement guide](docs/EcomCraft%20Prompt%20Enhancement.en.md).
+4. "Follow a reference" needs a vision model: administrators can click "One-click local model install" in the workspace's prompt enhancement settings to pick a tier and install it (or run `launchtools/install-vision-model-windows.ps1`, Linux: `launchtools/install-vision-model-linux.sh`); see the [Prompt Enhancement guide](docs/EcomCraft%20Prompt%20Enhancement.md).
 
 ## Data and Security
 
@@ -80,7 +80,7 @@ The first launch builds the server and takes a few minutes. macOS only gets the 
 ## Documentation
 
 - [Documentation index](docs/README.md) · [Chinese documentation index](docs/README.zh-CN.md) · [Basic Usage (Chinese)](docs/Basic%20Usage.zh-CN.md) · [Troubleshooting (Chinese)](docs/Troubleshooting.zh-CN.md)
-- [Workflow calls and APIs](docs/EcomCraft%20ComfyUI%20Workflows.md) · [LAN Deployment Guide](docs/EcomCraft%20LAN%20Deployment.md) · [Prompt enhancement and vision model](docs/EcomCraft%20Prompt%20Enhancement.en.md) · [Upgrade and Data Guide](docs/EcomCraft%20Upgrade.md)
+- [Workflow calls and APIs](docs/EcomCraft%20ComfyUI%20Workflows.md) · [LAN Deployment Guide](docs/EcomCraft%20LAN%20Deployment.md) · [Prompt enhancement and vision model](docs/EcomCraft%20Prompt%20Enhancement.md) · [Upgrade and Data Guide](docs/EcomCraft%20Upgrade.md)
 - Development planning: [Architecture and Roadmap](docs/EcomCraft%20Architecture.md) · [Implementation Plan](docs/EcomCraft%20Implementation%20Plan.md) · [Refactoring Plan](docs/EcomCraft%20Refactoring%20Plan.md) · [UI and Workflow Redesign](docs/EcomCraft%20UI%20Redesign.md) · [Simple Mode Redesign](docs/EcomCraft%20Simple%20Mode%20Redesign.md) · [LAN Multi-Server Platform Requirements](docs/EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md)
 
 ## Contact and Deployment Service
