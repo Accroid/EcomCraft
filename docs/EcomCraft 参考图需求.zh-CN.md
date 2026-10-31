@@ -33,7 +33,7 @@
 
 - 每张参考一个任务、一段描述，**互不合并、互不干扰**——不存在“多张打架”的问题。
 - 不需要新的生成模型，现有文生图链路直接可用。
-- 效果：能借到构图和氛围的大方向，细节还原有限——这与“只还原感觉”的定位一致。
+- 效果：能借到构图和氛围的大方向，细节还原有限——这与该回退路径的定位一致（原“只还原感觉”红线已按 D2 放宽为允许高度相似，见决策 2 与 3.3）。
 - 看图描述被关闭或没有可用的视觉模型时：参考模式不可用，界面说明缺什么及处理步骤（F68）；普通出图不受影响。
 
 ### 3.2 路径二：画面参考（图生图，P2；2026-10-31 被 T84 融合路线取代）
@@ -74,9 +74,9 @@
 | 接口 | 改动 |
 |---|---|
 | `EcomCraftStudioReferenceDescribe`（新） | `reference_images`（1–8 张）逐张返回 `[{ index, prompt_en, prompt_zh }]`（该参考的英文构图描述与中文译文）；vision 未开启时返回 `vision_disabled` |
-| `EcomCraftStudioGenerateSet` | 参考模式参数：`reference_images`（同上）+ `reference_prompts`（逐张英文提示词，必填、服务端清理，以用户改稿为准）+ 可选 `reference_placements`（与 `reference_prompts` 等长，每项为 `{ x, y, size }` 或 `null`，校验规则与商品摆放相同，非 `null` 时该参考的所有任务用它代替商品自己的摆放）+ 可选 `reference_mode`（`composition` / `scene`，P2 用）；参考模式固定使用保真场景模板，不按套图类型展开，与 `shots` 互斥（同时提交返回 `invalid_parameters`）；任务带 `reference_index` 供前端显示参考缩略图 |
+| `EcomCraftStudioGenerateSet` | 参考模式参数：`reference_images`（同上）+ `reference_prompts`（逐张英文提示词，当前版本必填、服务端清理，以用户改稿为准；路线 v2 落地后改为可选，见 3.3）+ 可选 `reference_placements`（与 `reference_prompts` 等长，每项为 `{ x, y, size }` 或 `null`，校验规则与商品摆放相同，非 `null` 时该参考的所有任务用它代替商品自己的摆放）+ 可选 `reference_mode`：当前版本只有 `composition`（借鉴构图）生效，原 P2 预留的 `scene` 随 T62 取代而作废；路线 v2（T85）改为 `composition`（旧路线回退）/ `edit`（新路线，默认），并新增 `reference_strength`（`composition` 只借构图 / `close` 高度相似（默认），由服务端映射到提示词或强度，客户端不能提交具体数值）；参考模式固定使用保真场景模板（`edit` 改用 reference-edit 蓝图，T84），不按套图类型展开，与 `shots` 互斥（同时提交返回 `invalid_parameters`）；任务带 `reference_index` 供前端显示参考缩略图 |
 | `EcomCraftStudioExpandPrompt` | 不改：AI 扩写仍只处理描述与产品类型（参考模式下不使用） |
-| `EcomCraftStudioTemplates` | 模板条目新增 `reference_slot`（是否声明画面参考槽位，P2），前端据此控制路径二可用性 |
+| `EcomCraftStudioTemplates` | 模板条目新增 `reference_slot`（是否声明参考图槽位；原为 P2 设计，2026-10-31 起由 T84 沿用），前端据此控制参考图融合路线的可用性 |
 | 校验 | `reference_images` 每项为图片 data URL，服务端与商品图相同的方式校验大小与格式，数量 1–8；`reference_prompts` 逐张非空、长度上限与提示词规则一致；模板校验 `reference.image` 须为快照图片参数且不与 `brand_kit` 槽位重复 |
 
 ## 6. 版权与合规边界
