@@ -8,6 +8,7 @@ using SixLabors.ImageSharp;
 using ISImage = SixLabors.ImageSharp.Image;
 using SixLabors.ImageSharp.PixelFormats;
 using SwarmUI.Accounts;
+using SwarmUI.Core;
 using SwarmUI.Utils;
 using SwarmUI.WebAPI;
 
@@ -15,12 +16,15 @@ namespace EcomCraftStudio.Studio.Generation;
 
 /// <summary>One-click sets and batches (F03): product photos × the set's templates become independent tasks (R5.7). Each task goes through the normal template
 /// generation, so it is checked against the snapshot allowlist and scheduled by Rule 1 on its own; tasks of different people run in parallel on several servers,
-/// while each person runs at most a few at once (R9.4). Batches live in memory for six hours and only their owner can see them.</summary>
+/// while each person runs at most a few at once (R9.4). Batches live in memory for six hours (up to a day while tasks are unfinished) and only their owner can see them.</summary>
 [API.APIClass("EcomCraft one-click sets and batches: expand products and a platform's image set into tasks, follow them, retry or cancel.")]
 public static class BatchService
 {
-    /// <summary>How long a batch stays readable.</summary>
-    private const long KeepMs = 6 * 60 * 60 * 1000;
+    /// <summary>Interval of the background loop that drops expired batches.</summary>
+    private const int CleanupLoopMs = 10 * 60 * 1000;
+
+    /// <summary>Stops the background loop when the extension shuts down.</summary>
+    private static readonly CancellationTokenSource StopSource = new();
 
     /// <summary>Largest product photo, as a data URL.</summary>
     private const int MaxImageDataLength = (5 * 1024 * 1024 + 2) / 3 * 4 + 40;
@@ -739,13 +743,58 @@ public static class BatchService
     private static Batch Find(Session session, string batchId) =>
         batchId is not null && Batches.TryGetValue(batchId, out Batch batch) && batch.UserId == session.User.UserID ? batch : null;
 
+    /// <summary>Starts the background loop that drops expired batches, so their images do not wait in memory for the next set to be started.</summary>
+    public static void Start()
+    {
+        _ = Task.Run(async () =>
+        {
+            while (!StopSource.IsCancellationRequested && !Program.GlobalProgramCancel.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(CleanupLoopMs, StopSource.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                try
+                {
+                    Cleanup();
+                }
+                catch (Exception ex)
+                {
+                    Logs.Warning($"EcomCraft batch cleanup loop failed: {ex.Message}");
+                }
+            }
+        });
+    }
+
+    /// <summary>Stops the loop.</summary>
+    public static void Shutdown()
+    {
+        StopSource.Cancel();
+    }
+
+    /// <summary>Whether a batch still has tasks that have not finished.</summary>
+    private static bool HasUnfinishedTasks(Batch batch)
+    {
+        lock (batch.Lock)
+        {
+            return batch.Jobs.Any(job => job.State is "prompt" or "queued" or "running");
+        }
+    }
+
     /// <summary>Drops expired batches.</summary>
     private static void Cleanup()
     {
-        long cutoff = Environment.TickCount64 - KeepMs;
-        foreach (KeyValuePair<string, Batch> pair in Batches.Where(pair => pair.Value.Created < cutoff).ToArray())
+        long now = Environment.TickCount64;
+        foreach (KeyValuePair<string, Batch> pair in Batches.ToArray())
         {
-            Batches.TryRemove(pair.Key, out _);
+            if (SetRules.BatchExpired(now - pair.Value.Created, HasUnfinishedTasks(pair.Value)))
+            {
+                Batches.TryRemove(pair.Key, out _);
+            }
         }
     }
 

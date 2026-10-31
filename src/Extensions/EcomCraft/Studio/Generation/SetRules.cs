@@ -15,6 +15,15 @@ public static class SetRules
     /// <summary>Upper bound for one person's tasks running at once, whatever their role allows (R9.4).</summary>
     public const int MaxConcurrent = 4;
 
+    /// <summary>How long a finished batch stays in memory.</summary>
+    public const long BatchKeepMs = 6 * 60 * 60 * 1000;
+
+    /// <summary>How long a batch with unfinished tasks may stay, so a stuck task cannot keep its images in memory forever.</summary>
+    public const long ActiveBatchKeepMs = 24 * 60 * 60 * 1000;
+
+    /// <summary>Whether a batch of this age can be dropped from memory: finished batches after <see cref="BatchKeepMs"/>; a batch still running is kept so its owner can follow it, up to <see cref="ActiveBatchKeepMs"/>.</summary>
+    public static bool BatchExpired(long ageMs, bool hasUnfinishedTasks) => ageMs > (hasUnfinishedTasks ? ActiveBatchKeepMs : BatchKeepMs);
+
     /// <summary>A template as the set expansion sees it.</summary>
     public sealed record class TemplateRef(string Id, IReadOnlyList<string> Platforms, IReadOnlyList<string> Sets, string Kind = "");
 
