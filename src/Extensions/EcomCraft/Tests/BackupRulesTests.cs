@@ -100,6 +100,54 @@ public class BackupRulesTests
         }
     }
 
+    [Theory]
+    [InlineData("ecomcraft/C:/x")]
+    [InlineData("ecomcraft/C:\\x")]
+    [InlineData("ecomcraft//x")]
+    [InlineData("ecomcraft/\\x")]
+    [InlineData("ecomcraft/\\\\server\\share\\x")]
+    [InlineData("ecomcraft/a/../../x")]
+    [InlineData("ecomcraft/..")]
+    [InlineData("ecomcraft/.")]
+    [InlineData("ecomcraft/")]
+    [InlineData("ecomcraft/a:stream")]
+    [InlineData("other/x")]
+    [InlineData("/ecomcraft/x")]
+    [InlineData("")]
+    public void EscapingEntryNamesHaveNoDestination(string name)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "ecomcraft-tests", "restore");
+        Assert.Null(BackupRules.ResolveDestination(name, root));
+    }
+
+    [Fact]
+    public void EscapingNamesInTheManifestFailValidation()
+    {
+        foreach (string name in new[] { "ecomcraft/C:/x", "ecomcraft//x", "ecomcraft/\\x", "ecomcraft/a/../../x" })
+        {
+            (MemoryStream stream, ZipArchive zip) = ZipOf((name, "one"));
+            try
+            {
+                Assert.Contains("清单包含不安全的路径。", BackupRules.Validate(zip, ManifestOf((name, "one"))));
+            }
+            finally
+            {
+                zip.Dispose();
+                stream.Dispose();
+            }
+        }
+    }
+
+    [Fact]
+    public void NormalEntryNamesStayInsideTheRoot()
+    {
+        string root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "ecomcraft-tests", "restore"));
+        Assert.Equal(Path.Combine(root, "storage.json"), BackupRules.ResolveDestination("ecomcraft/storage.json", root));
+        Assert.Equal(Path.Combine(root, "product-files", "local", "a", "original.jpg"), BackupRules.ResolveDestination("ecomcraft/product-files/local/a/original.jpg", root));
+        Assert.Equal(Path.Combine(root, "storage.json"), BackupRules.ResolveDestination("ecomcraft/storage.json", root + Path.DirectorySeparatorChar));
+        Assert.True(BackupRules.IsSafeEntryName("accounts/Users.ldb"));
+    }
+
     [Fact]
     public void HashMatchesFileContent()
     {

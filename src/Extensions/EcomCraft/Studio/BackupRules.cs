@@ -20,6 +20,30 @@ public static class BackupRules
         return "accounts/" + file[(dataRoot.Length + 1)..].Replace('\\', '/');
     }
 
+    /// <summary>Whether a backup entry name is plain relative segments joined by "/". Rejects what could leave the target folder on any system:
+    /// backslashes, drive or stream colons, empty segments (a leading "/" or "//") and "." or ".." segments.</summary>
+    public static bool IsSafeEntryName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.Contains('\\') || name.Contains(':') || name.Contains('\0') || Path.IsPathRooted(name))
+        {
+            return false;
+        }
+        return name.Split('/').All(segment => segment.Length > 0 && segment != "." && segment != "..");
+    }
+
+    /// <summary>The local file a "ecomcraft/…" backup entry restores to, always inside <paramref name="ecomcraftRoot"/>, or null for any other or unsafe name.</summary>
+    public static string ResolveDestination(string entryName, string ecomcraftRoot)
+    {
+        const string prefix = "ecomcraft/";
+        if (!IsSafeEntryName(entryName) || !entryName.StartsWith(prefix, StringComparison.Ordinal) || entryName.Length == prefix.Length)
+        {
+            return null;
+        }
+        string root = Path.GetFullPath(ecomcraftRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string full = Path.GetFullPath(Path.Combine(root, entryName[prefix.Length..].Replace('/', Path.DirectorySeparatorChar)));
+        return full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal) ? full : null;
+    }
+
     /// <summary>Builds the manifest entry of one file.</summary>
     public static JObject Entry(string name, long size, string sha256) => new()
     {
@@ -56,7 +80,7 @@ public static class BackupRules
         foreach (JToken item in files)
         {
             string name = item["name"]?.ToString();
-            if (string.IsNullOrWhiteSpace(name) || name.Contains("..") || Path.IsPathRooted(name))
+            if (!IsSafeEntryName(name) || name.Contains(".."))
             {
                 problems.Add("清单包含不安全的路径。");
                 continue;
