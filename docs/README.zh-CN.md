@@ -35,6 +35,7 @@
 - [EcomCraft 局域网多服务器平台需求（中文）](EcomCraft%20局域网多服务器平台需求.zh-CN.md) · [English](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md)：开发需求文档，涵盖多服务器接入、工作流审核与快照、负载调度、多人使用、画廊共享、作品存储；云端对接不做（2026-10-31 起，见 D11、R10）。
 - [EcomCraft 实施计划（中文）](EcomCraft%20实施计划.zh-CN.md) · [English](EcomCraft%20Implementation%20Plan.md)：新目标实施计划（2026-10-31）：参考图驱动的单入口、必须有显卡、Windows 和 Mac 优先；阶段 0–6 的任务详情（F74–F82、T81–T110、N11–N12）和 G1/G2 验收关卡。
 - [EcomCraft 重构计划（中文）](EcomCraft%20重构计划.zh-CN.md) · [English](EcomCraft%20Refactoring%20Plan.md)：基础重构计划（2026-10-31）：与实施计划穿插执行的 R00–R24，含安全网（测试、CI）、缺陷修复（索引文件覆盖、备份路径、批次内存、raw_prompt）、后端拆分（StudioApi、BatchService）、前端拆分（studio.js、simple.js）、移除休眠云端执行方类型和检查点。
+- [EcomCraft 参考图路线实测手册（中文）](EcomCraft%20参考图路线实测.zh-CN.md) · [English](EcomCraft%20Reference%20Route%20Trial.md)：G1 决策前要跑的路线和模型对比（T82、N12），含方案、提示词、评分方法和记录表。
 - [EcomCraft 回归清单（中文）](EcomCraft%20回归清单.zh-CN.md) · [English](EcomCraft%20Regression%20Checklist.md)：重构检查点 CP0–CP3 使用的 14 项手工回归流程。
 - [EcomCraft 简易模式改版需求（中文）](EcomCraft%20简易模式改版需求.zh-CN.md) · [English](EcomCraft%20Simple%20Mode%20Redesign.md)：开发需求文档（F52–F56 已实现待验收，F57 代码完成、蓝图文件待提供；含面向继续开发代理的交接章节），涵盖上传四入口、产品类型两级选择、双语提示词与 AI 扩写、候选张数总上限、出图链路提速与标准工作流自动生成；附[交互原型](EcomCraft%20简易模式改版原型.html)。
 - [EcomCraft 平台预设槽位设计（中文）](EcomCraft%20平台预设槽位设计.zh-CN.md) · [English](EcomCraft%20Platform%20Preset%20Slots.md)：开发设计文档（F58，已实现待验收）：按槽位定义各平台图片规格（尺寸比例、白底位置、主体占比、大小上限、禁用内容、AI 标识），套图按槽位组合模板；含 N06 规范核对清单。

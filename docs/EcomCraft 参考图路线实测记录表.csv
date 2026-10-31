@@ -1,0 +1,1 @@
+﻿商品ID product_id,品类 category,参考ID reference_id,参考类型 简单/复杂 reference_type,方案 R0-R5 scheme,模型 model,量化版本 quantization,平台 Windows/Mac platform,显卡或内存 hardware,种子 seed,步数 steps,强度 strength,提示词版本 prompt_version,构图相似 1-5 composition,形状颜色 1-5 shape_color,Logo文字可辨 是/否 logo_text,融合自然 1-5 blending,可直接上架 是/否 ready_to_list,单张秒数 seconds,峰值显存或内存GB peak_gb,崩溃或黑图 是/否 crash,备注 notes
