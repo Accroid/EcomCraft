@@ -6,16 +6,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
-
-const studioDir = path.join(__dirname, '..', 'Studio');
-
-/** Loads simple.js the way the browser does and returns the SimpleMode class. */
-function loadSimpleMode() {
-    let sandbox = {};
-    vm.runInNewContext(fs.readFileSync(path.join(studioDir, 'simple.js'), 'utf8') + '\nthis.SimpleMode = SimpleMode;', sandbox);
-    return sandbox.SimpleMode;
-}
+const { studioDir, loadSimpleMode } = require('./helpers/studio-sources.cjs');
 
 /** An ImageData-like RGBA buffer filled pixel by pixel. */
 function pixels(width, height, fill) {

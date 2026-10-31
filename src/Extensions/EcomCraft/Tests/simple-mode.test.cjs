@@ -6,9 +6,10 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
+const sources = require('./helpers/studio-sources.cjs');
+const { loadSimpleMode } = sources;
 
-const studioDir = path.join(__dirname, '..', 'Studio');
+const studioDir = sources.studioDir;
 const html = fs.readFileSync(path.join(studioDir, 'index.html'), 'utf8');
 
 /** The markup of one view section, from its opening tag to the next view section or the end of the main area. */
@@ -17,13 +18,6 @@ function section(id) {
     assert.ok(start >= 0, `missing ${id}`);
     let next = html.indexOf('<section class="view"', start + 10);
     return html.slice(start, next < 0 ? undefined : next);
-}
-
-/** Loads simple.js the way the browser does and returns the SimpleMode class. */
-function loadSimpleMode() {
-    let sandbox = {};
-    vm.runInNewContext(fs.readFileSync(path.join(studioDir, 'simple.js'), 'utf8') + '\nthis.SimpleMode = SimpleMode;', sandbox);
-    return sandbox.SimpleMode;
 }
 
 test('the simple view is the default and its only text boxes are the bilingual prompt panel', () => {
@@ -41,7 +35,7 @@ test('reference mode (F59): upload entry, standalone generate button and per-ref
     for (let id of ['simple-reference-add', 'simple-reference-file', 'simple-references', 'simple-reference-list-block', 'simple-generate-reference', 'simple-reference-hint']) {
         assert.ok(simple.includes(`id="${id}"`), `step 2 needs the reference entry ${id}`);
     }
-    let js = fs.readFileSync(path.join(studioDir, 'simple.js'), 'utf8');
+    let js = sources.readSimpleScripts();
     assert.match(js, /createElement\('textarea'\)/, 'each reference gets its own prompt box at runtime');
     assert.match(js, /EcomCraftStudioReferenceDescribe/, 'references are described by the server');
     assert.match(js, /reference_prompts/, 'generation sends one prompt per reference');
@@ -285,7 +279,7 @@ test('a reference thumbnail opens the gallery viewer, stepping across the refere
     SimpleMode.references = [{ image: 'data:image/png;base64,AA' }, { image: 'data:image/png;base64,BB' }];
     SimpleMode.openReference(1, 'button');
     assert.deepStrictEqual(JSON.parse(JSON.stringify(opened)), { items: [{ url: 'data:image/png;base64,AA', name: '参考图 1' }, { url: 'data:image/png;base64,BB', name: '参考图 2' }], index: 1, opener: 'button' });
-    let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    let studio = sources.readStudioScripts();
     assert.match(studio, /openImages: \(items, index, opener\) => Lightbox\.open\(items, index, 'reference', opener\)/, 'the same viewer as the gallery');
     assert.match(studio, /\$\('lb-download'\)\.hidden = reference;/, 'references are only viewed, not downloaded');
 });
@@ -319,13 +313,13 @@ test('the top bar: create images, professional mode, gallery and queue; administ
 test('own workflows are uploaded in professional mode only, as a name and the file text (F60)', () => {
     assert.ok(section('view-create').includes('id="own-workflow-upload"'));
     assert.ok(!section('view-simple').includes('own-workflow'), 'operators never see the upload');
-    let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    let studio = sources.readStudioScripts();
     assert.match(studio, /request\('EcomCraftStudioWorkflowUpload', \{ name: file\.name, workflow: text \}\)/);
 });
 
 test('one picked candidate can be refined in professional mode, with the prompt read by the server (F64)', () => {
     assert.match(section('view-simple'), /<button type="button" class="btn simple-refine" id="simple-refine" hidden>/);
-    let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    let studio = sources.readStudioScripts();
     assert.match(studio, /request\('EcomCraftStudioWorkRecipe', \{ image: url \}\)/, 'the prompt comes from the work itself, not from page memory');
     let css = fs.readFileSync(path.join(studioDir, 'studio.css'), 'utf8');
     assert.match(css, /@media \(max-width: 720px\) \{\s*\.simple-refine, \.pro-only \{ display: none; \}/, 'phones keep to the simple mode');
@@ -335,7 +329,7 @@ test('candidates are starred with the gallery star, by their gallery path (F65)'
     let SimpleMode = loadSimpleMode();
     assert.strictEqual(SimpleMode.galleryPath('View/alice/raw/2026-10-29/a.png'), 'raw/2026-10-29/a.png');
     assert.strictEqual(SimpleMode.galleryPath('/Output/raw/a.png'), 'raw/a.png');
-    let js = fs.readFileSync(path.join(studioDir, 'simple.js'), 'utf8');
+    let js = sources.readSimpleScripts();
     assert.match(js, /request\('ToggleImageStarred', \{ path: this\.galleryPath\(url\) \}\)/);
     assert.match(js, /new_state\) \{\s*this\.starred\.add\(url\);\s*this\.api\.request\('EcomCraftStudioMarkKept'/, 'a starred candidate is kept from cleanup');
 });
@@ -345,7 +339,7 @@ test('the gallery filters by source and the queue lists the account\'s own reque
     for (let value of ['all', 'simple', 'pro']) {
         assert.ok(gallery.includes(`<option value="${value}">`), `source option ${value}`);
     }
-    let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    let studio = sources.readStudioScripts();
     assert.match(studio, /extra\.ecomcraft_template \? 'simple' : 'pro'/, 'works made from a template come from the simple mode');
     let own = studio.indexOf('for (let task of tasks.filter(task => task.mine))');
     let servers = studio.indexOf('for (let task of nativeTasks)');
@@ -356,7 +350,7 @@ test('the gallery filters by source and the queue lists the account\'s own reque
 test('administrators reach the standard workflows from the "Manage" menu; the page only reads states or asks to initialize (F57)', () => {
     assert.match(html, /<button type="button" class="admin-menu-item" id="admin-menu-standard" data-admin-only>/);
     assert.match(html, /<div class="modal" id="standard-modal" hidden>/);
-    let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    let studio = sources.readStudioScripts();
     assert.match(studio, /request\('EcomCraftStandardWorkflows', action \? \{ action \} : \{\}\)/, 'no graph or model names are sent from the page');
 });
 
@@ -368,7 +362,7 @@ test('the gallery files works into projects and makes a filed work again with th
     assert.match(gallery, /<select id="gallery-project"[^>]*data-i18n-skip/, 'project names are user content and are not translated');
     assert.ok(html.includes('id="lb-redo"') && html.includes('id="lb-file"'), 'the preview offers redo and filing');
     assert.match(html, /<div class="modal" id="project-modal" hidden>/, 'projects are managed in a dialog');
-    let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    let studio = sources.readStudioScripts();
     for (let route of ['EcomCraftStudioProjects', 'EcomCraftStudioProjectWorks', 'EcomCraftStudioProjectSave', 'EcomCraftStudioProjectDelete',
         'EcomCraftStudioProjectAddWorks', 'EcomCraftStudioProjectRemoveWorks']) {
         assert.ok(studio.includes(`'${route}'`), `${route} is used`);

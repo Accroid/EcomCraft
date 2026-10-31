@@ -9,10 +9,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const studioDir = path.join(__dirname, '..', 'Studio');
+const sources = require('./helpers/studio-sources.cjs');
+
+const studioDir = sources.studioDir;
 const chinese = /[　-〿㐀-鿿＀-￯]/;
 // Workspace scripts whose Chinese literals are shown to users. i18n.js only holds the language names, which are never translated.
-const scriptFiles = ['studio.js', 'simple.js'];
+const scriptFiles = sources.translatableScripts();
 
 /** Same lookup form as I18n.normalize in i18n.js. */
 function normalize(text) {
@@ -146,11 +148,11 @@ function sourceTexts() {
     for (let text of htmlTexts(fs.readFileSync(path.join(studioDir, 'index.html'), 'utf8'))) {
         add(text, 'index.html');
     }
-    let script = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    let script = sources.readStudioScripts();
     for (let file of scriptFiles) {
-        for (let literal of literals(fs.readFileSync(path.join(studioDir, file), 'utf8'))) {
+        for (let literal of literals(fs.readFileSync(file, 'utf8'))) {
             if (chinese.test(literal.text) && literal.quote != '`') {
-                add(normalize(literal.text), `${file}:${literal.line}`);
+                add(normalize(literal.text), `${path.basename(file)}:${literal.line}`);
             }
         }
     }
@@ -164,8 +166,8 @@ function sourceTexts() {
 test('workspace scripts have no Chinese template literals; variable text must go through tr()', () => {
     let offending = [];
     for (let file of scriptFiles) {
-        let script = fs.readFileSync(path.join(studioDir, file), 'utf8');
-        offending.push(...literals(script).filter(literal => literal.quote == '`' && chinese.test(literal.text)).map(literal => `${file}:${literal.line}`));
+        let script = fs.readFileSync(file, 'utf8');
+        offending.push(...literals(script).filter(literal => literal.quote == '`' && chinese.test(literal.text)).map(literal => `${path.basename(file)}:${literal.line}`));
     }
     assert.deepStrictEqual(offending, []);
 });

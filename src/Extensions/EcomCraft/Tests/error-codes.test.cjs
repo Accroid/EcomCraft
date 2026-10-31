@@ -10,7 +10,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const root = path.join(__dirname, '..');
-const studioSource = fs.readFileSync(path.join(root, 'Studio', 'studio.js'), 'utf8');
+const studioSource = require('./helpers/studio-sources.cjs').readStudioScripts();
 const chinese = /[　-〿㐀-鿿＀-￯]/;
 
 /** The error codes studio.js accepts, extracted from the safeErrors set literal. */

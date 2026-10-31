@@ -6,8 +6,9 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const sources = require('./helpers/studio-sources.cjs');
 
-const studioDir = path.join(__dirname, '..', 'Studio');
+const studioDir = sources.studioDir;
 const html = fs.readFileSync(path.join(studioDir, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(studioDir, 'studio.css'), 'utf8');
 
@@ -20,10 +21,7 @@ test('the upload step offers camera capture without secure-context APIs', () => 
 });
 
 test('no browser feature that needs HTTPS is used', () => {
-    for (let file of ['studio.js', 'simple.js', 'i18n.js']) {
-        let source = fs.readFileSync(path.join(studioDir, file), 'utf8');
-        assert.ok(!/navigator\.clipboard|new Notification|serviceWorker|navigator\.share/.test(source), `${file} must not use secure-context APIs`);
-    }
+    assert.ok(!/navigator\.clipboard|new Notification|serviceWorker|navigator\.share/.test(sources.readAllScripts()), 'workspace scripts must not use secure-context APIs');
 });
 
 test('the gallery collapses to a single column on narrow phones', () => {
@@ -37,6 +35,6 @@ test('phones get the simple mode only: professional entries are hidden and #crea
     for (let id of ['nav-create', 'lb-edit']) {
         assert.match(html, new RegExp(`class="[^"]*\\bpro-only\\b[^"]*"[^>]*id="${id}"`), `${id} is hidden on phones`);
     }
-    let studio = fs.readFileSync(path.join(studioDir, 'studio.js'), 'utf8');
+    let studio = sources.readStudioScripts();
     assert.match(studio, /if \(view == 'create' && phoneScreen\(\)\) \{\s*view = 'simple';/);
 });
