@@ -1,4 +1,5 @@
 using System.IO;
+using EcomCraftStudio.Studio.Common;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Core;
@@ -43,6 +44,9 @@ public static class StorageSettings
     /// <summary>The loaded values, or null before the first read.</summary>
     private static Values Current;
 
+    /// <summary>Whether the settings file exists but could not be read. It is then never overwritten until the server restarts with a readable file.</summary>
+    private static bool Unreadable;
+
     /// <summary>Location of the settings file.</summary>
     private static string FilePath => Path.Combine(Program.DataDir, "EcomCraft", "storage.json");
 
@@ -54,41 +58,37 @@ public static class StorageSettings
             if (Current is null)
             {
                 Current = new Values();
-                try
+                JsonFileState state = JsonFile.TryRead<Values>(FilePath, root => root.ToObject<Values>() ?? new Values(), out Values values, out string error);
+                if (state == JsonFileState.Unreadable)
                 {
-                    if (File.Exists(FilePath))
-                    {
-                        Current = JObject.Parse(File.ReadAllText(FilePath)).ToObject<Values>() ?? new Values();
-                    }
+                    Logs.Error($"EcomCraft could not read the storage settings; using the platform server only until fixed: {error}");
+                    Unreadable = true;
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+                else if (state == JsonFileState.Ok)
                 {
-                    Logs.Error($"EcomCraft could not read the storage settings; using the platform server only until fixed: {ex.Message}");
+                    Current = values;
                 }
             }
             return JObject.FromObject(Current).ToObject<Values>();
         }
     }
 
-    /// <summary>Saves new settings through a temporary file. Returns false when the file cannot be written.</summary>
+    /// <summary>Saves new settings through a temporary file. Returns false when the file cannot be written, or while the original file is unreadable.</summary>
     public static bool Save(Values values)
     {
         lock (Lock)
         {
-            try
+            if (Unreadable)
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(FilePath));
-                string temp = $"{FilePath}.tmp";
-                File.WriteAllText(temp, JObject.FromObject(values).ToString(Formatting.Indented));
-                File.Move(temp, FilePath, true);
-                Current = JObject.FromObject(values).ToObject<Values>();
-                return true;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                Logs.Error($"EcomCraft could not save the storage settings: {ex.Message}");
                 return false;
             }
+            if (!JsonFile.TryWriteAtomic(FilePath, JObject.FromObject(values).ToString(Formatting.Indented), out string error))
+            {
+                Logs.Error($"EcomCraft could not save the storage settings: {error}");
+                return false;
+            }
+            Current = JObject.FromObject(values).ToObject<Values>();
+            return true;
         }
     }
 }

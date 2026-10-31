@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using EcomCraftStudio.MagicPrompt;
 using EcomCraftStudio.MagicPrompt.WebAPI;
 using EcomCraftStudio.MagicPrompt.WebAPI.Models;
+using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.Generation;
 using EcomCraftStudio.Studio.Templates;
 using FreneticUtilities.FreneticExtensions;
@@ -839,10 +840,11 @@ public static class PromptService
                         saved["product_vision_enabled"] = enableProduct;
                     }
                     saved["changed_by"] = session.User.UserID;
-                    Directory.CreateDirectory(Path.GetDirectoryName(SettingsFile));
-                    string temp = $"{SettingsFile}.tmp";
-                    File.WriteAllText(temp, saved.ToString(Formatting.Indented));
-                    File.Move(temp, SettingsFile, true);
+                    if (!JsonFile.TryWriteAtomic(SettingsFile, saved.ToString(Formatting.Indented), out string error))
+                    {
+                        Logs.Error($"EcomCraft could not save the prompt settings: {error}");
+                        return StudioApi.Error("提示词设置无法保存到服务器数据目录。", "prompt_settings_failed");
+                    }
                     ForgetVisionStatus();
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

@@ -1,4 +1,5 @@
 using System.IO;
+using EcomCraftStudio.Studio.Common;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
@@ -81,6 +82,9 @@ public static class CandidateCleanup
         StopSource.Cancel();
     }
 
+    /// <summary>Whether the registry file exists but could not be read. It is then never overwritten; new candidates stay in memory until the server restarts.</summary>
+    private static bool Unreadable;
+
     /// <summary>Reads the registry file once. Callers hold <see cref="Lock"/>. An unreadable file starts an empty registry and is left in place.</summary>
     private static void EnsureLoaded()
     {
@@ -89,32 +93,28 @@ public static class CandidateCleanup
             return;
         }
         Items = [];
-        try
+        JsonFileState state = JsonFile.TryRead<List<Entry>>(FilePath, root => root["candidates"]?.ToObject<List<Entry>>()?.Where(item => item is not null).ToList() ?? [], out List<Entry> items, out string error);
+        if (state == JsonFileState.Unreadable)
         {
-            if (File.Exists(FilePath))
-            {
-                Items = JObject.Parse(File.ReadAllText(FilePath))["candidates"]?.ToObject<List<Entry>>()?.Where(item => item is not null).ToList() ?? [];
-            }
+            Logs.Error($"EcomCraft could not read the candidate registry; expired candidates will not be cleaned until it is fixed: {error}");
+            Unreadable = true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        else if (state == JsonFileState.Ok)
         {
-            Logs.Error($"EcomCraft could not read the candidate registry; expired candidates will not be cleaned until it is fixed: {ex.Message}");
+            Items = items;
         }
     }
 
-    /// <summary>Writes the registry through a temporary file. Callers hold <see cref="Lock"/>.</summary>
+    /// <summary>Writes the registry through a temporary file. Callers hold <see cref="Lock"/>. Skipped while the original file is unreadable.</summary>
     private static void Save()
     {
-        try
+        if (Unreadable)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(FilePath));
-            string temp = $"{FilePath}.tmp";
-            File.WriteAllText(temp, new JObject() { ["version"] = 1, ["candidates"] = JArray.FromObject(Items) }.ToString(Formatting.Indented));
-            File.Move(temp, FilePath, true);
+            return;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        if (!JsonFile.TryWriteAtomic(FilePath, new JObject() { ["version"] = 1, ["candidates"] = JArray.FromObject(Items) }.ToString(Formatting.Indented), out string error))
         {
-            Logs.Error($"EcomCraft could not save the candidate registry: {ex.Message}");
+            Logs.Error($"EcomCraft could not save the candidate registry: {error}");
         }
     }
 

@@ -1,4 +1,5 @@
 using System.IO;
+using EcomCraftStudio.Studio.Common;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Builtin_ComfyUIBackend;
@@ -234,22 +235,19 @@ public static class TemplateStore
         return new Entry(errors.Count == 0 ? template : null, id, source, errors, raw);
     }
 
-    /// <summary>The administrator templates as stored. A missing file means none; an unreadable file is logged and treated as none without being overwritten.</summary>
-    private static List<JObject> ReadCustom()
+    /// <summary>The administrator templates as stored. A missing file means none; an unreadable file is logged and treated as none.</summary>
+    private static List<JObject> ReadCustom() => ReadCustom(out _);
+
+    /// <summary>The administrator templates as stored, and whether the file exists but could not be read, in which case it must not be overwritten.</summary>
+    private static List<JObject> ReadCustom(out bool unreadable)
     {
-        try
+        JsonFileState state = JsonFile.TryRead<List<JObject>>(CustomFile, root => [.. (root["templates"] as JArray ?? new JArray()).OfType<JObject>()], out List<JObject> custom, out string error);
+        unreadable = state == JsonFileState.Unreadable;
+        if (unreadable)
         {
-            if (!File.Exists(CustomFile))
-            {
-                return [];
-            }
-            return [.. (JObject.Parse(File.ReadAllText(CustomFile))["templates"] as JArray ?? new JArray()).OfType<JObject>()];
+            Logs.Error($"EcomCraft could not read the custom template file: {error}");
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            Logs.Error($"EcomCraft could not read the custom template file: {ex.Message}");
-            return [];
-        }
+        return state == JsonFileState.Ok ? custom : [];
     }
 
     /// <summary>Adds or replaces an administrator template after checking its structure and snapshot. Returns an error, or null when saved.</summary>
@@ -272,7 +270,11 @@ public static class TemplateStore
             {
                 return $"ID“{template.Id}”属于内置模板，请换一个 ID。";
             }
-            List<JObject> custom = ReadCustom();
+            List<JObject> custom = ReadCustom(out bool unreadable);
+            if (unreadable)
+            {
+                return CustomFileUnreadable;
+            }
             custom.RemoveAll(item => item["id"]?.ToString() == template.Id);
             if (custom.Count >= MaxCustomTemplates)
             {
@@ -288,7 +290,11 @@ public static class TemplateStore
     {
         lock (Lock)
         {
-            List<JObject> custom = ReadCustom();
+            List<JObject> custom = ReadCustom(out bool unreadable);
+            if (unreadable)
+            {
+                return CustomFileUnreadable;
+            }
             if (custom.RemoveAll(item => item["id"]?.ToString() == id) == 0)
             {
                 return "没有这个自定义模板。";
@@ -297,22 +303,18 @@ public static class TemplateStore
         }
     }
 
+    /// <summary>The answer when the custom file exists but cannot be read.</summary>
+    private const string CustomFileUnreadable = "自定义模板文件暂时读不了，这次没有保存，原有数据没有动。请稍后重试或联系管理员。";
+
     /// <summary>Writes the custom file through a temporary file. Callers hold <see cref="Lock"/>.</summary>
     private static string WriteCustom(List<JObject> custom)
     {
-        try
+        if (!JsonFile.TryWriteAtomic(CustomFile, new JObject() { ["version"] = 1, ["templates"] = new JArray(custom) }.ToString(Formatting.Indented), out string error))
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(CustomFile));
-            string temp = $"{CustomFile}.tmp";
-            File.WriteAllText(temp, new JObject() { ["version"] = 1, ["templates"] = new JArray(custom) }.ToString(Formatting.Indented));
-            File.Move(temp, CustomFile, true);
-            CacheStamp = null;
-            return null;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            Logs.Error($"EcomCraft could not save the custom template file: {ex.Message}");
+            Logs.Error($"EcomCraft could not save the custom template file: {error}");
             return "模板无法保存到服务器数据目录，请检查磁盘空间和文件权限。";
         }
+        CacheStamp = null;
+        return null;
     }
 }

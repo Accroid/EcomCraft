@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using EcomCraftStudio.Studio.Common;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Builtin_ComfyUIBackend;
@@ -263,21 +264,13 @@ public static class WorkflowReview
         {
             return false;
         }
-        string path = FilePath;
-        try
+        JObject root = new() { ["version"] = 1, ["records"] = JObject.FromObject(Records) };
+        if (!JsonFile.TryWriteAtomic(FilePath, root.ToString(Formatting.Indented), out string error))
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
-            JObject root = new() { ["version"] = 1, ["records"] = JObject.FromObject(Records) };
-            string temp = $"{path}.tmp";
-            File.WriteAllText(temp, root.ToString(Formatting.Indented));
-            File.Move(temp, path, true);
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            Logs.Error($"EcomCraft could not save the workflow review file: {ex.Message}");
+            Logs.Error($"EcomCraft could not save the workflow review file: {error}");
             return false;
         }
+        return true;
     }
 
     /// <summary>Re-adds published snapshots after a ComfyUI workflow registry reload. Never replaces a stored SwarmUI workflow with the same name.</summary>

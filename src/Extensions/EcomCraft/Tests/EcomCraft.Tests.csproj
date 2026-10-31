@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../../GlobalUsings.cs" Link="GlobalUsings.cs" />
+    <Compile Include="../Studio/Common/JsonFile.cs" Link="JsonFile.cs" />
     <Compile Include="../Studio/Generation/SchedulerRules.cs" Link="SchedulerRules.cs" />
     <Compile Include="../Studio/Generation/SetRules.cs" Link="SetRules.cs" />
     <Compile Include="../Studio/Products/ProductIndex.cs" Link="ProductIndex.cs" />
