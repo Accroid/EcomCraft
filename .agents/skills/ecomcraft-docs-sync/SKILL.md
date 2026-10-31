@@ -26,7 +26,7 @@ description: 修改 EcomCraft 功能、API、配置项或安全边界后同步�
 | 完成开发总表中的某个任务 | 开发总表“开发任务”的状态由用户确认后填写；需求文档的“开发进度”节同步更新（中英文） |
 | 工作台页面、按钮、配色、交互 | `docs/EcomCraft 工作台界面设计.zh-CN.md` 第 3 节控件清单（详见 `ecomcraft-studio-ui` 技能） |
 | 部署方式、账号登录、角色权限、排队上限、防火墙、HTTPS、共享存储可见性 | `docs/EcomCraft 局域网部署指南.zh-CN.md` 与 `docs/EcomCraft LAN Deployment.md` |
-| 提示词优化（MagicPrompt）、生成超时 | `docs/EcomCraft Prompt Enhancement.md`（文件名是英文，内容是中文） |
+| 提示词优化（MagicPrompt）、生成超时 | `docs/EcomCraft 提示词优化指南.zh-CN.md`、`docs/EcomCraft Prompt Enhancement.md` |
 | 配置键（如 `Settings.EcomCraft.ComfyWorkflowSearchPaths`） | 所有提到该键的文档，用 Grep 全文搜索，确保名称一致 |
 | 新增、删除或改名 EcomCraft 文档 | `docs/README.zh-CN.md` 与 `docs/README.md` 中的 EcomCraft 文档列表，以及两个根目录 README 的“文档”节 |
 | 开发规则、构建方式或项目约定 | `AGENTS.md` 和对应的 `.agents/skills/*/SKILL.md` |
@@ -42,7 +42,7 @@ description: 修改 EcomCraft 功能、API、配置项或安全边界后同步�
 - 根目录 `README.md` 是中文，`README.en.md` 是英文，内容要对应，文首的语言切换链接保持可用。
 - `docs/` 下 SwarmUI 原有文档采用“英文 `X.md` + 中文 `X.zh-CN.md`”成对维护；修改其中一份时检查另一份是否需要同步。中文只是导读、不是完整翻译时，必须标明“导读”并链接英文原文。
 - EcomCraft 同时面向国内外用户：新增或修改 EcomCraft 文档时，中文和英文两个版本必须同时编写或同步。新文档采用“英文 `X.md` + 中文 `X.zh-CN.md`”命名；已有中文文件名的文档（如需求文档）保留原名，英文版另起英文文件名，两份文首互相链接。
-- 尚无英文版的旧 EcomCraft 文档（`EcomCraft 工作台界面设计.zh-CN.md`，以及文件名为英文、内容为中文的 `EcomCraft Prompt Enhancement.md`），在下次修改时补齐英文版，并更新 README 和 docs 索引中的链接。`EcomCraft ComfyUI 工作流.zh-CN.md` 已有英文版 `EcomCraft ComfyUI Workflows.md`，两份需同步修改。
+- 尚无英文版的旧 EcomCraft 文档（`EcomCraft 工作台界面设计.zh-CN.md`），在下次修改时补齐英文版，并更新 README 和 docs 索引中的链接。`EcomCraft ComfyUI 工作流.zh-CN.md` 已有英文版 `EcomCraft ComfyUI Workflows.md`，两份需同步修改。
 - `.gitignore` 默认忽略 `docs/` 下的新文件，`!/docs/EcomCraft *` 放行了 EcomCraft 文档；新文档不以 `EcomCraft ` 开头时，需要在 `.gitignore` 中另行放行。
 - `docs/EcomCraft 开发总表.xlsx` 是中文规划表，不需要英文版；其中的路线图在架构文档中有中英文描述。
 - 不要编辑 `docs/APIRoutes/`，它由源码自动生成。

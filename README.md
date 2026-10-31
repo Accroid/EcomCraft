@@ -68,7 +68,7 @@ cd EcomCraft
 1. 浏览器打开 `http://127.0.0.1:7801`，按首次设置安装 **ComfyUI Self-Starting** 后端并下载模型（也可跳过，之后再配）。
 2. 打开 `http://127.0.0.1:7801/EcomCraft` 进入工作台；管理员首次进入会看到设置向导（语言、存储、执行服务器、模型、常用平台）。
 3. 局域网的其他显卡电脑以 `--listen` 启动 ComfyUI，再在原生引擎 **Server → Backends** 以 **ComfyUI API By URL** 登记，见[局域网部署指南](docs/EcomCraft%20局域网部署指南.zh-CN.md)。
-4. “照参考图做”需要看图模型：管理员可在工作台“提示词优化设置”里点“一键安装本地模型”选择档位直接安装（或运行 `launchtools/install-vision-model-windows.ps1`，Linux 为 `launchtools/install-vision-model-linux.sh`），见[提示词优化指南](docs/EcomCraft%20Prompt%20Enhancement.md)。
+4. “照参考图做”需要看图模型：管理员可在工作台“提示词优化设置”里点“一键安装本地模型”选择档位直接安装（或运行 `launchtools/install-vision-model-windows.ps1`，Linux 为 `launchtools/install-vision-model-linux.sh`），见[提示词优化指南](docs/EcomCraft%20提示词优化指南.zh-CN.md)。
 
 ## 数据与安全
 
@@ -80,7 +80,7 @@ cd EcomCraft
 ## 文档
 
 - [中文文档总览](docs/README.zh-CN.md) · [基础使用](docs/Basic%20Usage.zh-CN.md) · [常见问题排查](docs/Troubleshooting.zh-CN.md)
-- [工作流调用与接口](docs/EcomCraft%20ComfyUI%20工作流.zh-CN.md) · [局域网部署指南](docs/EcomCraft%20局域网部署指南.zh-CN.md) · [提示词优化与看图模型](docs/EcomCraft%20Prompt%20Enhancement.md) · [升级与数据说明](docs/EcomCraft%20Upgrade.zh-CN.md)
+- [工作流调用与接口](docs/EcomCraft%20ComfyUI%20工作流.zh-CN.md) · [局域网部署指南](docs/EcomCraft%20局域网部署指南.zh-CN.md) · [提示词优化与看图模型](docs/EcomCraft%20提示词优化指南.zh-CN.md) · [升级与数据说明](docs/EcomCraft%20Upgrade.zh-CN.md)
 - 开发规划：[架构与路线图](docs/EcomCraft%20Architecture.zh-CN.md) · [实施计划](docs/EcomCraft%20实施计划.zh-CN.md) · [重构计划](docs/EcomCraft%20重构计划.zh-CN.md) · [界面与操作改版需求](docs/EcomCraft%20界面改版需求.zh-CN.md) · [简易模式改版需求](docs/EcomCraft%20简易模式改版需求.zh-CN.md) · [局域网多服务器平台需求](docs/EcomCraft%20局域网多服务器平台需求.zh-CN.md)
 
 ## 联系与部署服务
