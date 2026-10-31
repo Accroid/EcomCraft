@@ -13,7 +13,7 @@
 
 - **开工必读：** 每个任务开始前，先读 `docs/EcomCraft Architecture.zh-CN.md` 第 1、2 节和对应计划，确认任务符合产品目标；不符合时先问用户，不得自行偏离。
 - 产品定位、架构和 MVP 范围：`docs/EcomCraft Architecture.zh-CN.md`（英文版 `docs/EcomCraft Architecture.md`）。
-- 新功能计划（F74–F82 / T81–T110）：`docs/EcomCraft 实施计划.zh-CN.md`（英文版 `docs/EcomCraft Implementation Plan.md`）；基础重构（R00–R24）：`docs/EcomCraft 重构计划.zh-CN.md`（英文版 `docs/EcomCraft Refactoring Plan.md`）。两份计划按重构计划第 7 节的顺序穿插执行：先 T81，再 R00–R03 与 CP0，之后 R04–R20（R21–R24 收尾并行，R23 等 R14/R20、R24 等 R14），G1 通过后开始 T83 及后续。
+- 新功能计划（F74–F82 / T81–T110）：`docs/EcomCraft 实施计划.zh-CN.md`（英文版 `docs/EcomCraft Implementation Plan.md`）；基础重构（R00–R24）：`docs/EcomCraft 重构计划.zh-CN.md`（英文版 `docs/EcomCraft Refactoring Plan.md`）。两份计划按重构计划第 7 节的顺序穿插执行：先 T81，再 R00–R03 与 CP0，之后 R04–R20 和 R24（R21–R23 收尾并行，R23 等 R14/R20），G1 通过后开始 T83 及后续。
 - 局域网多服务器需求：`docs/EcomCraft 局域网多服务器平台需求.zh-CN.md`。
 - 功能（F）与开发任务（T）进度：`docs/EcomCraft 开发总表.xlsx`。一个会话只做一个 T 或 R 任务，按“开发任务”表的验收标准和测试方式验证。
 

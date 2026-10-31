@@ -82,7 +82,7 @@
    - A check fails for unknown reasons, or two fix attempts still fail.
    - Software must be installed, code pushed, or branches deleted without the user's agreement.
 4. **Commit pure moves and logic changes separately.** A move commit changes no logic and no formatting. Self-check with `git diff --color-moved=dimmed-zebra`.
-5. **Branches and commits:** `dev` only. At least one commit per task, message format `refactor(R07): Chinese description` (defect fixes use `fix(R04): …`). Before committing run `git status --short`, `git diff --stat`, `git diff --check`. **Pushing needs the user's agreement.** Do not commit `.claude/`, `pic/`, build outputs.
+5. **Branches and commits:** `dev` only. At least one commit per task, message format `refactor(R07): Chinese description` (defect fixes use `fix(R04): …`). Before committing run `git status --short`, `git diff --stat`, `git diff --check`. **Pushing needs the user's agreement (given 2026-10-31: push to `origin/dev` after each task).** Do not commit `.claude/`, `pic/`, build outputs.
 6. **Follow `AGENTS.md`:** do not touch `Data/`, `Output/`, `Models/`, `dlbackend/`; do not edit `docs/APIRoutes/`; no `var` in C#, `///` on fields; `let` only in JS, `/** */` on functions.
 7. **Report honestly:** write "not run" for checks not run. A task counts as complete only after the user verifies it.
 8. **After front-end changes** update every `?v=` in `index.html`; **after C# changes** rebuild the extension per `.agents/skills/ecomcraft-build-run`.
@@ -131,7 +131,7 @@ Out-of-scope findings: list only, not fixed
 | | R13 | Standard workflows support multiple blueprints | CP1 | S |
 | | R14 | Tidy the `Studio/` folder | R07–R13 | S |
 | | R24 | Remove the dormant cloud executor types | R14 | S |
-| | **CP2** | **User regression** | R14 | — |
+| | **CP2** | **User regression** | R14, R24 | — |
 | D Front end | R15 | Split `simple.js` into files | R02, CP0 | L |
 | | R16 | Split `SimpleMode.attach` by feature | R15 | S |
 | | R17 | `studio.js`: shared layer and standalone views | R02, CP0 | L |
@@ -155,6 +155,8 @@ The local machine has no .NET SDK. **Ask the user which option (do not install o
 
 1. **(Recommended)** With the user's agreement, install the .NET 8 SDK into the user profile (no administrator rights needed) using Microsoft's official `dotnet-install.ps1`, into `%LOCALAPPDATA%\Microsoft\dotnet`.
 2. Do the whole refactoring on a computer that can compile.
+
+**User decision (2026-10-31):** no SDK on this machine; code is written here, and the user runs the C# build and unit tests on another computer. Step 1 below is the user's; the check gates are unchanged, so a C# task is not complete until the user confirms build and tests pass, and tasks depending on it do not start.
 
 Then:
 
@@ -409,7 +411,7 @@ Background: after the 2026-10-31 requirement revision there is no cloud generati
 
 1. Delete the two enum values and their branches. They never produced an executor or a request; deleting them must change no existing behavior.
 2. `execution_plans` validation keeps rejecting: submitting `cloud_comfy` / `cloud_model_api` still returns the existing error with the same code and wording; add a unit test covering it.
-3. Update the "awaits a later refactoring cleanup" notes in the LAN requirements' step-4 implementation notes and the workflow guide to say the types are gone while validation still rejects them.
+3. Update the "await refactoring task R24" notes in the LAN requirements' step-4 implementation notes and the workflow guide to say the types are gone while validation still rejects them.
 
 **Acceptance:** compiles; the `api-surface` snapshot is unchanged (update it explicitly first if any API changes); documents synced. Size S, depends on R14 (move first, modify later — never in one commit).
 
@@ -608,9 +610,9 @@ If any checkpoint regresses from the baseline, **do not enter the next phase**.
 |---|---|
 | 1 | **Implementation Plan T81: put the goals and both plans into the repository first** |
 | 2 | R00–R03, CP0. T82 and N12 (the route trial) can run in parallel with later work; neither touches platform code |
-| 3 | R04–R20 (CP1–CP3) |
+| 3 | R04–R20 and R24 (CP1–CP3) |
 | 4 | **After G1 passes**, start T83 and beyond |
-| 5 | R21–R24 parallel with the above, but R23 waits for R14 and R20, and R24 waits for R14 |
+| 5 | R21–R23 parallel with the above, but R23 waits for R14 and R20 |
 
 **If G1 fails:** phases A and B still happen; C and D can also continue since these problems are route-independent. But ask the user whether to keep investing.
 
