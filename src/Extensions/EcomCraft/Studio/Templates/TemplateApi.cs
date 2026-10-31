@@ -276,7 +276,7 @@ public static class TemplateApi
                 return null;
             }
             (int width, int height) = generationSize ?? TargetSize(parameters, workflowParams, workflowId);
-            string problem = ProductPreserve.Prepare(session.User.UserID, workflowParams.Value<string>(field), width, height, placement, out string canvas, out preserveToken);
+            string problem = ProductPreserve.Prepare(session.User.UserID, workflowParams.Value<string>(field), width, height, placement, StandardWorkflows.IsStandard(workflowId), out string canvas, out preserveToken);
             if (problem is not null)
             {
                 error = StudioApi.Error(problem, "invalid_reference");

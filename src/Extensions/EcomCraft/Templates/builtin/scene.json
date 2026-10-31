@@ -5,8 +5,8 @@
     "en": "Lifestyle scene"
   },
   "description": {
-    "zh-CN": "把商品放进贴合用途的生活或使用场景；保留原商品像素。",
-    "en": "Places the product in a lifestyle or usage scene that fits it; keeps the original product pixels."
+    "zh-CN": "把商品放进贴合用途的生活或使用场景；保留商品的 Logo、文字和形状，光线融入场景。",
+    "en": "Places the product in a lifestyle or usage scene that fits it; keeps the product's logo, text and shape, with light matched to the scene."
   },
   "example_image": null,
   "platforms": [
@@ -17,7 +17,7 @@
   ],
   "kind": "scene_main",
   "prompt": {
-    "prefix": "commercial photography of a realistic scene, the subject resting naturally on the surface with soft contact shadows and reflections,",
+    "prefix": "commercial photography of a realistic scene, eye-level straight-on camera, an open flat clear surface in the center foreground, props only at the sides and behind, soft directional light,",
     "suffix": "photorealistic lighting that matches the scene, shallow depth of field",
     "negative": "text, watermark, product, bottle, jar, tube, box, packaging, container, cluttered composition"
   },

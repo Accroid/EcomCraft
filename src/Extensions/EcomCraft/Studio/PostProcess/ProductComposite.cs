@@ -5,7 +5,8 @@ using SixLabors.ImageSharp.Processing;
 namespace EcomCraftStudio.Studio.PostProcess;
 
 /// <summary>Image operations for product preservation (F02): build the input canvas from a cut-out product, and paste the original product pixels
-/// back onto a generated picture so logos, text and shapes cannot be changed by generation. Only the outer edge is softened, and only inwards.</summary>
+/// back onto a generated picture so logos, text and shapes cannot be changed by generation. Only the outer edge is softened, and only inwards.
+/// The standard workflows use <see cref="PasteBlended"/>, which also takes light and color from the generated picture.</summary>
 public static class ProductComposite
 {
     /// <summary>Width in pixels of the softened product edge.</summary>
@@ -121,9 +122,9 @@ public static class ProductComposite
 
     /// <summary>The product placed on a white canvas of the output size. A <paramref name="transparent"/> canvas (the generation input, N10) keeps the white
     /// but makes it fully transparent and keeps the product's own alpha, so the workflow can load the alpha as the mask of what to generate.</summary>
-    public static Image<Rgba32> BuildCanvas(Image<Rgba32> cutout, int width, int height, Placement placement, bool transparent = false)
+    public static Image<Rgba32> BuildCanvas(Image<Rgba32> cutout, int width, int height, Placement placement, bool transparent = false, byte fill = 255)
     {
-        Image<Rgba32> canvas = new(width, height, new Rgba32(255, 255, 255, transparent ? (byte)0 : (byte)255));
+        Image<Rgba32> canvas = new(width, height, new Rgba32(fill, fill, fill, transparent ? (byte)0 : (byte)255));
         (int X, int Y, int Width, int Height) rect = placement.Rect(width, height, cutout.Width, cutout.Height);
         using Image<Rgba32> product = Scaled(cutout, rect);
         Blend(canvas, product, rect.X, rect.Y, null, transparent);
@@ -137,6 +138,141 @@ public static class ProductComposite
         (int X, int Y, int Width, int Height) rect = placement.Rect(generated.Width, generated.Height, cutout.Width, cutout.Height);
         using Image<Rgba32> product = Scaled(cutout, rect);
         Blend(generated, product, rect.X, rect.Y, FeatheredAlpha(product, feather), false);
+    }
+
+    /// <summary>Canvas fill for workflows that repaint around the product: neutral gray leaves no bright halo at the product's edge, unlike white.</summary>
+    public const byte NeutralFill = 128;
+
+    /// <summary>Softened product edge of the blended paste, in pixels.</summary>
+    private const int BlendFeatherPx = 3;
+
+    /// <summary>Window of the tone transfer as a fraction of the product's longer side: wider than text strokes, so only light and color come from the generated picture.</summary>
+    private const double ToneRadius = 0.03;
+
+    /// <summary>How much of the generated light and color reaches the product.</summary>
+    private const double ToneStrength = 0.8;
+
+    /// <summary>Largest change of a color channel, so brand colors stay recognizable whatever the generation drew there.</summary>
+    private const int MaxToneShift = 40;
+
+    /// <summary>Pastes the cut-out back so it belongs to the scene: details (logo, text, shape) come from the original pixels, while light and color come from
+    /// the generated picture (frequency separation), limited to <see cref="MaxToneShift"/>; a soft contact shadow is drawn under the product.</summary>
+    public static void PasteBlended(Image<Rgba32> generated, Image<Rgba32> cutout, Placement placement)
+    {
+        (int X, int Y, int Width, int Height) rect = placement.Rect(generated.Width, generated.Height, cutout.Width, cutout.Height);
+        using Image<Rgba32> product = Scaled(cutout, rect);
+        byte[] alpha = FeatheredAlpha(product, BlendFeatherPx);
+        TransferTone(product, generated, rect.X, rect.Y, alpha);
+        DrawContactShadow(generated, product, rect.X, rect.Y);
+        Blend(generated, product, rect.X, rect.Y, alpha, false);
+    }
+
+    /// <summary>Adds to each product pixel the blurred difference between the generated picture and the product, measured only where the product is fully opaque
+    /// and on the canvas, so neither the background nor the fine details of either image take part.</summary>
+    private static void TransferTone(Image<Rgba32> product, Image<Rgba32> generated, int offsetX, int offsetY, byte[] alpha)
+    {
+        int width = product.Width, height = product.Height;
+        Rgba32[] pixels = new Rgba32[width * height];
+        product.CopyPixelDataTo(pixels);
+        Rgba32[] below = new Rgba32[generated.Width * generated.Height];
+        generated.CopyPixelDataTo(below);
+        int radius = Math.Max(4, (int)Math.Round(Math.Max(width, height) * ToneRadius));
+        int stride = width + 1;
+        // Summed-area tables keep the blur independent of the radius.
+        long[] weights = new long[stride * (height + 1)];
+        long[][] sums = [new long[weights.Length], new long[weights.Length], new long[weights.Length]];
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int gx = x + offsetX, gy = y + offsetY;
+                bool used = alpha[y * width + x] == 255 && gx >= 0 && gy >= 0 && gx < generated.Width && gy < generated.Height;
+                Rgba32 from = pixels[y * width + x];
+                Rgba32 to = used ? below[gy * generated.Width + gx] : from;
+                int at = (y + 1) * stride + x + 1;
+                weights[at] = (used ? 1 : 0) + weights[at - 1] + weights[at - stride] - weights[at - stride - 1];
+                sums[0][at] = to.R - from.R + sums[0][at - 1] + sums[0][at - stride] - sums[0][at - stride - 1];
+                sums[1][at] = to.G - from.G + sums[1][at - 1] + sums[1][at - stride] - sums[1][at - stride - 1];
+                sums[2][at] = to.B - from.B + sums[2][at - 1] + sums[2][at - stride] - sums[2][at - stride - 1];
+            }
+        }
+        byte Shifted(byte value, long[] sum, int a, int b, int c, int d, long count)
+        {
+            double shift = (sum[a] - sum[b] - sum[c] + sum[d]) / (double)count * ToneStrength;
+            return (byte)Math.Clamp((int)Math.Round(value + Math.Clamp(shift, -MaxToneShift, MaxToneShift)), 0, 255);
+        }
+        for (int y = 0; y < height; y++)
+        {
+            int top = Math.Max(0, y - radius), bottom = Math.Min(height, y + radius + 1);
+            for (int x = 0; x < width; x++)
+            {
+                int left = Math.Max(0, x - radius), right = Math.Min(width, x + radius + 1);
+                int a = bottom * stride + right, b = top * stride + right, c = bottom * stride + left, d = top * stride + left;
+                long count = weights[a] - weights[b] - weights[c] + weights[d];
+                if (count > 0)
+                {
+                    Rgba32 pixel = pixels[y * width + x];
+                    product[x, y] = new Rgba32(Shifted(pixel.R, sums[0], a, b, c, d, count), Shifted(pixel.G, sums[1], a, b, c, d, count), Shifted(pixel.B, sums[2], a, b, c, d, count), pixel.A);
+                }
+            }
+        }
+    }
+
+    /// <summary>Darkens the scene under the product's base: a tight dark core and a wider soft shadow. The base is the lowest rows of the product's opaque pixels.</summary>
+    private static void DrawContactShadow(Image<Rgba32> generated, Image<Rgba32> product, int offsetX, int offsetY)
+    {
+        int bottom = -1;
+        for (int y = product.Height - 1; y >= 0 && bottom < 0; y--)
+        {
+            for (int x = 0; x < product.Width && bottom < 0; x++)
+            {
+                if (product[x, y].A >= 128)
+                {
+                    bottom = y;
+                }
+            }
+        }
+        if (bottom < 0)
+        {
+            return;
+        }
+        int left = product.Width, right = -1;
+        for (int y = Math.Max(0, bottom - Math.Max(2, product.Height / 20)); y <= bottom; y++)
+        {
+            for (int x = 0; x < product.Width; x++)
+            {
+                if (product[x, y].A >= 128)
+                {
+                    left = Math.Min(left, x);
+                    right = Math.Max(right, x);
+                }
+            }
+        }
+        double centerX = offsetX + (left + right) / 2.0, centerY = offsetY + bottom, radius = Math.Max(2, (right - left + 1) / 2.0);
+        DarkenEllipse(generated, centerX, centerY, radius * 1.45, radius * 0.28, 0.25);
+        DarkenEllipse(generated, centerX, centerY, radius * 1.08, radius * 0.1, 0.55);
+    }
+
+    /// <summary>Multiplies the picture by a soft ellipse: <paramref name="strength"/> at its center, fading to nothing at its edge.</summary>
+    private static void DarkenEllipse(Image<Rgba32> image, double centerX, double centerY, double radiusX, double radiusY, double strength)
+    {
+        image.ProcessPixelRows(rows =>
+        {
+            for (int y = Math.Max(0, (int)(centerY - radiusY)); y < Math.Min(rows.Height, (int)(centerY + radiusY) + 1); y++)
+            {
+                Span<Rgba32> row = rows.GetRowSpan(y);
+                for (int x = Math.Max(0, (int)(centerX - radiusX)); x < Math.Min(row.Length, (int)(centerX + radiusX) + 1); x++)
+                {
+                    double dx = (x - centerX) / radiusX, dy = (y - centerY) / radiusY, distance = dx * dx + dy * dy;
+                    if (distance < 1)
+                    {
+                        double keep = 1 - strength * (1 - distance) * (1 - distance);
+                        Rgba32 pixel = row[x];
+                        row[x] = new Rgba32((byte)(pixel.R * keep), (byte)(pixel.G * keep), (byte)(pixel.B * keep), pixel.A);
+                    }
+                }
+            }
+        });
     }
 
     /// <summary>Alpha of the product with its edge softened inwards: a box blur of the alpha, never above the original alpha.</summary>

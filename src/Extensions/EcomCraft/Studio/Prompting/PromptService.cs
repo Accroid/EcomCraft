@@ -515,6 +515,8 @@ public static class PromptService
         + "Never mention the product or describe it: not its type, shape, color, material, packaging, brand, logo or any text. Describe only "
         + "the surface it stands on and everything around it. Do not mention any bottles, jars, tubes, boxes, packages or containers, even if the photo has them; "
         + "props must be things that are not products, such as plants, fabric, stones, water or fruit. "
+        + "Whatever the photo's angle, write it as an eye-level straight-on shot with an open flat clear surface in the center foreground and the props at the sides and behind, "
+        + "so an upright item can stand there. "
         + "Reply with one English paragraph of 60 to 120 words, without lists or headings.";
 
     [API.APIDescription("Describe reference images for reference mode (F59): one English composition prompt and its Chinese translation per image (1–8), "
