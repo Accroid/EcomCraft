@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20界面改版需求.zh-CN.md)
 >
-> **Status:** Confirmed (2026-10-29); code complete pending acceptance, T70 deferred · **Version:** v1.3 · **Date:** 2026-10-29
+> **Status:** Confirmed (2026-10-29); code complete pending acceptance, T70 deferred; revised 2026-10-31 (A14): the single-entry design of U3/U4/section 5 replaces the former "three task entries" — see T89/T90 (after G2) · **Version:** v1.4 · **Date:** 2026-10-31
 >
 > Related: [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md) (decisions A2, A12), [EcomCraft Workspace UI Design](EcomCraft%20Workspace%20UI%20Design.md) (control list), [EcomCraft development table](EcomCraft%20开发总表.xlsx) (F60–F69 / T63–T72).
 
@@ -18,8 +18,8 @@ After the simple mode redesign v3, step 2 holds more than a dozen controls (plat
 |---|---|
 | U1 | Scope: simple mode, professional mode, gallery, queue and administration together; built task by task as listed in section 7, directly in code without a separate prototype. |
 | U2 | Keep the visual direction: the neutral grey "photo studio" style (UI design document section 2); only layout and hierarchy change. |
-| U3 | Simple mode is "choose a task, then fill it in": three task entries at the top, **Follow a reference** (first and default), **Make one image** and **Make a full set**; each task shows only the options it needs. |
-| U4 | Visual style, model, brand kit, one-line description with AI expand, and the bilingual prompt are folded under "More options" by default, with the open state remembered in the browser; selling points and storyboard appear only in "Make a full set". |
+| U3 | The simple-mode generation page is a single entry (revised 2026-10-31 (A14), replacing the former "choose a task first": the three task cards become "follow a reference" only): three steps — upload the product → pick platform and size, upload references (one makes a single image, several make a set, slots editable) → pick and export. The "make one image" and "make a full set" entries are removed; sets are reference-driven (see the [EcomCraft Implementation Plan](EcomCraft%20Implementation%20Plan.md) 6.1 and T89). |
+| U4 | Image type, visual style, model checkbox, brand kit, one-line description with AI expand, bilingual prompt and selling-point storyboard are hidden from simple mode (revised 2026-10-31 (A14); formerly folded under "More options"); the code stays for now and G2 decides on cleanup; features tied to the old entries migrate per T90. |
 | U5 | Candidates can be starred after generation (the same star as the gallery) to weed out weak results. Personal analysis of stars feeding back into prompts is a to-do (F67, draft in section 6). |
 | U6 | Designers (any account) may upload a ComfyUI workflow JSON in professional mode and **use it right away themselves** ("My workflows", visible to the uploader only); other accounts can use it after an administrator reviews and publishes it. Own workflows get the same server-side structure checks and an automatically generated parameter whitelist, run only on registered execution servers, and are rejected when they contain node types the administrator disabled (by default nodes that can run arbitrary code or read and write arbitrary paths); generation requests still send only the workflow ID and whitelisted parameters. (Revised 2026-10-29: formerly "usable only after publishing".) |
 | U7 | One-way hand-off from simple to professional mode: "Refine in professional mode" on a candidate carries the image and the English prompt actually sent; professional mode never writes back. |
@@ -47,23 +47,19 @@ After the simple mode redesign v3, step 2 holds more than a dozen controls (plat
 - Right side: server status, language, theme, account name; administrators also get an "Manage" menu: workflow review, first-setup wizard, prompt enhancement settings, storage and backup, native engine (new tab).
 - Workflow upload lives in professional mode (U6) and the uploader can use it at once; review and publishing for everyone lives in the "Manage" menu.
 
-## 5. Simple Mode
+## 5. Simple Mode (single entry, revised 2026-10-31 (A14), to be implemented by T89)
 
-Three task cards sit at the top; the chosen task is remembered in the browser and the first visit defaults to "Follow a reference". All tasks share step 1 (upload product photos) and step 3 (pick and download); step 2 depends on the task:
+The page no longer has three task cards; reference mode is the default. Three steps:
 
-| Step 2 content | Follow a reference | Make one image | Make a full set |
-|---|---|---|---|
-| Platform | Shown | Shown | Shown (with optional slots) |
-| References and per-reference prompts | Shown (required, 1–8) | — | — |
-| Image type | — | Shown | — (the platform's set) |
-| Product type | — | Shown | Shown |
-| More options (style, model, brand kit, one-line description and AI expand, prompt) | — | Folded | Folded |
-| Candidate count | — (one per reference) | Shown | Shown |
-| Selling points and storyboard | — | — | Shown (folded) |
-| Main button | Generate by reference | Start | One-click set / Set by storyboard |
+1. **Upload the product**: transparent PNGs are used directly (no cut-out); normal photos are still auto-cut; the product library and camera entries stay.
+2. **Platform and size → references**: pick the platform and output size first (keeping F73's "size before generating"); upload references — one makes a single image, several make a set — each showing its auto-detected slot (editable); "similarity" offers "borrow composition only / highly similar (default)"; an optional "also make a white-background image" needs no reference and uses the existing CutoutOnly; sets show the selling-point form (T99).
+3. **Pick and export**: candidates can be starred, downloaded, re-made, "edit this one" (into professional mode), or packaged per platform.
 
-- Switching tasks keeps uploaded product photos and references; references only apply in "Follow a reference".
-- Step 3: candidates can be starred (U5), downloaded, exported to a platform, turned into a selling-point image, or refined in professional mode (U7).
+- Image type, style, model, brand kit, one-line description, AI expand, bilingual prompt and storyboard are hidden (code kept, U4).
+- Without a vision model there is no full-page block anymore (the new route's slot detection does not need one), only "pick the slot manually" (T89).
+- Narrow screens likewise get the single entry only (U9); features tied to the old task cards migrate per T90.
+
+(History: the former section 5 — three task cards with step 2 per task — was implemented (T64) and is superseded by the single entry above; see Git history for the original text.)
 
 ## 5.1 Own Workflows (F60, T63)
 
@@ -106,3 +102,4 @@ This section is a direction only; confirm it again before development, and add d
 | 2026-10-29 | v1.1 | U6 now lets the uploader use a workflow at once (other accounts still need review and publishing); new U12 image description on by default with setup guidance, F68/T71, and the one-click install script F69/T72 |
 | 2026-10-29 | v1.2 | New 5.1 own workflow rules (Save format only, three-layer deny rules, 20 per account, 2 MB); submitting for review and publishing split into T73 |
 | 2026-10-29 | v1.3 | 5.1 adds own workflow review and publishing (T73) |
+| 2026-10-31 | v1.4 | Single-entry revision (T81, decision A14): U3 becomes the "follow a reference" single entry; U4 becomes hiding the old controls (code kept); section 5 becomes the three-step single entry; the tied-feature migration and implementation are in the Implementation Plan's T89 and T90 |

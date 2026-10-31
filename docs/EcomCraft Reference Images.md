@@ -2,9 +2,9 @@
 
 > **Language:** English · [简体中文](EcomCraft%20参考图需求.zh-CN.md)
 >
-> **Status:** P1 implemented, pending acceptance (F59 / T61, code complete 2026-10-28); P2 depends on N10 · **Version:** v1.10 · **Date:** 2026-10-30
+> **Status:** P1 implemented, pending acceptance (F59 / T61, code complete 2026-10-28); the route was upgraded on 2026-10-31 to "reference + product photo fed together into an editing model" (route E, section 3), with the concrete route and model awaiting the G1 trial (F74 / T83–T88; T62 superseded by T84) · **Version:** v1.11 · **Date:** 2026-10-31
 >
-> Related files: [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md) (decision A11, F59) and the [EcomCraft development tracker](EcomCraft%20开发总表.xlsx) (T61, T62; N10; Chinese spreadsheet). When this document changes, update it (Chinese and English together) first, then the code.
+> Related files: [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md) (decisions A11, A17, F59, F74), the [EcomCraft Implementation Plan](EcomCraft%20Implementation%20Plan.md) (phase 1 trial and phase 2 tasks) and the [EcomCraft development tracker](EcomCraft%20开发总表.xlsx) (T61, T83–T88; N10, N11, N12; Chinese spreadsheet). When this document changes, update it (Chinese and English together) first, then the code.
 
 ## 1. Background and User Story
 
@@ -19,7 +19,7 @@ Confirmed with the user on 2026-10-28 (A11, see the architecture document):
 | # | Decision |
 |---|---|
 | 1 | **Both paths are open**: path 1 "borrow the composition" (prompt reference) and path 2 "scene reference" (image-to-image) are both offered; path 2 needs the administrator to **install an extra image-to-image model** on the execution server (depends on the N10 plan), and while it is missing the option is greyed out with a reason, without affecting path 1. |
-| 2 | **Restore the feel, never a 1:1 copy**: Chinese platforms generally tolerate product-image borrowing, while international platforms review image similarity more strictly. The product goal is "restore the layout, light and mood"; the interface copy, prompt composition and (path 2's) repaint strength all serve that goal, and no "replicate / same-as / 1:1" feature is built. |
+| 2 | **Highly similar allowed, never a 1:1 pixel copy** (revised 2026-10-31, D2): users may upload their own references and generate compositions, scenes and lighting **highly similar** to them; the boundary is decision A17 in the architecture document — text, logos and watermarks never enter the finished image (the system re-lays-out text), references with real models do not keep their faces (first batch: prompt "not supported", T88), no competitor-link scraping, competitor libraries or recommendations, no "replicate competitors" marketing (the UI consistently says "follow a reference"), and the copyright notice plus the stronger international-platform notice stay. (Formerly "restore the feel, never a 1:1 copy".) |
 | 3 | **Each reference generates its own image, never merged** (clarified by the user, 2026-10-28): every reference image maps to one independent task that produces one image matching **that reference**; there is no primary/secondary split and no merged description. References are another expansion axis for image sets ("one per reference" alongside "one per image type") and are mutually exclusive with F25 storyboards. Cap of 8 (matching storyboards), still under the 20-image total cap. |
 | 4 | **Reference images are temporary, never stored** (added by the agent): they exist only inside the request and the in-memory batch, and are discarded when the task ends; they never enter the product library, the F04 project archive, diagnostics or backups (section 7). |
 | 5 | **Template scope** (added by the agent): path 1 is prompt text and works for every template; path 2 needs the template to declare a `reference` image slot, initially only scene-kind templates (`scene_main` / `detail` / `model` slot kinds); the white main image needs none. |
@@ -36,15 +36,26 @@ Each reference image goes to a vision model (MagicPrompt's vision capability; on
 - Effect: the broad direction of layout and mood carries over, details less so — consistent with "restore the feel".
 - With image description off or no usable vision model: reference mode is unavailable and the page says what is missing and how to fix it (F68); plain generation is unaffected.
 
-### 3.2 Path 2: scene reference (image-to-image)
+### 3.2 Path 2: scene reference (image-to-image, P2; superseded by T84's fusion route on 2026-10-31)
 
 The reference image becomes the input of an image-to-image / image-edit workflow: "put my product into a frame with a similar feel".
 
 - **Each task's reference is its own input**: with one-to-one mapping the single-input nature of image-to-image is a perfect fit; multi-image blending (IPAdapter-style) is left for later.
-- **Depends on N10 (the image-to-image plan)**: the default model chosen in N01 is text-to-image only; execution servers need an extra image-to-image model (such as a Qwen-Image-Edit style instruction model). Templates declare `requirements` as usual, the F08 model checklist and dependency check show what is missing, and templates whose models are missing stay hidden from users (existing behavior).
-- Workflow sources: commissioned from experts (N02), or the F57 standard-workflow generator extended to an image-to-image branch (both after N10).
-- **Feel, not copy**: the repaint strength / reference weight is fixed by the template in a sensible (lowish) range and checked at review; the interface consistently calls path 2 "scene reference (restores the feel)".
-- The template declares a `reference` slot (like the brand kit's F12 `reference_image`): `"reference": { "image": "parameter ID" }` pointing at an image parameter of the workflow snapshot; it may not point at the same parameter as `brand_kit.reference_image` (a validation error). Clients submit only image data; the server fills the parameter per task; the allowlist boundary is unchanged.
+- **Formerly depended on N10**: from 2026-10-31 this is superseded by T84's `reference-edit.json` blueprint and the G1-selected model; N10's model choice folds into the G1 trial. Template `requirements`, the F08 checklist and dependency checks are unchanged.
+- **The template declares a `reference` slot** (like the brand kit's F12 `reference_image`): `"reference": { "image": "parameter ID" }` pointing at an image parameter of the workflow snapshot; it may not point at the same parameter as `brand_kit.reference_image` (a validation error). Clients submit only image data; the server fills the parameter per task; the allowlist boundary is unchanged. T84 reuses this design (`Templates/builtin/reference.json`).
+
+### 3.3 Route upgrade: reference fusion (route E, 2026-10-31, pending the G1 trial)
+
+User feedback says the current route (vision prompt → inpaint → paste back) produces poor results: text descriptions cannot preserve exact layout, perspective and lighting; product placement relies on manual estimation; a single fixed-angle product photo rarely matches the scene's camera; and the fusion does not re-light the product for the scene. The new route lets the model directly "see" the reference and the product photo:
+
+1. **Analyze the reference** (T83): automatically derive the subject's position and size (SwarmRemBg mask bounding box), the slot role (main / scene / selling / detail) and flags (has_text, has_person, subject_count); replacing manual placement (T79 stays as a correction).
+2. **(Optional) clean up**: remove the old product, text, logos; trials decide whether needed.
+3. **Fuse** (T84): reference (or clean scene) + product photo → editing model (candidates: Qwen-Image 2.1, Qwen-Image-Edit-2511, FLUX.2 klein 4B; unmeasured, not a conclusion).
+4. **Restore the product** (T86): locate it in the result; paste the original details back when contours align; never force it when they do not (angle changed).
+5. **Verify** (T86): retry once on excessive difference; still failing, flag "product may be distorted" — never deliver silently.
+6. **Text**: re-laid-out by SellingImageService.
+
+The route, model and quantization follow the G1 conclusion (trial schemes R0–R5 in phase 1 of the [EcomCraft Implementation Plan](EcomCraft%20Implementation%20Plan.md)). Once the new route lands: the generation page becomes the single entry "follow a reference" (A14); the old borrow-the-composition path stays as the `reference_mode: composition` fallback with `reference_strength` offering "borrow composition only / highly similar"; per-reference editable prompts stop being required (`reference_prompts` becomes optional, the server template generates the prompt).
 
 ## 4. Interface and Interaction (reference mode)
 
@@ -70,8 +81,9 @@ The reference image becomes the input of an image-to-image / image-edit workflow
 
 ## 6. Copyright and Compliance Boundary
 
-- **Not built**: automatic scraping of competitor images, competitor image libraries or recommendations, and any "one-click replicate / same-as" feature — a red line.
-- The fixed copyright notice plus the stronger international-platform notice (section 4).
+- **Allowed**: users upload their own references; generating compositions, scenes and lighting highly similar to the reference (revised 2026-10-31, D2; boundary in architecture decision A17).
+- **Not built**: competitor-link scraping, competitor image libraries or recommendations; no "replicate competitors" marketing — the UI consistently says "follow a reference".
+- **Must do**: text, logos and watermarks never enter the finished image (the system re-lays-out text); references with real models do not keep their faces (first batch: prompt "not supported", T88); the fixed copyright notice plus the stronger international-platform notice (section 4).
 - Similarity checks between results and references (warning when too close) belong under F21 automatic candidate filtering; not in this phase.
 - Platform export (F58) does not know about references; AI metadata follows the existing F22 rules.
 
@@ -86,7 +98,7 @@ The reference image becomes the input of an image-to-image / image-edit workflow
 | Phase | Content | Depends on | Task |
 |---|---|---|---|
 | P1 | Reference mode: upload (up to 8) with copyright notices, per-reference descriptions and editable prompts, all other step-2 options disabled, products x references expansion (one image per reference, fixed scene template, mutually exclusive with storyboards, 20-image cap), reference thumbnails on task cards, stronger international-platform notice | No hard dependency (A5's vision switch exists) | T61 (M) |
-| P2 | Scene reference: reference mode switches to an image-to-image workflow (the template `reference` slot and validation, each task filling its own reference into the input), dependency-check display | **N10** (the image-to-image plan and model installation), N02 | T62 (L, not started) |
+| P2 | Scene reference: reference mode switches to an image-to-image workflow (the template `reference` slot and validation, each task filling its own reference into the input), dependency-check display (2026-10-31: superseded by T84's fusion route, no longer developed separately; the slot design is reused by T84) | formerly **N10**, N02 (folded into the G1 trial) | T62 (superseded by T84) |
 | P3 (reserved) | Whole-set references -> a whole set: the vision model classifies each reference's image type (white / scene / detail / model) and matches templates automatically, generating the set in one go | The vision classification accuracy after P1, N10, seed-team feedback | Not registered; see section 10 |
 
 ### 8.1 Vision Model Device (F71)
@@ -128,3 +140,4 @@ No phase changes the rule that references exist only briefly in memory; saved te
 | 2026-10-29 | v1.7 | F71 P1 measured (RX 5600 XT, Ollama 0.40.13): the time-limited GPU try, unloading, moving to the CPU and "CPU only" work as designed; the plain qwen3-vl tags are thinking variants that ignore `think:false`, so the recommendations and the one-click install use the `-instruct` tags |
 | 2026-10-30 | v1.9 | New interface item 9 "Place the product per reference" (T79) and the `reference_placements` parameter: each reference has its own placement, the preview shows the reference as a backdrop, hint only with no automatic inference |
 | 2026-10-30 | v1.10 | F71 P2 implemented, pending acceptance (T76): background self-test, results saved in `Data/EcomCraft/vision-device.json` by "Ollama version + model + graphics", no 60-second GPU wait once a record exists and a wait limit set from the measured speed, results shown in the settings with a re-test button |
+| 2026-10-31 | v1.11 | Route upgrade (T81): decision 2 relaxed per D2 to "highly similar allowed"; new 3.3 route E (reference + product photo into an editing model, pending the G1 trial); P2 (T62) superseded by T84 with the old borrow-the-composition path kept as the `reference_mode: composition` fallback; section 6 reorganized into allowed / not built / must do; status changed to "route pending G1" |

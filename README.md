@@ -39,6 +39,15 @@ EcomCraft Studio 是给电商团队用的**局域网商品图生产平台**，�
 - [Git](https://git-scm.com/downloads) 和 [.NET SDK](https://dotnet.microsoft.com/download)（建议 .NET 10 SDK，项目目标为 .NET 8）。首次构建需要访问 NuGet。
 - 生成图片需要显卡、模型和对应的 ComfyUI 节点；只启动网页服务不需要显卡。Linux 自动安装 ComfyUI 需先装 Python 3.10–3.12 及 `venv`；Windows 安装向导自带 Python。
 
+**配置要求（必须有显卡，不做无显卡和云端出图）**
+
+| 系统 | 最低配置 | 推荐 |
+|---|---|---|
+| Windows | NVIDIA 显卡 8GB 显存；AMD 仅限 ROCm 支持列表内 | NVIDIA 16GB 以上 |
+| macOS | Apple 芯片，24GB 统一内存；Intel 芯片 Mac 不支持 | 32GB 以上 |
+
+重点支持 Windows 和 Mac；Linux 启动脚本保留但暂不验证。达不到门槛时程序会明确告知不支持；数值为当前默认，实测后调整。
+
 **获取源码并启动**
 
 ```bash
@@ -72,7 +81,7 @@ cd EcomCraft
 
 - [中文文档总览](docs/README.zh-CN.md) · [基础使用](docs/Basic%20Usage.zh-CN.md) · [常见问题排查](docs/Troubleshooting.zh-CN.md)
 - [工作流调用与接口](docs/EcomCraft%20ComfyUI%20工作流.zh-CN.md) · [局域网部署指南](docs/EcomCraft%20局域网部署指南.zh-CN.md) · [提示词优化与看图模型](docs/EcomCraft%20Prompt%20Enhancement.md) · [升级与数据说明](docs/EcomCraft%20Upgrade.zh-CN.md)
-- 开发规划：[架构与路线图](docs/EcomCraft%20Architecture.zh-CN.md) · [界面与操作改版需求](docs/EcomCraft%20界面改版需求.zh-CN.md) · [简易模式改版需求](docs/EcomCraft%20简易模式改版需求.zh-CN.md) · [局域网多服务器平台需求](docs/EcomCraft%20局域网多服务器平台需求.zh-CN.md)
+- 开发规划：[架构与路线图](docs/EcomCraft%20Architecture.zh-CN.md) · [实施计划](docs/EcomCraft%20实施计划.zh-CN.md) · [重构计划](docs/EcomCraft%20重构计划.zh-CN.md) · [界面与操作改版需求](docs/EcomCraft%20界面改版需求.zh-CN.md) · [简易模式改版需求](docs/EcomCraft%20简易模式改版需求.zh-CN.md) · [局域网多服务器平台需求](docs/EcomCraft%20局域网多服务器平台需求.zh-CN.md)
 
 ## 联系与部署服务
 

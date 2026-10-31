@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20局域网多服务器平台需求.zh-CN.md)
 >
-> **Status:** In development (phase 1 steps 1–7 built and verified on one machine; per architecture decision A10 the MVP runs single-server first, multi-machine tests deferred until a customer asks or N08 is ready) · **Version:** v1.13 · **Date:** 2026-10-30
+> **Status:** In development (phase 1 steps 1–7 built and verified on one machine; per architecture decision A10 the MVP runs single-server first, multi-machine tests deferred until a customer asks or N08 is ready; revised 2026-10-31: cloud integration is not built — see D11 and R10) · **Version:** v1.14 · **Date:** 2026-10-31
 >
 > This document is the reference for further development. When requirements change, update this document first (Chinese and English together), record the change in the change log at the end, and only then change the code. For the e-commerce image layer, the overall architecture and the MVP roadmap, see [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md).
 
@@ -16,7 +16,7 @@ The goal is to turn EcomCraft into a ComfyUI scheduling platform for the local n
 - The platform lists each server's workflows automatically and sends each task to the least-loaded server that can run the workflow.
 - Whichever server runs a task, the result returns to the user's own gallery.
 - Works are stored on the platform server by default, and can also be kept on a LAN NAS or a shared folder on another computer.
-- Cloud platforms (such as RunningHub) may be connected later; this phase only plans for them.
+- Cloud platforms (such as RunningHub) will not be connected (revised 2026-10-31, D11; formerly "may be connected later; this phase only plans for them").
 
 ## 2. Terms
 
@@ -44,7 +44,7 @@ The goal is to turn EcomCraft into a ComfyUI scheduling platform for the local n
 | D8 | If an execution server goes offline during a task, the task fails immediately with no automatic retry; the user is told they can reassign it manually. |
 | D9 | Within the platform, results are visible only to their owner by default; users may share them, after which members of the same group can see them. **The storage layer is not isolated**: when works are stored on a NAS or another computer's shared folder, anyone who can access that storage can see everyone's works. |
 | D10 | The platform supports multiple concurrent users and must have account login enabled. |
-| D11 | Cloud generation capability is reserved: the scheduling layer is designed around an "executor" abstraction with room for cloud types. **This phase and the MVP develop no cloud generation features**, and the rules still forbid sending requests to cloud generation services. |
+| D11 | No cloud generation (revised 2026-10-31; formerly "cloud capability reserved, not developed in this phase or the MVP"): generation runs only on the local self-started and registered LAN ComfyUI servers, and no request goes to any cloud generation service; the scheduling layer's "executor" abstraction produces only local and LAN executors and no longer reserves cloud types. Cloud options for the vision and prompt models are unaffected (architecture decisions A5, A6). |
 | D12 | The work storage location is configurable: by default works are stored on the platform server itself, and the administrator can switch to a LAN NAS or a shared folder on another computer. System data (accounts, review snapshots, configuration, work index) always stays on the platform server. |
 
 ## 4. Roles and Permissions
@@ -162,14 +162,14 @@ Published + source file changed → Pending re-review (users keep using the old 
 - R9.4 Per-person limit: in sets and batches, each person runs at most the smaller of their role's `MaxT2ISimultaneous` and 4 tasks at once; the rest wait inside the platform without occupying execution servers, so one person cannot take every GPU. `MaxQueued` still limits the total queued images.
 - R9.3 User groups (phase 2): the administrator maintains user groups, used for gallery sharing and grouped workflow authorization.
 
-### R10 Cloud Integration (capability reserved only; not developed in this phase)
+### R10 Cloud Integration (not built, revised 2026-10-31)
 
-- R10.1 The scheduling layer (step 4) is implemented around a unified "executor" abstraction with these types: local ComfyUI, LAN ComfyUI, cloud ComfyUI (such as RunningHub or Comfy Cloud), and cloud model APIs (image generation services in China and abroad). This phase implements only the first two; the last two keep only their type and interface slots.
-- R10.2 A template may have several execution plans (local and cloud) that show users the same fields; each plan must be reviewed. This phase implements only local plans.
-- R10.3 Generation is implemented in three stages: "local pre-processing → generation → local post-processing". When cloud services are added, only the "generation" stage goes to the cloud; background removal, product masks and product-preserving compositing always run locally.
-- R10.4 To be specified when cloud integration starts: API keys configured by the administrator (stored only on the server), consent for sending data out, team budget and per-user quotas, cost records, and downloading results back to the local gallery.
-- R10.5 When all LAN servers are busy, tasks never switch to the cloud automatically (that costs money); at most a future version prompts the user, who must confirm.
-- R10.6 Before the cloud phase starts, the rule "never send requests to cloud generation services" must first be changed in AGENTS.md, the READMEs and this document.
+- R10.1 No cloud generation: the executor has exactly two types, local ComfyUI and LAN ComfyUI; the formerly reserved cloud ComfyUI and cloud model API types are gone, and no cloud executor or request is ever produced.
+- R10.2 Generation still runs in three stages, "local pre-processing → generation → local post-processing" (generation on execution servers; background removal, product masks and product-preserving compositing always on the platform server).
+- R10.3 When all LAN servers are busy, tasks queue per Rule 1; there is no cloud to fall back to and no cost can arise.
+- R10.4 If the product direction ever changes and cloud generation returns, the "no cloud generation" rules in the architecture document (A6), AGENTS.md, the READMEs and this document must be revised first and separate requirements added; until then no cloud integration code may be developed.
+
+(History: R10 formerly read "capability reserved only, not developed in this phase", with reserved cloud executor types, multi-plan templates, API keys, quotas and cost records — see Git history.)
 
 ### R11 Work Storage
 
@@ -193,7 +193,7 @@ Published + source file changed → Pending re-review (users keep using the old 
 
 ### Security
 
-- Requests go only to execution servers registered by the administrator; unregistered addresses are never contacted; before the cloud phase, no requests are sent to any cloud generation service.
+- Requests go only to execution servers registered by the administrator; unregistered addresses are never contacted; no request is sent to any cloud generation service (cloud generation is not built; cloud options for the vision and prompt models are unaffected).
 - ComfyUI itself has no login. The deployment guide must state: the firewall on LAN servers opens the ComfyUI port only to the platform server; the platform server has account login enabled; no server is exposed to the public internet.
 - Minimal disclosure still applies: APIs for ordinary users never return server addresses, raw workflows, other users' task IDs, session IDs or keys.
 - When works are kept on shared storage, the deployment guide must state that anyone who can access the shared directory can see everyone's works (D9); to restrict this, grant access on the NAS only to the platform's service account. APIs for ordinary users never return storage paths.
@@ -219,7 +219,7 @@ Published + source file changed → Pending re-review (users keep using the old 
 | 1 | **Server registration and execution limits**: reuse `ComfyUIAPIBackend`; change `ValidateLocalBackend` to allow only the local self-starting ComfyUI and registered LAN ComfyUI; update the security rules in AGENTS.md, the READMEs and related documents | R1 |
 | 2 | **Workflow discovery**: read each server's workflows, nodes and queue over HTTP and cache them in the background | R2 |
 | 3 | **Review and snapshots**: new permissions, review page, visible-parameter configuration, runnable-server check, snapshot storage | R3 |
-| 4 | **Calling and scheduling**: published list, parameter form, Rule 1 scheduling, server pinning, reference image upload; scheduling is implemented on the "executor" abstraction with room for cloud types | R4, R5, R10.1 |
+| 4 | **Calling and scheduling**: published list, parameter form, Rule 1 scheduling, server pinning, reference image upload; scheduling is implemented on the "executor" abstraction (cloud types no longer reserved since 2026-10-31, see R10) | R4, R5, R10.1 |
 | 5 | **Queue, failures, gallery**: multi-server queue, fail on disconnect with a reassign button, gallery shows the executing server | R6, R7.1–R7.2, R8 |
 | 6 | **Multi-user configuration and documentation**: account login and `MaxQueued` configuration, LAN deployment and firewall guide | R9.1–R9.2, security documentation |
 | 7 | **Work storage**: work library and export location settings, write locally then sync, migrate old works | R11 |
@@ -236,17 +236,17 @@ Published + source file changed → Pending re-review (users keep using the old 
 - Workflow categories, tags, cover images, descriptions, search
 - Operation logs, usage statistics
 
-### Phase 3: Cloud integration
+### Phase 3: Cloud integration (not built)
 
-See R10. This phase only reserves the capability; before it starts, the requirements will be specified separately and the related rules changed first.
+See R10. Since 2026-10-31 no cloud capability is reserved; if it ever returns, revise the rules first and add separate requirements.
 
 ## 8. Changes to Existing Project Rules
 
 The original AGENTS.md and README allowed the workspace to use only the local self-starting ComfyUI and forbade switching to remote or cloud services. Phase 1 step 1 has changed this rule to:
 
-> Generation requests may only be sent to execution servers registered by the administrator (the local self-starting ComfyUI and registered LAN ComfyUI); unregistered addresses must never be contacted; until cloud integration is complete and confirmed, no request may be sent to any cloud generation service.
+> Generation requests may only be sent to execution servers registered by the administrator (the local self-starting ComfyUI and registered LAN ComfyUI); unregistered addresses must never be contacted; cloud generation is not built and no request may be sent to any cloud generation service (cloud options for the vision and prompt models are unaffected).
 
-AGENTS.md, the READMEs and the workflow documentation have been updated accordingly.
+AGENTS.md, the READMEs and the workflow documentation have been updated accordingly (2026-10-31, with T81, "until cloud integration is complete and confirmed" became "cloud generation is not built").
 
 ## 9. Items to Verify and Assumptions
 
@@ -301,7 +301,7 @@ Implementation notes for step 3:
 
 Implementation notes for step 4:
 
-- Scheduling is built on an "executor" abstraction (`ExecutorKind`: local ComfyUI, LAN ComfyUI, cloud ComfyUI, cloud model API); the last two only reserve the type, never produce an executor and never send any request.
+- Scheduling is built on an "executor" abstraction (`ExecutorKind`: local ComfyUI, LAN ComfyUI, cloud ComfyUI, cloud model API); the last two only reserve the type, never produce an executor and never send any request. (After the 2026-10-31 requirement revision (D11, R10), those two enum values left in the code have no matching requirement and await a later refactoring cleanup; until then they never produce an executor or a request.)
 - On submission the ComfyUI queue of every online server is read (3-second timeout each, in parallel; a server that does not answer counts as offline), one server is chosen by Rule 1, and its ID is written into the request's internal metadata; backend matching then only allows that server, and while it is busy the task waits in the SwarmUI queue. All images of one submission go to the same server.
 - Queue = ComfyUI running + pending + tasks the platform assigned to that server that SwarmUI has not yet claimed it for. Claimed tasks are treated as already in the ComfyUI queue; in the few seconds between the claim and posting to ComfyUI they are undercounted, a known estimation error.
 - With a pinned server (`execution_server_id`) the task is never reassigned: if that server is offline or lacks dependencies an error is returned (`execution_server_unavailable`); if it has a queue while another capable server is idle, the response carries `server_hint`. When no server can run the task, `no_execution_server` is returned, distinguishing "all offline" from "the nodes / models each server lacks" (at most 3 per server). The generation API no longer returns the old `local_unavailable` and `workflow_dependencies_missing` codes.
@@ -344,3 +344,4 @@ Implementation notes for step 7:
 | 2026-10-27 | v1.5 | Static review of steps 1–3 (T33): workflow discovery now refreshes on a background timer started by the extension instead of only when a page is opened; added notes on server names and workflow IDs, and on re-review after conversion logic upgrades |
 | 2026-10-28 | v1.12 | Per architecture decision A10 the MVP runs single-server first: multi-machine testing of steps 1–7 (F28 / T33) and N08 are deferred until a customer asks; the multi-server architecture described here and the implemented code are unchanged |
 | 2026-10-30 | v1.13 | Reliability addition F72: clean up the self-started local ComfyUI left over from the previous run at startup (T78) |
+| 2026-10-31 | v1.14 | Cloud integration changed to "not built" (T81, architecture decision A6 revised): D11, R10 and phase 3 now say no cloud generation, and the executor no longer reserves cloud types; section 1 background and the rule quoted in section 8 updated to "cloud generation is not built" |

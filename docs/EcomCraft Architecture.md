@@ -2,27 +2,34 @@
 
 > **Language:** English · [简体中文](EcomCraft%20Architecture.zh-CN.md)
 >
-> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); this document describes the target architecture and marks implemented parts · **Version:** v2.7 · **Date:** 2026-10-30
+> **Status:** MVP code complete, deployed and accepted in single-server form (A10), pending manual acceptance and seed-team trials (N07); goal updated 2026-10-31 (v3.0): reference-driven single entry, a GPU is required, Windows and Mac first (see sections 1–2 and the EcomCraft Implementation Plan) · **Version:** v3.0 · **Date:** 2026-10-31
 >
 > Related files:
+> - [EcomCraft Implementation Plan](EcomCraft%20Implementation%20Plan.md) (Chinese original [EcomCraft 实施计划](EcomCraft%20实施计划.zh-CN.md)): the new-goal feature plan (F74–F82, T81–T110, N11–N12); phase 0–6 task details live there.
+> - [EcomCraft Refactoring Plan](EcomCraft%20Refactoring%20Plan.md) (Chinese original [EcomCraft 重构计划](EcomCraft%20重构计划.zh-CN.md)): the foundation refactoring (R00–R23) interleaved with the implementation plan; see its section 7 for the order.
 > - [EcomCraft LAN Multi-Server Platform Requirements](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md): detailed requirements for the platform foundation (execution servers, review, scheduling, storage); it takes precedence.
 > - [EcomCraft development tracker](EcomCraft%20开发总表.xlsx) (Chinese spreadsheet): features (F IDs), development tasks (T IDs), non-development items (N IDs) and progress tracking. Feature IDs in this document match the tracker.
-> - [EcomCraft UI and Workflow Redesign](EcomCraft%20UI%20Redesign.md): requirements for task-first simple mode, navigation and administration, opening professional mode, and stars with personal analysis (F60–F67); it is authoritative for them.
+> - [EcomCraft UI and Workflow Redesign](EcomCraft%20UI%20Redesign.md): requirements for task-first simple mode, navigation and administration, opening professional mode, and stars with personal analysis (F60–F67); it is authoritative for them (the F61 single-entry revision is in the Implementation Plan's T89).
 >
 > When the architecture or roadmap changes, update this document (Chinese and English together) and the requirements document first, then the tracker, and only then the code.
 
 ## 1. Product Positioning
 
-EcomCraft is a **LAN product-image production platform for e-commerce operators, graphic designers and small shop owners**:
+EcomCraft lets e-commerce operators, designers and small shop owners, **with just one product photo and one reference image they like**, get listing-ready product images and whole image sets on their own GPU-equipped Windows or Mac computer (or LAN) — without learning models or workflows, with the product staying true, and with images never leaving the company.
 
 - **Users**:
-  - Operators and shop owners: create images quickly in simple mode. They only upload product images, choose a platform and a style, then pick and download images; they never deal with prompts, models or parameters.
-  - Graphic designers: adjust models, samplers, LoRAs, steps and other parameters in professional mode to create more and richer results.
+  - Operators and shop owners: three steps in simple mode (upload the product → pick platform and references → pick and export), never touching prompts, models or parameters.
+  - Graphic designers: adjust models, samplers, LoRAs, steps and other parameters in professional mode (the refinement bench), or do local edits and instruction editing.
   - Administrators (the shop's technical staff, or our deployment service): handle installation and configuration.
-- **Sales model**: sold as software, priced per account (A12).
+- **Hardware threshold (A15, a GPU is required)**:
+  - Windows: NVIDIA with at least 8 GB VRAM (16 GB or more recommended); AMD only within the ROCm support list.
+  - Mac: Apple silicon only, at least 24 GB unified memory (32 GB or more recommended); Intel-chip Macs are unsupported.
+  - Machines below the threshold get a clear "not supported" message; no GPU-less option exists (D5; numbers to be tuned after measurement).
+- **Target platforms (A16)**: Windows and Mac first; the Linux launch scripts stay but get no investment or verification for now.
+- **Sales model**: open-source core + team edition (closed-source extension), priced per account (A12, A18).
 - **Deployment**: one or more GPU computers run ComfyUI, and one of them also runs the EcomCraft platform. Team members open the same page in a browser on the LAN, and the platform automatically sends tasks to idle GPU computers.
 - **Markets**: both Chinese platforms (Taobao/Tmall, JD, Pinduoduo, Douyin and others) and international platforms (Amazon, Shopify, TikTok Shop and others); the interface and documentation are available in Chinese and English.
-- **Differentiators**: fully local generation (product images never leave the company), product preservation, team collaboration, and one-click export that follows each platform's rules.
+- **Differentiators**: fully local generation (product images never leave the company), product preservation, listing-ready images and sets made by following a reference, and one-click export that follows each platform's rules.
 
 ## 2. Confirmed Decisions
 
@@ -33,14 +40,19 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators,
 | A3 | Both Chinese and international platforms are supported; the interface, documentation and platform presets are provided in Chinese and English. |
 | A4 | Users do not write prompts: a one-sentence description (Chinese or English) plus style options is turned into a prompt by the integrated online LLM (MagicPrompt). |
 | A5 | Image description (sending reference images to a vision model to read their composition) is on by default; the default vision model is local Ollama, so images never leave the machine. Administrators can turn it off or switch to a cloud vision service (images then leave the machine, which administrators must confirm). Sending product photos to the vision model to describe products stays off by default and administrators enable it. (Revised 2026-10-29: image description was off by default.) |
-| A6 | Cloud generation capability is reserved (executor abstraction, three-stage generation flow), but **the MVP develops no cloud generation features**; see D11 and R10 in the requirements. |
+| A6 | No cloud generation (revised 2026-10-31; formerly "cloud capability reserved, not developed in the MVP"): generation runs only on the local self-started or LAN-registered execution servers, and no request goes to any cloud generation service; cloud options for the vision and prompt models are unaffected (A5). The scheduling layer still uses the "executor" abstraction but produces only local and LAN executors. |
 | A7 | Works are stored on the platform server by default; the administrator can switch to a NAS or a shared folder on another computer; system data always stays local. See D12 and R11 in the requirements. |
 | A8 | Within the platform, works are visible only to their owner; the storage layer is not isolated. See D9 in the requirements. |
-| A9 | We will not take image orders ourselves to validate demand; instead, 3–5 seed teams will try the MVP after release. |
+| A9 | We will not take image orders ourselves to validate demand; instead, 3–5 seed teams will try the product after release. |
 | A10 | Single server first: the MVP is deployed and accepted as "one platform server that is also the execution server". The architecture and code for multi-server access, scheduling and storage remain in place; multi-machine testing (F28 / T33, N08) is deferred until a customer asks for it or the test environment is ready. |
-| A11 | Both reference-image paths are open (F59): "borrow the composition" (prompt reference) and "scene reference" (image-to-image) are both offered, the latter needing the administrator to install an image-to-image model (N10); the goal is restoring the feel of layout and light, never a 1:1 copy. Reference mode is standalone: once references are uploaded the other step-2 options stop applying, per-reference prompts are shown and editable, and each reference makes exactly one image (cap 8, mutually exclusive with storyboards); references are temporary and never stored. |
-| A12 | Revenue model: sold as software, priced per account. No complex roles or permissions: accounts are either administrators or regular accounts, and licensing limits only the number of accounts, never tiers features. |
-| A13 | UI and workflow redesign v4 (F60–F67): simple mode starts by choosing a task (follow a reference / make one image / make a full set, defaulting to follow a reference) with secondary options under "More options"; administration moves into an administrators' "Manage" menu and the native engine is for administrators only; phones get simple mode only; designers may upload ComfyUI workflows, usable by the uploader at once and by other accounts after review and publishing; image description is on by default with setup guidance when no vision model is available; candidates can be starred, personal analysis is deferred. See the EcomCraft UI and Workflow Redesign. |
+| A11 | Reference-image route upgraded to "follow a reference" (F74, revised 2026-10-31): the goal is feeding the reference and the product photo together into an editing model (route E), then locating the product, pasting its original details back and verifying distortion — no longer relying on the old "vision prompt + inpaint" route; the concrete route and model await the G1 trial. "Highly similar" results are allowed (D2, boundary in A17); no 1:1 pixel replication, no competitor-link scraping, libraries or recommendations. References are temporary and never stored. Of the old two paths, scene reference (T62) is superseded by T84; borrow-the-composition stays as the `reference_mode: composition` fallback. |
+| A12 | Revenue model (revised 2026-10-31): open-source core + team edition (A18), priced per account. Accounts remain just "administrators" and "regular accounts" with no complex roles or permissions; team-edition features (LAN multi-server, usage statistics, approval flows, industry template packs) live in a separate closed-source extension, licensing still limits only the account count, and the open-source edition is never protected by watermarks or crippled features. |
+| A13 | UI and workflow redesign v4 (F60–F67): administration moves into an administrators' "Manage" menu and the native engine is for administrators only; phones get simple mode only; designers may upload ComfyUI workflows, usable by the uploader at once and by other accounts after review and publishing; image description is on by default with setup guidance when no vision model is available; candidates can be starred, personal analysis is deferred. See the EcomCraft UI and Workflow Redesign. (Revised 2026-10-31: the former "task-first simple mode (follow a reference / make one image / make a full set)" is superseded by A14's single entry.) |
+| A14 | Single-entry generation page (F61 revised, G4): only "follow a reference" remains; the "make one image" and "make a full set" entries go away; full sets are also reference-driven (several references make a set by slot). Three steps: upload the product → pick platform, size and references (slots editable, similarity, optional white-background image) → pick and export. Controls tied to the old entries are hidden from simple mode (code kept until G2 decides); the tied features migrate per T90. |
+| A15 | Hardware threshold (G1, D5): a GPU is required; no GPU-less or cloud-generation options; insufficient hardware gets a clear "not supported" message. Minimums: Windows NVIDIA 8 GB VRAM, Mac Apple silicon 24 GB unified memory; Intel Macs unsupported, AMD only within the ROCm list. Numbers to be tuned after measurement. |
+| A16 | Platform focus (G2): Windows and Mac first; the Linux launch scripts stay but get no development or verification for now. |
+| A17 | Similarity boundary (D2): users may upload their own references and generate compositions, scenes and lighting highly similar to them; text, logos and watermarks never enter the finished image (the system re-lays-out text); references with real models do not keep their faces (first batch: prompt "not supported"); the copyright notice and the stronger international-platform notice stay; no competitor-link scraping, competitor libraries or recommendations, no "replicate competitors" marketing — the UI consistently says "follow a reference". |
+| A18 | Editions (G6): open-source core + team edition (closed-source extension assembly), priced per account; the split is designed in T109. |
 
 ## 3. Deployment Topology
 
@@ -60,7 +72,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators,
    (execution server) (execution servers)   (work library,        prompt enhancement only,
                                              exports)             never generates images
   ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-   Reserved (not developed): cloud ComfyUI and cloud image generation APIs, added as new "executor" types
+   Not built (A6, revised 2026-10-31): cloud ComfyUI and cloud image generation APIs; cloud options for the vision and prompt models are unaffected
 ```
 
 (1) Generation tasks, sent only to registered execution servers · (2) Work sync · (3) Text only
@@ -78,7 +90,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators,
 | Domain services | Templates and image sets | Template = published review snapshot + e-commerce information (Chinese and English names, sample images, target platforms); image set = a group of templates | Template data structure and management APIs implemented (`Studio/Templates/`) |
 | | Prompt service | One-sentence description + style → MagicPrompt → English prompt; its output may only fill prompt text fields | Implemented (`Studio/Prompting/`), wraps the existing MagicPrompt; also AI expansion and Chinese/English translation (F54) and selling-point storyboards (F25; the model may only answer in a fixed line format and every shot's template is checked) |
 | | Generation orchestration | Expands image sets and batches into tasks; per-user limits; tracks the status of each image | Implemented (`Studio/Generation/BatchService`); submissions that need the model return at once and the prompt is written in the background (F56); sets can expand by storyboard (F25) |
-| | Scheduling | Rule 1: choose the runnable executor with the shortest queue; the executor abstraction reserves cloud types | Implemented (requirements step 4, `Studio/Generation/ExecutionScheduler`) |
+| | Scheduling | Rule 1: choose the runnable executor with the shortest queue; the executor abstraction produces only local and LAN executors (cloud types de-reserved per A6) | Implemented (requirements step 4, `Studio/Generation/ExecutionScheduler`) |
 | | Post-processing | Product-preserving compositing (paste the original product back, using the local cut-out as the mask); candidate scoring later | Product preservation implemented (`Studio/PostProcess/`) |
 | | Product library | Caches original product images and background-removal results for reuse | Simple version implemented (`Studio/Products/`) |
 | | Brand kits | Brand colors, preferred background, logo and style references, per account | Implemented, pending acceptance (F12, `Studio/Brand/`); the prompt fragment applies to every template, images only fill a template's `brand_kit` slot |
@@ -107,7 +119,7 @@ EcomCraft is a **LAN product-image production platform for e-commerce operators,
    zip or export to the shared folder
 ```
 
-When cloud services are added later, only the executor in steps 6–7 changes; background removal, product-preserving compositing and export still run locally.
+When cloud services are added later, only the executor in steps 6–7 changes; background removal, product-preserving compositing and export still run locally. (Revised 2026-10-31: per decision A6 there is no cloud generation anymore; this sentence stays only as a historical design note — generation always runs on the local or LAN execution servers.)
 
 ## 6. Key Design Conventions
 
@@ -162,17 +174,21 @@ src/Extensions/EcomCraft/
    └─ languages/zh-CN.json, en.json
 ```
 
-## 7. MVP Scope
+## 7. MVP Scope and Acceptance
 
-MVP acceptance: **an operator without design experience can, on their own, use a browser on the LAN to go from "upload product image → full image set → export for a platform", and the results can be listed for sale directly.**
+The new MVP acceptance criteria (2026-10-31, Implementation Plan 1.4): on minimum-spec Windows and Mac computers:
 
-Current status: the code for every MVP feature is complete (including the usability and operations items below), deployed and accepted in single-server form (A10); multi-machine testing is deferred with F28 and seed-team trials (N07) are still pending; the four expert-made workflows templates depend on (N02) are still conventional-name placeholders.
+1. An operator unfamiliar with design goes from install to first image in under 30 minutes without a tutorial (excluding model downloads).
+2. The target categories reach the "listing-ready" pass rate (see the G1 gate).
+3. Main images and detail pages can be exported.
+
+The old MVP's code (single-server form) is complete (including the usability and operations items below) and accepted per A10; multi-machine testing is deferred with F28, seed-team trials (N07) are pending, and the four expert-made workflows templates depend on (N02) remain conventional-name placeholders.
 
 ### MVP-A: Platform foundation
 
 | ID | Feature | Description |
 |---|---|---|
-| F29 | Calling and automatic scheduling | Rule 1 dispatch; the executor abstraction reserves cloud types (requirements step 4) |
+| F29 | Calling and automatic scheduling | Rule 1 dispatch; the executor abstraction produces only local and LAN executors (requirements step 4) |
 | F30 | Queue, failure reassignment and gallery | Requirements step 5 |
 | F31 | Multi-user login and LAN deployment | Accounts, queue limits, firewall, shared storage and LAN HTTPS guidance (requirements step 6) |
 | F32 | Work storage location | Local / NAS / shared folder, write locally then sync (requirements step 7, R11) |
@@ -200,7 +216,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 |---|---|---|
 | F38 | Upload quality check | Warn early about low resolution, blur or a product that is too small |
 | F39 | Automatic cleanup of unselected candidates | Unselected candidates are removed after N days; selected images are kept |
-| F40 | First-run setup wizard | Language → storage location → register servers → check models → choose usual platforms |
+| F40 | First-run setup wizard | Usability and operations (implemented, pending acceptance, T44; revised 2026-10-31: T94 reworks it into "language → hardware check → recommended recipe → download → sample self-check → pick platforms", with a LAN exit for unsupported hardware) |
 | F41 | Plain-language errors | Explain the cause and next step in words operators understand |
 | F42 | Phone upload and mobile gallery | Take product photos on a phone and upload them; browse the gallery on a phone (without browser features that need HTTPS) |
 | F43 | Completion notifications | In-page notice when a batch finishes |
@@ -222,6 +238,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | ID | Feature | Category |
 |---|---|---|
 | F28 | LAN multi-server real-world testing | Platform foundation (deferred: A10 single-server first, until a customer asks or N08 is ready; steps 1–7 are implemented and verified on one machine) |
+| F23 | One-click install on Apple silicon Macs | Enhancement (priority raised 2026-10-31: T95 in phase 3 "out of the box", depends on T84 and T93) |
 | F25 | Selling-point analysis and image-set storyboards | Enhancement (implemented, pending acceptance, T30) |
 | F19 | Category presets | Enhancement |
 | F12 | Brand kits | Enhancement (implemented, pending acceptance, T17) |
@@ -233,8 +250,7 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F06 | Before/after comparison export | Enhancement |
 | F26 | Layered PSD export | Enhancement |
 | F09 | Template import and export | Enhancement |
-| F27 | ComfyUI App Mode compatibility | Enhancement |
-| F23 | One-click install on Apple silicon Macs | Enhancement |
+| F27 | ComfyUI App Mode compatibility | Enhancement (deferred) |
 | F11 | Finer roles and permissions | Not planned (A12: accounts are only administrators or regular accounts) |
 | F13 | Work approval flow | Team and commercial |
 | F14 | Usage statistics | Team and commercial |
@@ -246,10 +262,10 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F55 | Manual candidate count with a 20-image cap | Simple mode redesign v3 (implemented, pending acceptance) |
 | F56 | Faster generation path (queue on submit) | Simple mode redesign v3 (implemented, pending acceptance) |
 | F57 | Automatic standard workflow creation | Simple mode redesign v3 (T59 code and blueprint complete, pending build and acceptance; text-to-image first; since 2026-10-30 the scene and detail workflows generate only around the placed product (inpainting with the product canvas's alpha as the mask), full image-to-image still waits for N10) |
-| F58 | Platform presets by slot (per-slot size and ratio, subject fill, size caps, forbidden content, AI labelling) | Enhancement (implemented, pending acceptance, T60; design in [EcomCraft Platform Preset Slots](EcomCraft%20Platform%20Preset%20Slots.md), values pending the N06 check) |
-| F59 | Reference images (one image per reference: borrow the composition and scene reference) | Enhancement (P1 implemented, pending acceptance, T61; P2 scene reference depends on N10, T62; requirements in [EcomCraft Reference Images](EcomCraft%20Reference%20Images.md)) |
+| F58 | Platform presets by slot (per-slot size and ratio, subject fill, size caps, forbidden content, AI labelling) | Enhancement (implemented, pending acceptance, T60; T97 extends the slot data with first_main, selling, detail_page and the second platform batch, depends on N06; design in [EcomCraft Platform Preset Slots](EcomCraft%20Platform%20Preset%20Slots.md), values pending the N06 check) |
+| F59 | Reference images (one image per reference: borrow the composition and scene reference) | Enhancement (P1 implemented, pending acceptance, T61; route upgraded 2026-10-31: P2 scene reference (T62) is superseded by T84's fusion route (F74), the old path stays as the `reference_mode: composition` fallback; requirements in [EcomCraft Reference Images](EcomCraft%20Reference%20Images.md)) |
 | F60 | Professional mode open to every account (A2), with ComfyUI workflow upload (usable by the uploader at once, by others after review) | UI redesign v4 (T63 opening and own uploads; T73 review and publishing) |
-| F61 | Task-first simple mode (follow a reference / make one image / make a full set) | UI redesign v4 (T64) |
+| F61 | Task-first simple mode (follow a reference / make one image / make a full set) | UI redesign v4 (T64 implemented; revised 2026-10-31 (A14): becomes the single entry "follow a reference", T89 and T90, sets driven by references) |
 | F62 | Navigation, "Manage" menu and consistent wording | UI redesign v4 (T65) |
 | F63 | Phones get simple mode only | UI redesign v4 (T66) |
 | F64 | One-way hand-off from simple to professional mode | UI redesign v4 (T67) |
@@ -262,9 +278,17 @@ Current status: the code for every MVP feature is complete (including the usabil
 | F71 | Adaptive device for the vision model: image description on local Ollama picks the GPU or CPU for the customer's graphics card and moves to the CPU when the card cannot run it; three phases: P1 automatic fallback and manual choice, P2 a measured self-test whose result is saved, P3 model recommendation from the hardware and sharing the card with generation | Enhancement (T75 P1, T76 P2, T77 P3) |
 | F72 | Clean up leftover local ComfyUI at startup: after the platform is force-killed, crashes or loses power, self-started ComfyUI instances no longer pile up (requirements in the LAN platform requirements, "Reliability") | Enhancement (T78) |
 | F73 | Output size chosen before generating: by platform slot by default, common or custom sizes instead; generated at the aspect ratio and scaled to the exact size, no size choice after generation (requirements in section 5.4 of the EcomCraft Simple Mode Redesign) | Enhancement (T80) |
-| F16 | Per-account licensing (limits the number of accounts only, no feature tiers) | Team and commercial (A12) |
-| F18 | Cloud generation | Reserved (change the rules first) |
-| F17 | Brand-specific model training | Reserved (custom service) |
+| F74 | Reference fusion route (references v2): the reference and product photo go together into an editing model, then the product is located, its original details pasted back and distortion verified; reference analysis yields the subject position and slot automatically; aspect fitting and abnormal-reference handling | Phase 2: references v2 (T83, T84, T85, T87, T88; route and model await the G1 trial) |
+| F75 | Product locating, paste-back and distortion checks: frequency-separated paste-back when contours align, keep the model's result when they do not; one retry on excessive difference, then flag "product may be distorted" | Phase 2: references v2 (T86) |
+| F76 | Hardware detection and one-click model setup: GPU and memory tiers (recommended / minimum / conditional / unsupported); scan installed models against recipes (including user-placed ones), one-click download and auto-configuration (China-first mirrors, resume, checksums) | Phase 3: out of the box (T91, T92, T93) |
+| F77 | Windows and Mac installers: no .NET, Python or Git for users; installer plus desktop shortcut; signing pending the user's decision | Phase 3: out of the box (T96) |
+| F78 | Full sets by slot: several references assigned to platform slots (first image, selling point, scene, detail, white background, detail screens); duplicate slots allowed, unfilled slots shown; set-wide style consistency option | Phase 4: sets and details (T98, T101) |
+| F79 | Selling-point info and wording checks: product name, selling points, specs and sizes filled when making a set and saved per product; the model only suggests and the user confirms, nothing invented; advertising-law superlative notices | Phase 4: sets and details (T99) |
+| F80 | Selling-point images and detail-page layouts: several layouts, text always drawn by the server; layout picked from the reference analysis and product position to avoid the product; detail pages as per-screen slices and one long image | Phase 4: sets and details (T100) |
+| F81 | Built-in reference library: sample images by category and slot (rights-cleared only); a base pack ships with releases, industry packs belong to the team edition | Phase 4: sets and details (T102) |
+| F82 | Professional-mode refinement bench: version history, local edits with product lock, object removal and background swap, instruction editing, aspect change and upscale into platform sizes, P1 text layer, recolor, lighting, batch apply | Phase 5: professional mode (T103–T108) |
+| F16 | Per-account licensing (limits the number of accounts only, no feature tiers) | Team and commercial (A12, A18; T109 splits the open-source core from the closed-source team extension) |
+| F17 | Brand-specific model training | Reserved (custom service, deferred) |
 
 ## 9. Explicitly Out of Scope
 
@@ -272,15 +296,22 @@ Current status: the code for every MVP feature is complete (including the usabil
 - SaaS-style restrictions such as watermarked previews.
 - A complex role and permission system, or feature-tiered pricing (A12).
 - Building separate workflows for each customer (differences go into category presets and brand kits; anything beyond that is paid customization).
-- Cloud generation and taking image orders ourselves during the MVP.
+- GPU-less options and cloud generation (2026-10-31, A6 and A15: a GPU is required; insufficient hardware gets a clear "not supported" message; no GPU-less or cloud-generation options. Cloud options for the vision and prompt models are unaffected).
+- Taking image orders ourselves to validate demand.
 
 ## 10. Development Order
 
-1. **Platform foundation**: F28 testing (deferred, A10) → F29 scheduling → F30 gallery and reassignment → F31 multi-user deployment → F32 storage; finish the F24 internationalization framework early so every new feature is built bilingual.
-2. **E-commerce images**: F01 templates → F37 prompt service → F07 simple mode → F02 preservation (depends on N02) → F35 cut-out confirmation → F20 test bench → F03 image sets and batches → F36 product library → F05 export → F22 compliance → F08 model checklist.
-3. **Usability and operations**: F38–F46, then finally F10 README and demo.
+From 2026-10-31 the phases of the [EcomCraft Implementation Plan](EcomCraft%20Implementation%20Plan.md) apply, interleaved with the [EcomCraft Refactoring Plan](EcomCraft%20Refactoring%20Plan.md) (R00–R23; see its section 7 for the order):
 
-For each task's files, dependencies, acceptance criteria and Claude Code prompt, see the "开发任务" (development tasks) sheet in the tracker.
+1. **Phase 0, planning on paper (T81)**: the goals go into the repository documents and the tracker.
+2. **Phase 1, route trial (N11, N09/N03, T82, N12) → G1 decision gate**: choose the reference route, model and quantization; phase 2 may not start unless G1 passes. T82 and N12 run in parallel with refactoring phases A–B; neither touches platform code.
+3. **Phase 2, references v2 (T83–T90) → G2 quality gate**: reference analysis, fusion workflow, generation-flow integration, product locating/paste-back/verification, aspect fitting, abnormal handling, single entry.
+4. **Phase 3, out of the box (T91–T96)**: hardware tiers, model recipes and one-click download, wizard and self-check, Mac adaptation, installers.
+5. **Phase 4, sets and details (T97–T102)**: platform slot data, sets by slot, selling points, layouts, style consistency, built-in reference library.
+6. **Phase 5, professional mode (T103–T108)**: the refinement bench.
+7. **Phase 6, release (T109–T110)**: the open-source / team-edition split and release documentation.
+
+Phases 3, 4 and 5 do not block each other after G2, but tasks touching the same files must not run at once. For each task's files, dependencies, acceptance criteria and Claude Code prompt, see the "开发任务" (development tasks) sheet in the tracker.
 
 ## 11. Change Log
 
@@ -308,3 +339,4 @@ For each task's files, dependencies, acceptance criteria and Claude Code prompt,
 | 2026-10-30 | v2.8 | New F73 output size chosen before generating (T80): the size is picked in step 2, the model generates at its aspect ratio near one megapixel and the platform scales locally to the exact size; zip downloads keep the generated size, the platform only decides format and size cap |
 | 2026-10-30 | v2.9 | Better compositing in the standard workflows: after the product is put on the scene the whole picture is sampled again at low strength, the paste becomes a frequency-separated blend (details from the original, light from the generated picture, with a limit on tone changes) with a contact shadow; the canvas's transparent part is neutral gray and the repainted area reaches slightly into the product; the default placement is a little below the middle at size 0.55; the default seed is random |
 | 2026-10-29 | v2.4 | F04 project archive interface complete pending acceptance (T10): gallery project picker and project manager, adding or removing works in bulk, "Make again with same settings" filling in the template, platform, product, prompt and seed; template generation accepts `seed`, which only sets the snapshot's seed parameter |
+| 2026-10-31 | v3.0 | Goal update (see the EcomCraft Implementation Plan and Refactoring Plan, added to the repository with T81): section 1 becomes the reference-driven goal with the hardware threshold; new decisions A14 (single entry), A15 (GPU required), A16 (Windows and Mac first), A17 (highly-similar boundary), A18 (open-source core + team edition); revised A6 (no cloud generation), A11 (reference route upgraded to the fusion route, pending G1), A12 (team-edition feature split allowed), A13 (three task entries void); section 7 becomes the new MVP acceptance; section 8 adds F74–F82, removes F18 and pulls F23 forward; section 9 adds GPU-less options and cloud generation; section 10 becomes the new phases; both plan documents are linked |

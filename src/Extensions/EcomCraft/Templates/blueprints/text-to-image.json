@@ -152,14 +152,14 @@
         1024
       ],
       "widgets_values_named": {
-        "prompt": "A photorealistic boudoir portrait of a clearly adult fictional woman in her late 20s, with natural facial features and realistic skin texture. She is wearing a soft silk robe, sitting naturally on the edge of a bed in a sophisticated modern bedroom. Relaxed confident expression, graceful pose, natural body proportions, tasteful sensual atmosphere. Soft window light, warm neutral colors, delicate shadows, three-quarter camera angle, medium-full-body composition, realistic fabric details, professional editorial photography, high image quality, natural anatomy.",
+        "prompt": "commercial product photography, a single product on a clean surface, soft studio lighting, high detail",
         "negative_prompt": "",
         "cfg": 1,
         "steps": 20,
         "scheduler": "euler",
         "scheduler_1": "simple",
         "seed": 1095546475779037,
-        "unet_name": "z_image_turbo_bf16.safetensors",
+        "unet_name": "qwen-image-2.1-UC-Q4_K_M.gguf",
         "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
         "vae_name": "qwen_image_2.1_vae_bf16.safetensors",
         "width": 1024,

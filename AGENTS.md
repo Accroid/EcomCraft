@@ -2,6 +2,8 @@
 
 本文件定义在 SwarmUI 仓库中工作的自动化编程代理必须遵循的基本规则、指南和建议。本文档会随着时间逐步扩充。
 
+**开工必读：** 每个任务开始前，先读 [`docs/EcomCraft Architecture.zh-CN.md`](docs/EcomCraft%20Architecture.zh-CN.md) 第 1、2 节和对应计划（[`docs/EcomCraft 实施计划.zh-CN.md`](docs/EcomCraft%20实施计划.zh-CN.md) 或 [`docs/EcomCraft 重构计划.zh-CN.md`](docs/EcomCraft%20重构计划.zh-CN.md)），确认任务符合产品目标；不符合时先问用户，不得自行偏离。
+
 SwarmUI 是一个模块化 AI 媒体生成平台，由三个主要部分组成：
 - JavaScript/HTML 前端，在用户的浏览器中打开
 - C# 服务器，是主要工作核心
@@ -68,6 +70,8 @@ description: 简要说明技能的用途及适用场景。
 - Linux/macOS 常规启动：`launch-linux.sh` 或 `launch-macos.sh`
 - 服务默认地址：`http://127.0.0.1:7801`
 
+（决策 G2：重点支持 Windows 和 Mac；Linux 启动脚本保留，但暂不投入开发和验证。）
+
 常规构建应使用仓库现有的 .NET 项目和启动脚本，不要手工复制发布文件。启动后至少检查 HTTP 状态码、进程是否持续运行和日志中的致命错误。若使用了旧的 `src/bin/live_release`，必须确认其已由当前源码重新生成。
 
 Release 模式下，C# 扩展程序集按 Git 提交短哈希缓存。修改 `src/Extensions/EcomCraft/` 中的 C# 源码但未改变提交时，必须按 `ExtensionsManager.BuildExtension` 的输出目录与 `TargetName` 重新构建扩展；只构建主项目或重启会继续加载旧程序集。Windows 服务若因沙箱权限出现 DPAPI、WMI 或文件访问拒绝，应经执行权限审批后在正常用户环境启动，并确保同一数据目录只有一个服务实例。
@@ -96,7 +100,7 @@ Release 模式下，C# 扩展程序集按 Git 提交短哈希缓存。修改 `sr
 
 - EcomCraft 工作台只能接受工作流 ID、服务端发布的参数白名单和经过服务端校验的普通生成参数。客户端不得提交或展示任意 ComfyUI JSON、未校验的节点图、后端选择器、管理员默认图片或内部会话标识。
 - 客户端可以提交 `execution_server_id`，把任务限定在某台已登记的执行服务器上（需求 D7）；服务端须校验该 ID 属于 `ExecutionServers`，且不得接受 SwarmUI 原生的后端选择参数（如 `exactbackendid`）。执行服务器由 `Studio/Generation/ExecutionScheduler` 按规则 1 选定并写入请求的内部元数据，`StudioApi.ValidateExecutionBackend` 只允许该服务器执行。
-- `EcomCraftStudioGenerate` 只能使用 `ExecutionServers.IsExecutionServer` 认可的执行服务器：本机自启动 ComfyUI，以及地址为回环、私有网段或局域网主机名的 `ComfyUIAPIBackend`。不得连接未登记地址、远程 SwarmUI 或公网地址；云端对接完成并经确认之前，不得向任何云端生成服务发送请求。新增后端匹配逻辑时，应同步检查 `ExecutionServers`、`StudioApi.ValidateExecutionBackend` 和生成 API 的权限校验。
+- `EcomCraftStudioGenerate` 只能使用 `ExecutionServers.IsExecutionServer` 认可的执行服务器：本机自启动 ComfyUI，以及地址为回环、私有网段或局域网主机名的 `ComfyUIAPIBackend`。不得连接未登记地址、远程 SwarmUI 或公网地址；不做云端出图，不得向任何云端生成服务发送请求（看图和提示词模型的云端选项不受此限）。新增后端匹配逻辑时，应同步检查 `ExecutionServers`、`StudioApi.ValidateExecutionBackend` 和生成 API 的权限校验。
 - `EcomCraftStudioCatalog`、`EcomCraftStudioQueue` 和 `EcomCraftStudioCancelTask` 返回的数据应遵守最小披露原则：队列接口可以返回执行服务器的 ID、显示名称、状态、排队数、排队位置和节点进度，但不得返回服务器地址、提示词、原始工作流、其他用户的任务 ID、会话 ID 或密钥。取消任务前必须验证当前账号拥有该任务。
 - 原生 ComfyUI 工作流发现由 `WorkflowDiscovery` 在后台执行，接口请求只读缓存。本机只读取已配置本机后端、`Installation.FindComfyScripts` 验证的本机安装中的标准 `workflows` / `blueprints` 目录，或 `Settings.EcomCraft.ComfyWorkflowSearchPaths` 指定的目录；局域网执行服务器只通过其 ComfyUI `userdata` 接口读取 `workflows` 目录。不得全盘扫描任意 JSON 或扫描局域网网段。导入前必须验证工作流结构、子图连接和正负提示词输入；发现的工作流只是审核候选，不得直接注册给用户调用，只有 `WorkflowReview` 发布的快照进入工作流注册表，并继续使用参数白名单边界；工作流的来源服务器不决定执行服务器。
 - 账号上传的 ComfyUI 工作流（F60，决策 U6）：上传接口是客户端唯一可以提交 ComfyUI JSON 的入口。上传的工作流须通过与导入相同的结构、子图连接和正负提示词输入校验，并生成参数白名单，之后可作为上传者的“自用工作流”立即出图：只对上传者可见、只在已登记的执行服务器上执行、不得包含禁用的节点类型或像文件路径的参数（规则在 `OwnWorkflowRules`：类型名含 python、exec、eval、script、shell、command、code 等单词的节点，以及管理员在 `EcomCraft.DeniedWorkflowNodes` 追加的节点）。自用工作流只有在上传者提交审核后才作为待审核项出现在审核列表；审核通过时复制为 `上传/<名称>` 的正式发布快照供所有账号使用，自用原件仍只属于上传者；驳回原因只给上传者和审核人；模板不得引用自用工作流。其他账号要使用，仍须经 `WorkflowReview` 审核发布。出图请求仍只提交工作流 ID 和白名单参数，不提交节点图；工作流 JSON 不得出现在其他账号能读到的接口里。
@@ -105,13 +109,14 @@ Release 模式下，C# 扩展程序集按 Git 提交短哈希缓存。修改 `sr
 - 工作流审核接口（`WorkflowReviewApi`）只能返回参数定义、审核状态和缺失的节点或模型名称，不得返回原始节点图或服务器地址；驳回原因只给提交人和审核人。审核记录和快照保存在 `Data/EcomCraft/workflow-reviews.json`，写入须经临时文件替换，读取失败时不得覆盖原文件。
 - 品牌资料包（`Studio/Brand/`）按账号隔离：客户端出图时只提交 `brand_kit_id`，服务端读取文件、生成提示词片段，并且只把图片填进模板 `brand_kit` 槽位声明的图片参数；不得接受客户端提交的图片路径，也不得让 AI 生成或改写 Logo。索引 `Data/EcomCraft/brand-kits.json` 经临时文件替换写入，图片地址只给拥有者。
 - 项目归档（`Studio/Projects/`）是用户主动保存的作品记录，可以长期保存该账号作品的模板 ID、种子、执行服务器显示名称和实际使用的提示词，用于“用相同参数重做”。记录只给拥有者读取、可随时删除；不得保存图片内容、原始工作流、节点图或服务器地址，不得出现在队列、诊断包或其他账号能读到的接口里。配方只从作品文件自带的元数据读取，不接受客户端提交的参数；“用相同参数重做”只在浏览器里回填简易模式，提交的仍是普通的按模板生成请求，其中的 `seed` 只能设置快照的种子参数并按其范围校验。记录写入 `Data/EcomCraft/projects.json`，经临时文件替换，读取失败时不得覆盖原文件。这条不改变进度观测的规则：进度缓存仍不得长期保存提示词。系统备份会包含 `projects.json`（含提示词），备份只有管理员能创建和下载。
-- 参考图（F59 独立参考模式）只接受客户端提交的图片数据、逐张英文提示词（`reference_prompts`，服务端清理）和逐张商品摆放（`reference_placements`，按商品摆放规则校验，T79）；参考图只在描述接口调用与内存批次中短暂存在，不得写入 `Data/`、商品库、项目归档、候选清理登记、诊断包或备份，也不得出现在队列或他人可见的接口里。参考图描述走 MagicPrompt 的 vision 能力（默认关闭，管理员开启）；不得提供竞品图抓取、图库推荐或一键复刻类功能，界面须展示版权提示并在海外平台加强提醒。
+- 参考图（F59 独立参考模式）只接受客户端提交的图片数据、逐张英文提示词（`reference_prompts`，服务端清理）和逐张商品摆放（`reference_placements`，按商品摆放规则校验，T79）；参考图只在描述接口调用与内存批次中短暂存在，不得写入 `Data/`、商品库、项目归档、候选清理登记、诊断包或备份，也不得出现在队列或他人可见的接口里。参考图描述走 MagicPrompt 的 vision 能力（默认关闭，管理员开启）。相似度边界（决策 D2、A17）：允许用户自己上传参考图并生成高度相似的构图、场景、光线；文字、Logo、水印不进入成品（文字由系统重新排版）；含真人模特的参考图不沿用其面孔（首批直接提示不支持）；不得提供竞品链接抓取、竞品图库或推荐功能，对外不用“复刻竞品”宣传，界面统一用“照参考图做”，须展示版权提示并在海外平台加强提醒。
 - 预计剩余时间（F70，`Studio/Generation/TaskTiming`）只在内存中保存各类操作的耗时秒数和出图的“工作流 + 尺寸 + 执行服务器”键，不保存提示词、图片或节点图，不写入 `Data/`；接口只给本账号自己的任务带估算字段。
 - EcomCraft 进度观测不得长期保存提示词、工作流输入或生成结果。进度缓存应在任务结束或超时后清理，并在扩展卸载时解除 `ComfyUIAPIAbstractBackend.QueueProgressObserved` 事件订阅。候选图清理登记（`Data/EcomCraft/candidates.json`）、诊断包和备份只保存文件路径、时间和脱敏后的配置，不保存提示词、图片或节点图，不属于进度缓存。
 - 修改桌面入口或首页跳转时，应同时检查 `Desktop/`、`src/Core/Installation.cs`、`src/Core/Program.cs`、启动脚本、`src/Pages/Text2Image.cshtml` 和 `src/wwwroot/ecomcraft.ico` 的名称与路径一致性。
 - 修改 EcomCraft 功能后，应同步检查根目录的 `README.md`、`README.en.md`、`docs/README.zh-CN.md` 以及对应功能文档；API 名称、配置键和安全边界必须保持一致。
 - 局域网多服务器平台的开发以 [`docs/EcomCraft 局域网多服务器平台需求.zh-CN.md`](docs/EcomCraft%20局域网多服务器平台需求.zh-CN.md) 为准；需求变更先改该文档再改代码。
-- 产品定位、整体架构和 MVP 范围以 [`docs/EcomCraft Architecture.zh-CN.md`](docs/EcomCraft%20Architecture.zh-CN.md) 为准，功能和任务进度记录在 `docs/EcomCraft 开发总表.xlsx`（功能编号 F、任务编号 T 与架构文档一致）。范围变更先改架构文档和需求文档，再改开发总表，最后改代码。
+- 新功能（F74–F82 / T81–T110）按 [`docs/EcomCraft 实施计划.zh-CN.md`](docs/EcomCraft%20实施计划.zh-CN.md)（英文版 [`docs/EcomCraft Implementation Plan.md`](docs/EcomCraft%20Implementation%20Plan.md)）执行；基础重构（R00–R23）按 [`docs/EcomCraft 重构计划.zh-CN.md`](docs/EcomCraft%20重构计划.zh-CN.md)（英文版 [`docs/EcomCraft Refactoring Plan.md`](docs/EcomCraft%20Refactoring%20Plan.md)）执行，两份计划按重构计划第 7 节的顺序穿插。
+- 产品定位、整体架构和 MVP 范围以 [`docs/EcomCraft Architecture.zh-CN.md`](docs/EcomCraft%20Architecture.zh-CN.md) 为准，功能和任务进度记录在 `docs/EcomCraft 开发总表.xlsx`（功能编号 F、任务编号 T 与架构文档一致）。范围变更先改架构文档和需求文档（中英文同步），再改开发总表，最后改代码。
 
 ## 项目结构
 
