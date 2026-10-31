@@ -179,14 +179,7 @@ public static class BackupService
     }
 
     /// <summary>The local destination of a backup entry, or null for unknown areas (never inside works or Data roots other than the two owned ones).</summary>
-    private static string DestinationFor(string name)
-    {
-        if (name.StartsWith("ecomcraft/", StringComparison.Ordinal) && !name.Contains(".."))
-        {
-            return Path.Combine(Program.DataDir, "EcomCraft", name["ecomcraft/".Length..].Replace('/', Path.DirectorySeparatorChar));
-        }
-        return null;
-    }
+    private static string DestinationFor(string name) => BackupRules.ResolveDestination(name, Path.Combine(Program.DataDir, "EcomCraft"));
 
     /// <summary>The backup entry name of a local file: files under Data/EcomCraft are "ecomcraft/…", the account database files under Data are "accounts/…".</summary>
     private static string EntryName(string file) => BackupRules.EntryName(file,
