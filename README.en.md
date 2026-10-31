@@ -39,6 +39,15 @@ The full feature list and progress are in the [Architecture and Roadmap](docs/Ec
 - [Git](https://git-scm.com/downloads) and the [.NET SDK](https://dotnet.microsoft.com/download) (.NET 10 SDK recommended; the project targets .NET 8). The first build needs NuGet access.
 - Generating images needs a GPU, models and the matching ComfyUI nodes; running only the web server does not. Installing ComfyUI automatically on Linux needs Python 3.10–3.12 with `venv`; the Windows installer brings its own Python.
 
+**Hardware requirements (a GPU is required; no GPU-less or cloud generation)**
+
+| System | Minimum | Recommended |
+|---|---|---|
+| Windows | NVIDIA with 8 GB VRAM; AMD only within the ROCm support list | NVIDIA 16 GB or more |
+| macOS | Apple silicon with 24 GB unified memory; Intel-chip Macs unsupported | 32 GB or more |
+
+Windows and Mac are the priority platforms; the Linux launch scripts stay but are not verified for now. Machines below the threshold get a clear "not supported" message. Numbers are current defaults, to be tuned after measurement.
+
 **Get the source and launch**
 
 ```bash
@@ -72,7 +81,7 @@ The first launch builds the server and takes a few minutes. macOS only gets the 
 
 - [Documentation index](docs/README.md) · [Chinese documentation index](docs/README.zh-CN.md) · [Basic Usage (Chinese)](docs/Basic%20Usage.zh-CN.md) · [Troubleshooting (Chinese)](docs/Troubleshooting.zh-CN.md)
 - [Workflow calls and APIs](docs/EcomCraft%20ComfyUI%20Workflows.md) · [LAN Deployment Guide](docs/EcomCraft%20LAN%20Deployment.md) · [Prompt enhancement and vision model](docs/EcomCraft%20Prompt%20Enhancement.en.md) · [Upgrade and Data Guide](docs/EcomCraft%20Upgrade.md)
-- Development planning: [Architecture and Roadmap](docs/EcomCraft%20Architecture.md) · [UI and Workflow Redesign](docs/EcomCraft%20UI%20Redesign.md) · [Simple Mode Redesign](docs/EcomCraft%20Simple%20Mode%20Redesign.md) · [LAN Multi-Server Platform Requirements](docs/EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md)
+- Development planning: [Architecture and Roadmap](docs/EcomCraft%20Architecture.md) · [Implementation Plan](docs/EcomCraft%20Implementation%20Plan.md) · [Refactoring Plan](docs/EcomCraft%20Refactoring%20Plan.md) · [UI and Workflow Redesign](docs/EcomCraft%20UI%20Redesign.md) · [Simple Mode Redesign](docs/EcomCraft%20Simple%20Mode%20Redesign.md) · [LAN Multi-Server Platform Requirements](docs/EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md)
 
 ## Contact and Deployment Service
 
