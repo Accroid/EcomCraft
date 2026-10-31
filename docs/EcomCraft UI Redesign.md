@@ -2,7 +2,7 @@
 
 > **Language:** English · [简体中文](EcomCraft%20界面改版需求.zh-CN.md)
 >
-> **Status:** Confirmed (2026-10-29); code complete pending acceptance, T70 deferred; revised 2026-10-31 (A14): the single-entry design of U3/U4/section 5 replaces the former "three task entries" — see T89/T90 (after G2) · **Version:** v1.4 · **Date:** 2026-10-31
+> **Status:** Confirmed (2026-10-29); code complete pending acceptance, T70 deferred; revised 2026-10-31 (A14): the single-entry design of U3/U4/section 5 replaces the former "three task entries" — see T89/T90 (implemented once G1 passes; G2 acceptance follows when they are done) · **Version:** v1.4 · **Date:** 2026-10-31
 >
 > Related: [EcomCraft Architecture and Roadmap](EcomCraft%20Architecture.md) (decisions A2, A12), [EcomCraft Workspace UI Design](EcomCraft%20Workspace%20UI%20Design.md) (control list), [EcomCraft development table](EcomCraft%20开发总表.xlsx) (F60–F69 / T63–T72).
 

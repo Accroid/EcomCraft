@@ -136,6 +136,7 @@
 | | R12 | 统一图片 data URL 解析 | R07、R10、R11 | M |
 | | R13 | 标准工作流支持多蓝图 | CP1 | S |
 | | R14 | 整理 `Studio/` 目录 | R07–R13 | S |
+| | R24 | 移除休眠的云端执行方类型 | R14 | S |
 | | **CP2** | **用户回归** | R14 | — |
 | D 前端 | R15 | `simple.js` 拆文件 | R02、CP0 | L |
 | | R16 | `SimpleMode.attach` 按功能拆分 | R15 | S |
@@ -410,6 +411,16 @@ public static string ToDataUrl(byte[] bytes, string mime);
 
 同步：`Tests/EcomCraft.Tests.csproj` 的链接、`simple-mode.test.cjs:166` 等读取 C# 文件的路径、技能文件、AGENTS.md 中的路径。用 `git mv`。前端文件留在原位。
 
+#### R24 移除休眠的云端执行方类型
+
+背景：2026-10-31 需求修订后不做云端生成（局域网需求 D11、R10），但代码里仍留着休眠的云端类型：`ExecutorKind` 的云端 ComfyUI 和云端模型 API 枚举值，以及 `execution_plans` 校验里对 `cloud_comfy` / `cloud_model_api` 的预留。
+
+1. 删除这两个枚举值和相关分支。它们从未产生执行方或请求，删除不得改变任何现有行为。
+2. `execution_plans` 校验保留拒绝：提交 `cloud_comfy` / `cloud_model_api` 仍返回原有错误，错误码和文案不变；补一个单测覆盖。
+3. 同步删除局域网需求“步骤 4 实现说明”和《ComfyUI 工作流》文档中“待后续重构清理”的注释，改为说明类型已删除、校验仍拒绝。
+
+**验收：** 编译通过；`api-surface` 快照不变（接口有变化则先显式更新快照）；相关文档同步。规模 S，依赖 R14（先移动后修改，不混在一个提交）。
+
 ### 阶段 D：前端
 
 #### R15 `simple.js` 拆文件
@@ -586,7 +597,7 @@ let StudioCore = {};
      - `MagicPrompt/` 的 `{ get; set; }` 豁免（序列化模型）。
 2. **技能：** 更新 `ecomcraft-studio-ui`、`ecomcraft-api-route`、`ecomcraft-build-run`、`dev-branch-commit` 里 `studio.js`、`simple.js`、检查命令的说明。
 3. **`docs/EcomCraft 工作台界面设计.zh-CN.md`、架构文档第 6.5 节（代码组织）** 中英文同步。
-4. **开发总表：** 新增阶段“基础重构”和 R00–R23；编号规则加上 R。用 openpyxl 编辑前先备份，保存后确认公式和下拉还在。
+4. **开发总表：** 新增阶段“基础重构”和 R00–R24；编号规则加上 R。用 openpyxl 编辑前先备份，保存后确认公式和下拉还在。
 
 ---
 
@@ -611,7 +622,7 @@ let StudioCore = {};
 | 2 | R00–R03、CP0。T82、N12（路线实测）可与后面的工作并行，都不改平台代码 |
 | 3 | R04–R20（CP1–CP3） |
 | 4 | **G1 通过后**开始 T83 及后续 |
-| 5 | R21–R23 与上面并行，但 R23 要等 R14、R20 |
+| 5 | R21–R24 与上面并行，但 R23 要等 R14、R20，R24 要等 R14 |
 
 **G1 不通过时：** 阶段 A、B 仍要做；C、D 也可继续，因为这些问题与路线无关。但要问用户是否继续投入。
 

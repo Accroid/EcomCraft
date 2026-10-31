@@ -48,14 +48,16 @@
 
 ### 1.1 Decided, no further discussion
 
+(IDs renamed from G1–G6 to P1–P6 on 2026-10-31 to avoid clashing with the G1/G2 acceptance gates; G1 and G2 now mean the gates only.)
+
 | ID | Decision |
 |---|---|
-| G1 | **A GPU is required to use the product.** No GPU-less or cloud-generation options. Insufficient hardware gets a clear "not supported" message |
-| G2 | **Windows and Mac are the priority platforms**; Linux is not considered for now: keep the scripts, invest and verify nothing |
-| G3 | **Commercial licensing of models is not yet a selection criterion**; default models are chosen by quality and runnability only. Handle before release (see 8.1) |
-| G4 | The generation page keeps only "follow a reference"; the "make one image" and "make a full set" entries go away; full sets are also reference-driven |
-| G5 | Simple generation must produce main images, selling-point images and detail images |
-| G6 | Editions: open-source core + team edition (closed-source extension), priced per account |
+| P1 | **A GPU is required to use the product.** No GPU-less or cloud-generation options. Insufficient hardware gets a clear "not supported" message |
+| P2 | **Windows and Mac are the priority platforms**; Linux is not considered for now: keep the scripts, invest and verify nothing |
+| P3 | **Commercial licensing of models is not yet a selection criterion**; default models are chosen by quality and runnability only. Handle before release (see 8.1) |
+| P4 | The generation page keeps only "follow a reference"; the "make one image" and "make a full set" entries go away; full sets are also reference-driven |
+| P5 | Simple generation must produce main images, selling-point images and detail images |
+| P6 | Editions: open-source core + team edition (closed-source extension), priced per account |
 
 ### 1.2 Default recommendations (user-approved, adjustable after trials)
 

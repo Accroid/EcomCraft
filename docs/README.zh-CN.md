@@ -34,10 +34,10 @@
 - [EcomCraft 架构与路线图（中文）](EcomCraft%20Architecture.zh-CN.md) · [English](EcomCraft%20Architecture.md)：开发规划文档，涵盖产品定位、部署拓扑、分层架构、一键套图数据流、设计约定、MVP 范围和后续功能；功能和任务进度见 [EcomCraft 开发总表](EcomCraft%20开发总表.xlsx)。
 - [EcomCraft 局域网多服务器平台需求（中文）](EcomCraft%20局域网多服务器平台需求.zh-CN.md) · [English](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md)：开发需求文档，涵盖多服务器接入、工作流审核与快照、负载调度、多人使用、画廊共享、作品存储及云端预留（2026-10-31 起云端对接改为不做）。
 - [EcomCraft 实施计划（中文）](EcomCraft%20实施计划.zh-CN.md) · [English](EcomCraft%20Implementation%20Plan.md)：新目标实施计划（2026-10-31）：参考图驱动的单入口、必须有显卡、Windows 和 Mac 优先；阶段 0–6 的任务详情（F74–F82、T81–T110、N11–N12）和 G1/G2 验收关卡。
-- [EcomCraft 重构计划（中文）](EcomCraft%20重构计划.zh-CN.md) · [English](EcomCraft%20Refactoring%20Plan.md)：基础重构计划（2026-10-31）：与实施计划穿插执行的 R00–R23，含安全网（测试、CI）、缺陷修复（索引文件覆盖、备份路径、批次内存、raw_prompt）、后端拆分（StudioApi、BatchService）、前端拆分（studio.js、simple.js）和检查点。
+- [EcomCraft 重构计划（中文）](EcomCraft%20重构计划.zh-CN.md) · [English](EcomCraft%20Refactoring%20Plan.md)：基础重构计划（2026-10-31）：与实施计划穿插执行的 R00–R24，含安全网（测试、CI）、缺陷修复（索引文件覆盖、备份路径、批次内存、raw_prompt）、后端拆分（StudioApi、BatchService）、前端拆分（studio.js、simple.js）、移除休眠云端执行方类型和检查点。
 - [EcomCraft 简易模式改版需求（中文）](EcomCraft%20简易模式改版需求.zh-CN.md) · [English](EcomCraft%20Simple%20Mode%20Redesign.md)：开发需求文档（F52–F56 已实现待验收，F57 代码完成、蓝图文件待提供；含面向继续开发代理的交接章节），涵盖上传四入口、产品类型两级选择、双语提示词与 AI 扩写、候选张数总上限、出图链路提速与标准工作流自动生成；附[交互原型](EcomCraft%20简易模式改版原型.html)。
 - [EcomCraft 平台预设槽位设计（中文）](EcomCraft%20平台预设槽位设计.zh-CN.md) · [English](EcomCraft%20Platform%20Preset%20Slots.md)：开发设计文档（F58，已实现待验收）：按槽位定义各平台图片规格（尺寸比例、白底位置、主体占比、大小上限、禁用内容、AI 标识），套图按槽位组合模板；含 N06 规范核对清单。
-- [EcomCraft 参考图需求（中文）](EcomCraft%20参考图需求.zh-CN.md) · [English](EcomCraft%20Reference%20Images.md)：开发需求文档（F59，P1 已实现待验收）：上传参考图（如竞品成品图）一张参考出一张图；“借鉴构图”（视觉模型读图并入提示词）与“画面参考”（图生图，需另装模型）双路径；版权边界与临时存储；P2 依赖 N10。
+- [EcomCraft 参考图需求（中文）](EcomCraft%20参考图需求.zh-CN.md) · [English](EcomCraft%20Reference%20Images.md)：开发需求文档（F59，P1 已实现待验收；2026-10-31 路线升级）：上传你想要的参考图，一张参考出一张图；路线升级为参考图 + 商品图直接输入编辑模型融合（路线 E，待 G1 实测，F74 / T83–T88，T62 被 T84 取代），旧“借鉴构图”保留为回退；高度相似边界与临时存储规则。
 - [EcomCraft 界面与操作改版需求（中文）](EcomCraft%20界面改版需求.zh-CN.md) · [English](EcomCraft%20UI%20Redesign.md)：开发需求文档（F60–F69）：简易模式先选任务、导航与管理员菜单、专业模式向所有账号开放、手机端范围、收藏与个性化分析草案。
 - [SwarmUI 设计动机（中文）](Motivations.zh-CN.md) · [English](Motivations.md)
 

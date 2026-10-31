@@ -130,6 +130,7 @@ Out-of-scope findings: list only, not fixed
 | | R12 | Unify image data-URL parsing | R07, R10, R11 | M |
 | | R13 | Standard workflows support multiple blueprints | CP1 | S |
 | | R14 | Tidy the `Studio/` folder | R07–R13 | S |
+| | R24 | Remove the dormant cloud executor types | R14 | S |
 | | **CP2** | **User regression** | R14 | — |
 | D Front end | R15 | Split `simple.js` into files | R02, CP0 | L |
 | | R16 | Split `SimpleMode.attach` by feature | R15 | S |
@@ -402,6 +403,16 @@ Moves only, **namespace unchanged**, no content edits.
 
 Sync: `Tests/EcomCraft.Tests.csproj` links, paths reading C# files such as `simple-mode.test.cjs:166`, skill files, AGENTS.md paths. Use `git mv`. Front-end files stay.
 
+#### R24 Remove the dormant cloud executor types
+
+Background: after the 2026-10-31 requirement revision there is no cloud generation (LAN requirements D11 and R10), but dormant cloud types remain in the code: the cloud ComfyUI and cloud model API values of `ExecutorKind`, and the `cloud_comfy` / `cloud_model_api` reservation in `execution_plans` validation.
+
+1. Delete the two enum values and their branches. They never produced an executor or a request; deleting them must change no existing behavior.
+2. `execution_plans` validation keeps rejecting: submitting `cloud_comfy` / `cloud_model_api` still returns the existing error with the same code and wording; add a unit test covering it.
+3. Update the "awaits a later refactoring cleanup" notes in the LAN requirements' step-4 implementation notes and the workflow guide to say the types are gone while validation still rejects them.
+
+**Acceptance:** compiles; the `api-surface` snapshot is unchanged (update it explicitly first if any API changes); documents synced. Size S, depends on R14 (move first, modify later — never in one commit).
+
 ### Phase D: front end
 
 #### R15 Split `simple.js`
@@ -578,7 +589,7 @@ Update test assertions that depend on the old text (e.g. the regex at `mobile.te
      - `{ get; set; }` in `MagicPrompt/` is exempt (serialization models).
 2. **Skills:** update `ecomcraft-studio-ui`, `ecomcraft-api-route`, `ecomcraft-build-run`, `dev-branch-commit` for `studio.js`, `simple.js` and the check commands.
 3. **`docs/EcomCraft 工作台界面设计.zh-CN.md` and architecture section 6.5 (code organization)**, Chinese and English in sync.
-4. **Tracker:** add the phase "基础重构" and R00–R23; add R to the ID rules. Back up before editing with openpyxl; confirm formulas and dropdowns survive the save.
+4. **Tracker:** add the phase "基础重构" and R00–R24; add R to the ID rules. Back up before editing with openpyxl; confirm formulas and dropdowns survive the save.
 
 ## 6. Checkpoints (run by the user on a GPU-capable computer)
 
@@ -599,7 +610,7 @@ If any checkpoint regresses from the baseline, **do not enter the next phase**.
 | 2 | R00–R03, CP0. T82 and N12 (the route trial) can run in parallel with later work; neither touches platform code |
 | 3 | R04–R20 (CP1–CP3) |
 | 4 | **After G1 passes**, start T83 and beyond |
-| 5 | R21–R23 parallel with the above, but R23 waits for R14 and R20 |
+| 5 | R21–R24 parallel with the above, but R23 waits for R14 and R20, and R24 waits for R14 |
 
 **If G1 fails:** phases A and B still happen; C and D can also continue since these problems are route-independent. But ask the user whether to keep investing.
 
