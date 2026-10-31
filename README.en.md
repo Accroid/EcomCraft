@@ -22,7 +22,7 @@ Demo video: (to be added)
 
 | Pain point | How EcomCraft handles it |
 |---|---|
-| No prompt or design skills | Choose a task first: **Follow a reference** (upload a competitor's image and get its composition and light), make one image, or make a full set; a one-line description can be expanded by AI into Chinese and English prompts |
+| No prompt or design skills | Choose a task first: **Follow a reference** (upload a reference image you like and get its composition and light), make one image, or make a full set; a one-line description can be expanded by AI into Chinese and English prompts |
 | AI distorts the product, its logo and text | **Product preservation**: the cut-out goes onto the canvas and the product's logo, text and shape are pasted back unchanged after generation, with light matched to the scene; selling-point text is laid out by the program in fixed layouts, never written by AI |
 | Every platform has its own sizes, white backgrounds and file caps | One-click sets and exports by the platform's **slots**; Amazon white main images use the cut-out only, with a pure-white check and AI metadata |
 | Product photos must not leave the company | Generation runs **only on registered local or LAN** ComfyUI servers, never falling back to the cloud; the vision model defaults to local Ollama |
