@@ -2058,7 +2058,7 @@ public static class StudioApi
         string message = detail switch
         {
             "Timeout! All backends are occupied with other tasks." => "等待 ComfyUI 执行服务器超时，请检查服务器状态和队列。",
-            "Generation session interrupted." => "生成任务已被中断，请在原生引擎核对队列和个人历史。",
+            "Generation session interrupted." => "生成任务已被中断。请到“队列”查看，需要时重新提交。",
             "No images were generated (all refused, or failed - check server logs for details)." => "引擎没有生成可保存的结果，请检查工作流输出节点、模型依赖和服务器日志。",
             "Server failed to save an image." => "引擎生成了结果，但服务器保存文件失败，请检查输出目录和磁盘空间。",
             _ => $"引擎未完整返回结果。请在原生引擎检查{(workflow ? "工作流" : "模型")}依赖、参数和个人历史；可能已有部分输出，请勿直接重复提交。"
