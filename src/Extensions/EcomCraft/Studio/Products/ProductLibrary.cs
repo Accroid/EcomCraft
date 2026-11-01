@@ -212,7 +212,7 @@ public static class ProductLibrary
         }
     }
 
-    [API.APIDescription("Save a product photo (PNG, JPEG or WebP data URL, at most 5 MB) to the current account's product library, optionally with its cut-out and placement. Returns the product.", "product: { id: \"…\" }")]
+    [API.APIDescription("Save a product photo (PNG, JPEG or WebP data URL, at most 5 MB) to the current account's product library, optionally with its cut-out and placement. Returns the product and edge_warnings codes about the cut-out rim's quality (F83).", "product: { id: \"…\" }, edge_warnings: []")]
     public static Task<JObject> EcomCraftStudioProductSave(Session session, string image, string name = "", string cutout = "")
     {
         if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.BasicImageGeneration))
@@ -264,7 +264,8 @@ public static class ProductLibrary
                 TryDeleteFolder(record.Folder);
                 return Task.FromResult(StudioApi.Error(error, "product_save_failed"));
             }
-            return Task.FromResult(new JObject() { ["product"] = Json(record) });
+            // Edge quality of a saved cut-out's rim (F83) becomes plain-language notices at the upload confirmation; it never blocks anything.
+            return Task.FromResult(new JObject() { ["product"] = Json(record), ["edge_warnings"] = new JArray(ProductEdgeRules.TryAnalyze(cut)) });
         }
     }
 

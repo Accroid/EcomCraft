@@ -40,7 +40,7 @@ public static class CutoutService
         return [.. RequiredNodes.Where(node => !nodes.Contains(node)).Select(node => $"节点 {node}")];
     }
 
-    [API.APIDescription("Remove the background of a product photo (PNG, JPEG or WebP data URL, at most 5 MB) on a registered execution server that has the SwarmUI nodes. Returns the cut-out as a PNG data URL with the original product pixels.", "cutout: \"data:image/png;base64,...\", execution_server: \"B\"")]
+    [API.APIDescription("Remove the background of a product photo (PNG, JPEG or WebP data URL, at most 5 MB) on a registered execution server that has the SwarmUI nodes. Returns the cut-out as a PNG data URL with the original product pixels, plus edge_warnings codes about the rim's quality (white or dark fringe, stray islands, a product cut off by the canvas, jagged edges, much semi-transparency).", "cutout: \"data:image/png;base64,...\", execution_server: \"B\", edge_warnings: [\"fringe_white\"]")]
     public static async Task<JObject> EcomCraftStudioCutout(Session session, string product_image)
     {
         if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.BasicImageGeneration))
@@ -71,7 +71,9 @@ public static class CutoutService
         {
             return StudioApi.Error(error, errorId);
         }
-        return new JObject() { ["cutout"] = ImageDataUrl.ToDataUrl(cutout, "image/png"), ["execution_server"] = server };
+        // Edge quality of the rim (F83) becomes plain-language notices at the upload confirmation; it never blocks anything.
+        return new JObject() { ["cutout"] = ImageDataUrl.ToDataUrl(cutout, "image/png"), ["execution_server"] = server,
+            ["edge_warnings"] = new JArray(ProductEdgeRules.TryAnalyze(cutout)) };
     }
 
     /// <summary>Removes the background of a photo on a registered execution server chosen by Rule 1. Returns the cut-out PNG and the server name,
