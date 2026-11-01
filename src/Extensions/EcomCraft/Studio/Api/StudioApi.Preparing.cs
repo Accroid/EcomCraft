@@ -123,7 +123,7 @@ public static partial class StudioApi
             {
                 if (answer is null || answer.ContainsKey("error"))
                 {
-                    PostProcess.ProductPreserve.Discard(preserveToken);
+                    PostProcess.GenerationFinish.Discard(preserveToken);
                 }
                 task.Finish(answer ?? Error("无法确认任务是否已提交。请在队列和作品画廊核对后再重试。", "generation_uncertain"));
             }

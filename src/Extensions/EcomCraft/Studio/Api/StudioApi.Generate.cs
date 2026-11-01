@@ -132,27 +132,10 @@ public static partial class StudioApi
             {
                 return templateError;
             }
-            // Local postprocessing (R10.3): scale to the chosen size first, then paste the original product pixels back at that size, so scaling never
-            // blurs the product's logo or text; both happen before the works are synced or shown.
-            Func<JObject, Task> postProcess = preserveToken is null && outputSize is null ? null : async result =>
-            {
-                if (outputSize is (int finalWidth, int finalHeight))
-                {
-                    int failed = await PostProcess.OutputResize.ApplyAsync(session.User, result, finalWidth, finalHeight);
-                    if (failed > 0)
-                    {
-                        result["resize_failed"] = failed;
-                    }
-                }
-                if (preserveToken is not null)
-                {
-                    int failed = await PostProcess.ProductPreserve.ApplyAsync(preserveToken, session.User, result);
-                    if (failed > 0)
-                    {
-                        result["preserve_failed"] = failed;
-                    }
-                }
-            };
+            // Local postprocessing (R10.3, in GenerationFinish since R09): scale to the chosen size first, then paste the original product
+            // pixels back at that size, so scaling never blurs the product's logo or text; both happen before the works are synced or shown.
+            Func<JObject, Task> postProcess = preserveToken is null && outputSize is null ? null
+                : result => PostProcess.GenerationFinish.ApplyAsync(session.User, preserveToken, outputSize, result);
             if (background)
             {
                 return StartPreparing(session, resolved, requestedTemplate, pinnedServer, preserveToken, postProcess,
@@ -161,7 +144,7 @@ public static partial class StudioApi
             JObject templateResult = await GeneratePublishedWorkflow(session, resolved, resolved.Value<string>("workflow_id"), pinnedServer, requestedTemplate, postProcess);
             if (templateResult.ContainsKey("error"))
             {
-                PostProcess.ProductPreserve.Discard(preserveToken);
+                PostProcess.GenerationFinish.Discard(preserveToken);
             }
             else
             {
@@ -227,86 +210,31 @@ public static partial class StudioApi
         }
 
         // ----- Reference / edit images -----
-        string reference = (string)rawInput["initimage"];
-        bool needsReference = mode is "img2img" or "inpaint" or "outpaint" or "upscale";
-        if (needsReference && string.IsNullOrEmpty(reference))
+        JObject referenceError = AttachReferenceImage(rawInput, input, mode, kind);
+        if (referenceError is not null)
         {
-            return Error("该创作方式需要先提供初始图。", "invalid_reference");
-        }
-        if (!string.IsNullOrEmpty(reference))
-        {
-            if (kind != "image" || !ValidReference(reference))
-            {
-                return Error("仅图片流程支持初始图；请使用不超过 5 MB 的 PNG、JPEG 或 WebP。", "invalid_reference");
-            }
-            int refWidth = 0, refHeight = 0;
-            try
-            {
-                SwarmUI.Media.ImageFile decoded = SwarmUI.Media.ImageFile.FromDataString(reference);
-                (refWidth, refHeight) = decoded.GetResolution();
-                if (refWidth > 8192 || refHeight > 8192 || (long)refWidth * refHeight > 40_000_000)
-                {
-                    return Error("初始图尺寸过大，请缩小到最长边 8192 像素以内且不超过 4000 万像素。", "invalid_reference");
-                }
-            }
-            catch (Exception)
-            {
-                return Error("无法解码初始图，请重新导出为 PNG、JPEG 或 WebP。", "invalid_reference");
-            }
-            input["initimage"] = reference;
-            // Img2img / inpaint / outpaint need a creativity value; upscale keeps it optional.
-            if (mode is "img2img" or "inpaint" or "outpaint")
-            {
-                if (!CopyOptionalNumber(rawInput, input, "initimagecreativity", 0, 1, false) || input["initimagecreativity"] is null)
-                {
-                    return Error("请提供 0–1 的重绘幅度。", "invalid_parameters");
-                }
-            }
+            return referenceError;
         }
 
         // ----- Mask (inpaint / outpaint) -----
-        string mask = (string)rawInput["maskimage"];
-        if (mode is "inpaint" or "outpaint")
+        JObject maskError = AttachMask(rawInput, input, mode);
+        if (maskError is not null)
         {
-            if (string.IsNullOrEmpty(mask) || !ValidReference(mask)
-                || !Integer(rawInput, "maskshrinkgrow", 0, 512, out int shrink)
-                || !Integer(rawInput, "maskblur", 0, 64, out int blur))
-            {
-                return Error("局部重绘/扩图需要有效的蒙版，蒙版收缩 0–512、羽化 0–64。", "invalid_mask");
-            }
-            input["maskimage"] = mask;
-            input["maskshrinkgrow"] = shrink;
-            input["maskblur"] = blur;
-            input["initimagerecompositemask"] = true;
+            return maskError;
         }
 
         // ----- Upscale -----
-        if (mode == "upscale")
+        JObject upscaleError = AttachUpscale(rawInput, input, mode);
+        if (upscaleError is not null)
         {
-            if (!CopyOptionalNumber(rawInput, input, "refinerupscale", 1.5, 4, false) || input["refinerupscale"] is null)
-            {
-                return Error("请提供 1.5–4 的放大倍数。", "invalid_parameters");
-            }
-            // Keep the base stage close to the supplied image, then refine at the larger size.
-            input["initimagecreativity"] = 0.25;
+            return upscaleError;
         }
 
         // ----- LoRAs -----
-        JToken loraToken = rawInput["loras"];
-        if (loraToken is not null && loraToken.Type != JTokenType.Null)
+        JObject loraError = AttachLoras(session, rawInput, input);
+        if (loraError is not null)
         {
-            JArray loras = null;
-            JArray weights = null;
-            string loraError = null;
-            if (loraToken.Type != JTokenType.Array || !TryBuildLoras(loraToken as JArray, rawInput["loraweights"], LocalLoras(session), out loras, out weights, out loraError))
-            {
-                return Error(loraError ?? "LoRA 配置无效。", "invalid_loras");
-            }
-            if (loras.Count > 0)
-            {
-                input["loras"] = loras;
-                input["loraweights"] = weights;
-            }
+            return loraError;
         }
 
         // ----- Sampler / scheduler -----
@@ -333,6 +261,110 @@ public static partial class StudioApi
             }
         }
         return await ScheduleAndSubmit(session, images, input, pinnedServer, false, rawInput.Value<bool?>("async") is true, StandardModeProblems);
+    }
+
+    /// <summary>Validates and attaches the initial or edit image of a standard-mode request (img2img / inpaint / outpaint / upscale);
+    /// the check order and error texts are part of the API contract. Returns the error, or null when accepted.</summary>
+    private static JObject AttachReferenceImage(JObject rawInput, JObject input, string mode, string kind)
+    {
+        string reference = (string)rawInput["initimage"];
+        bool needsReference = mode is "img2img" or "inpaint" or "outpaint" or "upscale";
+        if (needsReference && string.IsNullOrEmpty(reference))
+        {
+            return Error("该创作方式需要先提供初始图。", "invalid_reference");
+        }
+        if (string.IsNullOrEmpty(reference))
+        {
+            return null;
+        }
+        if (kind != "image" || !ValidReference(reference))
+        {
+            return Error("仅图片流程支持初始图；请使用不超过 5 MB 的 PNG、JPEG 或 WebP。", "invalid_reference");
+        }
+        int refWidth = 0, refHeight = 0;
+        try
+        {
+            SwarmUI.Media.ImageFile decoded = SwarmUI.Media.ImageFile.FromDataString(reference);
+            (refWidth, refHeight) = decoded.GetResolution();
+            if (refWidth > 8192 || refHeight > 8192 || (long)refWidth * refHeight > 40_000_000)
+            {
+                return Error("初始图尺寸过大，请缩小到最长边 8192 像素以内且不超过 4000 万像素。", "invalid_reference");
+            }
+        }
+        catch (Exception)
+        {
+            return Error("无法解码初始图，请重新导出为 PNG、JPEG 或 WebP。", "invalid_reference");
+        }
+        input["initimage"] = reference;
+        // Img2img / inpaint / outpaint need a creativity value; upscale keeps it optional.
+        if (mode is "img2img" or "inpaint" or "outpaint")
+        {
+            if (!CopyOptionalNumber(rawInput, input, "initimagecreativity", 0, 1, false) || input["initimagecreativity"] is null)
+            {
+                return Error("请提供 0–1 的重绘幅度。", "invalid_parameters");
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Validates and attaches the mask of an inpaint / outpaint request. Returns the error, or null when accepted.</summary>
+    private static JObject AttachMask(JObject rawInput, JObject input, string mode)
+    {
+        string mask = (string)rawInput["maskimage"];
+        if (mode is not ("inpaint" or "outpaint"))
+        {
+            return null;
+        }
+        if (string.IsNullOrEmpty(mask) || !ValidReference(mask)
+            || !Integer(rawInput, "maskshrinkgrow", 0, 512, out int shrink)
+            || !Integer(rawInput, "maskblur", 0, 64, out int blur))
+        {
+            return Error("局部重绘/扩图需要有效的蒙版，蒙版收缩 0–512、羽化 0–64。", "invalid_mask");
+        }
+        input["maskimage"] = mask;
+        input["maskshrinkgrow"] = shrink;
+        input["maskblur"] = blur;
+        input["initimagerecompositemask"] = true;
+        return null;
+    }
+
+    /// <summary>Validates and attaches the upscale factor of an upscale request. Returns the error, or null when accepted.</summary>
+    private static JObject AttachUpscale(JObject rawInput, JObject input, string mode)
+    {
+        if (mode != "upscale")
+        {
+            return null;
+        }
+        if (!CopyOptionalNumber(rawInput, input, "refinerupscale", 1.5, 4, false) || input["refinerupscale"] is null)
+        {
+            return Error("请提供 1.5–4 的放大倍数。", "invalid_parameters");
+        }
+        // Keep the base stage close to the supplied image, then refine at the larger size.
+        input["initimagecreativity"] = 0.25;
+        return null;
+    }
+
+    /// <summary>Validates and attaches the LoRA selection of a standard-mode request against the account's allowed list.
+    /// Returns the error, or null when accepted.</summary>
+    private static JObject AttachLoras(Session session, JObject rawInput, JObject input)
+    {
+        JToken loraToken = rawInput["loras"];
+        if (loraToken is not null && loraToken.Type != JTokenType.Null)
+        {
+            JArray loras = null;
+            JArray weights = null;
+            string loraError = null;
+            if (loraToken.Type != JTokenType.Array || !TryBuildLoras(loraToken as JArray, rawInput["loraweights"], LocalLoras(session), out loras, out weights, out loraError))
+            {
+                return Error(loraError ?? "LoRA 配置无效。", "invalid_loras");
+            }
+            if (loras.Count > 0)
+            {
+                input["loras"] = loras;
+                input["loraweights"] = weights;
+            }
+        }
+        return null;
     }
 
     /// <summary>Joins prompt parts with commas, skipping empty ones.</summary>

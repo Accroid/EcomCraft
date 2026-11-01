@@ -19,10 +19,40 @@ using SwarmUI.WebAPI;
 
 namespace EcomCraftStudio.Studio;
 
-
 /// <summary>The published-workflow generate path. Part of the StudioApi partial class (R07).</summary>
 public static partial class StudioApi
 {
+    /// <summary>Validated pieces of one published-workflow request, gathered by <see cref="ValidatePublishedHeader"/> before the input object is built (R09).</summary>
+    private sealed class PublishedPlan
+    {
+        /// <summary>Image or video.</summary>
+        public string Kind;
+
+        /// <summary>Whether the workflow runs native (review-published graph) instead of a plain model.</summary>
+        public bool Native;
+
+        /// <summary>The chosen model; null for native workflows.</summary>
+        public T2IModel Model;
+
+        /// <summary>The creation description.</summary>
+        public string Prompt;
+
+        /// <summary>The excluded content.</summary>
+        public string Negative;
+
+        /// <summary>Generation width.</summary>
+        public int Width;
+
+        /// <summary>Generation height.</summary>
+        public int Height;
+
+        /// <summary>Images per batch.</summary>
+        public int Images;
+
+        /// <summary>The resolution step the engine requires.</summary>
+        public int Step;
+    }
+
     private static async Task<JObject> GeneratePublishedWorkflow(Session session, JObject rawInput, string workflowId, int? pinnedServer, string templateId = null,
         Func<JObject, Task> postProcess = null)
     {
@@ -37,6 +67,47 @@ public static partial class StudioApi
         {
             return Error("工作流不存在、未发布到简单工作台，或工作流配置无效。请刷新工作流列表。", "invalid_workflow");
         }
+        // Work on a copy from here on: the steps below fill defaults and the engine seed into the request.
+        rawInput = (JObject)rawInput.DeepClone();
+        PublishedPlan plan = new();
+        JObject headerError = ValidatePublishedHeader(session, rawInput, workflow, metadata, savedValues, plan);
+        if (headerError is not null)
+        {
+            return headerError;
+        }
+        JObject paramsError = MergePublishedParams(session, rawInput, workflow, metadata, savedValues, plan, out JObject input);
+        if (paramsError is not null)
+        {
+            return paramsError;
+        }
+        JObject finalizeError = FinalizePublishedRequest(session, rawInput, input, workflow, metadata, plan, templateId, postProcess);
+        if (finalizeError is not null)
+        {
+            return finalizeError;
+        }
+        // Dependencies are checked per server against the final request, so the scheduler only considers servers that can run it (Rule 1).
+        JObject executable = plan.Native ? ParseWorkflowObject(workflow.Prompt) : null;
+        JObject checkedInput = (JObject)input.DeepClone();
+        List<string> capability(BackendHandler.T2IBackendData data)
+        {
+            if (!plan.Native)
+            {
+                return StoredWorkflowProblems(workflow, data);
+            }
+            if (NativeWorkflowParameters.Supports(executable, metadata, checkedInput, ExecutionServers.Schema(data), out List<string> problems))
+            {
+                return [];
+            }
+            return problems.Count > 0 ? problems : ["缺少所需节点或模型"];
+        }
+        return await ScheduleAndSubmit(session, plan.Images, input, pinnedServer, true, rawInput.Value<bool?>("async") is true, capability, postProcess, candidates: templateId != null);
+    }
+
+    /// <summary>The request-wide checks of a published-workflow generation: kind, the workflow's own defaults, the model, the prompt and the
+    /// size; fills <paramref name="plan"/>. The check order and error texts are part of the API contract. Returns the error, or null when accepted.</summary>
+    private static JObject ValidatePublishedHeader(Session session, JObject rawInput, ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
+        JObject metadata, JObject savedValues, PublishedPlan plan)
+    {
         string kind = (string)rawInput["kind"];
         if (kind is not ("image" or "video"))
         {
@@ -51,7 +122,6 @@ public static partial class StudioApi
             return Error("所选工作流与当前创作类型不匹配，请切换图片/视频类型或选择其他工作流。", "invalid_mode");
         }
         bool native = WorkflowReview.IsUsableBy(workflow.Name, session.User.UserID);
-        rawInput = (JObject)rawInput.DeepClone();
         if (native)
         {
             JObject defaults = NativeWorkflowParameters.FormDefaults(metadata, savedValues);
@@ -79,7 +149,7 @@ public static partial class StudioApi
             return Error("本版工作台只接受普通描述，不支持原生 <…> 指令、预设或 __通配符__。", "unsupported_prompt_syntax");
         }
         int step = Math.Max(8, model?.ModelClass.CompatClass.ResolutionPrecision ?? 8);
-        // The workflow path serves the simple mode's candidate count, widened to 20 (F55); the standard path below keeps 1–4.
+        // The workflow path serves the simple mode's candidate count, widened to 20 (F55); the standard path keeps 1–4.
         int imageLimit = kind == "video" ? 1 : 20;
         if (!Integer(rawInput, "width", 256, 2048, out int width) || width % step != 0
             || !Integer(rawInput, "height", 256, 2048, out int height) || height % step != 0
@@ -87,13 +157,31 @@ public static partial class StudioApi
         {
             return Error($"尺寸须为 256–2048 且是 {step} 的倍数；图片每批 1–20 张，视频每批 1 条。", "invalid_parameters");
         }
+        plan.Kind = kind;
+        plan.Native = native;
+        plan.Model = model;
+        plan.Prompt = prompt;
+        plan.Negative = negative;
+        plan.Width = width;
+        plan.Height = height;
+        plan.Images = images;
+        plan.Step = step;
+        return null;
+    }
+
+    /// <summary>Merges the workflow's own saved values and the request's parameters into one allowlisted <paramref name="input"/> object;
+    /// every parameter is validated against the published definition. Returns the error, or null when accepted.</summary>
+    private static JObject MergePublishedParams(Session session, JObject rawInput, ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
+        JObject metadata, JObject savedValues, PublishedPlan plan, out JObject input)
+    {
         JToken rawWorkflowParams = rawInput["workflow_params"];
         if (rawWorkflowParams is not null && rawWorkflowParams.Type is not (JTokenType.Object or JTokenType.Null))
         {
+            input = null;
             return Error("工作流参数格式无效。", "invalid_workflow_parameters");
         }
         JObject requestedParams = rawWorkflowParams as JObject ?? new JObject();
-        if (native)
+        if (plan.Native)
         {
             foreach (JProperty property in metadata.Properties())
             {
@@ -107,16 +195,18 @@ public static partial class StudioApi
         }
         if (requestedParams.Count > 60)
         {
+            input = null;
             return Error("工作流参数数量超过限制。", "invalid_workflow_parameters");
         }
         JArray publishedFields = PublishedWorkflowInputs(session, metadata, savedValues, out bool workflowInputsSupported);
         if (!workflowInputsSupported)
         {
+            input = null;
             return Error("该工作流包含暂不支持的网页输入定义，请在 SwarmUI 工作流编辑器中修正后重新发布。", "invalid_workflow_parameters");
         }
         HashSet<string> allowedWorkflowInputIds = new(publishedFields.OfType<JObject>()
             .Select(field => field["id"]?.ToString()).Where(id => !string.IsNullOrWhiteSpace(id)), StringComparer.OrdinalIgnoreCase);
-        JObject input = new()
+        input = new JObject()
         {
             // This must precede dynamic input IDs so SwarmUI recognizes them as parameters of this stored workflow.
             ["comfyuicustomworkflow"] = workflow.Name,
@@ -151,10 +241,12 @@ public static partial class StudioApi
                 || WorkflowFormParameterIds.Contains(property.Name) || WorkflowDeniedParameterIds.Contains(property.Name)
                 || !metadata.TryGetValue(property.Name, out JToken definition) || definition is not JObject definitionObject)
             {
+                input = null;
                 return Error($"工作流参数“{property.Name}”不在此工作流的允许输入列表中。", "invalid_workflow_parameters");
             }
             if (!ValidatePublishedWorkflowInput(session, property.Name, property.Value, definitionObject, out string validationError))
             {
+                input = null;
                 return Error(validationError, "invalid_workflow_parameters");
             }
             string type = definitionObject["type"]?.ToString()?.ToLowerInvariant() ?? "";
@@ -167,10 +259,17 @@ public static partial class StudioApi
                 input[property.Name] = property.Value.DeepClone();
             }
         }
-        // Build the root request from a strict allowlist; never forward arbitrary client-supplied routes, metadata or workflow JSON.
-        if (!native)
+        return null;
+    }
+
+    /// <summary>Builds the root generation request from a strict allowlist; never forwards arbitrary client-supplied routes, metadata or workflow JSON.
+    /// Returns the error, or null when accepted.</summary>
+    private static JObject FinalizePublishedRequest(Session session, JObject rawInput, JObject input, ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
+        JObject metadata, PublishedPlan plan, string templateId, Func<JObject, Task> postProcess)
+    {
+        if (!plan.Native)
         {
-            input["model"] = model.Name;
+            input["model"] = plan.Model.Name;
         }
         else
         {
@@ -197,18 +296,18 @@ public static partial class StudioApi
                 }
             }
         }
-        if (native && StandardWorkflows.IsStandard(workflow.Name) && !StandardCanvasUsable(input[StandardWorkflows.ProductImageParam]?.ToString()))
+        if (plan.Native && StandardWorkflows.IsStandard(workflow.Name) && !StandardCanvasUsable(input[StandardWorkflows.ProductImageParam]?.ToString()))
         {
             return Error("标准工作流只重绘商品周围的场景，商品图需要是透明背景的商品画布。请通过“场景图”或“细节图”模板出图，或上传已抠图的透明 PNG。", "invalid_reference");
         }
-        input["prompt"] = prompt;
-        input["negativeprompt"] = negative;
-        input["width"] = width;
-        input["height"] = height;
-        input["images"] = images;
+        input["prompt"] = plan.Prompt;
+        input["negativeprompt"] = plan.Negative;
+        input["width"] = plan.Width;
+        input["height"] = plan.Height;
+        input["images"] = plan.Images;
         input["webhooks"] = "None";
         input["donotsave"] = false;
-        if (!CopyOptionalNumber(rawInput, input, "seed", -1, native ? 9007199254740991 : uint.MaxValue, true)
+        if (!CopyOptionalNumber(rawInput, input, "seed", -1, plan.Native ? 9007199254740991 : uint.MaxValue, true)
             || !CopyOptionalNumber(rawInput, input, "steps", 1, 100, true)
             || !CopyOptionalNumber(rawInput, input, "cfgscale", 0, 30, false))
         {
@@ -222,7 +321,7 @@ public static partial class StudioApi
         {
             return Error(schedulerError, "invalid_scheduler");
         }
-        if (kind == "video")
+        if (plan.Kind == "video")
         {
             if (!Integer(rawInput, "text2videoframes", 1, 129, out int frames))
             {
@@ -249,21 +348,6 @@ public static partial class StudioApi
             // Marks the work as a composite of the real product and a generated picture, for the provenance metadata written on export (F22).
             ((JObject)input["extra_metadata"])["ecomcraft_preserve"] = "true";
         }
-        // Dependencies are checked per server against the final request, so the scheduler only considers servers that can run it (Rule 1).
-        JObject executable = native ? ParseWorkflowObject(workflow.Prompt) : null;
-        JObject checkedInput = (JObject)input.DeepClone();
-        List<string> capability(BackendHandler.T2IBackendData data)
-        {
-            if (!native)
-            {
-                return StoredWorkflowProblems(workflow, data);
-            }
-            if (NativeWorkflowParameters.Supports(executable, metadata, checkedInput, ExecutionServers.Schema(data), out List<string> problems))
-            {
-                return [];
-            }
-            return problems.Count > 0 ? problems : ["缺少所需节点或模型"];
-        }
-        return await ScheduleAndSubmit(session, images, input, pinnedServer, true, rawInput.Value<bool?>("async") is true, capability, postProcess, candidates: templateId != null);
+        return null;
     }
 }
