@@ -118,8 +118,10 @@ class SimpleProductsPart {
         return button;
     }
 
-    /** Uses a generated work from the gallery as a product photo (F52): read as is when it fits, otherwise compressed in the browser to at most 5 MB.
-     * The work itself is not changed; the copy goes through the same quality check and product library as an upload. */
+    /** Uses a generated work from the gallery as a product photo (F52): read as is when it fits, otherwise made small enough for the 5 MB limit
+     * in the browser. Transparency decides the way down (F83): a transparent work is scaled down and stays a PNG, so its alpha is never thrown
+     * away onto a white JPEG; only an opaque one becomes JPEG. The work itself is not changed; the copy goes through the same quality check and
+     * product library as an upload. */
     static async useGalleryImage(src, name, button) {
         let tr = this.api.tr;
         if (this.products.length >= 20) {
@@ -135,13 +137,16 @@ class SimpleProductsPart {
             let blob = await response.blob();
             let data = await this.blobToDataUrl(blob);
             if (!['image/png', 'image/jpeg', 'image/webp'].includes(blob.type) || blob.size > this.maxProductBytes) {
-                data = await this.compressImage(data, this.maxProductBytes);
+                let image = await this.loadImage(data);
+                data = await this.shrinkImage(image, await this.imageIsTransparent(image));
             }
             this.closePicker();
             await this.addPhoto(data, name, 'gallery');
         }
         catch (error) {
-            this.message(tr('这张作品暂时无法读取，请换一张或稍后重试。'), true);
+            this.message(error.message == 'png_oversize'
+                ? tr('这张透明图压缩后仍超过 5 MB，无法上传。请换一张更简单的透明图，或先用系统工具压小。')
+                : tr('这张作品暂时无法读取，请换一张或稍后重试。'), true);
         }
         finally {
             button.disabled = false;
@@ -159,8 +164,8 @@ class SimpleProductsPart {
     }
 
     /** Scales a loaded image down to at most 16 megapixels. A transparent one stays a PNG at any size (F83): the scale drops until it fits in 5 MB,
-     * and only when even below the recommended side it still cannot, the user's own PNG bytes are kept — never a white JPEG that throws the alpha away.
-     * Others become JPEG within 5 MB. */
+     * and when even below the recommended side it cannot, the user's own PNG bytes are kept when they fit the limit — never a white JPEG that throws
+     * the alpha away. When they do not fit either, there is nothing acceptable to send, so 'png_oversize' tells the caller to explain and give up. */
     static async shrinkImage(image, transparent) {
         if (transparent) {
             let min = Number(this.quality && this.quality.min_side) || 512;
@@ -179,7 +184,10 @@ class SimpleProductsPart {
                 }
                 scale *= 0.75;
             }
-            return image.src;
+            if (this.dataUrlBytes(image.src) <= this.maxProductBytes) {
+                return image.src;
+            }
+            throw new Error('png_oversize');
         }
         return await this.compressImage(image.src, this.maxProductBytes);
     }
@@ -336,14 +344,22 @@ class SimpleProductsPart {
         });
     }
 
-    /** Reads a product photo from this computer or the camera into memory (origin 'local' or 'camera'). */
+    /** Reads a product photo from this computer or the camera into memory (origin 'local' or 'camera'). PNG and WebP can carry a cut-out (F83),
+     * so up to maxLocalReadBytes they are read anyway and shrunk in the browser later, instead of being refused here at the 5 MB upload limit;
+     * a JPEG over 5 MB has no alpha to lose and is refused as before. */
     static readFile(file, origin) {
         let tr = this.api.tr;
         if (!file) {
             return;
         }
-        if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > this.maxProductBytes) {
+        let typeOk = ['image/png', 'image/jpeg', 'image/webp'].includes(file.type);
+        let canHoldAlpha = file.type == 'image/png' || file.type == 'image/webp';
+        if (!typeOk || (!canHoldAlpha && file.size > this.maxProductBytes)) {
             this.message(tr('请选择不超过 5 MB 的 PNG、JPEG 或 WebP 图片。文件尚未上传。'), true);
+            return;
+        }
+        if (file.size > this.maxLocalReadBytes) {
+            this.message(tr('这张图片超过 64 MB，请先用系统工具压缩或裁小后再上传。文件尚未上传。'), true);
             return;
         }
         let reader = new FileReader();
@@ -353,12 +369,15 @@ class SimpleProductsPart {
     }
 
     /** Adds a new product photo (a data URL of at most 5 MB) from any entry (F52): checks its quality (F38), makes it the current photo and saves it to the product library.
-     * <origin> is 'local', 'camera' or 'gallery' and is shown on the thumbnail. */
+     * <origin> is 'local', 'camera' or 'gallery' and is shown on the thumbnail. A photo over 5 MB or over 16 megapixels is shrunk here (F83):
+     * a transparent one is scaled down as a PNG, an opaque local file is refused with the picker's own message, and a transparent one that not even
+     * the smallest recommended size fits is refused with its own message — the server would reject anything larger. */
     static async addPhoto(data, name, origin) {
         if (this.products.length >= 20) {
             this.message(this.api.tr('一次最多 20 张商品图。'), true);
             return;
         }
+        let tr = this.api.tr;
         let product = { id: null, name, origin, data, source: data, cutout: null, width: 0, height: 0 };
         this.product = product;
         this.products.push(product);
@@ -375,10 +394,26 @@ class SimpleProductsPart {
             // Quality checks (F38): warnings with suggestions, never a block; the photo is usable anyway.
             product.qualityIssues = this.uploadIssues(image.naturalWidth, image.naturalHeight, imageData, this.quality);
             let transparent = this.hasTransparency(imageData);
-            // A phone photo can pass 40 megapixels while staying under 5 MB; the server's cut-out and product compositing refuse that, so shrink it here.
-            if (this.compressionScale(image.naturalWidth, image.naturalHeight) < 1) {
+            let overBytes = this.dataUrlBytes(product.data) > this.maxProductBytes;
+            if (overBytes && !transparent && (origin == 'local' || origin == 'camera')) {
+                // An opaque local file over 5 MB cannot keep anything by shrinking: refuse it right away, as the picker itself does.
+                this.dropProduct(product);
+                this.message(tr('请选择不超过 5 MB 的 PNG、JPEG 或 WebP 图片。文件尚未上传。'), true);
+                return;
+            }
+            if (overBytes || this.compressionScale(image.naturalWidth, image.naturalHeight) < 1) {
                 let before = product.data;
-                product.data = await this.shrinkImage(image, transparent);
+                try {
+                    product.data = await this.shrinkImage(image, transparent);
+                }
+                catch (error) {
+                    if (error && error.message == 'png_oversize') {
+                        this.dropProduct(product);
+                        this.message(tr('这张透明图压缩后仍超过 5 MB，无法上传。请换一张更简单的透明图，或先用系统工具压小。'), true);
+                        return;
+                    }
+                    throw error;
+                }
                 product.source = product.data;
                 let shrunk = await this.loadImage(product.data);
                 product.width = shrunk.naturalWidth;
@@ -407,6 +442,38 @@ class SimpleProductsPart {
         }
         this.message('', false);
         this.saveToLibrary(product);
+    }
+
+    /** The bytes a data URL carries, from its base64 length: the closest a browser can tell without re-encoding. */
+    static dataUrlBytes(data) {
+        let base64 = String(data).slice(String(data).indexOf(',') + 1);
+        let padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+        return Math.max(0, Math.floor(base64.length * 3 / 4) - padding);
+    }
+
+    /** Whether a loaded image is a cut-out, the same rule as an upload (F83): drawn small and read back, so large works are not decoded twice more. */
+    static async imageIsTransparent(image) {
+        try {
+            let canvas = document.createElement('canvas');
+            canvas.width = Math.min(512, image.naturalWidth);
+            canvas.height = Math.max(1, Math.round(image.naturalHeight * canvas.width / Math.max(1, image.naturalWidth)));
+            let context = canvas.getContext('2d');
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+            return this.hasTransparency(context.getImageData(0, 0, canvas.width, canvas.height));
+        }
+        catch (error) {
+            return false;
+        }
+    }
+
+    /** Takes a just-added photo back out of the list after it was refused (too large to send at all), and shows the picker state again. */
+    static dropProduct(product) {
+        let restore = this.product;
+        this.product = product;
+        this.clearProduct();
+        if (restore != product && restore) {
+            this.selectProduct(restore);
+        }
     }
 
     /** Loads an image element from a data URL. */

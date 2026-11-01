@@ -94,6 +94,9 @@ class SimpleMode {
     /** Candidates whose star request is still running, so a second click waits. */
     static starring = new Set();
     static maxProductBytes = 5 * 1024 * 1024;
+    /** Largest local PNG or WebP read at all (F83): such files can carry a cut-out, so up to this size they are read anyway and shrunk in the
+     * browser instead of being refused at the 5 MB upload limit; the server's own limit stays 5 MB. Larger files are refused with their own message. */
+    static maxLocalReadBytes = 64 * 1024 * 1024;
     static placement = { x: 0.5, y: 0.56, size: 0.55 };
 
     /** Which reference's placement the preview edits in reference mode (T79), or -1 for the product's own placement. */

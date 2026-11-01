@@ -199,6 +199,27 @@ public static class ProductLibrary
         ["cutout_image"] = record.Cutout is null ? null : $"/EcomCraft/product-image/{record.Id}/cutout"
     };
 
+    /// <summary>Edge warnings of a saved cut-out's rim (F83), analyzed at the work size: the cut-out is scaled down first, because a client can send
+    /// up to 100 megapixels. Any failure only means no warnings — a save that already succeeded is never failed by the analysis, and there are none
+    /// without a cut-out.</summary>
+    private static List<string> EdgeWarnings(byte[] cut)
+    {
+        if (cut is null || cut.Length == 0)
+        {
+            return [];
+        }
+        try
+        {
+            byte[] fitted = PostProcess.ProductComposite.FitForWork(cut) ?? [];
+            return ProductEdgeRules.TryAnalyze(fitted);
+        }
+        catch (Exception ex) when (ex is IOException or SixLabors.ImageSharp.UnknownImageFormatException or SixLabors.ImageSharp.InvalidImageContentException
+            or NotSupportedException)
+        {
+            return [];
+        }
+    }
+
     [API.APIDescription("List the current account's saved products (newest first), without file locations.", "products: [{ id: \"…\", name: \"\", has_cutout: true }]")]
     public static Task<JObject> EcomCraftStudioProducts(Session session)
     {
@@ -250,6 +271,7 @@ public static class ProductLibrary
             Logs.Warning($"EcomCraft could not save product files: {ex.Message}");
             return Task.FromResult(StudioApi.Error("商品图无法保存：作品库位置可能离线或空间不足，请稍后重试。", "product_save_failed"));
         }
+        JObject saved;
         lock (Lock)
         {
             string error = Loaded().Add(record);
@@ -264,9 +286,12 @@ public static class ProductLibrary
                 TryDeleteFolder(record.Folder);
                 return Task.FromResult(StudioApi.Error(error, "product_save_failed"));
             }
-            // Edge quality of a saved cut-out's rim (F83) becomes plain-language notices at the upload confirmation; it never blocks anything.
-            return Task.FromResult(new JObject() { ["product"] = Json(record), ["edge_warnings"] = new JArray(ProductEdgeRules.TryAnalyze(cut)) });
+            saved = new JObject() { ["product"] = Json(record) };
         }
+        // Edge quality becomes plain-language notices at the upload confirmation; it never blocks anything. The analysis runs outside the index
+        // lock and on a work-size copy, so neither a huge cut-out nor a failed analysis can hold up or fail the save.
+        saved["edge_warnings"] = new JArray(EdgeWarnings(cut));
+        return Task.FromResult(saved);
     }
 
     [API.APIDescription("Update one of the current account's products: name, confirmed cut-out (data URL) and placement (x, y as 0–1, size 0.1–1.5). Only given fields change. rawInput is the root request JSON.", "product: { id: \"…\" }")]

@@ -99,8 +99,8 @@ public static class ProductComposite
         return cutout.Clone(context => context.Crop(crop));
     }
 
-    /// <summary>Whether the image is a cut-out: at least 2% of its pixels are transparent, or at least half of the border ring is, which also catches
-    /// a cut-out whose product fills almost the whole canvas and whose few transparent pixels lie along the border (F83).</summary>
+    /// <summary>Whether the image is a cut-out: at least 2% of its pixels are transparent, or at least 5% of the border ring is, which also catches
+    /// a rounded product that fills almost the whole canvas and whose few transparent pixels lie along the border (F83).</summary>
     public static bool HasTransparency(Image<Rgba32> image)
     {
         long transparent = 0, ring = 0, ringTransparent = 0;
@@ -132,7 +132,7 @@ public static class ProductComposite
         {
             return true;
         }
-        return ringTransparent * 2 >= ring;
+        return ringTransparent * 20 >= ring;
     }
 
     /// <summary>The cut-out scaled to its place on a canvas of the given size; at the same size it is copied without resampling, so pixels stay exact.</summary>
@@ -145,7 +145,8 @@ public static class ProductComposite
     {
         Image<Rgba32> canvas = new(width, height, new Rgba32(fill, fill, fill, transparent ? (byte)0 : (byte)255));
         (int X, int Y, int Width, int Height) rect = placement.Rect(width, height, cutout.Width, cutout.Height);
-        using Image<Rgba32> product = Defringed(Scaled(cutout, rect));
+        using Image<Rgba32> scaled = Scaled(cutout, rect);
+        using Image<Rgba32> product = Defringed(scaled);
         Blend(canvas, product, rect.X, rect.Y, null, transparent);
         return canvas;
     }
@@ -155,7 +156,8 @@ public static class ProductComposite
     public static void PasteBack(Image<Rgba32> generated, Image<Rgba32> cutout, Placement placement, int feather = FeatherPx)
     {
         (int X, int Y, int Width, int Height) rect = placement.Rect(generated.Width, generated.Height, cutout.Width, cutout.Height);
-        using Image<Rgba32> product = Defringed(Scaled(cutout, rect));
+        using Image<Rgba32> scaled = Scaled(cutout, rect);
+        using Image<Rgba32> product = Defringed(scaled);
         Blend(generated, product, rect.X, rect.Y, FeatheredAlpha(product, feather), false);
     }
 
@@ -179,7 +181,8 @@ public static class ProductComposite
     public static void PasteBlended(Image<Rgba32> generated, Image<Rgba32> cutout, Placement placement)
     {
         (int X, int Y, int Width, int Height) rect = placement.Rect(generated.Width, generated.Height, cutout.Width, cutout.Height);
-        using Image<Rgba32> product = Defringed(Scaled(cutout, rect));
+        using Image<Rgba32> scaled = Scaled(cutout, rect);
+        using Image<Rgba32> product = Defringed(scaled);
         byte[] alpha = FeatheredAlpha(product, BlendFeatherPx);
         TransferTone(product, generated, rect.X, rect.Y, alpha);
         DrawContactShadow(generated, product, rect.X, rect.Y);
@@ -294,18 +297,27 @@ public static class ProductComposite
         });
     }
 
-    /// <summary>The cut-out with the color of every semi-transparent pixel replaced by the color of the nearest fully opaque pixel, so the white or dark
-    /// rim a third-party cut-out leaves behind does not show once the product is placed on another picture (F83). Only pixels with alpha below 255
-    /// change, and only their color: fully opaque pixels and every alpha value stay exactly as they were, and the saved library files are never touched.</summary>
+    /// <summary>How far from a fully opaque pixel the recoloring of the rim reaches (F83): only this many steps out is edge, where a third-party
+    /// cut-out's fringe sits. Farther semi-transparent pixels are the inside of glass or a liquid, not edge, and keep their own color.</summary>
+    public const int DefringePx = 3;
+
+    /// <summary>The cut-out with the color of the semi-transparent rim replaced by the color of the nearest fully opaque pixel, so the white or dark
+    /// rim a third-party cut-out leaves behind does not show once the product is placed on another picture (F83). Only rim pixels within
+    /// <see cref="DefringePx"/> of an opaque pixel and with alpha above 0 change, and only their color: fully opaque pixels, every alpha value and
+    /// invisible pixels' stored color stay exactly as they were, and the saved library files are never touched.</summary>
     public static Image<Rgba32> Defringed(Image<Rgba32> cutout)
     {
         Image<Rgba32> result = cutout.Clone();
         int width = result.Width, height = result.Height;
         Rgba32[] pixels = new Rgba32[width * height];
         result.CopyPixelDataTo(pixels);
-        // A breadth-first search from every opaque pixel hands each remaining pixel the color of the opaque pixel nearest to it.
+        // A breadth-first search from every opaque pixel hands each rim pixel the color of the opaque pixel nearest to it. The color travels in its
+        // own array, so the stored color of a fully transparent pixel never leaks into the rim behind it, and the search stops after DefringePx
+        // steps: pixels farther out are semi-transparent on their own (glass, liquids) and are not an edge to fix.
         int[] queue = new int[pixels.Length];
+        int[] distance = new int[pixels.Length];
         bool[] reached = new bool[pixels.Length];
+        Rgb24[] spread = new Rgb24[pixels.Length];
         int head = 0, tail = 0;
         for (int i = 0; i < pixels.Length; i++)
         {
@@ -313,6 +325,7 @@ public static class ProductComposite
             {
                 queue[tail++] = i;
                 reached[i] = true;
+                spread[i] = pixels[i].Rgb;
             }
         }
         while (head < tail)
@@ -337,13 +350,19 @@ public static class ProductComposite
                     {
                         continue;
                     }
+                    int step = distance[at] + 1;
                     reached[ni] = true;
+                    spread[ni] = spread[at];
                     if (pixels[ni].A > 0)
                     {
-                        // Invisible fully transparent pixels keep their stored color; only the visible rim is recolored.
-                        pixels[ni] = new Rgba32(pixels[at].R, pixels[at].G, pixels[at].B, pixels[ni].A);
+                        // Only the visible rim is recolored; invisible fully transparent pixels keep their stored color.
+                        pixels[ni] = new Rgba32(spread[at].R, spread[at].G, spread[at].B, pixels[ni].A);
                     }
-                    queue[tail++] = ni;
+                    if (step < DefringePx)
+                    {
+                        distance[ni] = step;
+                        queue[tail++] = ni;
+                    }
                 }
             }
         }
@@ -362,8 +381,9 @@ public static class ProductComposite
     }
 
     /// <summary>Alpha of the product with its edge softened inwards: a box blur of the alpha, never above the original alpha. A part thinner than the
-    /// feather radius (a cord, a thin handle) would be eaten by the blur, so every solid part is feathered with the radius its own depth allows:
-    /// a thin part keeps a smaller radius and so stays visible, while its edge is still softened and nothing of the original background leaks out.</summary>
+    /// feather radius (a cord, a thin handle) would be eaten by the blur, so every pixel is judged on its own (F83): the core is the solid area deeper
+    /// than the radius, and only pixels within the radius of the core take the full blur; a pixel outside it belongs to a thin part and is feathered
+    /// with the smaller radius its own depth allows, so it stays visible while its edge is still softened and nothing of the original background leaks out.</summary>
     public static byte[] FeatheredAlpha(Image<Rgba32> product, int radius)
     {
         int width = product.Width;
@@ -385,16 +405,50 @@ public static class ProductComposite
             return alpha;
         }
         bool[] solid = new bool[alpha.Length];
+        bool[] open = new bool[alpha.Length];
+        bool[] core = new bool[alpha.Length];
         for (int i = 0; i < alpha.Length; i++)
         {
             solid[i] = alpha[i] >= SolidAlpha;
+            open[i] = alpha[i] < SolidAlpha;
         }
-        // Depth of every solid pixel: steps to the nearest non-solid pixel (0 outside the solid parts), a two-pass Chebyshev distance.
+        // Depth of every solid pixel: steps to the nearest non-solid pixel (0 outside the solid parts).
         const int Far = int.MaxValue / 4;
-        int[] depth = new int[alpha.Length];
-        for (int i = 0; i < depth.Length; i++)
+        int[] depth = ChebyshevDistance(open, width, height, Far);
+        for (int i = 0; i < alpha.Length; i++)
         {
-            depth[i] = solid[i] ? Far : 0;
+            core[i] = solid[i] && depth[i] > radius;
+        }
+        // Steps from the core, so a pixel of the core grown by the radius can be told from a pixel of a thin part beside it.
+        int[] toCore = ChebyshevDistance(core, width, height, Far);
+        int[] featherOf = new int[alpha.Length];
+        HashSet<int> radii = [radius];
+        for (int i = 0; i < alpha.Length; i++)
+        {
+            featherOf[i] = solid[i] && toCore[i] > radius ? Math.Clamp(depth[i] - 1, 1, radius) : radius;
+            radii.Add(featherOf[i]);
+        }
+        Dictionary<int, byte[]> blurred = [];
+        foreach (int r in radii)
+        {
+            blurred[r] = BoxBlurred(alpha, width, height, r);
+        }
+        byte[] result = new byte[alpha.Length];
+        for (int i = 0; i < alpha.Length; i++)
+        {
+            result[i] = (byte)Math.Min(blurred[featherOf[i]][i], alpha[i]);
+        }
+        return result;
+    }
+
+    /// <summary>A two-pass Chebyshev distance transform over an image-sized flag array: for every pixel the steps to the nearest flagged pixel,
+        /// with flagged pixels at 0. A pixel no flagged pixel ever reaches stays at <paramref name="far"/> (clamped only by the additions below).</summary>
+    private static int[] ChebyshevDistance(bool[] flagged, int width, int height, int far)
+    {
+        int[] distance = new int[flagged.Length];
+        for (int i = 0; i < distance.Length; i++)
+        {
+            distance[i] = flagged[i] ? 0 : far;
         }
         for (int pass = 0; pass < 2; pass++)
         {
@@ -405,11 +459,11 @@ public static class ProductComposite
                 {
                     int x = pass == 0 ? passX : width - 1 - passX;
                     int at = y * width + x;
-                    if (!solid[at])
+                    if (flagged[at])
                     {
                         continue;
                     }
-                    int nearest = Far;
+                    int nearest = far;
                     for (int dy = -1; dy <= 1; dy++)
                     {
                         for (int dx = -1; dx <= 1; dx++)
@@ -424,83 +478,14 @@ public static class ProductComposite
                             {
                                 continue;
                             }
-                            nearest = Math.Min(nearest, depth[ny * width + nx]);
+                            nearest = Math.Min(nearest, distance[ny * width + nx]);
                         }
                     }
-                    depth[at] = Math.Min(depth[at], nearest + 1);
+                    distance[at] = Math.Min(distance[at], nearest + 1);
                 }
             }
         }
-        // Every solid part keeps the radius its own depth allows; deeper than the radius changes nothing, so the cap keeps the numbers small.
-        int[] partOf = new int[alpha.Length];
-        List<int> partDepth = [];
-        Stack<int> pending = new();
-        for (int start = 0; start < alpha.Length; start++)
-        {
-            if (!solid[start] || partOf[start] != 0)
-            {
-                continue;
-            }
-            int id = partDepth.Count + 1;
-            int deepest = 1;
-            pending.Push(start);
-            partOf[start] = id;
-            while (pending.Count > 0)
-            {
-                int at = pending.Pop();
-                deepest = Math.Max(deepest, Math.Min(depth[at], radius + 1));
-                int x = at % width, y = at / width;
-                for (int dy = -1; dy <= 1; dy++)
-                {
-                    for (int dx = -1; dx <= 1; dx++)
-                    {
-                        if (dx == 0 && dy == 0)
-                        {
-                            continue;
-                        }
-                        int nx = x + dx, ny = y + dy;
-                        if (nx < 0 || ny < 0 || nx >= width || ny >= height)
-                        {
-                            continue;
-                        }
-                        int ni = ny * width + nx;
-                        if (solid[ni] && partOf[ni] == 0)
-                        {
-                            partOf[ni] = id;
-                            pending.Push(ni);
-                        }
-                    }
-                }
-            }
-            partDepth.Add(deepest);
-        }
-        // Each solid part is blurred with its own radius; pixels outside any part take the full one.
-        Dictionary<int, byte[]> blurred = [];
-        HashSet<int> radii = [radius];
-        for (int i = 0; i < alpha.Length; i++)
-        {
-            if (partOf[i] != 0)
-            {
-                int deepest = partDepth[partOf[i] - 1];
-                radii.Add(deepest > radius ? radius : Math.Clamp(deepest - 1, 1, radius));
-            }
-        }
-        foreach (int r in radii)
-        {
-            blurred[r] = BoxBlurred(alpha, width, height, r);
-        }
-        byte[] result = new byte[alpha.Length];
-        for (int i = 0; i < alpha.Length; i++)
-        {
-            int r = radius;
-            if (partOf[i] != 0)
-            {
-                int deepest = partDepth[partOf[i] - 1];
-                r = deepest > radius ? radius : Math.Clamp(deepest - 1, 1, radius);
-            }
-            result[i] = (byte)Math.Min(blurred[r][i], alpha[i]);
-        }
-        return result;
+        return distance;
     }
 
     /// <summary>A box blur of the alpha with the given radius, counting pixels outside the image as transparent, so the edge of the image itself also softens.</summary>

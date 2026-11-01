@@ -407,6 +407,8 @@ window.EcomCraftLanguages.en = {
     "放大后会用模型重新精炼细节。": "After upscaling, the model refines the details again.",
     "向指定方向扩展画面，扩展区域由 AI 补全。": "Extends the picture in the chosen directions; AI fills in the extended area.",
     "请选择不超过 5 MB 的 PNG、JPEG 或 WebP 图片。文件尚未上传。": "Choose a PNG, JPEG or WebP image of at most 5 MB. The file has not been uploaded.",
+    "这张图片超过 64 MB，请先用系统工具压缩或裁小后再上传。文件尚未上传。": "This image is over 64 MB. Compress or crop it with a system tool first, then upload it again. The file has not been uploaded.",
+    "这张透明图压缩后仍超过 5 MB，无法上传。请换一张更简单的透明图，或先用系统工具压小。": "This transparent image is still over 5 MB after compressing, so it cannot be uploaded. Use a simpler transparent image, or make it smaller with a system tool first.",
     "初始图尺寸过大，请先缩小到最长边 8192 像素以内且不超过 4000 万像素。": "The initial image is too large. Scale it down to at most 8192 pixels on the longest side and at most 40 megapixels.",
     "无法读取文件，请重新选择。": "Could not read the file. Choose it again.",
     "初始图已选好，提交生成时才发送给服务。": "Initial image chosen; it is sent to the service only when you submit.",

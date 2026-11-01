@@ -99,6 +99,10 @@ public static class ProductEdgeRules
     /// <summary>The warning codes of an encoded cut-out image, or an empty list when it cannot be decoded: the analysis never fails a request.</summary>
     public static List<string> TryAnalyze(byte[] encoded)
     {
+        if (encoded is null || encoded.Length == 0)
+        {
+            return [];
+        }
         try
         {
             using Image<Rgba32> image = ISImage.Load<Rgba32>(encoded);

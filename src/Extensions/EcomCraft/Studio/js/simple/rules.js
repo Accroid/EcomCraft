@@ -75,8 +75,8 @@ class SimpleRulesPart {
         return { x: clamp(placement.x, 0, 1), y: clamp(placement.y, 0, 1), size: clamp(placement.size, 0.1, 1.5) };
     }
 
-    /** Whether an image is a cut-out, the same rule as the server: at least 2% of its pixels are transparent, or at least half of the border ring is,
-     * which also catches a product that fills almost the whole canvas and whose few transparent pixels lie along the border (F83). */
+    /** Whether an image is a cut-out, the same rule as the server: at least 2% of its pixels are transparent, or at least 5% of the border ring is,
+     * which also catches a rounded product that fills almost the whole canvas and whose few transparent pixels lie along the border (F83). */
     static hasTransparency(imageData) {
         let width = imageData.width || 0, height = imageData.height || 0, data = imageData.data;
         let transparent = 0, ring = 0, ringTransparent = 0;
@@ -98,7 +98,7 @@ class SimpleRulesPart {
         if (transparent * 50 >= width * height) {
             return true;
         }
-        return ringTransparent * 2 >= ring;
+        return ringTransparent * 20 >= ring;
     }
 
     /** Server edge warnings (F83) as quality issues: the codes arrive with the cut-out or the product save, the text comes from the translation table. */
