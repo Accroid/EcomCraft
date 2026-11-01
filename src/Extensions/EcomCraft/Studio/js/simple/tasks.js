@@ -4,6 +4,8 @@
  * Simple mode: the result list: redo, tracking and downloads. Part of simple.js since R15; static methods are copied onto SimpleMode by adopt(), so callers and this stay unchanged.
  */
 class SimpleTasksPart {
+    /** Fills the page with the settings of a filed work (F04): single image task, its template, platform, saved product, prompt and seed.
+     * The recipe comes from the project record, which the server read from the work's own metadata. Returns false when the template is no longer offered. */
     static async applyRecipe(recipe) {
         let tr = this.api.tr;
         // Opening the view starts loading the lists too; wait for that load instead of racing it.
@@ -60,14 +62,10 @@ class SimpleTasksPart {
     }
 
     /** Stops applying the filed work's seed and prompt; the page keeps the filled-in choices. */
-
-    /** Stops applying the filed work's seed and prompt; the page keeps the filled-in choices. */
     static clearRedo() {
         this.redo = null;
         this.renderRedo();
     }
-
-    /** Shows which work's settings the next generation repeats, with a button to stop. */
 
     /** Shows which work's settings the next generation repeats, with a button to stop. */
     static renderRedo() {
@@ -161,9 +159,6 @@ class SimpleTasksPart {
 
     /** Takes a submit answer, either straight from the submit call or once the prompt was written in the background (F56): shows inline images,
      * starts tracking the task and shows the prompt used. <counted> says whether the tab-title progress already counts this task. */
-
-    /** Takes a submit answer, either straight from the submit call or once the prompt was written in the background (F56): shows inline images,
-     * starts tracking the task and shows the prompt used. <counted> says whether the tab-title progress already counts this task. */
     static acceptSubmitted(result, entry, sent, counted) {
         let tr = this.api.tr;
         if (result.images && result.images.length) {
@@ -203,15 +198,11 @@ class SimpleTasksPart {
     }
 
     /** Adds a single submission to the task list (newest first, the last ten are shown). */
-
-    /** Adds a single submission to the task list (newest first, the last ten are shown). */
     static addTask(entry) {
         this.tasks.unshift(entry);
         this.tasks = this.tasks.slice(0, 10);
         this.renderTasks();
     }
-
-    /** A waiting label with the estimate of an operation of <kind> started at <started> (F70), such as "Writing… (about 20 s left)". */
 
     /** A waiting label with the estimate of an operation of <kind> started at <started> (F70), such as "Writing… (about 20 s left)". */
     static waitingLabel(base, kind, started) {
@@ -220,21 +211,15 @@ class SimpleTasksPart {
     }
 
     /** Calls <update> every second until the returned function is called (F70); without the estimate helper nothing runs. */
-
-    /** Calls <update> every second until the returned function is called (F70); without the estimate helper nothing runs. */
     static startTicker(update) {
         return this.api.estimate ? this.api.estimate.tick(update) : () => {};
     }
-
-    /** A task stage with its time estimate (F70): <fields> holds the server's elapsed, remaining and start-in seconds, received at <receivedAt>. */
 
     /** A task stage with its time estimate (F70): <fields> holds the server's elapsed, remaining and start-in seconds, received at <receivedAt>. */
     static stageWithEstimate(stageText, fields, receivedAt) {
         let estimate = this.api.estimate;
         return estimate && fields ? estimate.label(stageText, estimate.text(fields, receivedAt)) : stageText;
     }
-
-    /** The plain-language stage of a task (F56): writing the prompt, queued or running on a named server, done or failed. */
 
     /** The plain-language stage of a task (F56): writing the prompt, queued or running on a named server, done or failed. */
     static stageText(stage, server) {
@@ -253,8 +238,6 @@ class SimpleTasksPart {
         }
         return stage == 'cancelled' ? tr('已取消') : tr('失败');
     }
-
-    /** Shows the single submissions of this page with their stage. */
 
     /** Shows the single submissions of this page with their stage. */
     static renderTasks() {
@@ -276,8 +259,6 @@ class SimpleTasksPart {
         list.replaceChildren(...items);
         list.hidden = !items.length;
     }
-
-    /** Asks how the submissions still waiting for their prompt are doing (F56) and takes over the ones that were submitted or failed. */
 
     /** Asks how the submissions still waiting for their prompt are doing (F56) and takes over the ones that were submitted or failed. */
     static async pollPreparing() {
@@ -316,16 +297,12 @@ class SimpleTasksPart {
     }
 
     /** Explains a prompt fallback the server used (F37/F54); clears the banner when there was none. */
-
-    /** Explains a prompt fallback the server used (F37/F54); clears the banner when there was none. */
     static promptNotice(code) {
         let tr = this.api.tr;
         this.message(code == 'description_unused' ? tr('提示词优化服务暂时不可用，你的中文描述这次没有用上，已按所选风格出图。')
             : code == 'description_used' ? tr('提示词优化服务暂时不可用，已直接使用你的英文描述。')
             : code == 'prompt_untranslated' ? tr('提示词服务暂时不可用，你修改的中文提示词这次没能翻译成英文，已按所选产品类型和风格出图。') : '', false);
     }
-
-    /** Polls the queue for this page's tasks and collects their results; keeps polling in the background (F43). */
 
     /** Polls the queue for this page's tasks and collects their results; keeps polling in the background (F43). */
     static track() {
@@ -357,8 +334,6 @@ class SimpleTasksPart {
             }
         }, 3000);
     }
-
-    /** Reads the queue for this page's submitted tasks: marks running ones and collects the results of finished ones. */
 
     /** Reads the queue for this page's submitted tasks: marks running ones and collects the results of finished ones. */
     static async pollQueue() {
@@ -413,20 +388,14 @@ class SimpleTasksPart {
     }
 
     /** Address of a result as returned by the server ("View/user/..." or "Output/..."). */
-
-    /** Address of a result as returned by the server ("View/user/..." or "Output/..."). */
     static resultUrl(url) {
         return '/' + String(url).split('/').map(part => encodeURIComponent(part)).join('/');
     }
 
     /** The gallery path of a result URL ("View/<user>/a/b.png" or "Output/a/b.png" → "a/b.png"), as the star API expects. */
-
-    /** The gallery path of a result URL ("View/<user>/a/b.png" or "Output/a/b.png" → "a/b.png"), as the star API expects. */
     static galleryPath(url) {
         return String(url).replace(/^\/?View\/[^/]+\//, '').replace(/^\/?Output\//, '');
     }
-
-    /** Stars or unstars one candidate with the gallery's star (F65). A starred candidate is also marked kept, so cleanup never removes its original. */
 
     /** Stars or unstars one candidate with the gallery's star (F65). A starred candidate is also marked kept, so cleanup never removes its original. */
     static async toggleStar(url) {
@@ -459,8 +428,6 @@ class SimpleTasksPart {
             this.renderResults();
         }
     }
-
-    /** Shows the candidates as selectable tiles, each with a star to weed out weak results (F65). */
 
     /** Shows the candidates as selectable tiles, each with a star to weed out weak results (F65). */
     static renderResults() {
@@ -514,8 +481,6 @@ class SimpleTasksPart {
         this.api.$('simple-results').replaceChildren(...tiles);
         this.renderExport();
     }
-
-    /** Downloads the selected candidates one by one through the browser; downloaded works are kept forever (F39). */
 
     /** Downloads the selected candidates one by one through the browser; downloaded works are kept forever (F39). */
     static download() {

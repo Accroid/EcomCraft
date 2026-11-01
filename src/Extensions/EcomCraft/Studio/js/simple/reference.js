@@ -4,6 +4,8 @@
  * Simple mode: reference mode: uploads, vision describing and generation (F59). Part of simple.js since R15; static methods are copied onto SimpleMode by adopt(), so callers and this stay unchanged.
  */
 class SimpleReferencePart {
+    /** Opens the reference picker only when image description can work (F59/F68): without a usable vision model the guidance
+     * below shows instead — its settings steps open the configuration directly — so references never sit undescribable. */
     static async addReferenceClick() {
         if (!this.vision || this.vision.state == 'unknown') {
             await this.loadVision();
@@ -16,9 +18,6 @@ class SimpleReferencePart {
         }
         this.api.$('simple-reference-file').click();
     }
-
-    /** Adds reference image files (F59): at most 8 in total, each compressed like a product photo; every new one is described in the background.
-     * References only apply to the "follow a reference" task and storyboards only to "make a full set" (F61), so neither clears the other. */
 
     /** Adds reference image files (F59): at most 8 in total, each compressed like a product photo; every new one is described in the background.
      * References only apply to the "follow a reference" task and storyboards only to "make a full set" (F61), so neither clears the other. */
@@ -54,8 +53,6 @@ class SimpleReferencePart {
     }
 
     /** Puts one reference at the end of the description queue (also used by "Retry") and starts working through the queue if it is idle. */
-
-    /** Puts one reference at the end of the description queue (also used by "Retry") and starts working through the queue if it is idle. */
     static queueDescribe(item) {
         if (item.queued || item.describing) {
             return;
@@ -67,8 +64,6 @@ class SimpleReferencePart {
         this.update();
         this.runDescribeQueue();
     }
-
-    /** Describes the queued references one at a time, skipping any the user removed meanwhile. */
 
     /** Describes the queued references one at a time, skipping any the user removed meanwhile. */
     static async runDescribeQueue() {
@@ -90,8 +85,6 @@ class SimpleReferencePart {
             this.describeRunning = false;
         }
     }
-
-    /** Asks the server to describe one reference image (F59); fills the item's prompt unless the user edited it first. */
 
     /** Asks the server to describe one reference image (F59); fills the item's prompt unless the user edited it first. */
     static async describeReference(item) {
@@ -127,9 +120,6 @@ class SimpleReferencePart {
 
     /** Counts down the reference descriptions in progress every second (F70), updating only their status lines so prompts being edited stay untouched;
      * stops once none is left. */
-
-    /** Counts down the reference descriptions in progress every second (F70), updating only their status lines so prompts being edited stay untouched;
-     * stops once none is left. */
     static ensureDescribeTicker() {
         if (this.stopDescribeTicker) {
             return;
@@ -153,8 +143,6 @@ class SimpleReferencePart {
     }
 
     /** Asks the server whether image description can work (F68) and shows what is missing for "follow a reference". */
-
-    /** Asks the server whether image description can work (F68) and shows what is missing for "follow a reference". */
     static async loadVision() {
         try {
             let status = await this.api.request('EcomCraftStudioVisionStatus', {});
@@ -170,8 +158,6 @@ class SimpleReferencePart {
             this.loadVisionModels();
         }
     }
-
-    /** Lists the models the vision service offers, so an administrator can switch the vision model here (F68); the same setting as in the prompt enhancement settings. */
 
     /** Lists the models the vision service offers, so an administrator can switch the vision model here (F68); the same setting as in the prompt enhancement settings. */
     static async loadVisionModels() {
@@ -203,8 +189,6 @@ class SimpleReferencePart {
     }
 
     /** Switches the vision model used for the next descriptions (F68); a failure keeps the previous model and says why. */
-
-    /** Switches the vision model used for the next descriptions (F68); a failure keeps the previous model and says why. */
     static async switchVisionModel(model) {
         let models = this.visionModels;
         if (!models || models.saving || !model || model == this.vision?.model) {
@@ -234,8 +218,6 @@ class SimpleReferencePart {
             this.loadVision();
         }
     }
-
-    /** Shows the vision model under the references (F68): administrators get a switcher, other accounts only see the model name. */
 
     /** Shows the vision model under the references (F68): administrators get a switcher, other accounts only see the model name. */
     static renderVisionModel() {
@@ -288,8 +270,6 @@ class SimpleReferencePart {
     }
 
     /** The guidance for an image description problem (F68): a title and the steps; administrators get the steps to fix it, other accounts are asked to contact one. */
-
-    /** The guidance for an image description problem (F68): a title and the steps; administrators get the steps to fix it, other accounts are asked to contact one. */
     static visionGuide() {
         let tr = this.api.tr;
         let vision = this.vision;
@@ -322,8 +302,6 @@ class SimpleReferencePart {
             ? { title: tr('Ollama 已在运行，但还没有视觉模型 {0}。', vision.model), steps: [script, tr('或者在服务器上打开命令行运行：ollama pull {0}', vision.model), tr('下载完成后回到本页点“重新检查”；也可以在“提示词优化设置”中改选已安装的视觉模型。')] }
             : { title: tr('视觉服务里没有模型 {0}。', vision.model), steps: [tr('打开“提示词优化设置”，改选可用的视觉模型。')], settings_steps: [0] };
     }
-
-    /** Shows the image description guidance under the references (F68); hidden when description works. */
 
     /** Shows the image description guidance under the references (F68); hidden when description works. */
     static renderVision() {
@@ -381,13 +359,9 @@ class SimpleReferencePart {
     }
 
     /** Whether reference mode is on: the "follow a reference" task is chosen (F61); its references are required (F59). */
-
-    /** Whether reference mode is on: the "follow a reference" task is chosen (F61); its references are required (F59). */
     static referenceMode() {
         return this.chosenTask == 'reference';
     }
-
-    /** Opens the references full size in the gallery viewer, starting at one of them. */
 
     /** Opens the references full size in the gallery viewer, starting at one of them. */
     static openReference(index, opener) {
@@ -397,8 +371,6 @@ class SimpleReferencePart {
         }
         this.api.openImages(items, index, opener);
     }
-
-    /** Shows the reference thumbnails and the per-reference prompt list (F59): the English prompt is editable, the Chinese translation read-only. */
 
     /** Shows the reference thumbnails and the per-reference prompt list (F59): the English prompt is editable, the Chinese translation read-only. */
     static renderReferences() {
@@ -486,10 +458,6 @@ class SimpleReferencePart {
     /** Turns the other step-2 options on or off (F59): in reference mode they do not apply (and are hidden by the task, F61).
      * The optional-slot box is left out: it already hides itself via data-tasks, and disabling it here would grey out the whole
      * platform field (its closest .fld), which every task still needs for choosing a platform. */
-
-    /** Turns the other step-2 options on or off (F59): in reference mode they do not apply (and are hidden by the task, F61).
-     * The optional-slot box is left out: it already hides itself via data-tasks, and disabling it here would grey out the whole
-     * platform field (its closest .fld), which every task still needs for choosing a platform. */
     static setReferenceOptions() {
         let off = this.referenceMode();
         let ids = ['simple-templates', 'simple-categories', 'simple-subtypes', 'simple-styles', 'simple-model',
@@ -513,8 +481,6 @@ class SimpleReferencePart {
             field.classList.toggle('simple-mode-off', off);
         }
     }
-
-    /** Why "generate by reference" cannot run yet (F59); empty when it can. */
 
     /** Why "generate by reference" cannot run yet (F59); empty when it can. */
     static referenceProblem() {
@@ -546,8 +512,6 @@ class SimpleReferencePart {
         }
         return '';
     }
-
-    /** Starts reference mode: one image per reference for every product, each with the prompt shown to the user (F59). */
 
     /** Starts reference mode: one image per reference for every product, each with the prompt shown to the user (F59). */
     static async generateReference() {

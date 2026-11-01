@@ -16,9 +16,6 @@ class SimpleRulesPart {
 
     /** The bounds of a cut-out's product plus a small transparent margin, the same math as ProductComposite.Trim on the server, so a placement's size
      * is the product's own size and not that of the photo's empty border: { x, y, width, height }, or null when nothing is visible. */
-
-    /** The bounds of a cut-out's product plus a small transparent margin, the same math as ProductComposite.Trim on the server, so a placement's size
-     * is the product's own size and not that of the photo's empty border: { x, y, width, height }, or null when nothing is visible. */
     static trimBounds(imageData) {
         let width = imageData.width, height = imageData.height, data = imageData.data;
         let left = width, top = height, right = -1, bottom = -1;
@@ -42,9 +39,6 @@ class SimpleRulesPart {
         bottom = Math.min(height - 1, bottom + margin);
         return { x: left, y: top, width: right - left + 1, height: bottom - top + 1 };
     }
-
-    /** Makes the preview image of a product's cut-out: trimmed like the server does, so the preview matches the result. The cut-out itself is sent unchanged.
-     * Without a readable cut-out the preview is the cut-out as it is. */
 
     /** Makes the preview image of a product's cut-out: trimmed like the server does, so the preview matches the result. The cut-out itself is sent unchanged.
      * Without a readable cut-out the preview is the cut-out as it is. */
@@ -76,14 +70,10 @@ class SimpleRulesPart {
     }
 
     /** Keeps a placement inside the ranges the server accepts: center 0–1, size 0.1–1.5. */
-
-    /** Keeps a placement inside the ranges the server accepts: center 0–1, size 0.1–1.5. */
     static clampPlacement(placement) {
         let clamp = (value, min, max) => Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
         return { x: clamp(placement.x, 0, 1), y: clamp(placement.y, 0, 1), size: clamp(placement.size, 0.1, 1.5) };
     }
-
-    /** Whether at least 2% of an image's pixels are transparent, as the server checks a cut-out. */
 
     /** Whether at least 2% of an image's pixels are transparent, as the server checks a cut-out. */
     static hasTransparency(imageData) {
@@ -96,8 +86,6 @@ class SimpleRulesPart {
         }
         return transparent * 50 >= data.length / 4;
     }
-
-    /** Variance of the 4-neighbour Laplacian over a grayscale copy, the classic sharpness score: blurry photos score low. */
 
     /** Variance of the 4-neighbour Laplacian over a grayscale copy, the classic sharpness score: blurry photos score low. */
     static laplacianVariance(imageData) {
@@ -127,8 +115,6 @@ class SimpleRulesPart {
     }
 
     /** Share of pixels that are at least half opaque, as the product's share of a cut-out (0–1). */
-
-    /** Share of pixels that are at least half opaque, as the product's share of a cut-out (0–1). */
     static opaqueRatio(imageData) {
         let data = imageData.data;
         let opaque = 0;
@@ -139,9 +125,6 @@ class SimpleRulesPart {
         }
         return data.length ? opaque / (data.length / 4) : 1;
     }
-
-    /** Upload quality issues of an original photo (F38): resolution below the configured minimum or a blurry picture.
-     * Each issue is { code, ... } and only leads to a warning; the user can always continue. */
 
     /** Upload quality issues of an original photo (F38): resolution below the configured minimum or a blurry picture.
      * Each issue is { code, ... } and only leads to a warning; the user can always continue. */
@@ -160,8 +143,6 @@ class SimpleRulesPart {
     }
 
     /** The cut-out issue when the product covers too little of the picture: [{ code: 'ratio', ratio }], or none. */
-
-    /** The cut-out issue when the product covers too little of the picture: [{ code: 'ratio', ratio }], or none. */
     static cutoutIssues(imageData, quality) {
         let q = quality || this.quality;
         let min = q.min_cutout_ratio == null ? 0.08 : Number(q.min_cutout_ratio);
@@ -172,22 +153,16 @@ class SimpleRulesPart {
         return ratio < min ? [{ code: 'ratio', ratio, min }] : [];
     }
 
-    /** Which views an account sees (decision A2, F60): every signed-in account gets the simple mode and the professional mode for designers. */
-
     /** The first scale for compressing an image: at most 16 megapixels, which every mobile browser can draw on a canvas. */
     static compressionScale(width, height) {
         let pixels = Math.max(1, width) * Math.max(1, height);
         return Math.min(1, Math.sqrt(16000000 / pixels));
     }
 
-    /** Scales a loaded image down to at most 16 megapixels: a transparent one stays a PNG (falling back to JPEG only when the PNG passes 5 MB), others become JPEG within 5 MB. */
-
     /** The candidate count the user typed, as a number (NaN when not numeric). The same 1–20 cap applies to single generations and whole sets (F55). */
     static countValue() {
         return Number(String(this.api.$('simple-count').value || '').trim());
     }
-
-    /** Why the typed count cannot be used, or an empty string when it is a positive integer from 1 to 20 (F55). */
 
     /** Why the typed count cannot be used, or an empty string when it is a positive integer from 1 to 20 (F55). */
     static countProblem() {
@@ -202,8 +177,6 @@ class SimpleRulesPart {
         return '';
     }
 
-    /** Why the generate button is disabled, or an empty string when it can be pressed. */
-
     /** The plain-language warning for one quality issue, with a suggestion; the user can always continue. */
     static qualityText(issue) {
         let tr = this.api.tr;
@@ -215,7 +188,5 @@ class SimpleRulesPart {
         }
         return tr('抠图后商品只占画面约 {0}%，建议拍得更近一些，让商品占满画面。也可以继续使用。', Math.round((issue.ratio || 0) * 100));
     }
-
-    /** Shows the current product's quality warnings under the upload step; empty when there is nothing to complain about. */
 }
 SimpleMode.adopt(SimpleRulesPart);

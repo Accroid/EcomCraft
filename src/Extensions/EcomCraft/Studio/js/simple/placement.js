@@ -26,8 +26,6 @@ class SimplePlacementPart {
     }
 
     /** Draws the cut-out on the square preview at the current placement. */
-
-    /** Draws the cut-out on the square preview at the current placement. */
     static renderStage() {
         let image = this.api.$('simple-stage-product');
         let stage = this.api.$('simple-stage');
@@ -57,9 +55,6 @@ class SimplePlacementPart {
 
     /** The output size the preview stands for: the chosen size, or with "by platform" the slot size of the current image type (the scene slot in
      * reference mode); square when it is unknown, as for whole sets whose image types differ. */
-
-    /** The output size the preview stands for: the chosen size, or with "by platform" the slot size of the current image type (the scene slot in
-     * reference mode); square when it is unknown, as for whole sets whose image types differ. */
     static stageAspect() {
         if (this.outputSize.mode != 'auto') {
             return this.outputSizeProblem() ? { width: 1, height: 1 } : { width: this.outputSize.width, height: this.outputSize.height };
@@ -71,14 +66,10 @@ class SimplePlacementPart {
     }
 
     /** The placement the preview edits: the chosen reference's (T79) once adjusted, otherwise the product's own. */
-
-    /** The placement the preview edits: the chosen reference's (T79) once adjusted, otherwise the product's own. */
     static activePlacement() {
         let reference = this.referenceMode() ? this.references[this.placementRef] : null;
         return reference && reference.placement ? reference.placement : this.placement;
     }
-
-    /** Stores a placement edited on the preview: on the chosen reference in reference mode (T79), otherwise as the product's own. */
 
     /** Stores a placement edited on the preview: on the chosen reference in reference mode (T79), otherwise as the product's own. */
     static setActivePlacement(placement) {
@@ -95,8 +86,6 @@ class SimplePlacementPart {
             this.placement = placement;
         }
     }
-
-    /** Lists "place for reference n" above the preview in reference mode (T79) and shows the chosen reference behind the product. */
 
     /** Lists "place for reference n" above the preview in reference mode (T79) and shows the chosen reference behind the product. */
     static renderPlacementPicker() {
@@ -127,8 +116,6 @@ class SimplePlacementPart {
     }
 
     /** Makes the preview edit one reference's placement (T79), starting from the product's own until it is adjusted; -1 goes back to the product's. */
-
-    /** Makes the preview edit one reference's placement (T79), starting from the product's own until it is adjusted; -1 goes back to the product's. */
     static choosePlacementRef(index) {
         this.placementRef = index;
         this.renderPlacementPicker();
@@ -137,16 +124,12 @@ class SimplePlacementPart {
     }
 
     /** Starts dragging the product on the preview. */
-
-    /** Starts dragging the product on the preview. */
     static startDrag(event) {
         event.preventDefault();
         event.target.setPointerCapture(event.pointerId);
         event.target.classList.add('is-dragging');
         this.drag = { startX: event.clientX, startY: event.clientY, origin: { ...this.activePlacement() } };
     }
-
-    /** Moves the product with the pointer; the center stays inside the picture. */
 
     /** Moves the product with the pointer; the center stays inside the picture. */
     static moveDrag(event) {
@@ -165,8 +148,6 @@ class SimplePlacementPart {
     }
 
     /** Ends dragging. */
-
-    /** Ends dragging. */
     static endDrag(event) {
         if (!this.drag) {
             return;
@@ -178,8 +159,6 @@ class SimplePlacementPart {
             this.savePlacement();
         }
     }
-
-    /** Asks the server to remove the background; the result keeps the original product pixels. */
 
     /** Placement controls of step 1: reset, the size slider and the drag handling (T79). */
     static bindPlacement() {

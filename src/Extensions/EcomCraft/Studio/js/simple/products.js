@@ -4,6 +4,7 @@
  * Simple mode: the product library, the photo picker and the cut-out. Part of simple.js since R15; static methods are copied onto SimpleMode by adopt(), so callers and this stay unchanged.
  */
 class SimpleProductsPart {
+    /** Reads the account's saved products for the "from the product library" list. */
     static async loadLibrary() {
         try {
             let result = await this.api.request('EcomCraftStudioProducts');
@@ -16,15 +17,11 @@ class SimpleProductsPart {
     }
 
     /** Refreshes the product-library picker when it is open; choosing a saved product skips uploading and cutting out again. */
-
-    /** Refreshes the product-library picker when it is open; choosing a saved product skips uploading and cutting out again. */
     static renderLibrary() {
         if (this.picker == 'library') {
             this.renderPicker();
         }
     }
-
-    /** Opens the picker for the product library or the gallery of generated works (F52). */
 
     /** Opens the picker for the product library or the gallery of generated works (F52). */
     static async openPicker(kind, opener) {
@@ -47,8 +44,6 @@ class SimpleProductsPart {
     }
 
     /** Closes the picker. */
-
-    /** Closes the picker. */
     static closePicker() {
         if (!this.picker) {
             return;
@@ -57,8 +52,6 @@ class SimpleProductsPart {
         this.api.$('simple-picker-modal').hidden = true;
         this.api.dialogLeave(this.api.$('simple-picker-modal'));
     }
-
-    /** Reads this account's recent generated images for the gallery picker (newest first, images only, starred copies skipped). */
 
     /** Reads this account's recent generated images for the gallery picker (newest first, images only, starred copies skipped). */
     static async loadGalleryItems() {
@@ -76,8 +69,6 @@ class SimpleProductsPart {
         }
         this.galleryError = '';
     }
-
-    /** Fills the picker with saved products or generated works as selectable tiles. */
 
     /** Fills the picker with saved products or generated works as selectable tiles. */
     static renderPicker() {
@@ -112,8 +103,6 @@ class SimpleProductsPart {
     }
 
     /** One picker tile: a thumbnail with its name. */
-
-    /** One picker tile: a thumbnail with its name. */
     static pickerTile(source, name, label, onPick) {
         let el = this.api.el;
         let button = el('button', 'simple-picker-item');
@@ -128,9 +117,6 @@ class SimpleProductsPart {
         button.addEventListener('click', () => onPick(button));
         return button;
     }
-
-    /** Uses a generated work from the gallery as a product photo (F52): read as is when it fits, otherwise compressed in the browser to at most 5 MB.
-     * The work itself is not changed; the copy goes through the same quality check and product library as an upload. */
 
     /** Uses a generated work from the gallery as a product photo (F52): read as is when it fits, otherwise compressed in the browser to at most 5 MB.
      * The work itself is not changed; the copy goes through the same quality check and product library as an upload. */
@@ -163,8 +149,6 @@ class SimpleProductsPart {
     }
 
     /** Reads a blob as a data URL. */
-
-    /** Reads a blob as a data URL. */
     static blobToDataUrl(blob) {
         return new Promise((resolve, reject) => {
             let reader = new FileReader();
@@ -174,6 +158,7 @@ class SimpleProductsPart {
         });
     }
 
+    /** Scales a loaded image down to at most 16 megapixels: a transparent one stays a PNG (falling back to JPEG only when the PNG passes 5 MB), others become JPEG within 5 MB. */
     static async shrinkImage(image, transparent) {
         if (transparent) {
             let scale = this.compressionScale(image.naturalWidth, image.naturalHeight);
@@ -188,8 +173,6 @@ class SimpleProductsPart {
         }
         return await this.compressImage(image.src, this.maxProductBytes);
     }
-
-    /** Re-encodes an image as JPEG on a white background, lowering the quality and then the size until it fits in maxBytes. */
 
     /** Re-encodes an image as JPEG on a white background, lowering the quality and then the size until it fits in maxBytes. */
     static async compressImage(dataUrl, maxBytes) {
@@ -213,8 +196,6 @@ class SimpleProductsPart {
         }
         throw new Error('compress');
     }
-
-    /** Makes a saved product the current one, with its confirmed cut-out and placement. */
 
     /** Makes a saved product the current one, with its confirmed cut-out and placement. */
     static async useSaved(saved) {
@@ -249,8 +230,6 @@ class SimpleProductsPart {
     }
 
     /** Saves a newly uploaded photo to the product library; generation keeps working when saving fails. */
-
-    /** Saves a newly uploaded photo to the product library; generation keeps working when saving fails. */
     static async saveToLibrary(product) {
         try {
             let name = String(product.name || '').replace(/\.[^.]+$/, '').slice(0, 60);
@@ -268,8 +247,6 @@ class SimpleProductsPart {
     }
 
     /** Shows the name field and delete button for a saved current product. */
-
-    /** Shows the name field and delete button for a saved current product. */
     static renderProductMeta() {
         let saved = Boolean(this.product && this.product.id);
         this.api.$('simple-product-meta').hidden = !saved;
@@ -277,8 +254,6 @@ class SimpleProductsPart {
             this.api.$('simple-product-name').value = this.product.name || '';
         }
     }
-
-    /** Renames the current saved product. */
 
     /** Renames the current saved product. */
     static async renameProduct(name) {
@@ -296,8 +271,6 @@ class SimpleProductsPart {
     }
 
     /** Deletes the current product from the library and from this page. */
-
-    /** Deletes the current product from the library and from this page. */
     static async deleteProduct() {
         if (!this.product || !this.product.id || !window.confirm(this.api.tr('从商品库删除“{0}”？已生成的作品不受影响。', this.product.name))) {
             return;
@@ -313,8 +286,6 @@ class SimpleProductsPart {
     }
 
     /** Remembers the confirmed placement of the current saved product, shortly after the user stops adjusting it. */
-
-    /** Remembers the confirmed placement of the current saved product, shortly after the user stops adjusting it. */
     static savePlacement() {
         if (!this.product || !this.product.id) {
             return;
@@ -328,8 +299,6 @@ class SimpleProductsPart {
             });
         }, 800);
     }
-
-    /** A data URL for a product image that may only be available as a server URL. */
 
     /** A data URL for a product image that may only be available as a server URL. */
     static async toDataUrl(source) {
@@ -349,8 +318,6 @@ class SimpleProductsPart {
         });
     }
 
-    /** Shows or hides the message banner. */
-
     /** Reads a product photo from this computer or the camera into memory (origin 'local' or 'camera'). */
     static readFile(file, origin) {
         let tr = this.api.tr;
@@ -366,9 +333,6 @@ class SimpleProductsPart {
         reader.onerror = () => this.message(tr('无法读取文件，请重新选择。'), true);
         reader.readAsDataURL(file);
     }
-
-    /** Adds a new product photo (a data URL of at most 5 MB) from any entry (F52): checks its quality (F38), makes it the current photo and saves it to the product library.
-     * <origin> is 'local', 'camera' or 'gallery' and is shown on the thumbnail. */
 
     /** Adds a new product photo (a data URL of at most 5 MB) from any entry (F52): checks its quality (F38), makes it the current photo and saves it to the product library.
      * <origin> is 'local', 'camera' or 'gallery' and is shown on the thumbnail. */
@@ -424,8 +388,6 @@ class SimpleProductsPart {
     }
 
     /** Loads an image element from a data URL. */
-
-    /** Loads an image element from a data URL. */
     static loadImage(source) {
         return new Promise((resolve, reject) => {
             let image = new Image();
@@ -435,6 +397,7 @@ class SimpleProductsPart {
         });
     }
 
+    /** Asks the server to remove the background; the result keeps the original product pixels. */
     static async runCutout() {
         let tr = this.api.tr;
         if (!this.product || this.cutting) {
@@ -481,8 +444,6 @@ class SimpleProductsPart {
     }
 
     /** Forgets the product photo. */
-
-    /** Forgets the product photo. */
     static clearProduct() {
         this.products = this.products.filter(product => product != this.product);
         if (this.products.length) {
@@ -500,6 +461,7 @@ class SimpleProductsPart {
         this.update();
     }
 
+    /** Shows the current product's quality warnings under the upload step; empty when there is nothing to complain about. */
     static renderQuality() {
         if (!this.api) {
             return;
@@ -510,15 +472,11 @@ class SimpleProductsPart {
         box.hidden = !issues.length;
     }
 
-    /** Enables the buttons and shows what is missing. */
-
     /** The plain-language source of a product photo (F52): this computer, the camera, the product library or the gallery. */
     static originText(origin) {
         let names = { local: '本机', camera: '拍照', library: '商品库', gallery: '画廊' };
         return this.api.tr(names[origin] || '本机');
     }
-
-    /** Shows the product photos as thumbnails with their source (F52); clicking one makes it the current photo. */
 
     /** Shows the product photos as thumbnails with their source (F52); clicking one makes it the current photo. */
     static renderProducts() {
@@ -544,8 +502,6 @@ class SimpleProductsPart {
     }
 
     /** Makes a product photo the current one for preview, cut-out and single generation. */
-
-    /** Makes a product photo the current one for preview, cut-out and single generation. */
     static selectProduct(product) {
         this.product = product;
         let preview = this.api.$('simple-preview');
@@ -558,10 +514,6 @@ class SimpleProductsPart {
         this.renderCutout();
         this.update();
     }
-
-    /** Templates of the standard set for the chosen platform, as the server will expand them. */
-    /** The set's templates for the chosen platform: composed by the platform's slot kinds when it defines slots (F58), matching the server's
-     * composition; platforms without slots keep the old composition by set membership. */
 
     /** Upload controls of step 1 (F52): this computer, camera, library and gallery pickers. */
     static bindUpload() {

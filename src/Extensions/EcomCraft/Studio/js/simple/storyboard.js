@@ -4,13 +4,12 @@
  * Simple mode: the storyboard generator (F25). Part of simple.js since R15; static methods are copied onto SimpleMode by adopt(), so callers and this stay unchanged.
  */
 class SimpleStoryboardPart {
+    /** Why the storyboard cannot be used on the chosen platform, or an empty string (F25). */
     static storyboardProblem() {
         let visible = this.visibleTemplates();
         return this.storyboard.shots.some(shot => !visible.some(template => template.id == shot.template))
             ? '分镜里有当前平台不可用的图片类型，请重新选择。' : '';
     }
-
-    /** Shows the selling points and storyboard shots as editable rows (F25). Only structural changes re-render; typing just updates the state. */
 
     /** Shows the selling points and storyboard shots as editable rows (F25). Only structural changes re-render; typing just updates the state. */
     static renderStoryboard() {
@@ -110,8 +109,6 @@ class SimpleStoryboardPart {
     }
 
     /** Adds an empty shot with the first image type of the platform's set (or of the platform). */
-
-    /** Adds an empty shot with the first image type of the platform's set (or of the platform). */
     static addShot() {
         if (this.storyboard.shots.length >= 8) {
             return;
@@ -121,8 +118,6 @@ class SimpleStoryboardPart {
         this.renderStoryboard();
         this.update();
     }
-
-    /** Asks the server for selling points and a storyboard (F25) from the description or prompt panel, the user's points and the choices of step 2. */
 
     /** Asks the server for selling points and a storyboard (F25) from the description or prompt panel, the user's points and the choices of step 2. */
     static async runStoryboard() {
@@ -165,9 +160,6 @@ class SimpleStoryboardPart {
             this.update();
         }
     }
-
-    /** Opens the reference picker only when image description can work (F59/F68): without a usable vision model the guidance
-     * below shows instead — its settings steps open the configuration directly — so references never sit undescribable. */
 
     /** Storyboard controls (F25). */
     static bindStoryboard() {

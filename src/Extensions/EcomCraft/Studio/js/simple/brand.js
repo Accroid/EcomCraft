@@ -20,8 +20,6 @@ class SimpleBrandPart {
     }
 
     /** Fills the brand kit list of step 2: "none" first, then the account's kits. */
-
-    /** Fills the brand kit list of step 2: "none" first, then the account's kits. */
     static renderBrandSelect() {
         let select = this.api.$('simple-brand');
         let options = [new Option(this.api.tr('不使用'), '')];
@@ -36,13 +34,9 @@ class SimpleBrandPart {
     }
 
     /** The brand kit fields of a generation request: only the kit's ID (F12). */
-
-    /** The brand kit fields of a generation request: only the kit's ID (F12). */
     static brandFields() {
         return this.choice.brandKit ? { brand_kit_id: this.choice.brandKit } : {};
     }
-
-    /** Opens the brand kit dialog with the account's kits. */
 
     /** Opens the brand kit dialog with the account's kits. */
     static async openBrand(opener) {
@@ -56,8 +50,6 @@ class SimpleBrandPart {
     }
 
     /** Closes the brand kit dialog; unsaved changes are dropped. */
-
-    /** Closes the brand kit dialog; unsaved changes are dropped. */
     static closeBrand() {
         if (this.api.$('brand-modal').hidden) {
             return;
@@ -66,8 +58,6 @@ class SimpleBrandPart {
         this.brandEditor = null;
         this.api.dialogLeave(this.api.$('brand-modal'));
     }
-
-    /** Shows the account's kits as chips; choosing one opens it in the editor. */
 
     /** Shows the account's kits as chips; choosing one opens it in the editor. */
     static renderBrandList() {
@@ -86,8 +76,6 @@ class SimpleBrandPart {
         this.api.$('brand-list').replaceChildren(...chips);
         this.api.$('brand-new').disabled = this.brandKits.length >= 20;
     }
-
-    /** Opens a kit in the editor, or an empty one for a new kit. */
 
     /** Opens a kit in the editor, or an empty one for a new kit. */
     static editBrand(kit) {
@@ -110,14 +98,10 @@ class SimpleBrandPart {
     }
 
     /** How many reference images the kit will have after saving. */
-
-    /** How many reference images the kit will have after saving. */
     static brandReferenceCount() {
         let editor = this.brandEditor;
         return editor ? editor.references.filter(item => !editor.removed.includes(item.id)).length + editor.added.length : 0;
     }
-
-    /** One thumbnail with a remove button. */
 
     /** One thumbnail with a remove button. */
     static brandThumb(source, label, onRemove) {
@@ -133,8 +117,6 @@ class SimpleBrandPart {
         box.append(image, remove);
         return box;
     }
-
-    /** Shows the editor for the open kit: name, colors, background, logo and references. */
 
     /** Shows the editor for the open kit: name, colors, background, logo and references. */
     static renderBrandEditor() {
@@ -196,16 +178,12 @@ class SimpleBrandPart {
     }
 
     /** Shows a message inside the brand kit dialog. */
-
-    /** Shows a message inside the brand kit dialog. */
     static brandMessage(text, error) {
         let box = this.api.$('brand-message');
         box.textContent = text;
         box.classList.toggle('simple-hint-error', Boolean(error));
         box.hidden = !text;
     }
-
-    /** Reads a chosen image as a data URL of at most 5 MB (compressed in the browser when larger), or null with a message. */
 
     /** Reads a chosen image as a data URL of at most 5 MB (compressed in the browser when larger), or null with a message. */
     static async brandImageData(file) {
@@ -221,8 +199,6 @@ class SimpleBrandPart {
             return null;
         }
     }
-
-    /** Saves the open kit; only new images are sent, existing ones are referred to by ID. */
 
     /** Saves the open kit; only new images are sent, existing ones are referred to by ID. */
     static async saveBrand() {
@@ -270,8 +246,6 @@ class SimpleBrandPart {
     }
 
     /** Deletes the open kit after confirmation. */
-
-    /** Deletes the open kit after confirmation. */
     static async deleteBrand() {
         let editor = this.brandEditor;
         if (!editor || !editor.id || !window.confirm(this.api.tr('删除品牌资料包“{0}”？已生成的作品不受影响。', editor.name))) {
@@ -288,8 +262,6 @@ class SimpleBrandPart {
             this.brandMessage(error.message || this.api.tr('操作失败，请稍后重试。'), true);
         }
     }
-
-    /** Why the storyboard cannot be used on the chosen platform, or an empty string (F25). */
 
     /** Brand kit selection and the brand dialog's controls (F12). */
     static bindBrand() {

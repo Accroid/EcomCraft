@@ -17,14 +17,9 @@ class SimpleExportPart {
 
     /** The export preset of the platform chosen in step 2, or null when it has none: works keep the size chosen before generating, and the
      * platform only decides format and size caps. */
-
-    /** The export preset of the platform chosen in step 2, or null when it has none: works keep the size chosen before generating, and the
-     * platform only decides format and size caps. */
     static exportPlatform() {
         return (this.exportOptions.platforms || []).find(item => item.id == this.choice.platform) || null;
     }
-
-    /** The platform's slot size for an image kind (F58), the non-optional slot first, or null. */
 
     /** The platform's slot size for an image kind (F58), the non-optional slot first, or null. */
     static slotSize(kind) {
@@ -33,8 +28,6 @@ class SimpleExportPart {
         slots.sort((a, b) => Number(a.optional) - Number(b.optional));
         return slots.length ? { width: slots[0].width, height: slots[0].height, name: slots[0].name } : null;
     }
-
-    /** Why the chosen output size cannot be used, or an empty string. */
 
     /** Why the chosen output size cannot be used, or an empty string. */
     static outputSizeProblem() {
@@ -46,13 +39,9 @@ class SimpleExportPart {
     }
 
     /** The output_size to send: null for "by platform" (the server takes each image kind's slot size), otherwise { width, height }. */
-
-    /** The output_size to send: null for "by platform" (the server takes each image kind's slot size), otherwise { width, height }. */
     static outputSizeField() {
         return this.outputSize.mode == 'auto' ? null : { width: this.outputSize.width, height: this.outputSize.height };
     }
-
-    /** Fills the output size picker (the platform's size for the current image type, common sizes, custom) and explains what happens with it. */
 
     /** Fills the output size picker (the platform's size for the current image type, common sizes, custom) and explains what happens with it. */
     static renderOutputSize() {
@@ -96,8 +85,6 @@ class SimpleExportPart {
     }
 
     /** Shows the export panel once there are candidates, with a notice when the chosen preset is not verified yet. */
-
-    /** Shows the export panel once there are candidates, with a notice when the chosen preset is not verified yet. */
     static renderExport() {
         let tr = this.api.tr;
         let platform = this.exportPlatform();
@@ -116,9 +103,6 @@ class SimpleExportPart {
         this.api.$('simple-export-note').textContent = note;
         this.renderSelling();
     }
-
-    /** Shows the selling-image panel once there are candidates (F47); it works on exactly one picked image. Points planned in the storyboard
-     * and the brand kit's first color are offered once as a start. */
 
     /** Shows the selling-image panel once there are candidates (F47); it works on exactly one picked image. Points planned in the storyboard
      * and the brand kit's first color are offered once as a start. */
@@ -157,8 +141,6 @@ class SimpleExportPart {
     }
 
     /** Makes a selling-point image from the one picked candidate (F47) and adds it to the front of the candidates. */
-
-    /** Makes a selling-point image from the one picked candidate (F47) and adds it to the front of the candidates. */
     static async makeSellingImage() {
         let tr = this.api.tr;
         if (this.selected.size != 1 || this.selling.running) {
@@ -195,8 +177,6 @@ class SimpleExportPart {
             this.renderSelling();
         }
     }
-
-    /** Exports the selected candidates for the chosen platform, grouped by product, to the chosen slot (F58). */
 
     /** Exports the selected candidates for the chosen platform, grouped by product, to the chosen slot (F58). */
     static async exportSelected(target) {
@@ -247,8 +227,6 @@ class SimpleExportPart {
     }
 
     /** The plain-language text for one export warning code (F58): still over the slot's size cap, subject fill too small, or drawn text on a platform that forbids it. */
-
-    /** The plain-language text for one export warning code (F58): still over the slot's size cap, subject fill too small, or drawn text on a platform that forbids it. */
     static warningText(warning) {
         let tr = this.api.tr;
         let count = warning.count || 1;
@@ -262,15 +240,11 @@ class SimpleExportPart {
     }
 
     /** The display name of an export slot ID, from the export platform's slot list. */
-
-    /** The display name of an export slot ID, from the export platform's slot list. */
     static slotName(id) {
         let platform = this.exportPlatform();
         let slot = platform && (platform.slots || []).find(slot => slot.id == id);
         return slot ? slot.name : id;
     }
-
-    /** Reads the account's saved products for the "from the product library" list. */
 
     /** Selling-point image controls (F47). */
     static bindSelling() {

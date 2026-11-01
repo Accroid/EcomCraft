@@ -107,6 +107,7 @@ class SimpleMode {
     static preferredKey = 'ecomcraft.preferred-platforms';
     static quality = { min_side: 512, blur_variance: 30, min_cutout_ratio: 0.08 };
 
+    /** Which views an account sees (decision A2, F60): every signed-in account gets the simple mode and the professional mode for designers. */
     static viewAccess(catalog) {
         return { simple: true, pro: Boolean(catalog) };
     }
@@ -230,6 +231,7 @@ class SimpleMode {
         this.update();
     }
 
+    /** Reads platforms, templates and styles from the server. */
     static async load() {
         if (this.loading || !this.api.state.session) {
             return;
@@ -278,7 +280,7 @@ class SimpleMode {
         await this.loadExportOptions();
     }
 
-
+    /** Shows or hides the message banner. */
     static message(text, error) {
         let box = this.api.$('simple-message');
         box.textContent = text;
@@ -499,8 +501,7 @@ class SimpleMode {
         return (template?.fields || []).find(field => field.type == 'image') || null;
     }
 
-
-
+    /** Why the generate button is disabled, or an empty string when it can be pressed. */
     static blocker() {
         let template = this.currentTemplate();
         if (!this.api.state.session || !this.loaded) {
@@ -532,6 +533,7 @@ class SimpleMode {
         return '';
     }
 
+    /** Enables the buttons and shows what is missing. */
     static update() {
         if (!this.api) {
             return;

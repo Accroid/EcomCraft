@@ -21,13 +21,9 @@ class SimplePromptPart {
     }
 
     /** Whether the panel text of a language differs from the last expansion or translation. */
-
-    /** Whether the panel text of a language differs from the last expansion or translation. */
     static promptDirty(lang) {
         return String(this.prompt[lang] || '').trim() != String(this.prompt.base[lang] || '').trim();
     }
-
-    /** The prompt fields of a generation request and what to show afterwards: only the text the server should use is sent. */
 
     /** The prompt fields of a generation request and what to show afterwards: only the text the server should use is sent. */
     static promptSnapshot() {
@@ -44,8 +40,6 @@ class SimplePromptPart {
     }
 
     /** Fills both languages of the panel and marks them as in sync. */
-
-    /** Fills both languages of the panel and marks them as in sync. */
     static setPromptTexts(zh, en) {
         this.prompt.zh = zh;
         this.prompt.en = en;
@@ -57,8 +51,6 @@ class SimplePromptPart {
     }
 
     /** Shows the Chinese or English text of the panel. */
-
-    /** Shows the Chinese or English text of the panel. */
     static switchPromptTab(lang) {
         this.prompt.tab = lang;
         for (let item of ['zh', 'en']) {
@@ -66,8 +58,6 @@ class SimplePromptPart {
             this.api.$(`simple-prompt-${item}`).hidden = item != lang;
         }
     }
-
-    /** Shows whether the panel is empty, in sync, or which edited language will be used. */
 
     /** Shows whether the panel is empty, in sync, or which edited language will be used. */
     static renderPromptState() {
@@ -81,8 +71,6 @@ class SimplePromptPart {
         chip.classList.toggle('is-synced', source != '' && !dirty);
         chip.classList.toggle('is-dirty', dirty);
     }
-
-    /** AI expand (F54): asks the server to write the one-line description (or the product type) into a full prompt in both languages. */
 
     /** AI expand (F54): asks the server to write the one-line description (or the product type) into a full prompt in both languages. */
     static async expandPrompt() {
@@ -124,8 +112,6 @@ class SimplePromptPart {
     }
 
     /** After a submission: remembers the prompt the engine received for the result card and puts the server's translation of edited Chinese on the English tab. */
-
-    /** After a submission: remembers the prompt the engine received for the result card and puts the server's translation of edited Chinese on the English tab. */
     static applyPromptResult(result, sent) {
         if (!result.prompt_used) {
             return;
@@ -137,8 +123,6 @@ class SimplePromptPart {
         this.promptUsed = { zh, en: String(result.prompt_used) };
         this.renderPromptUsed();
     }
-
-    /** Shows the prompt of the latest submission (Chinese shown, English actually sent), folded under the status line. */
 
     /** Shows the prompt of the latest submission (Chinese shown, English actually sent), folded under the status line. */
     static renderPromptUsed() {
@@ -155,8 +139,6 @@ class SimplePromptPart {
         lines.push(this.api.el('p', '', this.api.tr('英文（实际发送）：{0}', used.en)));
         this.api.$('simple-prompt-used-body').replaceChildren(...lines);
     }
-
-    /** Reads platforms, templates and styles from the server. */
 
     /** The bilingual prompt panel's buttons and inputs (F54). */
     static bindPrompt() {

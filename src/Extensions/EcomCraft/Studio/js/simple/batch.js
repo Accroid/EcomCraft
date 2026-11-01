@@ -4,6 +4,8 @@
  * Simple mode: one-click set generation and its batch tracking. Part of simple.js since R15; static methods are copied onto SimpleMode by adopt(), so callers and this stay unchanged.
  */
 class SimpleBatchPart {
+    /** The set's templates for the chosen platform: composed by the platform's slot kinds when it defines slots (F58), matching the server's
+     * composition; platforms without slots keep the old composition by set membership. */
     static setTemplates() {
         let visible = this.visibleTemplates();
         let platform = this.data.platforms.find(item => item.id == this.choice.platform);
@@ -30,8 +32,6 @@ class SimpleBatchPart {
         }
         return set;
     }
-
-    /** Starts a one-click set for every uploaded product: each product × each image type of the set, with the chosen number of candidates. */
 
     /** Starts a one-click set for every uploaded product: each product × each image type of the set, with the chosen number of candidates. */
     static async generateSet() {
@@ -92,9 +92,6 @@ class SimpleBatchPart {
 
     /** Polls the batch until every task has ended, adding finished candidates to the results. Keeps polling in the background
      * so the tab title shows the progress (F43). */
-
-    /** Polls the batch until every task has ended, adding finished candidates to the results. Keeps polling in the background
-     * so the tab title shows the progress (F43). */
     static trackBatch() {
         if (this.batchTimer) {
             return;
@@ -134,8 +131,6 @@ class SimpleBatchPart {
     }
 
     /** Once the batch prompt is written (F56), shows the prompt used and any fallback notice, only once per batch. */
-
-    /** Once the batch prompt is written (F56), shows the prompt used and any fallback notice, only once per batch. */
     static showBatchPrompt() {
         if (!this.batch || !this.batch.prompt_ready || this.batchPromptShown) {
             return;
@@ -151,13 +146,9 @@ class SimpleBatchPart {
     }
 
     /** Whether every task of a batch has ended (done, failed or cancelled). */
-
-    /** Whether every task of a batch has ended (done, failed or cancelled). */
     static batchFinished(jobs) {
         return !(jobs || []).some(job => job.state == 'prompt' || job.state == 'queued' || job.state == 'running');
     }
-
-    /** Shows each task's state with a retry button for failed ones, and adds finished images to the candidates. */
 
     /** Shows each task's state with a retry button for failed ones, and adds finished images to the candidates. */
     static renderBatch() {
@@ -217,8 +208,6 @@ class SimpleBatchPart {
     }
 
     /** Retries one failed or cancelled task. */
-
-    /** Retries one failed or cancelled task. */
     static async retryJob(id) {
         try {
             this.batch = await this.api.request('EcomCraftStudioBatchRetry', { batch_id: this.batch.batch_id, job_id: id });
@@ -231,8 +220,6 @@ class SimpleBatchPart {
             this.message(error.message || this.api.tr('操作失败，请稍后重试。'), true);
         }
     }
-
-    /** Cancels the tasks still waiting; running tasks finish. */
 
     /** Cancels the tasks still waiting; running tasks finish. */
     static async cancelBatch() {
@@ -248,10 +235,6 @@ class SimpleBatchPart {
             this.message(error.message || this.api.tr('操作失败，请稍后重试。'), true);
         }
     }
-
-    /** Submits one template generation; the server composes the prompt from the style and description. */
-    /** Fills the page with the settings of a filed work (F04): single image task, its template, platform, saved product, prompt and seed.
-     * The recipe comes from the project record, which the server read from the work's own metadata. Returns false when the template is no longer offered. */
 
     /** The main generate buttons of the single and set tasks. */
     static bindGenerate() {
