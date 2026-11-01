@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace EcomCraftStudio.Studio.Generation;
 
 /// <summary>Rules for one-click sets and batches (F03, R5.7, R9.4), independent of SwarmUI so they can be unit tested.</summary>
@@ -12,8 +14,26 @@ public static class SetRules
     /// <summary>Most tasks one batch may expand into.</summary>
     public const int MaxJobs = 80;
 
+    /// <summary>Most images one batch may request in total (F55): products × set types × candidates, shared with single generations. The value is part of the API contract.</summary>
+    public const int MaxImages = 20;
+
+    /// <summary>Most candidate pictures per image type; the batch total still stays within <see cref="MaxImages"/> (F55).</summary>
+    public const int MaxCandidates = 20;
+
+    /// <summary>Largest inline image, as a data URL, that a request may carry.</summary>
+    public const int MaxImageDataLength = (5 * 1024 * 1024 + 2) / 3 * 4 + 40;
+
     /// <summary>Upper bound for one person's tasks running at once, whatever their role allows (R9.4).</summary>
     public const int MaxConcurrent = 4;
+
+    /// <summary>Whether expanded tasks × candidates stays within the shared image cap (F55).</summary>
+    public static bool WithinImageTotal(int tasks, int candidates) => (long)tasks * candidates <= MaxImages;
+
+    /// <summary>Whether a product photo looks like a data URL of an allowed image type within <see cref="MaxImageDataLength"/>; only the prefix is checked here,
+    /// the bytes are decoded later (R10).</summary>
+    public static bool ProductImageLooksValid(string image) =>
+        image is not null && image.Length <= MaxImageDataLength
+        && Regex.IsMatch(image[..Math.Min(image.Length, 30)], "^data:image/(png|jpeg|webp);base64,");
 
     /// <summary>How long a finished batch stays in memory.</summary>
     public const long BatchKeepMs = 6 * 60 * 60 * 1000;
