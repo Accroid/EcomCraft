@@ -173,6 +173,31 @@ public sealed class ProjectIndex
         return text;
     }
 
+    /// <summary>Picks SwarmUI's own metadata out of a work's text chunks. A work from a ComfyUI workflow also carries the executed graph in a chunk of its own,
+    /// which must never reach a recipe. Returns null when no chunk has SwarmUI's metadata.</summary>
+    public static string SwarmMetadata(IEnumerable<string> chunks)
+    {
+        foreach (string chunk in chunks)
+        {
+            if (string.IsNullOrWhiteSpace(chunk) || !chunk.Contains("sui_image_params", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            try
+            {
+                if (JObject.Parse(chunk)["sui_image_params"] is JObject)
+                {
+                    return chunk;
+                }
+            }
+            catch (JsonException)
+            {
+                // Not this chunk; the others are still checked.
+            }
+        }
+        return null;
+    }
+
     /// <summary>Reads a recipe from a work's SwarmUI metadata text (sui_image_params and sui_extra_data); unreadable metadata gives an empty recipe.
     /// <paramref name="templatePrompt"/> returns the template's prefix and suffix for a template ID, so only the subject is kept.</summary>
     public static ProjectRecipe ParseMetadata(string text, Func<string, (string Prefix, string Suffix)> templatePrompt)

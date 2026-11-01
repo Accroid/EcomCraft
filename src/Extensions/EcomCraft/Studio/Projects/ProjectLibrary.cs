@@ -1,5 +1,4 @@
 using System.IO;
-using System.Text;
 using System.Text.RegularExpressions;
 using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.Storage;
@@ -94,16 +93,12 @@ public static class ProjectLibrary
     private static (string Text, int Width, int Height) ReadMetadata(string path)
     {
         ImageInfo info = ISImage.Identify(path);
-        StringBuilder text = new();
-        foreach (SixLabors.ImageSharp.Formats.Png.Chunks.PngTextData item in info.Metadata.GetPngMetadata().TextData)
+        string text = ProjectIndex.SwarmMetadata(info.Metadata.GetPngMetadata().TextData.Select(item => item.Value));
+        if (text is null && info.Metadata.ExifProfile?.TryGetValue(ExifTag.UserComment, out IExifValue<EncodedString> comment) == true)
         {
-            text.Append(item.Value);
+            text = comment.Value.Text;
         }
-        if (text.Length == 0 && info.Metadata.ExifProfile?.TryGetValue(ExifTag.UserComment, out IExifValue<EncodedString> comment) == true)
-        {
-            text.Append(comment.Value.Text);
-        }
-        return (text.ToString(), info.Width, info.Height);
+        return (text ?? "", info.Width, info.Height);
     }
 
     /// <summary>A project as its owner sees it, without its works.</summary>
