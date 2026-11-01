@@ -7,22 +7,22 @@
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 工作台</title>
-    <link rel="icon" href="/favicon.ico?v=0.54.0">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.54.0">
-    <script src="/EcomCraft/lang/en.js?v=0.54.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.54.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.54.0" defer></script>
-    <script src="/EcomCraft/js/simple/brand.js?v=0.54.0" defer></script>
-    <script src="/EcomCraft/js/simple/storyboard.js?v=0.54.0" defer></script>
-    <script src="/EcomCraft/js/simple/rules.js?v=0.54.0" defer></script>
-    <script src="/EcomCraft/js/simple/prompt.js?v=0.54.0" defer></script>
-    <script src="/EcomCraft/js/simple/export.js?v=0.54.0" defer></script>
-    <script src="/EcomCraft/js/simple/placement.js?v=0.54.0" defer></script>
-    <script src="/EcomCraft/js/simple/products.js?v=0.54.0" defer></script>
-    <script src="/EcomCraft/js/simple/reference.js?v=0.54.0" defer></script>
-    <script src="/EcomCraft/js/simple/batch.js?v=0.54.0" defer></script>
-    <script src="/EcomCraft/js/simple/tasks.js?v=0.54.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.54.0" defer></script>
+    <link rel="icon" href="/favicon.ico?v=0.55.0">
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.55.0">
+    <script src="/EcomCraft/lang/en.js?v=0.55.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.55.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.55.0" defer></script>
+    <script src="/EcomCraft/js/simple/brand.js?v=0.55.0" defer></script>
+    <script src="/EcomCraft/js/simple/storyboard.js?v=0.55.0" defer></script>
+    <script src="/EcomCraft/js/simple/rules.js?v=0.55.0" defer></script>
+    <script src="/EcomCraft/js/simple/prompt.js?v=0.55.0" defer></script>
+    <script src="/EcomCraft/js/simple/export.js?v=0.55.0" defer></script>
+    <script src="/EcomCraft/js/simple/placement.js?v=0.55.0" defer></script>
+    <script src="/EcomCraft/js/simple/products.js?v=0.55.0" defer></script>
+    <script src="/EcomCraft/js/simple/reference.js?v=0.55.0" defer></script>
+    <script src="/EcomCraft/js/simple/batch.js?v=0.55.0" defer></script>
+    <script src="/EcomCraft/js/simple/tasks.js?v=0.55.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.55.0" defer></script>
 </head>
 
 <body>
@@ -79,7 +79,7 @@
         </div>
 
         <!-- 创作视图 -->
-        <section class="view" id="view-simple" aria-labelledby="simple-title" data-simple-task="reference">
+        <section class="view" id="view-simple" aria-labelledby="simple-title" data-simple-task="reference" data-check-bg="checker">
             <header class="page-head">
                 <h1 class="page-title" id="simple-title">商品出图</h1>
                 <p class="page-meta">先选要做什么，再上传商品图、按提示填写，最后挑图下载。</p>
@@ -118,6 +118,12 @@
                     <input type="file" id="simple-camera" accept="image/*" capture="environment" class="visually-hidden">
                     <div class="simple-products" id="simple-products" hidden></div>
                     <div class="simple-quality" id="simple-quality" role="status" hidden></div>
+                    <div class="inline-row simple-bg-row" id="simple-bg-row" role="group" aria-label="预览背景" hidden>
+                        <span class="simple-bg-label">预览背景</span>
+                        <button type="button" class="btn btn-sm" id="simple-bg-white" aria-pressed="false">白底</button>
+                        <button type="button" class="btn btn-sm" id="simple-bg-black" aria-pressed="false">黑底</button>
+                        <button type="button" class="btn btn-sm" id="simple-bg-checker" aria-pressed="true">棋盘</button>
+                    </div>
                     <div class="simple-product-meta" id="simple-product-meta" hidden>
                         <label for="simple-product-name">商品名称</label>
                         <input id="simple-product-name" type="text" maxlength="60" autocomplete="off">

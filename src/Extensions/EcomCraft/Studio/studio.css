@@ -405,6 +405,15 @@ main:focus:not(:focus-visible) { outline: none; }
 .simple-vision-title { margin: 0; font-weight: 600; }
 .simple-vision-steps { margin: 0; padding-left: 20px; display: grid; gap: 4px; overflow-wrap: anywhere; }
 .simple-quality { display: grid; gap: 4px; margin: 4px 0 8px; padding: 8px 12px; border-left: 3px solid var(--tally); background: var(--backdrop); border-radius: 0 6px 6px 0; font-size: var(--fs-13); }
+.simple-bg-row { gap: 8px; margin: 4px 0 8px; font-size: var(--fs-13); justify-content: flex-start; }
+.simple-bg-row .btn { min-height: 32px; }
+.simple-bg-row .btn[aria-pressed="true"] { border-color: var(--key); box-shadow: inset 0 0 0 1px var(--key); }
+.simple-bg-label { color: var(--ink-2); }
+/* Preview backgrounds of step 1 (F83): checkerboard by default, white and black to make a bright or dark rim visible. */
+[data-check-bg="checker"] .simple-preview { background-color: #fff; background-image: linear-gradient(45deg, #e6e6e6 25%, transparent 25%, transparent 75%, #e6e6e6 75%), linear-gradient(45deg, #e6e6e6 25%, transparent 25%, transparent 75%, #e6e6e6 75%); background-size: 16px 16px; background-position: 0 0, 8px 8px; border-radius: 4px; }
+[data-check-bg="white"] .simple-preview, [data-check-bg="white"] .simple-stage { background: #fff; }
+[data-check-bg="black"] .simple-preview, [data-check-bg="black"] .simple-stage { background: #141414; }
+[data-check-bg="black"] .simple-drop { border-color: var(--line-strong); }
 .simple-product { position: relative; width: 56px; height: 56px; padding: 0; border: 2px solid transparent; border-radius: 6px; background: var(--backdrop); cursor: pointer; }
 .simple-product[aria-pressed="true"] { border-color: var(--key); }
 .simple-product img { width: 100%; height: 100%; object-fit: contain; border-radius: 4px; }

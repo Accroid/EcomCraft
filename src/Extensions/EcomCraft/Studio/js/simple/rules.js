@@ -75,16 +75,47 @@ class SimpleRulesPart {
         return { x: clamp(placement.x, 0, 1), y: clamp(placement.y, 0, 1), size: clamp(placement.size, 0.1, 1.5) };
     }
 
-    /** Whether at least 2% of an image's pixels are transparent, as the server checks a cut-out. */
+    /** Whether an image is a cut-out, the same rule as the server: at least 2% of its pixels are transparent, or at least half of the border ring is,
+     * which also catches a product that fills almost the whole canvas and whose few transparent pixels lie along the border (F83). */
     static hasTransparency(imageData) {
-        let transparent = 0;
-        let data = imageData.data;
-        for (let i = 3; i < data.length; i += 4) {
-            if (data[i] < 16) {
-                transparent++;
+        let width = imageData.width || 0, height = imageData.height || 0, data = imageData.data;
+        let transparent = 0, ring = 0, ringTransparent = 0;
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                let clear = data[(y * width + x) * 4 + 3] < 16;
+                let onRing = x == 0 || y == 0 || x == width - 1 || y == height - 1;
+                if (clear) {
+                    transparent++;
+                    if (onRing) {
+                        ringTransparent++;
+                    }
+                }
+                if (onRing) {
+                    ring++;
+                }
             }
         }
-        return transparent * 50 >= data.length / 4;
+        if (transparent * 50 >= width * height) {
+            return true;
+        }
+        return ringTransparent * 2 >= ring;
+    }
+
+    /** Server edge warnings (F83) as quality issues: the codes arrive with the cut-out or the product save, the text comes from the translation table. */
+    static edgeIssues(codes) {
+        let issues = [];
+        for (let code of codes || []) {
+            if (code) {
+                issues.push({ code: 'edge_' + code });
+            }
+        }
+        return issues;
+    }
+
+    /** Appends issues that are not shown yet; warnings can arrive twice, with the cut-out and again when the product is saved. */
+    static mergeIssues(issues, extra) {
+        let shown = new Set((issues || []).map(issue => issue.code));
+        return (issues || []).concat((extra || []).filter(issue => !shown.has(issue.code)));
     }
 
     /** Variance of the 4-neighbour Laplacian over a grayscale copy, the classic sharpness score: blurry photos score low. */
@@ -177,7 +208,8 @@ class SimpleRulesPart {
         return '';
     }
 
-    /** The plain-language warning for one quality issue, with a suggestion; the user can always continue. */
+    /** The plain-language warning for one quality issue, with a suggestion; the user can always continue.
+     * Edge issues (F83) only describe what was found in the picture; they never block a generation. */
     static qualityText(issue) {
         let tr = this.api.tr;
         if (issue.code == 'resolution') {
@@ -185,6 +217,27 @@ class SimpleRulesPart {
         }
         if (issue.code == 'blur') {
             return tr('这张图看起来有些模糊，建议对准商品重新拍一张。也可以继续使用。');
+        }
+        if (issue.code == 'oversize') {
+            return tr('这张透明图太大，自动压缩后会超过 5 MB，已保留原图使用。也可以继续使用，或换一张更简单的透明 PNG。');
+        }
+        if (issue.code == 'edge_fringe_white') {
+            return tr('图片边缘有一圈白色残留，放在深色背景上会显出来；出图时会自动淡化，换一张边缘干净的透明图效果更好。也可以继续使用。');
+        }
+        if (issue.code == 'edge_fringe_black') {
+            return tr('图片边缘有一圈深色残留，放在浅色背景上会显出来；出图时会自动淡化，换一张边缘干净的透明图效果更好。也可以继续使用。');
+        }
+        if (issue.code == 'edge_islands') {
+            return tr('商品旁边有零碎的小碎片，可能是没删干净的背景；建议重新抠图或擦掉它们。也可以继续使用。');
+        }
+        if (issue.code == 'edge_canvas_cut') {
+            return tr('商品贴着图片边缘，可能被裁掉了一部分；建议重新上传四周留些空白的图。也可以继续使用。');
+        }
+        if (issue.code == 'edge_jagged') {
+            return tr('商品边缘是硬锯齿，放进场景会有毛边；建议上传边缘平滑的透明图。也可以继续使用。');
+        }
+        if (issue.code == 'edge_semi_transparent') {
+            return tr('这张图有大量半透明边缘（玻璃、毛发类商品）；这类边缘只能按图片自带的透明度呈现，效果不保证。也可以继续使用。');
         }
         return tr('抠图后商品只占画面约 {0}%，建议拍得更近一些，让商品占满画面。也可以继续使用。', Math.round((issue.ratio || 0) * 100));
     }

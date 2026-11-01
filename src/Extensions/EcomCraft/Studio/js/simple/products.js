@@ -158,18 +158,28 @@ class SimpleProductsPart {
         });
     }
 
-    /** Scales a loaded image down to at most 16 megapixels: a transparent one stays a PNG (falling back to JPEG only when the PNG passes 5 MB), others become JPEG within 5 MB. */
+    /** Scales a loaded image down to at most 16 megapixels. A transparent one stays a PNG at any size (F83): the scale drops until it fits in 5 MB,
+     * and only when even below the recommended side it still cannot, the user's own PNG bytes are kept — never a white JPEG that throws the alpha away.
+     * Others become JPEG within 5 MB. */
     static async shrinkImage(image, transparent) {
         if (transparent) {
+            let min = Number(this.quality && this.quality.min_side) || 512;
             let scale = this.compressionScale(image.naturalWidth, image.naturalHeight);
-            let canvas = document.createElement('canvas');
-            canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-            canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-            canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
-            let blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-            if (blob && blob.size <= this.maxProductBytes) {
-                return await this.blobToDataUrl(blob);
+            for (let attempt = 0; attempt < 8; attempt++) {
+                let canvas = document.createElement('canvas');
+                canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+                canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+                canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+                let blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                if (blob && blob.size <= this.maxProductBytes) {
+                    return await this.blobToDataUrl(blob);
+                }
+                if (Math.min(canvas.width, canvas.height) <= min) {
+                    break;
+                }
+                scale *= 0.75;
             }
+            return image.src;
         }
         return await this.compressImage(image.src, this.maxProductBytes);
     }
@@ -229,13 +239,21 @@ class SimpleProductsPart {
         this.selectProduct(product);
     }
 
-    /** Saves a newly uploaded photo to the product library; generation keeps working when saving fails. */
+    /** Saves a newly uploaded photo to the product library; generation keeps working when saving fails. The save is also the first time the server
+     * sees an uploaded transparent PNG, so its edge warnings (F83) arrive here and join the quality notices. */
     static async saveToLibrary(product) {
         try {
             let name = String(product.name || '').replace(/\.[^.]+$/, '').slice(0, 60);
             let result = await this.api.request('EcomCraftStudioProductSave', { image: product.data, name, cutout: product.cutout && product.cutout.startsWith('data:') ? product.cutout : '' });
             product.id = result.product.id;
             product.name = result.product.name;
+            let withEdges = this.mergeIssues(product.qualityIssues || [], this.edgeIssues(result.edge_warnings));
+            if (withEdges.length != (product.qualityIssues || []).length) {
+                product.qualityIssues = withEdges;
+                if (product == this.product) {
+                    this.renderQuality();
+                }
+            }
             await this.loadLibrary();
             if (product == this.product) {
                 this.renderProductMeta();
@@ -359,12 +377,16 @@ class SimpleProductsPart {
             let transparent = this.hasTransparency(imageData);
             // A phone photo can pass 40 megapixels while staying under 5 MB; the server's cut-out and product compositing refuse that, so shrink it here.
             if (this.compressionScale(image.naturalWidth, image.naturalHeight) < 1) {
+                let before = product.data;
                 product.data = await this.shrinkImage(image, transparent);
                 product.source = product.data;
                 let shrunk = await this.loadImage(product.data);
                 product.width = shrunk.naturalWidth;
                 product.height = shrunk.naturalHeight;
-                // A transparent photo too big for a 5 MB PNG came back as JPEG on white and needs cutting out again.
+                // A transparent PNG that cannot be re-encoded within 5 MB keeps its own bytes (F83); the notice explains why the original stays.
+                if (transparent && product.data == before) {
+                    product.qualityIssues = product.qualityIssues.concat([{ code: 'oversize' }]);
+                }
                 transparent = transparent && product.data.startsWith('data:image/png');
             }
             if (transparent) {
@@ -426,6 +448,8 @@ class SimpleProductsPart {
             catch (error) {
                 // The cut-out is still usable when its preview cannot be read back.
             }
+            // Edge warnings of the server's cut-out (F83): plain-language notices, never a block.
+            product.qualityIssues = this.mergeIssues(product.qualityIssues || [], this.edgeIssues(result.edge_warnings));
             if (product.id) {
                 this.api.request('EcomCraftStudioProductUpdate', { product_id: product.id, cutout: result.cutout }).then(() => this.loadLibrary()).catch(() => {
                     // The cut-out is still used on this page; it just is not remembered for next time.
@@ -461,7 +485,8 @@ class SimpleProductsPart {
         this.update();
     }
 
-    /** Shows the current product's quality warnings under the upload step; empty when there is nothing to complain about. */
+    /** Shows the current product's quality warnings under the upload step; empty when there is nothing to complain about.
+     * The preview-background toggle (F83) is shown exactly while a photo is there to look at. */
     static renderQuality() {
         if (!this.api) {
             return;
@@ -470,6 +495,7 @@ class SimpleProductsPart {
         let issues = this.product && this.product.qualityIssues ? this.product.qualityIssues : [];
         box.replaceChildren(...issues.map(issue => this.api.el('p', '', this.qualityText(issue))));
         box.hidden = !issues.length;
+        this.api.$('simple-bg-row').hidden = !this.product;
     }
 
     /** The plain-language source of a product photo (F52): this computer, the camera, the product library or the gallery. */
@@ -519,6 +545,7 @@ class SimpleProductsPart {
     static bindUpload() {
         let $ = this.api.$;
         let drop = $('simple-drop');
+        this.bindBackgrounds();
         // Four equal ways to add a product photo (F52): this computer, the camera, the product library and the gallery of generated works.
         $('simple-file-btn').addEventListener('click', () => $('simple-file').click());
         $('simple-library-btn').addEventListener('click', e => this.openPicker('library', e.currentTarget));
@@ -561,6 +588,25 @@ class SimpleProductsPart {
         $('simple-product-name').addEventListener('change', e => this.renameProduct(e.target.value));
         $('simple-product-delete').addEventListener('click', () => this.deleteProduct());
         $('simple-size').addEventListener('change', () => this.savePlacement());
+    }
+
+    /** The preview-background toggle of step 1 (F83): white, black or checkerboard behind the uploaded picture and the cut-out, so a bright or dark
+     * rim becomes visible before generating. The choice is remembered in this browser. */
+    static bindBackgrounds() {
+        let $ = this.api.$;
+        let buttons = { white: $('simple-bg-white'), black: $('simple-bg-black'), checker: $('simple-bg-checker') };
+        let apply = background => {
+            $('view-simple').dataset.checkBg = background;
+            this.api.writeStorage('ecomcraft.check-bg', background);
+            for (let name of Object.keys(buttons)) {
+                buttons[name].setAttribute('aria-pressed', name == background ? 'true' : 'false');
+            }
+        };
+        for (let name of Object.keys(buttons)) {
+            buttons[name].addEventListener('click', () => apply(name));
+        }
+        let saved = this.api.readStorage('ecomcraft.check-bg');
+        apply(['white', 'black', 'checker'].includes(saved) ? saved : 'checker');
     }
 }
 SimpleMode.adopt(SimpleProductsPart);
