@@ -87,17 +87,11 @@ public sealed class EcomTemplate
     }
 }
 
-/// <summary>One way to run a template. Only <see cref="Local"/> plans run in this phase; cloud kinds are reserved and rejected (D11).</summary>
+/// <summary>One way to run a template. Only <see cref="Local"/> plans run; the dormant cloud kinds were removed (R24) and templates naming them are rejected (D11).</summary>
 public sealed class ExecutionPlan
 {
     /// <summary>Runs a published snapshot on registered execution servers.</summary>
     public const string Local = "local";
-
-    /// <summary>Reserved: a cloud ComfyUI service.</summary>
-    public const string CloudComfy = "cloud_comfy";
-
-    /// <summary>Reserved: a cloud image model API.</summary>
-    public const string CloudModelApi = "cloud_model_api";
 
     /// <summary>Plan kind.</summary>
     public string Kind;
@@ -272,7 +266,8 @@ public static class TemplateValidator
             }
         }
         ExecutionPlan plan = new() { Kind = Text(json["kind"]), Workflow = Text(json["workflow"]) };
-        if (plan.Kind is ExecutionPlan.CloudComfy or ExecutionPlan.CloudModelApi)
+        // The cloud plan kinds were removed as dormant types (R24); a template naming one still gets the same rejection as before.
+        if (plan.Kind is "cloud_comfy" or "cloud_model_api")
         {
             errors.Add("云端执行方案是预留类型，本期不能使用。");
             return null;

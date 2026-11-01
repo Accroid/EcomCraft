@@ -3,20 +3,14 @@ using SwarmUI.Builtin_ComfyUIBackend;
 
 namespace EcomCraftStudio.Studio.Generation;
 
-/// <summary>Kinds of executors a generation can run on (R10.1). Only the local and LAN ComfyUI kinds are implemented.</summary>
+/// <summary>Kinds of executors a generation can run on (R10.1). Only the local and LAN ComfyUI kinds exist; the dormant cloud kinds were removed (R24, D11: no cloud generation).</summary>
 public enum ExecutorKind
 {
     /// <summary>The self-starting ComfyUI on the platform server.</summary>
     LocalComfy,
 
     /// <summary>A ComfyUI on the LAN, registered by address.</summary>
-    LanComfy,
-
-    /// <summary>Reserved for a cloud ComfyUI service. Not implemented; no request is ever sent to one.</summary>
-    CloudComfy,
-
-    /// <summary>Reserved for a cloud image model API. Not implemented; no request is ever sent to one.</summary>
-    CloudModelApi
+    LanComfy
 }
 
 /// <summary>One place a generation can run. <see cref="Data"/> is the SwarmUI backend for ComfyUI kinds and would be null for cloud kinds.</summary>
