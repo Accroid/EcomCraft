@@ -1,11 +1,12 @@
 {
   "version": 1,
-  "note": "硬件分档阈值和 ROCm 显卡列表（F76 / T91）。数值为初版占位，待 G1 实测后调整；管理员可在 Data/EcomCraft/hardware-tiers.json 放一份同格式的文件整体覆盖。档位只决定推荐和提示，不锁功能（A19）。阈值单位为 MB（1 MB = 2^20 字节）、disk_hint_gb 为 GB；rocm_gpus 按显卡名称不区分大小写的包含关系匹配，缺省或留空时使用内置初版列表。",
+  "note": "硬件分档阈值和 ROCm 显卡列表（F76 / T91）。数值为初版占位，待 G1 实测后调整；管理员可在 Data/EcomCraft/hardware-tiers.json 放一份同格式的文件整体覆盖。档位只决定推荐和提示，不锁功能（A19）。阈值单位为 MB（1 MB = 2^20 字节）、disk_hint_gb 为 GB；rocm_gpus 按显卡名称不区分大小写的包含关系匹配，缺省或留空时使用内置初版列表。vram_tolerance_percent 是显存阈值比较的容差百分比：显卡实际读数常略低于标称值（如 8GB 卡读到 8176 MB），NVIDIA 和 AMD 的显存阈值按此下浮，取值 0–10，超出回退默认值 3；Mac 统一内存读数准确，不用容差。单个值写错（小数、字符串、超范围等）只回退该值为默认值，不影响其他值。",
   "nvidia_recommended_mb": 16384,
   "nvidia_minimum_mb": 8192,
   "mac_recommended_mb": 32768,
   "mac_minimum_mb": 24576,
   "amd_minimum_mb": 8192,
+  "vram_tolerance_percent": 3,
   "disk_hint_gb": 50,
   "rocm_gpus": [
     "Radeon RX 7900 XTX",

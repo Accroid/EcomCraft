@@ -202,6 +202,38 @@ public static class HardwareProbe
         return reader.ReadLine()?.Trim() ?? "";
     }
 
+    /// <summary>The names of the graphics adapters currently present on this machine (Win32_VideoController through Hardware.Info), or null when they
+    /// cannot be read: the display class registry key keeps entries of cards that were already removed, so only adapters present now may decide the
+    /// tier (T91 review). The wait is bounded so a stuck WMI query cannot freeze the status API; on failure every registry entry is kept instead.</summary>
+    private static async Task<List<string>> ReadPresentAdapterNamesAsync()
+    {
+        try
+        {
+            return await Task.Run(() =>
+            {
+                Hardware.Info.HardwareInfo info = new();
+                info.RefreshVideoControllerList();
+                List<string> names = [.. info.VideoControllerList.Select(controller => controller.Name ?? "")];
+                return names;
+            }).WaitAsync(TimeSpan.FromSeconds(5), Program.GlobalProgramCancel);
+        }
+        catch (Exception ex) when (ex is TimeoutException or OperationCanceledException or IOException or UnauthorizedAccessException
+            or InvalidOperationException or Win32Exception or COMException)
+        {
+            Logs.Debug($"EcomCraft could not read the present graphics adapters: {ex.GetType().Name}");
+            return null;
+        }
+    }
+
+    /// <summary>Whether a present adapter name and a registry entry name mean the same card: equal, or one containing the other after normalizing
+    /// case and whitespace, so a vendor word added or dropped between the two readings still matches.</summary>
+    private static bool NamesMatch(string presentName, string registryName)
+    {
+        string present = HardwareRules.Normalize(presentName);
+        string registry = HardwareRules.Normalize(registryName);
+        return present.Length > 0 && registry.Length > 0 && (present == registry || present.Contains(registry) || registry.Contains(present));
+    }
+
     /// <summary>Whether an adapter is a virtual or indirect display device rather than hardware images run on.</summary>
     private static bool IsVirtualAdapter(string name)
     {
@@ -216,7 +248,19 @@ public static class HardwareProbe
         List<ProbedGpu> gpus = [];
         if (OperatingSystem.IsWindows())
         {
-            foreach (WindowsAdapter adapter in ReadWindowsAdapters())
+            List<WindowsAdapter> adapters = ReadWindowsAdapters();
+            // The registry key keeps entries of cards that were removed; only adapters present now may decide the tier, and when the present list
+            // cannot be read or matches nothing, every entry is kept rather than the machine being judged on a guess (T91 review).
+            List<string> present = await ReadPresentAdapterNamesAsync();
+            if (present is not null)
+            {
+                List<WindowsAdapter> installed = [.. adapters.Where(adapter => present.Any(name => NamesMatch(name, adapter.Name)))];
+                if (installed.Count > 0)
+                {
+                    adapters = installed;
+                }
+            }
+            foreach (WindowsAdapter adapter in adapters)
             {
                 if (IsVirtualAdapter(adapter.Name))
                 {
@@ -394,9 +438,10 @@ public static class HardwareProbe
         + "video or unified memory, total memory, free disk space, and the tier (recommended, minimum, conditional, unsupported or unknown) with reason "
         + "codes. Values that could not be read come back as null and never make the machine unsupported, and the tier only guides recommendations: "
         + "force_allowed is always true (A19). Only this server is probed (never paths or addresses of anything); other execution servers are judged by "
-        + "their nodes and models. Thresholds come from Templates/hardware-tiers.json, overridable by administrators.",
-        "tier: \"conditional\", os: \"windows\", arch: \"x64\", gpus: [{ name: \"AMD Radeon RX 5600 XT\", vram_mb: 6128, vram_source: \"registry\" }], "
-        + "memory_mb: 16312, disk_free_gb: 245.3, reasons: [\"amd_rocm_listed\"], force_allowed: true")]
+        + "their nodes and models. Thresholds come from Templates/hardware-tiers.json, overridable by administrators; video memory thresholds are "
+        + "compared with a small tolerance for cards reporting slightly under their stated size.",
+        "tier: \"recommended\", os: \"windows\", arch: \"x64\", gpus: [{ name: \"NVIDIA GeForce RTX 5090 Ti\", vram_mb: 32512, vram_source: \"registry\" }], "
+        + "memory_mb: 65280, disk_free_gb: 412.7, reasons: [\"nvidia_recommended\"], force_allowed: true")]
     public static async Task<JObject> EcomCraftStudioHardwareStatus(Session session)
     {
         if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.EditServerSettings))

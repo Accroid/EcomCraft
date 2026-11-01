@@ -81,8 +81,11 @@ public static class HardwareRules
     /// <param name="MacMinimumMb">Apple silicon unified memory at or above this (under recommended) is the minimum tier.</param>
     /// <param name="AmdMinimumMb">AMD video memory a ROCm-listed card needs for the conditional tier.</param>
     /// <param name="DiskHintGb">Free disk space under this adds the disk_low reason; 0 disables the check.</param>
+    /// <param name="VramTolerancePercent">How many percent a card's reading may fall short of a video memory threshold and still qualify: cards report
+    /// a little less than their stated size (a "6 GB" card may read 6128 MB while 6 GB is 6144 MB). Only the NVIDIA and AMD video memory thresholds
+    /// use it; Mac unified memory reads exactly and never does.</param>
     /// <param name="RocmGpus">Names (or name fragments) of AMD cards treated as ROCm-capable; matched case-insensitively inside the adapter name.</param>
-    public sealed record class Rules(long NvidiaRecommendedMb, long NvidiaMinimumMb, long MacRecommendedMb, long MacMinimumMb, long AmdMinimumMb, long DiskHintGb, List<string> RocmGpus);
+    public sealed record class Rules(long NvidiaRecommendedMb, long NvidiaMinimumMb, long MacRecommendedMb, long MacMinimumMb, long AmdMinimumMb, long DiskHintGb, int VramTolerancePercent, List<string> RocmGpus);
 
     /// <summary>One graphics adapter as seen by the rules: its name, vendor (from the name or, on Linux, the PCI IDs) and its video memory in bytes when it was read.</summary>
     /// <param name="Name">The adapter name, or a stand-in such as "pci 10de:2684" when only IDs are known.</param>
@@ -102,8 +105,9 @@ public static class HardwareRules
     /// <summary>The decision: the tier, and machine-readable reason codes explaining it.</summary>
     public sealed record class Verdict(string Tier, List<string> Reasons);
 
-    /// <summary>Initial threshold values; the shipped hardware-tiers.json matches them and administrators can override both (re-tuning from G1 measurements is expected).</summary>
-    public static Rules Default() => new(16 * 1024, 8 * 1024, 32 * 1024, 24 * 1024, 8 * 1024, 50, [.. DefaultRocmGpus.Select(Normalize)]);
+    /// <summary>Initial threshold values; the shipped hardware-tiers.json matches them and administrators can override both (re-tuning from G1 measurements is expected).
+    /// The tolerance covers cards reporting slightly under their stated size (T91 review).</summary>
+    public static Rules Default() => new(16 * 1024, 8 * 1024, 32 * 1024, 24 * 1024, 8 * 1024, 50, 3, [.. DefaultRocmGpus.Select(Normalize)]);
 
     /// <summary>The initial ROCm card list: current consumer Radeon cards that run ComfyUI through ROCm/ZLUDA on Windows or Linux. A starting point only, to be re-tuned (G1).</summary>
     public static readonly string[] DefaultRocmGpus =
@@ -117,6 +121,9 @@ public static class HardwareRules
 
     /// <summary>Upper bound for a threshold in megabytes, so a mistyped config cannot produce nonsense tiers.</summary>
     private const long MaxMb = 1024L * 1024;
+
+    /// <summary>Upper bound of the video memory tolerance in percent: values outside 0–10 fall back to the default instead of being clamped.</summary>
+    private const int MaxTolerancePercent = 10;
 
     /// <summary>Reads the rules from hardware-tiers.json text; unreadable text or missing values fall back to <see cref="Default"/>. A missing or empty
     /// ROCm list also falls back to the default list (use an impossible entry such as "none" to keep a custom file from matching any card).</summary>
@@ -132,15 +139,18 @@ public static class HardwareRules
             JObject root = JObject.Parse(json);
             long Mb(string key, long fallbackMb)
             {
-                long? value = root.Value<long?>(key);
                 // A missing or nonsensical value falls back to the default instead of producing nonsense tiers.
+                long? value = WholeNumber(root, key);
                 if (value is null || value <= 0)
                 {
                     return fallbackMb;
                 }
                 return Math.Min(value.Value, MaxMb);
             }
-            long diskGb = root.Value<long?>("disk_hint_gb") ?? fallback.DiskHintGb;
+            long diskGb = WholeNumber(root, "disk_hint_gb") is long disk and >= 0 ? Math.Min(disk, 1024 * 1024) : fallback.DiskHintGb;
+            // Only a small tolerance is meaningful; anything outside 0–10 keeps the default instead of being clamped (T91 review).
+            long tolerance = WholeNumber(root, "vram_tolerance_percent") ?? fallback.VramTolerancePercent;
+            int tolerancePercent = tolerance is >= 0 and <= MaxTolerancePercent ? (int)tolerance : fallback.VramTolerancePercent;
             List<string> rocm = [.. (root["rocm_gpus"] as JArray ?? new JArray()).Select(item => item?.ToString() ?? "").Select(Normalize)
                 .Where(name => name.Length > 0)];
             return new Rules(
@@ -149,13 +159,26 @@ public static class HardwareRules
                 Mb("mac_recommended_mb", fallback.MacRecommendedMb),
                 Mb("mac_minimum_mb", fallback.MacMinimumMb),
                 Mb("amd_minimum_mb", fallback.AmdMinimumMb),
-                Math.Clamp(diskGb, 0, 1024 * 1024),
+                diskGb,
+                tolerancePercent,
                 rocm.Count == 0 ? fallback.RocmGpus : rocm);
         }
-        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        catch (JsonException)
         {
             return fallback;
         }
+    }
+
+    /// <summary>One config value as a whole number, or null when it is missing, null, a decimal, a string, a nested object or an integer too large
+    /// for a long: a mistyped entry falls back to its default on its own, so the rest of the file keeps working and the API never errors on a bad
+    /// config (T91 review).</summary>
+    private static long? WholeNumber(JObject root, string key)
+    {
+        if (root[key] is not JValue value || value.Type != JTokenType.Integer || value.Value is not long number)
+        {
+            return null;
+        }
+        return number;
     }
 
     /// <summary>The vendor an adapter name suggests, or "unknown". The probe may supply a better answer from PCI IDs; this is the name-based fallback.</summary>
@@ -204,6 +227,10 @@ public static class HardwareRules
 
     /// <summary>Video memory rounded to whole megabytes the way memory sizes are usually stated.</summary>
     public static long Megabytes(long bytes) => (bytes + (1024 * 1024) / 2) / (1024 * 1024);
+
+    /// <summary>A video memory threshold with the tolerance applied: cards report a little less than their stated size (an "8 GB" card may read
+    /// 8176 MB), so the boundary shifts down by the configured percent instead of rejecting such cards (T91 review).</summary>
+    private static long WithTolerance(long thresholdMb, Rules rules) => thresholdMb - thresholdMb * Math.Max(0, rules.VramTolerancePercent) / 100;
 
     /// <summary>Rank of a tier for picking the best card of a machine: a card that could not be judged never sinks an otherwise-supported machine.</summary>
     private static int Rank(string tier) => tier switch
@@ -255,6 +282,7 @@ public static class HardwareRules
             return Unknown;
         }
         long megabytes = Megabytes(memory);
+        // Unified memory reads exactly, so the Mac thresholds are compared without the video memory tolerance.
         if (megabytes >= rules.MacRecommendedMb)
         {
             reasons.Add(MacRecommendedMemory);
@@ -320,11 +348,11 @@ public static class HardwareRules
             return new Verdict(Unknown, [GpuVramUnknown]);
         }
         long megabytes = Megabytes(vram);
-        if (megabytes >= rules.NvidiaRecommendedMb)
+        if (megabytes >= WithTolerance(rules.NvidiaRecommendedMb, rules))
         {
             return new Verdict(Recommended, [NvidiaRecommendedMemory]);
         }
-        if (megabytes >= rules.NvidiaMinimumMb)
+        if (megabytes >= WithTolerance(rules.NvidiaMinimumMb, rules))
         {
             return new Verdict(Minimum, [NvidiaMinimumMemory]);
         }
@@ -347,7 +375,7 @@ public static class HardwareRules
         {
             return new Verdict(Unknown, [GpuVramUnknown]);
         }
-        if (Megabytes(vram) >= rules.AmdMinimumMb)
+        if (Megabytes(vram) >= WithTolerance(rules.AmdMinimumMb, rules))
         {
             return new Verdict(Conditional, [AmdRocmListed]);
         }
