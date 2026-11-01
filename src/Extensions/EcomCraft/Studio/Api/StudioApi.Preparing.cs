@@ -95,7 +95,7 @@ public static partial class StudioApi
     /// is completed with it and submitted to the scheduler as usual. The language model keeps its own 45-second limit and falls back to the defaults,
     /// so generation is never blocked by it. The owner reads the outcome through <see cref="EcomCraftStudioPrepareStatus"/>.</summary>
     private static JObject StartPreparing(Session session, JObject resolved, string templateId, int? pinnedServer, string preserveToken, Func<JObject, Task> postProcess,
-        Func<Task<PromptService.Composed>> compose)
+        Func<Task<PromptService.Composed>> compose, bool rawPrompt)
     {
         string id = Guid.NewGuid().ToString("N");
         PreparingTask task = new(session.User.UserID);
@@ -107,7 +107,7 @@ public static partial class StudioApi
             {
                 PromptService.Composed composed = await compose();
                 TaskTiming.RecordSince(TaskTiming.Compose, task.Started);
-                resolved["prompt"] = TemplateApi.WithTemplatePrompt(templateId, composed.Prompt);
+                resolved["prompt"] = TemplateApi.WithTemplatePrompt(templateId, composed.Prompt, rawPrompt);
                 answer = await GeneratePublishedWorkflow(session, resolved, resolved.Value<string>("workflow_id"), pinnedServer, templateId, postProcess);
                 if (!answer.ContainsKey("error"))
                 {

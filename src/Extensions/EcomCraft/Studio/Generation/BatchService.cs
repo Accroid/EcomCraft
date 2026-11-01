@@ -610,11 +610,8 @@ public static class BatchService
         {
             payload["output_size"] = batch.OutputSize.DeepClone();
         }
-        if (job.Reference >= 0)
-        {
-            // A reference task's prompt is final and user-edited (F59): it is sent as is, without the template's own fragments.
-            payload["raw_prompt"] = true;
-        }
+        // A reference task's prompt is final and user-edited (F59): it is sent as is, without the template's own fragments (R08: server-side option, not a request field).
+        GenerateOptions options = new() { RawPrompt = job.Reference >= 0 };
         if (batch.Server is int server)
         {
             payload["execution_server_id"] = server;
@@ -623,7 +620,7 @@ public static class BatchService
         {
             payload["brand_kit_id"] = batch.BrandKitId;
         }
-        return await StudioApi.EcomCraftStudioGenerate(session, payload);
+        return await StudioApi.GenerateInternal(session, payload, options);
     }
 
     /// <summary>The product's cut-out: the photo itself when it is already transparent, otherwise made once on an execution server. Null when it failed.</summary>

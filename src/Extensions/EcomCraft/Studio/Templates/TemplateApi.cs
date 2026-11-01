@@ -167,7 +167,8 @@ public static class TemplateApi
     /// (template_params, by parameter ID) and the prompt with the template's fragments. Returns null with an error response when the template cannot be used.
     /// Page fields bound to parameters the template does not open to users are removed or overwritten, so only presets, allowed fields and snapshot values apply.
     /// <paramref name="generationSize"/> (from the output size chosen before generating) sets the generated width and height and the product canvas size.</summary>
-    public static JObject Resolve(Session session, JObject rawInput, string templateId, out JObject error, out string preserveToken, (int Width, int Height)? generationSize = null)
+    public static JObject Resolve(Session session, JObject rawInput, string templateId, out JObject error, out string preserveToken, (int Width, int Height)? generationSize = null,
+        bool rawPrompt = false)
     {
         error = null;
         preserveToken = null;
@@ -309,7 +310,7 @@ public static class TemplateApi
             request["height"] = generateHeight;
         }
         // A raw prompt (F59 reference mode) is sent as is: what the user saw and edited is exactly what the engine gets, with no template fragments.
-        bool rawPrompt = rawInput["raw_prompt"]?.Type == JTokenType.Boolean && rawInput.Value<bool>("raw_prompt");
+        // The flag is a server-side choice passed by the caller (R08); a client-sent field of the same name is stripped and ignored.
         request.Remove("raw_prompt");
         request["prompt"] = rawPrompt
             ? (rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : "")
@@ -404,9 +405,14 @@ public static class TemplateApi
     }
 
     /// <summary>The full prompt of a resolved template request once its subject is known (F56): the template's prefix, the subject and its suffix,
-    /// joined the same way <see cref="Resolve"/> does, so a request resolved before the prompt was written can be completed later.</summary>
-    public static string WithTemplatePrompt(string templateId, string subject)
+    /// joined the same way <see cref="Resolve"/> does, so a request resolved before the prompt was written can be completed later. A raw prompt
+    /// (<see cref="GenerateOptions.RawPrompt"/>) skips the template fragments the same way <see cref="Resolve"/> does.</summary>
+    public static string WithTemplatePrompt(string templateId, string subject, bool rawPrompt = false)
     {
+        if (rawPrompt)
+        {
+            return subject;
+        }
         EcomTemplate template = TemplateStore.Find(templateId)?.Template;
         return Join(" ", template?.PromptPrefix, subject, template?.PromptSuffix);
     }

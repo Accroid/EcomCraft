@@ -24,7 +24,11 @@ namespace EcomCraftStudio.Studio;
 public static partial class StudioApi
 {
     [API.APIDescription("Generate using a validated allowlist on registered ComfyUI execution servers only. No cloud fallback, automatic retries or durable task guarantees. rawInput is the root request JSON.", "images: [\"View/user/result.png\"]")]
-    public static async Task<JObject> EcomCraftStudioGenerate(Session session, JObject rawInput)
+    public static Task<JObject> EcomCraftStudioGenerate(Session session, JObject rawInput) => GenerateInternal(session, rawInput, new GenerateOptions());
+
+    /// <summary>The generate route's implementation, shared with server-side callers (R08): internal flags such as a raw prompt travel in
+    /// <paramref name="options"/>, so no client-visible request field can set them.</summary>
+    internal static async Task<JObject> GenerateInternal(Session session, JObject rawInput, GenerateOptions options)
     {
         if (!CanView(session) || !session.User.HasPermission(Permissions.BasicImageGeneration))
         {
@@ -123,7 +127,7 @@ public static partial class StudioApi
             }
             // The template decides the workflow and presets; the client's own workflow_id and workflow_params are replaced.
             // A background submission is resolved now with an empty subject, so invalid requests still fail at once; the prompt is filled in later.
-            JObject resolved = TemplateApi.Resolve(session, templateInput, requestedTemplate, out JObject templateError, out string preserveToken, generationSize);
+            JObject resolved = TemplateApi.Resolve(session, templateInput, requestedTemplate, out JObject templateError, out string preserveToken, generationSize, options.RawPrompt);
             if (resolved is null)
             {
                 return templateError;
@@ -152,7 +156,7 @@ public static partial class StudioApi
             if (background)
             {
                 return StartPreparing(session, resolved, requestedTemplate, pinnedServer, preserveToken, postProcess,
-                    async () => WithBrand(await PromptService.ComposePanelAsync(session, styleId, productTypeId, needModel, description, promptEn, promptZh), brandFragment));
+                    async () => WithBrand(await PromptService.ComposePanelAsync(session, styleId, productTypeId, needModel, description, promptEn, promptZh), brandFragment), options.RawPrompt);
             }
             JObject templateResult = await GeneratePublishedWorkflow(session, resolved, resolved.Value<string>("workflow_id"), pinnedServer, requestedTemplate, postProcess);
             if (templateResult.ContainsKey("error"))
