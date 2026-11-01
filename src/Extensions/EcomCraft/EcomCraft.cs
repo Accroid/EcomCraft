@@ -4,6 +4,7 @@ using EcomCraftStudio.Studio.Storage;
 using EcomCraftStudio.Studio.Templates;
 using EcomCraftStudio.Studio.Prompting;
 using EcomCraftStudio.Studio.PostProcess;
+using EcomCraftStudio.Studio.Setup;
 using SwarmUI.Text2Image;
 using SwarmUI.Accounts;
 using SwarmUI.Core;
@@ -98,6 +99,7 @@ public class EcomCraft : Extension
         API.RegisterAPICall(PromptService.EcomCraftPromptSettings, true, Permissions.EditServerSettings);
         API.RegisterAPICall(VisionModelInstall.EcomCraftStudioVisionInstall, true, Permissions.EditServerSettings);
         API.RegisterAPICall(VisionModelInstall.EcomCraftStudioVisionInstallStatus, false, Permissions.EditServerSettings);
+        API.RegisterAPICall(HardwareProbe.EcomCraftStudioHardwareStatus, false, Permissions.EditServerSettings);
         API.RegisterAPICall(CutoutService.EcomCraftStudioCutout, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(EcomCraftStudio.Studio.Export.ExportService.EcomCraftStudioExportOptions, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(EcomCraftStudio.Studio.Export.ExportService.EcomCraftStudioExport, true, Permissions.FundamentalGenerateTabAccess);
@@ -136,6 +138,7 @@ public class EcomCraft : Extension
         PromptService.Init(FilePath);
         StandardWorkflows.Init(FilePath);
         EcomCraftStudio.Studio.Export.SellingImageService.Init(FilePath);
+        HardwareProbe.Init(FilePath);
     }
 
     /// <inheritdoc/>

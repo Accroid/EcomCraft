@@ -1,10 +1,9 @@
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using EcomCraftStudio.MagicPrompt.WebAPI;
 using EcomCraftStudio.Studio.Common;
+using EcomCraftStudio.Studio.Setup;
 using FreneticUtilities.FreneticExtensions;
-using Microsoft.Win32;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SixLabors.ImageSharp;
@@ -37,8 +36,8 @@ public static class VisionDeviceCheck
     /// <summary>How long a worked-out key is reused.</summary>
     private static readonly TimeSpan KeyTtl = TimeSpan.FromMinutes(1);
 
-    /// <summary>The graphics of this computer, read once.</summary>
-    private static readonly Lazy<string> LocalGraphics = new(ReadLocalGraphics);
+    /// <summary>The graphics of this computer, read once by the shared per-system reading in <see cref="HardwareProbe.GraphicsKey"/>.</summary>
+    private static readonly Lazy<string> LocalGraphics = new(HardwareProbe.GraphicsKey);
 
     /// <summary>The built-in test image as base64 PNG, drawn once.</summary>
     private static readonly Lazy<string> TestImage = new(DrawTestImage);
@@ -142,80 +141,6 @@ public static class VisionDeviceCheck
             return LocalGraphics.Value;
         }
         return $"lan:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(uri.Authority.ToLowerFast())))[..16]}";
-    }
-
-    /// <summary>The names and driver versions of this computer's graphics, sorted; "unknown" when they cannot be read.</summary>
-    private static string ReadLocalGraphics()
-    {
-        List<string> cards = [];
-        try
-        {
-            if (OperatingSystem.IsWindows())
-            {
-                using RegistryKey adapters = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}");
-                foreach (string name in adapters?.GetSubKeyNames() ?? Array.Empty<string>())
-                {
-                    // Only the numbered adapter entries; "Properties" cannot be opened.
-                    if (!int.TryParse(name, out _))
-                    {
-                        continue;
-                    }
-                    using RegistryKey card = adapters.OpenSubKey(name);
-                    string description = card?.GetValue("DriverDesc") as string;
-                    if (!string.IsNullOrWhiteSpace(description))
-                    {
-                        cards.Add($"{description.Trim()} {card.GetValue("DriverVersion") as string}".Trim());
-                    }
-                }
-            }
-            else if (OperatingSystem.IsLinux())
-            {
-                if (Directory.Exists("/sys/class/drm"))
-                {
-                    foreach (string card in Directory.GetDirectories("/sys/class/drm", "card*"))
-                    {
-                        // card0 is the device; card0-HDMI-A-1 and the like are its outputs.
-                        if (Path.GetFileName(card).Contains('-'))
-                        {
-                            continue;
-                        }
-                        string vendor = ReadFirstLine(Path.Combine(card, "device", "vendor"));
-                        if (vendor.Length > 0)
-                        {
-                            cards.Add($"{vendor}:{ReadFirstLine(Path.Combine(card, "device", "device"))}");
-                        }
-                    }
-                }
-                string nvidia = ReadFirstLine("/proc/driver/nvidia/version");
-                if (nvidia.Length > 0)
-                {
-                    cards.Add(nvidia);
-                }
-                // AMD and Intel drivers come with the kernel.
-                cards.Add($"kernel {Environment.OSVersion.Version}");
-            }
-            else if (OperatingSystem.IsMacOS())
-            {
-                cards.Add($"{RuntimeInformation.OSArchitecture} macOS {Environment.OSVersion.Version}");
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
-        {
-            Logs.Debug($"EcomCraft could not read the graphics of this computer: {ex.GetType().Name}");
-        }
-        cards.Sort(StringComparer.Ordinal);
-        return cards.Count == 0 ? "unknown" : string.Join(", ", cards);
-    }
-
-    /// <summary>The trimmed first line of a small system file, or an empty string when it does not exist.</summary>
-    private static string ReadFirstLine(string path)
-    {
-        if (!File.Exists(path))
-        {
-            return "";
-        }
-        using StreamReader reader = new(path);
-        return reader.ReadLine()?.Trim() ?? "";
     }
 
     /// <summary>Reads the saved results on first use; call inside <see cref="RecordsLock"/>.</summary>
