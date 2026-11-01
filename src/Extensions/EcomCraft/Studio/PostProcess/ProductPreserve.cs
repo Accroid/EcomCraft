@@ -1,4 +1,5 @@
 using System.IO;
+using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.Storage;
 using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json.Linq;
@@ -42,7 +43,7 @@ public static class ProductPreserve
         token = null;
         Cleanup();
         int comma = productDataUrl?.IndexOf(',') ?? -1;
-        if (comma < 0 || !productDataUrl.StartsWith("data:image/", StringComparison.Ordinal) || width < 64 || height < 64 || width > 8192 || height > 8192)
+        if (!ImageDataUrl.IsValid(productDataUrl, ImageDataUrl.ImageDataFormats.AnyImage, int.MaxValue) || width < 64 || height < 64 || width > 8192 || height > 8192)
         {
             return "商品图无效，无法进行商品保真合成。";
         }
@@ -68,7 +69,7 @@ public static class ProductPreserve
             canvas.Save(canvasStream, new PngEncoder());
             using MemoryStream cutoutStream = new();
             cutout.Save(cutoutStream, new PngEncoder());
-            canvasDataUrl = "data:image/png;base64," + Convert.ToBase64String(canvasStream.ToArray());
+            canvasDataUrl = ImageDataUrl.ToDataUrl(canvasStream.ToArray(), "image/png");
             token = Guid.NewGuid().ToString("N");
             Jobs[token] = new Job(userId, cutoutStream.ToArray(), placement, Environment.TickCount64, blend);
             return null;

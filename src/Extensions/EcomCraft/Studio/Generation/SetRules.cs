@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+using EcomCraftStudio.Studio.Common;
 
 namespace EcomCraftStudio.Studio.Generation;
 
@@ -30,10 +30,9 @@ public static class SetRules
     public static bool WithinImageTotal(int tasks, int candidates) => (long)tasks * candidates <= MaxImages;
 
     /// <summary>Whether a product photo looks like a data URL of an allowed image type within <see cref="MaxImageDataLength"/>; only the prefix is checked here,
-    /// the bytes are decoded later (R10).</summary>
+    /// the bytes are decoded later (R10, via ImageDataUrl since R12).</summary>
     public static bool ProductImageLooksValid(string image) =>
-        image is not null && image.Length <= MaxImageDataLength
-        && Regex.IsMatch(image[..Math.Min(image.Length, 30)], "^data:image/(png|jpeg|webp);base64,");
+        ImageDataUrl.IsValid(image, ImageDataUrl.ImageDataFormats.PngJpegWebp, MaxImageDataLength);
 
     /// <summary>How long a finished batch stays in memory.</summary>
     public const long BatchKeepMs = 6 * 60 * 60 * 1000;

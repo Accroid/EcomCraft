@@ -81,7 +81,7 @@ public static partial class PromptService
                 // Names the model actually asked, so administrators can confirm a switch took effect; never the address, key or image.
                 Logs.Info($"EcomCraft is describing an image with {LLMAPICalls.VisionBackend(settings)} / {model}.");
                 int comma = imageDataUrl.IndexOf(',');
-                if (comma < 0 || !imageDataUrl.StartsWith("data:image/", StringComparison.Ordinal))
+                if (!ImageDataUrl.IsValid(imageDataUrl, ImageDataUrl.ImageDataFormats.AnyImage, int.MaxValue))
                 {
                     return "";
                 }

@@ -89,26 +89,14 @@ public static class BrandKitLibrary
     }
 
     /// <summary>Decodes a PNG, JPEG or WebP data URL of at most 5 MB, returning the bytes and a file extension, or null.</summary>
+    /// <summary>Decodes a PNG, JPEG or WebP data URL, returning the bytes and a file extension, or null.</summary>
     private static (byte[] Bytes, string Extension) Decode(string data)
     {
-        if (string.IsNullOrEmpty(data) || data.Length > MaxDataLength)
+        if (data?.Length > MaxDataLength || !ImageDataUrl.TryParse(data, ImageDataUrl.ImageDataFormats.PngJpegWebp, int.MaxValue, out byte[] bytes, out string extension))
         {
             return (null, null);
         }
-        Match match = Regex.Match(data[..Math.Min(data.Length, 30)], "^data:image/(png|jpeg|webp);base64,");
-        if (!match.Success)
-        {
-            return (null, null);
-        }
-        try
-        {
-            byte[] bytes = Convert.FromBase64String(data[match.Length..]);
-            return bytes.Length > 0 ? (bytes, match.Groups[1].Value == "jpeg" ? "jpg" : match.Groups[1].Value) : (null, null);
-        }
-        catch (FormatException)
-        {
-            return (null, null);
-        }
+        return (bytes, extension);
     }
 
     /// <summary>A kit file as a data URL, or null when it cannot be read (for example while the work library is offline).</summary>

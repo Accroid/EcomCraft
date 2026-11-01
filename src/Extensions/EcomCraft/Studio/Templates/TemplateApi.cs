@@ -1,3 +1,4 @@
+using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.Export;
 using EcomCraftStudio.Studio.PostProcess;
 using EcomCraftStudio.Studio.Storage;
@@ -342,7 +343,8 @@ public static class TemplateApi
         }
         else if (rawInput["template_params"] is JObject parameters)
         {
-            image = parameters.Properties().Select(property => property.Value).FirstOrDefault(value => value.Type == JTokenType.String && value.ToString().StartsWith("data:image/", StringComparison.Ordinal))?.ToString();
+            image = parameters.Properties().Select(property => property.Value).FirstOrDefault(value => value.Type == JTokenType.String
+                && ImageDataUrl.IsValid(value.ToString(), ImageDataUrl.ImageDataFormats.AnyImage, int.MaxValue))?.ToString();
         }
         if (image is null)
         {
@@ -367,7 +369,7 @@ public static class TemplateApi
                 {
                     return StudioApi.Error(error, errorId);
                 }
-                cutout = "data:image/png;base64," + Convert.ToBase64String(png);
+                cutout = ImageDataUrl.ToDataUrl(png, "image/png");
             }
         }
         ExportImageSize(platform, out int width, out int height);

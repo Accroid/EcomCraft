@@ -1,4 +1,5 @@
 using System.IO;
+using EcomCraftStudio.Studio.Common;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
 using SwarmUI.Backends;
@@ -153,35 +154,12 @@ public static class TemplateAdminApi
         return Task.FromResult(error is null ? new JObject() { ["success"] = true } : StudioApi.Error(error, "invalid_template"));
     }
 
-    /// <summary>Decodes a PNG, JPEG or WebP data URL of at most <see cref="MaxImageBytes"/>.</summary>
+    /// <summary>Decodes a PNG, JPEG or WebP data URL of at most <see cref="MaxImageBytes"/> (character pre-filter included, as before R12).</summary>
     private static bool TryDecodeImage(string data, out byte[] bytes, out string extension)
     {
         bytes = null;
         extension = null;
-        int comma = data.IndexOf(',');
-        if (comma < 0 || data.Length > (MaxImageBytes + 2) / 3 * 4 + 40)
-        {
-            return false;
-        }
-        extension = data[..comma] switch
-        {
-            "data:image/png;base64" => "png",
-            "data:image/jpeg;base64" => "jpg",
-            "data:image/webp;base64" => "webp",
-            _ => null
-        };
-        if (extension is null)
-        {
-            return false;
-        }
-        try
-        {
-            bytes = Convert.FromBase64String(data[(comma + 1)..]);
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-        return bytes.Length > 0 && bytes.Length <= MaxImageBytes;
+        return data.Length <= (MaxImageBytes + 2) / 3 * 4 + 40
+            && ImageDataUrl.TryParse(data, ImageDataUrl.ImageDataFormats.PngJpegWebp, MaxImageBytes, out bytes, out extension);
     }
 }

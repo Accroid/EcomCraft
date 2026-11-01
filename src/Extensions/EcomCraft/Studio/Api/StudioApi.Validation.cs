@@ -3,6 +3,7 @@ using System.IO;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using EcomCraftStudio.MagicPrompt.WebAPI;
+using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.Generation;
 using EcomCraftStudio.Studio.Storage;
 using EcomCraftStudio.Studio.Templates;
@@ -252,17 +253,8 @@ public static partial class StudioApi
         }
     }
 
-    private static bool ValidReference(string data)
-    {
-        int comma = data.IndexOf(',');
-        if (comma < 0 || comma > 30 || data.Length > (MaxReferenceBytes + 2) / 3 * 4 + 40
-            || data[..comma] is not ("data:image/png;base64" or "data:image/jpeg;base64" or "data:image/webp;base64"))
-        {
-            return false;
-        }
-        byte[] buffer = new byte[(data.Length - comma) * 3 / 4];
-        return Convert.TryFromBase64String(data[(comma + 1)..], buffer, out int count) && count > 0 && count <= MaxReferenceBytes;
-    }
+    private static bool ValidReference(string data) =>
+        ImageDataUrl.TryParse(data, ImageDataUrl.ImageDataFormats.PngJpegWebp, MaxReferenceBytes, out _, out _);
 
     private static JObject GenerationError(JObject result, bool workflow)
     {

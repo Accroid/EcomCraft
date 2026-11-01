@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.Export;
 using EcomCraftStudio.Studio.PostProcess;
 using EcomCraftStudio.Studio.Prompting;
@@ -245,7 +246,7 @@ public static partial class BatchService
             foreach (JToken item in imageItems)
             {
                 string image = item?.Type == JTokenType.String ? item.ToString() : "";
-                if (!image.StartsWith("data:image/", StringComparison.Ordinal) || image.Length > SetRules.MaxImageDataLength)
+                if (!ImageDataUrl.IsValid(image, ImageDataUrl.ImageDataFormats.AnyImage, SetRules.MaxImageDataLength))
                 {
                     return StudioApi.Error("参考图须为不超过 5 MB 的图片。", "invalid_reference");
                 }

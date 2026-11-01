@@ -1,6 +1,7 @@
 using System.IO;
 using System.Net.Http;
 using System.Text;
+using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.Generation;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -47,8 +48,7 @@ public static class CutoutService
             return StudioApi.Error("此账号没有生成权限。", "bad_permissions");
         }
         int comma = product_image?.IndexOf(',') ?? -1;
-        if (comma < 0 || product_image.Length > (MaxBytes + 2) / 3 * 4 + 40
-            || product_image[..comma] is not ("data:image/png;base64" or "data:image/jpeg;base64" or "data:image/webp;base64"))
+        if (!ImageDataUrl.IsValid(product_image, ImageDataUrl.ImageDataFormats.PngJpegWebp, (MaxBytes + 2) / 3 * 4 + 40))
         {
             return StudioApi.Error("请选择不超过 5 MB 的 PNG、JPEG 或 WebP 图片。", "invalid_reference");
         }
@@ -71,7 +71,7 @@ public static class CutoutService
         {
             return StudioApi.Error(error, errorId);
         }
-        return new JObject() { ["cutout"] = "data:image/png;base64," + Convert.ToBase64String(cutout), ["execution_server"] = server };
+        return new JObject() { ["cutout"] = ImageDataUrl.ToDataUrl(cutout, "image/png"), ["execution_server"] = server };
     }
 
     /// <summary>Removes the background of a photo on a registered execution server chosen by Rule 1. Returns the cut-out PNG and the server name,

@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.Export;
 using EcomCraftStudio.Studio.PostProcess;
 using EcomCraftStudio.Studio.Prompting;
@@ -173,7 +174,7 @@ public static partial class BatchService
                 product.CutoutError = error;
                 return null;
             }
-            product.Cutout = "data:image/png;base64," + Convert.ToBase64String(png);
+            product.Cutout = ImageDataUrl.ToDataUrl(png, "image/png");
             return product.Cutout;
         }
         catch (Exception ex) when (ex is FormatException or UnknownImageFormatException or InvalidImageContentException)
