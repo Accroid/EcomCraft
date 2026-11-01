@@ -60,7 +60,10 @@ public static class WorkflowReviewApi
             }
             else
             {
-                item["ok"] = NativeWorkflowParameters.Supports(prompt, metadata, values, ExecutionServers.Schema(data), out List<string> problems);
+                JObject schema = ExecutionServers.Schema(data);
+                NativeWorkflowParameters.Supports(prompt, metadata, values, schema, out List<string> problems);
+                problems.AddRange(NativeWorkflowParameters.MissingRequiredInputs(prompt, schema));
+                item["ok"] = problems.Count == 0;
                 item["problems"] = new JArray(problems.Take(3));
             }
             result.Add(item);
