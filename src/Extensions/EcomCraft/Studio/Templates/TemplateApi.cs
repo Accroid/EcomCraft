@@ -344,7 +344,7 @@ public static class TemplateApi
         else if (rawInput["template_params"] is JObject parameters)
         {
             image = parameters.Properties().Select(property => property.Value).FirstOrDefault(value => value.Type == JTokenType.String
-                && ImageDataUrl.IsValid(value.ToString(), ImageDataUrl.ImageDataFormats.AnyImage, int.MaxValue))?.ToString();
+                && ImageDataUrl.HasImagePrefix(value.ToString(), int.MaxValue))?.ToString();
         }
         if (image is null)
         {

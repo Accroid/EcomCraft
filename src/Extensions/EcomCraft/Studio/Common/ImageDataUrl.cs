@@ -72,6 +72,11 @@ public static class ImageDataUrl
     public static bool IsValid(string dataUrl, ImageDataFormats allowed, int maxChars) =>
         dataUrl is not null && dataUrl.Length <= maxChars && MatchPrefix(dataUrl, allowed, out _, out _);
 
+    /// <summary>Whether the string starts with the image data-URL prefix (data:image/) and stays within the character limit;
+    /// neither the comma nor the payload is checked, matching the call sites that only ever looked at the prefix.</summary>
+    public static bool HasImagePrefix(string dataUrl, int maxChars) =>
+        dataUrl is not null && dataUrl.Length <= maxChars && dataUrl.StartsWith("data:image/", StringComparison.Ordinal);
+
     /// <summary>Decodes the data URL's base64 payload when its prefix names one of the accepted formats and it decodes to at least one byte and at most
     /// <paramref name="maxBytes"/>; the extension follows the subtype (jpeg becomes jpg), an arbitrary subtype gives the subtype text.</summary>
     public static bool TryParse(string dataUrl, ImageDataFormats allowed, int maxBytes, out byte[] bytes, out string extension)

@@ -256,7 +256,7 @@ public static partial class PromptService
         foreach (JToken image in images)
         {
             string data = image?.Type == JTokenType.String ? image.ToString() : "";
-            if (!ImageDataUrl.IsValid(data, ImageDataUrl.ImageDataFormats.AnyImage, MaxReferenceImageLength))
+            if (!ImageDataUrl.HasImagePrefix(data, MaxReferenceImageLength))
             {
                 return StudioApi.Error("参考图须为不超过 5 MB 的图片。", "invalid_reference");
             }

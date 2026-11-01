@@ -254,7 +254,8 @@ public static partial class StudioApi
     }
 
     private static bool ValidReference(string data) =>
-        ImageDataUrl.TryParse(data, ImageDataUrl.ImageDataFormats.PngJpegWebp, MaxReferenceBytes, out _, out _);
+        data.Length <= (MaxReferenceBytes + 2) / 3 * 4 + 40
+        && ImageDataUrl.TryParse(data, ImageDataUrl.ImageDataFormats.PngJpegWebp, MaxReferenceBytes, out _, out _);
 
     private static JObject GenerationError(JObject result, bool workflow)
     {
