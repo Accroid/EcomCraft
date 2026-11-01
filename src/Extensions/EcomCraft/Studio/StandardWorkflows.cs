@@ -21,12 +21,15 @@ public static class StandardWorkflows
     /// <summary>Source label of system generated workflows, shown to reviewers in place of a server name.</summary>
     public const string Source = "系统生成";
 
-    /// <summary>The generated workflows: published ID (matching the templates' "*/ecomcraft/…" names) and description.
-    /// Scene and detail share the text-to-image blueprint; the templates differ by prompt, and "with a model" is a prompt fragment (F53).</summary>
-    private static readonly (string Kind, string Id, string Description)[] Kinds =
+    /// <summary>The generated workflows: published ID (matching the templates' "*/ecomcraft/…" names), description, the blueprint file it is built from and
+    /// whether the product repainting pass is added (R13). Scene and detail share the text-to-image blueprint; the templates differ by prompt,
+    /// and "with a model" is a prompt fragment (F53).</summary>
+    private sealed record KindEntry(string Kind, string Id, string Description, string BlueprintFile, bool AddProductInpaint);
+
+    private static readonly KindEntry[] Kinds =
     [
-        ("scene", $"{Source}/ecomcraft/scene", "系统按默认模型生成的场景图工作流（围绕放好的商品重绘场景，出图后贴回原商品）。"),
-        ("detail", $"{Source}/ecomcraft/detail", "系统按默认模型生成的细节图工作流（围绕放好的商品重绘场景，出图后贴回原商品）。")
+        new("scene", $"{Source}/ecomcraft/scene", "系统按默认模型生成的场景图工作流（围绕放好的商品重绘场景，出图后贴回原商品）。", "text-to-image.json", true),
+        new("detail", $"{Source}/ecomcraft/detail", "系统按默认模型生成的细节图工作流（围绕放好的商品重绘场景，出图后贴回原商品）。", "text-to-image.json", true)
     ];
 
     /// <summary>Whether a published ID is one of the generated standard workflows.</summary>
@@ -97,7 +100,7 @@ public static class StandardWorkflows
     /// Names missing nodes or models only, never addresses or graphs.</summary>
     public static string Unavailable(string kind)
     {
-        (string Kind, string Id, string Description) entry = Kinds.FirstOrDefault(item => item.Kind == kind);
+        KindEntry entry = Kinds.FirstOrDefault(item => item.Kind == kind);
         if (entry.Id is null || WorkflowReview.IsPublished(entry.Id))
         {
             return null;
@@ -122,11 +125,11 @@ public static class StandardWorkflows
         };
     }
 
-    /// <summary>Reads and converts the shipped text-to-image blueprint, with the default models and the product image input.
-    /// Returns null and a problem when the file is missing or cannot be converted.</summary>
-    private static (JObject Prompt, JObject Metadata, JObject Values, string Canvas, string Problem) Blueprint()
+    /// <summary>Reads and converts one kind's blueprint, with the default models and the product image input; kinds that share a file share the converted
+    /// result within one <see cref="Ensure"/> run. Returns null and a problem when the file is missing or cannot be converted.</summary>
+    private static (JObject Prompt, JObject Metadata, JObject Values, string Canvas, string Problem) Blueprint(KindEntry kind)
     {
-        string path = Path.Combine(BlueprintDir ?? "", "text-to-image.json");
+        string path = Path.Combine(BlueprintDir ?? "", kind.BlueprintFile);
         string json;
         try
         {
@@ -172,7 +175,7 @@ public static class StandardWorkflows
             ["id"] = ProductImageParam, ["name"] = "商品图", ["type"] = "image", ["default"] = "", ["visible"] = true, ["form"] = null,
             ["description"] = "放好商品的透明画布：只重绘商品以外的场景，出图后由平台把原商品贴回画面。"
         };
-        if (!AddProductInpaint(prompt))
+        if (kind.AddProductInpaint && !AddProductInpaint(prompt))
         {
             return (null, null, null, null, "unsupported");
         }
@@ -247,13 +250,19 @@ public static class StandardWorkflows
         {
             WorkflowReview.Restore();
             List<(string, string, string, List<string>)> result = [];
-            (JObject prompt, JObject metadata, JObject values, string canvas, string problem) = Blueprint();
             List<BackendHandler.T2IBackendData> ready = [.. ExecutionServers.All.Where(ExecutionServers.IsReady)];
-            foreach ((string kind, string id, string description) in Kinds)
+            // Kinds may share a blueprint file: convert each file once per run (R13).
+            Dictionary<string, (JObject Prompt, JObject Metadata, JObject Values, string Canvas, string Problem)> blueprints = [];
+            foreach (KindEntry kind in Kinds)
             {
-                (string state, List<string> problems) = Publish(id, description, prompt, metadata, values, canvas, problem, ready, force);
-                Status[kind] = (state, problems);
-                result.Add((kind, id, state, problems));
+                if (!blueprints.TryGetValue(kind.BlueprintFile, out (JObject Prompt, JObject Metadata, JObject Values, string Canvas, string Problem) built))
+                {
+                    built = Blueprint(kind);
+                    blueprints[kind.BlueprintFile] = built;
+                }
+                (string state, List<string> problems) = Publish(kind.Id, kind.Description, built.Prompt, built.Metadata, built.Values, built.Canvas, built.Problem, ready, force);
+                Status[kind.Kind] = (state, problems);
+                result.Add((kind.Kind, kind.Id, state, problems));
             }
             return result;
         }
