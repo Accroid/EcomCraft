@@ -157,5 +157,20 @@ class SimplePromptPart {
     }
 
     /** Reads platforms, templates and styles from the server. */
+
+    /** The bilingual prompt panel's buttons and inputs (F54). */
+    static bindPrompt() {
+        let $ = this.api.$;
+        $('simple-expand').addEventListener('click', () => this.expandPrompt());
+        $('simple-prompt-tab-zh').addEventListener('click', () => this.switchPromptTab('zh'));
+        $('simple-prompt-tab-en').addEventListener('click', () => this.switchPromptTab('en'));
+        for (let lang of ['zh', 'en']) {
+            $(`simple-prompt-${lang}`).addEventListener('input', e => {
+                this.prompt[lang] = e.target.value;
+                this.prompt.last = lang;
+                this.renderPromptState();
+            });
+        }
+    }
 }
 SimpleMode.adopt(SimplePromptPart);

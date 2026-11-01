@@ -589,5 +589,16 @@ class SimpleReferencePart {
             this.update();
         }
     }
+
+    /** Reference uploads and the reference generation button (F59). */
+    static bindReference() {
+        let $ = this.api.$;
+        $('simple-reference-add').addEventListener('click', () => this.addReferenceClick());
+        $('simple-reference-file').addEventListener('change', e => {
+            this.addReferenceFiles(Array.from(e.target.files || []));
+            e.target.value = '';
+        });
+        $('simple-generate-reference').addEventListener('click', () => this.generateReference());
+    }
 }
 SimpleMode.adopt(SimpleReferencePart);

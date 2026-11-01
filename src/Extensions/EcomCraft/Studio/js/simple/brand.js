@@ -290,5 +290,64 @@ class SimpleBrandPart {
     }
 
     /** Why the storyboard cannot be used on the chosen platform, or an empty string (F25). */
+
+    /** Brand kit selection and the brand dialog's controls (F12). */
+    static bindBrand() {
+        let $ = this.api.$;
+        // Brand kits (F12): pick one for generation, or manage them in a dialog.
+        $('simple-brand').addEventListener('change', e => {
+            this.choice.brandKit = e.target.value;
+            this.remember();
+        });
+        $('simple-brand-manage').addEventListener('click', e => this.openBrand(e.currentTarget));
+        $('simple-redo-clear').addEventListener('click', () => this.clearRedo());
+        $('brand-close').addEventListener('click', () => this.closeBrand());
+        $('brand-backdrop').addEventListener('click', () => this.closeBrand());
+        $('brand-new').addEventListener('click', () => this.editBrand(null));
+        $('brand-color-add').addEventListener('click', () => {
+            if (this.brandEditor && this.brandEditor.colors.length < 5) {
+                this.brandEditor.colors.push('#1F2937');
+                this.renderBrandEditor();
+            }
+        });
+        $('brand-name').addEventListener('input', e => {
+            if (this.brandEditor) {
+                this.brandEditor.name = e.target.value;
+            }
+        });
+        $('brand-background').addEventListener('input', e => {
+            if (this.brandEditor) {
+                this.brandEditor.background = e.target.value;
+            }
+        });
+        $('brand-logo-pick').addEventListener('click', () => $('brand-logo-file').click());
+        $('brand-reference-pick').addEventListener('click', () => $('brand-reference-file').click());
+        $('brand-logo-file').addEventListener('change', async e => {
+            let file = (e.target.files || [])[0];
+            e.target.value = '';
+            let data = file ? await this.brandImageData(file) : null;
+            if (data && this.brandEditor) {
+                this.brandEditor.logoData = data;
+                this.brandEditor.removeLogo = false;
+                this.renderBrandEditor();
+            }
+        });
+        $('brand-reference-file').addEventListener('change', async e => {
+            let files = Array.from(e.target.files || []);
+            e.target.value = '';
+            for (let file of files) {
+                if (!this.brandEditor || this.brandReferenceCount() >= 4) {
+                    break;
+                }
+                let data = await this.brandImageData(file);
+                if (data && this.brandEditor) {
+                    this.brandEditor.added.push(data);
+                }
+            }
+            this.renderBrandEditor();
+        });
+        $('brand-save').addEventListener('click', () => this.saveBrand());
+        $('brand-delete').addEventListener('click', () => this.deleteBrand());
+    }
 }
 SimpleMode.adopt(SimpleBrandPart);

@@ -533,5 +533,18 @@ class SimpleTasksPart {
             link.remove();
         }
     }
+
+    /** The result list's download and professional-mode hand-off (F64). */
+    static bindResults() {
+        let $ = this.api.$;
+        $('simple-download').addEventListener('click', () => this.download());
+        // One-way hand-off to the professional mode (F64): exactly one picked image.
+        $('simple-refine').addEventListener('click', () => {
+            let url = Array.from(this.selected)[0];
+            if (this.selected.size == 1 && url) {
+                this.api.refineInPro(url);
+            }
+        });
+    }
 }
 SimpleMode.adopt(SimpleTasksPart);

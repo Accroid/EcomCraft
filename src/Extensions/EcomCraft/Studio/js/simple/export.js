@@ -271,5 +271,45 @@ class SimpleExportPart {
     }
 
     /** Reads the account's saved products for the "from the product library" list. */
+
+    /** Selling-point image controls (F47). */
+    static bindSelling() {
+        let $ = this.api.$;
+        // Selling-point images (F47): the user's own text in a fixed layout, drawn by the server.
+        for (let chip of Array.from($('simple-selling-layouts').querySelectorAll('button[data-layout]'))) {
+            chip.addEventListener('click', () => {
+                this.selling.layout = chip.dataset.layout;
+                this.renderSelling();
+            });
+        }
+        $('simple-selling-accent').addEventListener('input', () => {
+            this.selling.accentTouched = true;
+        });
+        $('simple-selling-run').addEventListener('click', () => this.makeSellingImage());
+    }
+
+    /** Export buttons and the output size choice (F73). */
+    static bindExport() {
+        let $ = this.api.$;
+        $('simple-export-zip').addEventListener('click', () => this.exportSelected('zip'));
+        $('simple-export-folder').addEventListener('click', () => this.exportSelected('folder'));
+        $('simple-output-size').addEventListener('change', e => {
+            this.outputSize.mode = e.target.value;
+            let preset = /^(\d+)x(\d+)$/.exec(e.target.value);
+            if (preset) {
+                this.outputSize.width = Number(preset[1]);
+                this.outputSize.height = Number(preset[2]);
+            }
+            this.remember();
+            this.update();
+        });
+        for (let side of ['width', 'height']) {
+            $('simple-output-' + side).addEventListener('input', e => {
+                this.outputSize[side] = Number(String(e.target.value || '').trim());
+                this.remember();
+                this.update();
+            });
+        }
+    }
 }
 SimpleMode.adopt(SimpleExportPart);

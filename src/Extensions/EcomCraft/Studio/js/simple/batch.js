@@ -252,5 +252,20 @@ class SimpleBatchPart {
     /** Submits one template generation; the server composes the prompt from the style and description. */
     /** Fills the page with the settings of a filed work (F04): single image task, its template, platform, saved product, prompt and seed.
      * The recipe comes from the project record, which the server read from the work's own metadata. Returns false when the template is no longer offered. */
+
+    /** The main generate buttons of the single and set tasks. */
+    static bindGenerate() {
+        let $ = this.api.$;
+        $('simple-generate').addEventListener('click', () => this.generate());
+        $('simple-generate-set').addEventListener('click', () => this.generateSet());
+    }
+
+    /** Candidate count and batch cancellation. */
+    static bindBatch() {
+        let $ = this.api.$;
+        $('simple-count').addEventListener('input', () => this.update());
+        $('simple-count').addEventListener('change', () => this.update());
+        $('simple-batch-cancel').addEventListener('click', () => this.cancelBatch());
+    }
 }
 SimpleMode.adopt(SimpleBatchPart);

@@ -180,5 +180,25 @@ class SimplePlacementPart {
     }
 
     /** Asks the server to remove the background; the result keeps the original product pixels. */
+
+    /** Placement controls of step 1: reset, the size slider and the drag handling (T79). */
+    static bindPlacement() {
+        let $ = this.api.$;
+        $('simple-placement-reset').addEventListener('click', () => {
+            this.setActivePlacement({ x: 0.5, y: 0.56, size: 0.55 });
+            $('simple-size').value = '55';
+            this.renderStage();
+        });
+        $('simple-size').addEventListener('input', e => {
+            this.setActivePlacement(this.clampPlacement({ ...this.activePlacement(), size: Number(e.target.value) / 100 }));
+            this.renderStage();
+        });
+        let product = $('simple-stage-product');
+        product.addEventListener('pointerdown', e => this.startDrag(e));
+        product.addEventListener('pointermove', e => this.moveDrag(e));
+        product.addEventListener('pointerup', e => this.endDrag(e));
+        product.addEventListener('pointercancel', e => this.endDrag(e));
+        window.addEventListener('resize', () => this.renderStage());
+    }
 }
 SimpleMode.adopt(SimplePlacementPart);

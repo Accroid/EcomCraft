@@ -168,5 +168,23 @@ class SimpleStoryboardPart {
 
     /** Opens the reference picker only when image description can work (F59/F68): without a usable vision model the guidance
      * below shows instead — its settings steps open the configuration directly — so references never sit undescribable. */
+
+    /** Storyboard controls (F25). */
+    static bindStoryboard() {
+        let $ = this.api.$;
+        $('simple-point-add').addEventListener('click', () => {
+            if (this.storyboard.points.length < 5) {
+                this.storyboard.points.push('');
+                this.renderStoryboard();
+            }
+        });
+        $('simple-storyboard-run').addEventListener('click', () => this.runStoryboard());
+        $('simple-shot-add').addEventListener('click', () => this.addShot());
+        $('simple-storyboard-clear').addEventListener('click', () => {
+            this.storyboard.shots = [];
+            this.renderStoryboard();
+            this.update();
+        });
+    }
 }
 SimpleMode.adopt(SimpleStoryboardPart);

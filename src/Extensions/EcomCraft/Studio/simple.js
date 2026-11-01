@@ -111,60 +111,12 @@ class SimpleMode {
         return { simple: true, pro: Boolean(catalog) };
     }
 
-    /** Receives the helpers of studio.js and binds the controls. */
+    /** Receives the helpers of studio.js and binds the controls; the bind methods live in the part files and run in the order the old one-piece attach had (R16). */
     static attach(api) {
         this.api = api;
+        this.bindUpload();
+        this.bindPlacement();
         let $ = api.$;
-        let drop = $('simple-drop');
-        // Four equal ways to add a product photo (F52): this computer, the camera, the product library and the gallery of generated works.
-        $('simple-file-btn').addEventListener('click', () => $('simple-file').click());
-        $('simple-library-btn').addEventListener('click', e => this.openPicker('library', e.currentTarget));
-        $('simple-gallery-btn').addEventListener('click', e => this.openPicker('gallery', e.currentTarget));
-        $('simple-picker-close').addEventListener('click', () => this.closePicker());
-        $('simple-picker-backdrop').addEventListener('click', () => this.closePicker());
-        $('simple-file').addEventListener('change', e => {
-            for (let file of Array.from(e.target.files || [])) {
-                this.readFile(file, 'local');
-            }
-            e.target.value = '';
-        });
-        drop.addEventListener('dragover', e => {
-            e.preventDefault();
-            drop.classList.add('is-over');
-        });
-        drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
-        drop.addEventListener('drop', e => {
-            e.preventDefault();
-            drop.classList.remove('is-over');
-            for (let file of Array.from(e.dataTransfer.files || [])) {
-                this.readFile(file, 'local');
-            }
-        });
-        $('simple-clear').addEventListener('click', () => this.clearProduct());
-        // Camera capture (F42): the capture attribute opens the camera on phones and works over plain http, unlike secure-context APIs.
-        $('simple-camera-btn').addEventListener('click', () => $('simple-camera').click());
-        $('simple-camera').addEventListener('change', e => {
-            for (let file of Array.from(e.target.files || [])) {
-                this.readFile(file, 'camera');
-            }
-            e.target.value = '';
-        });
-        $('simple-cutout-run').addEventListener('click', () => this.runCutout());
-        $('simple-placement-reset').addEventListener('click', () => {
-            this.setActivePlacement({ x: 0.5, y: 0.56, size: 0.55 });
-            $('simple-size').value = '55';
-            this.renderStage();
-        });
-        $('simple-size').addEventListener('input', e => {
-            this.setActivePlacement(this.clampPlacement({ ...this.activePlacement(), size: Number(e.target.value) / 100 }));
-            this.renderStage();
-        });
-        let product = $('simple-stage-product');
-        product.addEventListener('pointerdown', e => this.startDrag(e));
-        product.addEventListener('pointermove', e => this.moveDrag(e));
-        product.addEventListener('pointerup', e => this.endDrag(e));
-        product.addEventListener('pointercancel', e => this.endDrag(e));
-        window.addEventListener('resize', () => this.renderStage());
         $('simple-platform').addEventListener('change', e => {
             this.choice.platform = e.target.value;
             this.optionalSlots.clear();
@@ -178,102 +130,12 @@ class SimpleMode {
             this.needModel = e.target.checked;
             this.update();
         });
-        $('simple-expand').addEventListener('click', () => this.expandPrompt());
-        $('simple-prompt-tab-zh').addEventListener('click', () => this.switchPromptTab('zh'));
-        $('simple-prompt-tab-en').addEventListener('click', () => this.switchPromptTab('en'));
-        for (let lang of ['zh', 'en']) {
-            $(`simple-prompt-${lang}`).addEventListener('input', e => {
-                this.prompt[lang] = e.target.value;
-                this.prompt.last = lang;
-                this.renderPromptState();
-            });
-        }
-        // Selling-point images (F47): the user's own text in a fixed layout, drawn by the server.
-        for (let chip of Array.from($('simple-selling-layouts').querySelectorAll('button[data-layout]'))) {
-            chip.addEventListener('click', () => {
-                this.selling.layout = chip.dataset.layout;
-                this.renderSelling();
-            });
-        }
-        $('simple-selling-accent').addEventListener('input', () => {
-            this.selling.accentTouched = true;
-        });
-        $('simple-selling-run').addEventListener('click', () => this.makeSellingImage());
-        // Brand kits (F12): pick one for generation, or manage them in a dialog.
-        $('simple-brand').addEventListener('change', e => {
-            this.choice.brandKit = e.target.value;
-            this.remember();
-        });
-        $('simple-brand-manage').addEventListener('click', e => this.openBrand(e.currentTarget));
-        $('simple-redo-clear').addEventListener('click', () => this.clearRedo());
-        $('brand-close').addEventListener('click', () => this.closeBrand());
-        $('brand-backdrop').addEventListener('click', () => this.closeBrand());
-        $('brand-new').addEventListener('click', () => this.editBrand(null));
-        $('brand-color-add').addEventListener('click', () => {
-            if (this.brandEditor && this.brandEditor.colors.length < 5) {
-                this.brandEditor.colors.push('#1F2937');
-                this.renderBrandEditor();
-            }
-        });
-        $('brand-name').addEventListener('input', e => {
-            if (this.brandEditor) {
-                this.brandEditor.name = e.target.value;
-            }
-        });
-        $('brand-background').addEventListener('input', e => {
-            if (this.brandEditor) {
-                this.brandEditor.background = e.target.value;
-            }
-        });
-        $('brand-logo-pick').addEventListener('click', () => $('brand-logo-file').click());
-        $('brand-reference-pick').addEventListener('click', () => $('brand-reference-file').click());
-        $('brand-logo-file').addEventListener('change', async e => {
-            let file = (e.target.files || [])[0];
-            e.target.value = '';
-            let data = file ? await this.brandImageData(file) : null;
-            if (data && this.brandEditor) {
-                this.brandEditor.logoData = data;
-                this.brandEditor.removeLogo = false;
-                this.renderBrandEditor();
-            }
-        });
-        $('brand-reference-file').addEventListener('change', async e => {
-            let files = Array.from(e.target.files || []);
-            e.target.value = '';
-            for (let file of files) {
-                if (!this.brandEditor || this.brandReferenceCount() >= 4) {
-                    break;
-                }
-                let data = await this.brandImageData(file);
-                if (data && this.brandEditor) {
-                    this.brandEditor.added.push(data);
-                }
-            }
-            this.renderBrandEditor();
-        });
-        $('brand-save').addEventListener('click', () => this.saveBrand());
-        $('brand-delete').addEventListener('click', () => this.deleteBrand());
-        $('simple-point-add').addEventListener('click', () => {
-            if (this.storyboard.points.length < 5) {
-                this.storyboard.points.push('');
-                this.renderStoryboard();
-            }
-        });
-        $('simple-storyboard-run').addEventListener('click', () => this.runStoryboard());
-        $('simple-shot-add').addEventListener('click', () => this.addShot());
-        $('simple-storyboard-clear').addEventListener('click', () => {
-            this.storyboard.shots = [];
-            this.renderStoryboard();
-            this.update();
-        });
-        $('simple-generate').addEventListener('click', () => this.generate());
-        $('simple-generate-set').addEventListener('click', () => this.generateSet());
-        $('simple-reference-add').addEventListener('click', () => this.addReferenceClick());
-        $('simple-reference-file').addEventListener('change', e => {
-            this.addReferenceFiles(Array.from(e.target.files || []));
-            e.target.value = '';
-        });
-        $('simple-generate-reference').addEventListener('click', () => this.generateReference());
+        this.bindPrompt();
+        this.bindSelling();
+        this.bindBrand();
+        this.bindStoryboard();
+        this.bindGenerate();
+        this.bindReference();
         // Task-first simple mode (F61): the chosen task decides which step-2 fields and which main button are shown.
         for (let button of Array.from($('simple-task-picker').querySelectorAll('button[data-task]'))) {
             button.addEventListener('click', () => this.setTask(button.dataset.task));
@@ -282,39 +144,10 @@ class SimpleMode {
             this.moreOpen = $('simple-more').open;
             this.remember();
         });
-        $('simple-count').addEventListener('input', () => this.update());
-        $('simple-count').addEventListener('change', () => this.update());
-        $('simple-batch-cancel').addEventListener('click', () => this.cancelBatch());
-        $('simple-product-name').addEventListener('change', e => this.renameProduct(e.target.value));
-        $('simple-export-zip').addEventListener('click', () => this.exportSelected('zip'));
-        $('simple-export-folder').addEventListener('click', () => this.exportSelected('folder'));
-        $('simple-output-size').addEventListener('change', e => {
-            this.outputSize.mode = e.target.value;
-            let preset = /^(\d+)x(\d+)$/.exec(e.target.value);
-            if (preset) {
-                this.outputSize.width = Number(preset[1]);
-                this.outputSize.height = Number(preset[2]);
-            }
-            this.remember();
-            this.update();
-        });
-        for (let side of ['width', 'height']) {
-            $('simple-output-' + side).addEventListener('input', e => {
-                this.outputSize[side] = Number(String(e.target.value || '').trim());
-                this.remember();
-                this.update();
-            });
-        }
-        $('simple-product-delete').addEventListener('click', () => this.deleteProduct());
-        $('simple-size').addEventListener('change', () => this.savePlacement());
-        $('simple-download').addEventListener('click', () => this.download());
-        // One-way hand-off to the professional mode (F64): exactly one picked image.
-        $('simple-refine').addEventListener('click', () => {
-            let url = Array.from(this.selected)[0];
-            if (this.selected.size == 1 && url) {
-                this.api.refineInPro(url);
-            }
-        });
+        this.bindBatch();
+        this.bindProductControls();
+        this.bindExport();
+        this.bindResults();
         let saved = api.readStorage(this.storageKey);
         if (saved) {
             try {

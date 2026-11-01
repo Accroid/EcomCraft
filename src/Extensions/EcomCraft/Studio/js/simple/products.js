@@ -562,5 +562,53 @@ class SimpleProductsPart {
     /** Templates of the standard set for the chosen platform, as the server will expand them. */
     /** The set's templates for the chosen platform: composed by the platform's slot kinds when it defines slots (F58), matching the server's
      * composition; platforms without slots keep the old composition by set membership. */
+
+    /** Upload controls of step 1 (F52): this computer, camera, library and gallery pickers. */
+    static bindUpload() {
+        let $ = this.api.$;
+        let drop = $('simple-drop');
+        // Four equal ways to add a product photo (F52): this computer, the camera, the product library and the gallery of generated works.
+        $('simple-file-btn').addEventListener('click', () => $('simple-file').click());
+        $('simple-library-btn').addEventListener('click', e => this.openPicker('library', e.currentTarget));
+        $('simple-gallery-btn').addEventListener('click', e => this.openPicker('gallery', e.currentTarget));
+        $('simple-picker-close').addEventListener('click', () => this.closePicker());
+        $('simple-picker-backdrop').addEventListener('click', () => this.closePicker());
+        $('simple-file').addEventListener('change', e => {
+            for (let file of Array.from(e.target.files || [])) {
+                this.readFile(file, 'local');
+            }
+            e.target.value = '';
+        });
+        drop.addEventListener('dragover', e => {
+            e.preventDefault();
+            drop.classList.add('is-over');
+        });
+        drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+        drop.addEventListener('drop', e => {
+            e.preventDefault();
+            drop.classList.remove('is-over');
+            for (let file of Array.from(e.dataTransfer.files || [])) {
+                this.readFile(file, 'local');
+            }
+        });
+        $('simple-clear').addEventListener('click', () => this.clearProduct());
+        // Camera capture (F42): the capture attribute opens the camera on phones and works over plain http, unlike secure-context APIs.
+        $('simple-camera-btn').addEventListener('click', () => $('simple-camera').click());
+        $('simple-camera').addEventListener('change', e => {
+            for (let file of Array.from(e.target.files || [])) {
+                this.readFile(file, 'camera');
+            }
+            e.target.value = '';
+        });
+        $('simple-cutout-run').addEventListener('click', () => this.runCutout());
+    }
+
+    /** Product naming and removal in step 1; the size slider's committed change saves the placement. */
+    static bindProductControls() {
+        let $ = this.api.$;
+        $('simple-product-name').addEventListener('change', e => this.renameProduct(e.target.value));
+        $('simple-product-delete').addEventListener('click', () => this.deleteProduct());
+        $('simple-size').addEventListener('change', () => this.savePlacement());
+    }
 }
 SimpleMode.adopt(SimpleProductsPart);
