@@ -19,6 +19,7 @@ public static class StudioRoutes
         ("/EcomCraft/i18n.js", "i18n.js", "text/javascript; charset=utf-8"),
         ("/EcomCraft/simple.js", "simple.js", "text/javascript; charset=utf-8"),
         ("/EcomCraft/js/simple/brand.js", "js/simple/brand.js", "text/javascript; charset=utf-8"),
+        ("/EcomCraft/js/simple/storyboard.js", "js/simple/storyboard.js", "text/javascript; charset=utf-8"),
         ("/EcomCraft/lang/en.js", "lang/en.js", "text/javascript; charset=utf-8"),
         ("/EcomCraft/studio.css", "studio.css", "text/css; charset=utf-8")
     ];
