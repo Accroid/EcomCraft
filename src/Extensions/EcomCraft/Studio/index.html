@@ -7,22 +7,22 @@
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 工作台</title>
-    <link rel="icon" href="/favicon.ico?v=0.59.3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.59.3">
-    <script src="/EcomCraft/lang/en.js?v=0.59.3" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.59.3" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.59.3" defer></script>
-    <script src="/EcomCraft/js/simple/brand.js?v=0.59.3" defer></script>
-    <script src="/EcomCraft/js/simple/storyboard.js?v=0.59.3" defer></script>
-    <script src="/EcomCraft/js/simple/rules.js?v=0.59.3" defer></script>
-    <script src="/EcomCraft/js/simple/prompt.js?v=0.59.3" defer></script>
-    <script src="/EcomCraft/js/simple/export.js?v=0.59.3" defer></script>
-    <script src="/EcomCraft/js/simple/placement.js?v=0.59.3" defer></script>
-    <script src="/EcomCraft/js/simple/products.js?v=0.59.3" defer></script>
-    <script src="/EcomCraft/js/simple/reference.js?v=0.59.3" defer></script>
-    <script src="/EcomCraft/js/simple/batch.js?v=0.59.3" defer></script>
-    <script src="/EcomCraft/js/simple/tasks.js?v=0.59.3" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.59.3" defer></script>
+    <link rel="icon" href="/favicon.ico?v=0.60.0">
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.60.0">
+    <script src="/EcomCraft/lang/en.js?v=0.60.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.60.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.60.0" defer></script>
+    <script src="/EcomCraft/js/simple/brand.js?v=0.60.0" defer></script>
+    <script src="/EcomCraft/js/simple/storyboard.js?v=0.60.0" defer></script>
+    <script src="/EcomCraft/js/simple/rules.js?v=0.60.0" defer></script>
+    <script src="/EcomCraft/js/simple/prompt.js?v=0.60.0" defer></script>
+    <script src="/EcomCraft/js/simple/export.js?v=0.60.0" defer></script>
+    <script src="/EcomCraft/js/simple/placement.js?v=0.60.0" defer></script>
+    <script src="/EcomCraft/js/simple/products.js?v=0.60.0" defer></script>
+    <script src="/EcomCraft/js/simple/reference.js?v=0.60.0" defer></script>
+    <script src="/EcomCraft/js/simple/batch.js?v=0.60.0" defer></script>
+    <script src="/EcomCraft/js/simple/tasks.js?v=0.60.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.60.0" defer></script>
 </head>
 
 <body>
@@ -82,9 +82,10 @@
         <section class="view" id="view-simple" aria-labelledby="simple-title" data-simple-task="reference" data-check-bg="checker">
             <header class="page-head">
                 <h1 class="page-title" id="simple-title">商品出图</h1>
-                <p class="page-meta">先选要做什么，再上传商品图、按提示填写，最后挑图下载。</p>
+                <p class="page-meta">上传商品图，选平台和参考图，最后挑图下载。</p>
             </header>
-            <div class="simple-tasks" id="simple-task-picker" role="group" aria-label="选择要做的事">
+            <!-- The task picker of the task-first simple mode (F61): the single entry keeps it hidden (A14, T89's interface part); the code stays for G2. -->
+            <div class="simple-tasks" id="simple-task-picker" role="group" aria-label="选择要做的事" hidden>
                 <button type="button" class="simple-task" data-task="reference" aria-pressed="true">
                     <span class="simple-task-name">照参考图做</span>
                     <span class="simple-task-desc">上传竞品或喜欢的成品图，按它的构图和光线为你的商品出图</span>
@@ -113,7 +114,8 @@
                         <button type="button" class="btn" id="simple-file-btn">本机上传</button>
                         <button type="button" class="btn" id="simple-camera-btn">拍照上传</button>
                         <button type="button" class="btn" id="simple-library-btn">从商品库选择</button>
-                        <button type="button" class="btn" id="simple-gallery-btn">从画廊选择</button>
+                        <!-- The gallery entry is hidden by the single entry (A14); the picker code stays for G2. -->
+                        <button type="button" class="btn" id="simple-gallery-btn" hidden>从画廊选择</button>
                     </div>
                     <input type="file" id="simple-camera" accept="image/*" capture="environment" class="visually-hidden">
                     <input type="file" id="simple-angle-file" accept="image/*" multiple class="visually-hidden">
@@ -321,7 +323,7 @@
                     </details>
                     <div class="recover-actions">
                         <button type="button" class="btn btn-primary" id="simple-download" disabled>下载所选</button>
-                        <button type="button" class="btn simple-refine" id="simple-refine" hidden>在专业模式里精修</button>
+                        <button type="button" class="btn simple-refine" id="simple-refine" hidden>修改这张</button>
                         <a class="btn" href="#gallery">在画廊查看全部</a>
                     </div>
                 </li>

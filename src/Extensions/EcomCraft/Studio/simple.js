@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * Three-step simple mode (F07), the default view: 1. upload a product photo, 2. pick platform, image type (template), product type, an optional
- * visual style and whether a model is needed (F53), 3. pick and download candidates. The only prompt text is the optional bilingual prompt panel (F54):
- * "AI expand" fills both languages, edited Chinese is translated by the server and edited English is sent as is; the server always adds the product type,
- * model and style fragments and fills the template's product image field. Professional parameters stay in the administrators' professional mode.
- * studio.js hands over its helpers through SimpleMode.attach(); all text goes through the translation table.
+ * Three-step simple mode (F07), the default view: 1. upload a product photo, 2. pick the platform, the output size and 1–8 reference images (the
+ * single entry, A14), 3. pick and download candidates. The task-first cards (F61) and their fields — image type, product type, style, model, brand
+ * kit, one-line description with AI expand, the bilingual prompt panel and the storyboard — stay in the code and the page but are hidden until G2
+ * decides their fate; "follow a reference" (F59) is the only entrance. The direct-fusion trial's switch (F84) stays. studio.js hands over its
+ * helpers through SimpleMode.attach(); all text goes through the translation table.
  */
 class SimpleMode {
     /** Copies the static methods of a part class onto SimpleMode, so simple mode can live in several files while callers and this stay the same (R15). */
@@ -43,7 +43,8 @@ class SimpleMode {
     /** The optional image slots ticked for the chosen platform (F58); same-kind optional slots only add export targets, so only kinds not already in the default set are offered. */
     static optionalSlots = new Set();
 
-    /** The task chosen at the top of the page (F61): 'reference' (follow a reference, the default), 'single' (one image type) or 'set' (the platform's set). */
+    /** The task of the task picker (F61): 'reference' (follow a reference), 'single' (one image type) or 'set' (the platform's set). The single
+     * entry (A14) locks the page to 'reference'; the other two stay for the hidden cards, whose code is kept until G2 decides their fate. */
     static chosenTask = 'reference';
 
     /** The tasks of the task picker, in display order (F61). */
@@ -180,9 +181,8 @@ class SimpleMode {
                 this.choice.category = String(parsed.category || '');
                 this.choice.subtype = String(parsed.subtype || '');
                 this.choice.brandKit = String(parsed.brand_kit || '');
-                if (this.taskKinds.includes(parsed.task)) {
-                    this.chosenTask = parsed.task;
-                }
+                // A task remembered by an older version ('single' or 'set', T90) is never restored: the single entry always starts in the
+                // reference flow, so a stale choice cannot bring hidden controls back or stop the reference flow's setup from running.
                 this.moreOpen = parsed.more_open == true;
                 let size = parsed.output_size;
                 if (size && typeof size.mode == 'string' && Number.isInteger(size.width) && Number.isInteger(size.height)) {

@@ -4082,17 +4082,30 @@
             return !message[1];
         }
 
-        /** "Make again with the same settings": opens the simple mode filled with the work's template, platform, product, prompt and seed. */
+        /** "Make again with the same settings" (F04): the single entry hid the template, style and prompt controls this refill used to fill
+         * (A14, T90), so the filed work's prompt and seed go to the professional mode instead; the direct-fusion trial's works stay unrepeatable.
+         * A reference-route work keeps its recipe too, but its reference images were never saved (F59), so the notice in professional mode asks
+         * for a fresh upload on the reference page. */
         static async redo(item) {
             let recipe = this.recipe(item);
             if (!recipe?.template) {
                 return;
             }
             closeLightbox();
-            if (state.view != 'simple') {
-                location.hash = 'simple';
+            if (recipe.template == 'reference-edit') {
+                // The direct-fusion trial has no repeatable settings of its own; the notice lands in the view the user is looking at.
+                if (state.view == 'simple') {
+                    SimpleMode.message(tr('直接融合（试用）的作品不支持用相同参数重做。'), true);
+                }
+                else {
+                    showGalleryMessage(tr('直接融合（试用）的作品不支持用相同参数重做。'), true);
+                }
+                return;
             }
-            await SimpleMode.applyRecipe(recipe);
+            if (state.view != 'create') {
+                location.hash = 'create';
+            }
+            redoInPro(recipe);
         }
 
         /** Opens the project dialog. */
@@ -5642,6 +5655,23 @@
             setStatus(tr('无法载入这张图：{0}。', error.message || tr('请刷新后重试')), true);
             return false;
         }
+    }
+
+    /** "Make again with the same settings" (F04) refills the professional mode (T90): the simple mode's single entry (A14) no longer shows the
+     * template, style or prompt controls the old refill filled, so the filed work's prompt and seed go to the only place that still takes them.
+     * Reference images were never saved (F59), so the notice also says to re-upload them on the reference page. */
+    function redoInPro(recipe) {
+        let prompt = String(recipe.prompt || '').trim().slice(0, 12000);
+        if (prompt) {
+            $('prompt').value = prompt;
+        }
+        if (Number.isSafeInteger(recipe.seed) && recipe.seed >= 0) {
+            $('seed').value = String(recipe.seed);
+        }
+        updateControls();
+        setStatus(prompt
+            ? tr('已带入这件作品的提示词和种子，可以直接生成或修改后再生成。照参考图做的作品不保存参考图，按参考重做请在出图页重新上传。')
+            : tr('这件作品没有读到提示词，已带入种子，请自己填写创作描述。照参考图做的作品不保存参考图，按参考重做请在出图页重新上传。'), false);
     }
 
     /** One-way hand-off from the simple mode (F64): loads a candidate as the image-to-image start picture in professional mode

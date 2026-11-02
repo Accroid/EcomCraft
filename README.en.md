@@ -28,7 +28,7 @@ Demo video: (to be added)
 | Product photos must not leave the company | Generation runs **only on registered local or LAN** ComfyUI servers, never falling back to the cloud; the vision model defaults to local Ollama |
 | Several GPU computers and nobody to schedule them | Tasks go to idle execution servers automatically; the queue shows progress and the estimated time left, and lets you stop your own tasks |
 | Building workflows is hard | The built-in templates' workflows are **generated automatically** with the default models; a designer's uploaded workflow works for them at once and is published to everyone after review |
-| Starting from scratch every time | Product library, starring candidates, and "Refine in professional mode" |
+| Starting from scratch every time | Product library, starring candidates, and "Edit this image" (refine in professional mode) |
 
 The full feature list and progress are in the [Architecture and Roadmap](docs/EcomCraft%20Architecture.md); APIs and security rules are in the [workflow calls guide](docs/EcomCraft%20ComfyUI%20Workflows.md).
 

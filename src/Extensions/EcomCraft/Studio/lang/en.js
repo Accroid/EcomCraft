@@ -35,7 +35,7 @@ window.EcomCraftLanguages.en = {
     "作品来源": "Work source",
     "全部来源": "All sources",
     "专业模式请在电脑上使用；手机上可以出图、看画廊和队列。": "Professional mode is for computers; on a phone you can create images and view the gallery and queue.",
-    "在专业模式里精修": "Refine in professional mode",
+    "修改这张": "Edit this image",
     "已带入这张图和它的提示词，可以在专业模式里继续精修。": "This image and its prompt are loaded; keep refining in professional mode.",
     "已带入这张图，但没读到它的提示词，请自己填写创作描述。": "This image is loaded, but its prompt could not be read; write the description yourself.",
     "上传工作流": "Upload workflow",
@@ -84,7 +84,7 @@ window.EcomCraftLanguages.en = {
 
     // Simple mode
     "商品出图": "Product images",
-    "先选要做什么，再上传商品图、按提示填写，最后挑图下载。": "Choose what to make, upload product photos, fill in what is asked, then pick and download.",
+    "上传商品图，选平台和参考图，最后挑图下载。": "Upload product photos, pick the platform and references, then pick and download.",
     "选择要做的事": "Choose what to make",
     "照参考图做": "Follow a reference",
     "上传竞品或喜欢的成品图，按它的构图和光线为你的商品出图": "Upload a competitor's or favorite finished image and get your product in its composition and light",
@@ -1205,5 +1205,7 @@ window.EcomCraftLanguages.en = {
     "直接融合试用暂不可用：{0}": "The direct-fusion trial is unavailable right now: {0}",
     "已开始直接融合（试用）：共 {0} 个任务，结果由模型直接输出，不会贴回原商品。": "Direct fusion (trial) started: {0} tasks in total. Results are the model's direct output; the original product is not pasted back.",
     "试用：模型直接输出，未贴回原商品": "Trial: model output, original product not pasted back",
-    "直接融合（试用）的作品不支持用相同参数重做。": "Works made by direct fusion (trial) cannot be remade with the same settings."
+    "直接融合（试用）的作品不支持用相同参数重做。": "Works made by direct fusion (trial) cannot be remade with the same settings.",
+    "已带入这件作品的提示词和种子，可以直接生成或修改后再生成。照参考图做的作品不保存参考图，按参考重做请在出图页重新上传。": "This work's prompt and seed are filled in; generate right away or edit first. Works made by following a reference do not keep their reference images; to redo those, upload the references again on the create page.",
+    "这件作品没有读到提示词，已带入种子，请自己填写创作描述。照参考图做的作品不保存参考图，按参考重做请在出图页重新上传。": "No prompt could be read from this work; the seed is filled in, so write the description yourself. Works made by following a reference do not keep their reference images; to redo those, upload the references again on the create page."
 };
