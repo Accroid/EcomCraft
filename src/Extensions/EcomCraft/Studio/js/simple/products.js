@@ -344,18 +344,21 @@ class SimpleProductsPart {
         });
     }
 
-    /** Reads a product photo from this computer or the camera into memory (origin 'local' or 'camera'). PNG and WebP can carry a cut-out (F83),
-     * so up to maxLocalReadBytes they are read anyway and shrunk in the browser later, instead of being refused here at the 5 MB upload limit;
-     * a JPEG over 5 MB has no alpha to lose and is refused as before. */
+    /** Reads a product photo from this computer or the camera into memory (origin 'local' or 'camera'). Any photo up to 64 MB is read (F85):
+     * a phone photo over 5 MB is compressed in the browser by addPhoto instead of being refused, whatever its format. HEIC/HEIF, which
+     * browsers cannot draw, gets its own plain-language hint instead of the generic format message. */
     static readFile(file, origin) {
         let tr = this.api.tr;
         if (!file) {
             return;
         }
-        let typeOk = ['image/png', 'image/jpeg', 'image/webp'].includes(file.type);
-        let canHoldAlpha = file.type == 'image/png' || file.type == 'image/webp';
-        if (!typeOk || (!canHoldAlpha && file.size > this.maxProductBytes)) {
-            this.message(tr('请选择不超过 5 MB 的 PNG、JPEG 或 WebP 图片。文件尚未上传。'), true);
+        let name = String(file.name || '').toLowerCase();
+        if (file.type == 'image/heic' || file.type == 'image/heif' || name.endsWith('.heic') || name.endsWith('.heif')) {
+            this.message(tr('这张 HEIC 照片浏览器打不开，请在手机或电脑上另存为 JPEG 后再上传，或用“拍照上传”现场拍一张。'), true);
+            return;
+        }
+        if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+            this.message(tr('请选择 PNG、JPEG 或 WebP 图片。文件尚未上传。'), true);
             return;
         }
         if (file.size > this.maxLocalReadBytes) {
@@ -368,10 +371,12 @@ class SimpleProductsPart {
         reader.readAsDataURL(file);
     }
 
-    /** Adds a new product photo (a data URL of at most 5 MB) from any entry (F52): checks its quality (F38), makes it the current photo and saves it to the product library.
-     * <origin> is 'local', 'camera' or 'gallery' and is shown on the thumbnail. A photo over 5 MB or over 16 megapixels is shrunk here (F83):
-     * a transparent one is scaled down as a PNG, an opaque local file is refused with the picker's own message, and a transparent one that not even
-     * the smallest recommended size fits is refused with its own message — the server would reject anything larger. */
+    /** Adds a new product photo (a data URL read from a file up to 64 MB, or a smaller one from the library or gallery pickers) from any entry (F52):
+     * checks its quality (F38), makes it the current photo and saves it to the product library. <origin> is 'local', 'camera' or 'gallery' and is shown
+     * on the thumbnail. A photo over 5 MB or over 16 megapixels is shrunk here (F85): a phone photo becomes a JPEG within the upload limit, a transparent
+     * one is scaled down as a PNG (F83), and a transparent one that not even the smallest recommended size fits is refused with its own message —
+     * the server would reject anything larger. The preview and the placement match what the user saw: the browser already shows a photo turned
+     * upright by its EXIF, and the server turns the stored bytes upright too before cutting out. */
     static async addPhoto(data, name, origin) {
         if (this.products.length >= 20) {
             this.message(this.api.tr('一次最多 20 张商品图。'), true);
@@ -395,12 +400,6 @@ class SimpleProductsPart {
             product.qualityIssues = this.uploadIssues(image.naturalWidth, image.naturalHeight, imageData, this.quality);
             let transparent = this.hasTransparency(imageData);
             let overBytes = this.dataUrlBytes(product.data) > this.maxProductBytes;
-            if (overBytes && !transparent && (origin == 'local' || origin == 'camera')) {
-                // An opaque local file over 5 MB cannot keep anything by shrinking: refuse it right away, as the picker itself does.
-                this.dropProduct(product);
-                this.message(tr('请选择不超过 5 MB 的 PNG、JPEG 或 WebP 图片。文件尚未上传。'), true);
-                return;
-            }
             if (overBytes || this.compressionScale(image.naturalWidth, image.naturalHeight) < 1) {
                 let before = product.data;
                 try {

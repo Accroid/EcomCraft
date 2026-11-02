@@ -25,9 +25,72 @@ public static class ProductComposite
     /// <summary>Largest product image decoded at all, in pixels; the size is checked before decoding.</summary>
     public const long MaxPixels = 100_000_000;
 
-    /// <summary>An encoded product image scaled down to at most <paramref name="workPixels"/>: the same bytes when already small enough,
-    /// re-encoded as JPEG when the source was JPEG and as PNG otherwise (so transparency stays), or null when it is over <see cref="MaxPixels"/>.
-    /// Throws the ImageSharp format exceptions for unreadable data.</summary>
+    /// <summary>JPEG quality of a re-encoded working image (a shrunk or turned-upright photo, F85): high enough that the change is not
+    /// visible, low enough that the file stays near the original size.</summary>
+    public const int WorkJpegQuality = 92;
+
+    /// <summary>Whether the image carries an EXIF block at all, orientation or not: turning a phone photo upright (F85) also drops the whole
+    /// block, GPS included, so nothing about where the photo was taken survives. An unreadable block counts as present, to be on the safe side.</summary>
+    private static bool HasExif(ImageInfo info)
+    {
+        try
+        {
+            return info.Metadata.ExifProfile?.Values.Count > 0;
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidOperationException)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>An upright copy of a photo with its whole EXIF block removed, GPS included (F85): a portrait phone photo stores its rotation in
+    /// EXIF, and neither a saved product file nor a cut-out mask may keep it, or the mask no longer lines up with the photo. An image without any
+    /// EXIF returns its own bytes unchanged, so nothing is re-encoded without need; a JPEG re-encodes as JPEG at <see cref="WorkJpegQuality"/> and
+    /// anything else as PNG, so transparency stays. <paramref name="extension"/> is the file extension of what came back ("jpg", "png" or the
+    /// source's own when the bytes did not change). Throws the ImageSharp format exceptions for unreadable data.</summary>
+    public static byte[] AutoOrient(byte[] bytes, out string extension)
+    {
+        ImageInfo info = Image.Identify(bytes);
+        extension = info.Metadata.DecodedImageFormat is SixLabors.ImageSharp.Formats.Jpeg.JpegFormat ? "jpg" : info.Metadata.DecodedImageFormat is SixLabors.ImageSharp.Formats.Webp.WebpFormat ? "webp" : "png";
+        if (!HasExif(info))
+        {
+            return bytes;
+        }
+        using Image<Rgba32> image = LoadUpright(bytes);
+        using System.IO.MemoryStream stream = new();
+        if (info.Metadata.DecodedImageFormat is SixLabors.ImageSharp.Formats.Jpeg.JpegFormat)
+        {
+            extension = "jpg";
+            image.SaveAsJpeg(stream, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder() { Quality = WorkJpegQuality });
+        }
+        else
+        {
+            extension = "png";
+            image.SaveAsPng(stream);
+        }
+        return stream.ToArray();
+    }
+
+    /// <summary>The image turned upright by its EXIF orientation with the EXIF block removed. An unreadable orientation flag leaves the pixels as
+    /// they are — the block is still dropped, and the photo stays usable instead of failing.</summary>
+    private static Image<Rgba32> LoadUpright(byte[] bytes)
+    {
+        Image<Rgba32> image = Image.Load<Rgba32>(bytes);
+        try
+        {
+            image.Mutate(context => context.AutoOrient());
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidOperationException)
+        {
+            // A broken orientation flag must not lose the photo: keep the pixels as stored.
+        }
+        image.Metadata.ExifProfile = null;
+        return image;
+    }
+
+    /// <summary>An encoded product image scaled down to at most <paramref name="workPixels"/> and turned upright (F85): the same bytes when already
+    /// small enough and without EXIF, re-encoded as JPEG (quality 92) when the source was JPEG and as PNG otherwise (so transparency stays), or null
+    /// when it is over <see cref="MaxPixels"/>. Throws the ImageSharp format exceptions for unreadable data.</summary>
     public static byte[] FitForWork(byte[] bytes, long workPixels = WorkPixels)
     {
         ImageInfo info = Image.Identify(bytes);
@@ -36,19 +99,21 @@ public static class ProductComposite
         {
             return null;
         }
-        if (pixels <= workPixels)
+        bool exif = HasExif(info);
+        if (pixels <= workPixels && !exif)
         {
             return bytes;
         }
-        double scale = Math.Sqrt((double)workPixels / pixels);
-        int width = Math.Max(1, (int)(info.Width * scale));
-        int height = Math.Max(1, (int)(info.Height * scale));
-        using Image<Rgba32> image = Image.Load<Rgba32>(bytes);
-        image.Mutate(context => context.Resize(width, height));
+        using Image<Rgba32> image = LoadUpright(bytes);
+        if ((long)image.Width * image.Height > workPixels)
+        {
+            double scale = Math.Sqrt((double)workPixels / ((long)image.Width * image.Height));
+            image.Mutate(context => context.Resize(Math.Max(1, (int)(image.Width * scale)), Math.Max(1, (int)(image.Height * scale))));
+        }
         using System.IO.MemoryStream stream = new();
         if (info.Metadata.DecodedImageFormat is SixLabors.ImageSharp.Formats.Jpeg.JpegFormat)
         {
-            image.SaveAsJpeg(stream, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder() { Quality = 92 });
+            image.SaveAsJpeg(stream, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder() { Quality = WorkJpegQuality });
         }
         else
         {
