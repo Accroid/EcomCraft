@@ -1,5 +1,28 @@
 namespace EcomCraftStudio.Studio.Products;
 
+/// <summary>One angle photo of a saved product (F84): its own original, cut-out and placement. The first angle of the list is the product's main
+/// image; angle IDs are only ever compared, never used to build file paths.</summary>
+public sealed class ProductAngle
+{
+    /// <summary>Angle ID, unique within the product.</summary>
+    public string Id;
+
+    /// <summary>File name of this angle's original photo.</summary>
+    public string Original;
+
+    /// <summary>File name of this angle's cut-out, or null before one is confirmed.</summary>
+    public string Cutout;
+
+    /// <summary>Confirmed product center, fraction of the picture width.</summary>
+    public double X = 0.5;
+
+    /// <summary>Confirmed product center, fraction of the picture height.</summary>
+    public double Y = 0.56;
+
+    /// <summary>Confirmed product size, fraction of the picture's shorter side.</summary>
+    public double Size = 0.55;
+}
+
 /// <summary>One saved product (F36): who owns it, its name, where its files are and the confirmed placement. File locations never leave the server.</summary>
 public sealed class ProductRecord
 {
@@ -18,10 +41,10 @@ public sealed class ProductRecord
     /// <summary>Folder holding the files.</summary>
     public string Folder;
 
-    /// <summary>File name of the original photo.</summary>
+    /// <summary>File name of the original photo. Historical field of records saved before angles existed (F84); it always mirrors the main angle.</summary>
     public string Original;
 
-    /// <summary>File name of the cut-out, or null before one is confirmed.</summary>
+    /// <summary>File name of the cut-out, or null before one is confirmed. Historical field of records saved before angles existed (F84); it always mirrors the main angle.</summary>
     public string Cutout;
 
     /// <summary>Confirmed product center, fraction of the picture width.</summary>
@@ -30,8 +53,31 @@ public sealed class ProductRecord
     /// <summary>Confirmed product center, fraction of the picture height.</summary>
     public double Y = 0.56;
 
-    /// <summary>Confirmed product size, fraction of the picture's shorter side.</summary>
+    /// <summary>Confirmed product size, fraction of the picture's shorter side. Historical field of records saved before angles existed (F84); it always mirrors the main angle.</summary>
     public double Size = 0.55;
+
+    /// <summary>The angle photos (F84); the first is the main image. Never null once <see cref="ProductIndex.Migrate"/> has run.</summary>
+    public List<ProductAngle> Angles = [];
+
+    /// <summary>The main angle — the first of the list — or null while the record has no angle at all.</summary>
+    public ProductAngle MainAngle()
+    {
+        return Angles.Count > 0 ? Angles[0] : null;
+    }
+
+    /// <summary>Mirrors the main angle into the historical single-photo fields, so files saved by either version of the index agree.</summary>
+    public void SyncLegacy()
+    {
+        if (MainAngle() is not ProductAngle main)
+        {
+            return;
+        }
+        Original = main.Original;
+        Cutout = main.Cutout;
+        X = main.X;
+        Y = main.Y;
+        Size = main.Size;
+    }
 }
 
 /// <summary>The product index with per-account isolation, independent of SwarmUI so isolation and deletion can be unit tested.
@@ -97,5 +143,95 @@ public sealed class ProductIndex
             Items.Remove(record);
         }
         return record;
+    }
+
+    /// <summary>Fills every record's angle list (F84): a record saved before angles existed becomes one main angle carrying its photo, cut-out and
+    /// placement, and nothing is renamed on disk. Angle entries without a photo or with a malformed or duplicate ID are dropped, and every record's
+    /// historical fields mirror its main angle, so no reading loses data.</summary>
+    public void Migrate()
+    {
+        foreach (ProductRecord record in Items)
+        {
+            record.Angles = (record.Angles ?? []).Where(angle => angle is not null && !string.IsNullOrEmpty(angle.Original) && ProductAngleRules.IsValidId(angle.Id))
+                .GroupBy(angle => angle.Id).Select(group => group.First()).ToList();
+            if (record.Angles.Count == 0 && !string.IsNullOrEmpty(record.Original))
+            {
+                record.Angles = [new ProductAngle() { Id = ProductAngleRules.MainId, Original = record.Original, Cutout = record.Cutout, X = record.X, Y = record.Y, Size = record.Size }];
+            }
+            record.SyncLegacy();
+        }
+    }
+
+    /// <summary>The account's product and its angle with this ID (the main angle when the ID is null or empty), or nulls; another account's product is
+    /// never found. A malformed angle ID is never looked up.</summary>
+    public (ProductRecord Record, ProductAngle Angle) FindAngle(string userId, string productId, string angleId)
+    {
+        ProductRecord record = Find(userId, productId);
+        if (record is null || record.MainAngle() is null)
+        {
+            return (record, null);
+        }
+        if (string.IsNullOrEmpty(angleId))
+        {
+            return (record, record.MainAngle());
+        }
+        return ProductAngleRules.IsValidId(angleId) ? (record, record.Angles.FirstOrDefault(item => item.Id == angleId)) : (record, null);
+    }
+
+    /// <summary>Adds an angle to the account's product; returns an error when the product is not found or already holds the maximum (F84).</summary>
+    public string AddAngle(string userId, string productId, ProductAngle angle)
+    {
+        ProductRecord record = Find(userId, productId);
+        if (record is null)
+        {
+            return "商品不存在。";
+        }
+        if (record.Angles.Count >= ProductAngleRules.MaxAngles)
+        {
+            return $"一个商品最多 {ProductAngleRules.MaxAngles} 张角度图，请先删除不用的角度图。";
+        }
+        record.Angles.Add(angle);
+        return null;
+    }
+
+    /// <summary>Removes one angle of the account's product and reports its old position, so a failed save can put it back; the next angle becomes the
+    /// main image. The last angle is never removed — the product itself has to be deleted — and the historical fields follow the new main angle.</summary>
+    public string RemoveAngle(string userId, string productId, string angleId, out ProductAngle removed, out int position)
+    {
+        removed = null;
+        position = 0;
+        ProductRecord record = Find(userId, productId);
+        ProductAngle angle = record?.Angles.FirstOrDefault(item => item.Id == angleId);
+        if (record is null || angle is null)
+        {
+            return "商品里没有这张角度图。";
+        }
+        if (record.Angles.Count <= 1)
+        {
+            return $"最后 1 张角度图不能删除；要移除整个商品，请删除商品“{record.Name}”。";
+        }
+        position = record.Angles.IndexOf(angle);
+        record.Angles.RemoveAt(position);
+        removed = angle;
+        record.SyncLegacy();
+        return null;
+    }
+
+    /// <summary>Makes one of the account's angles the product's main image (the first of the list, F84); the other angles keep their IDs and order.</summary>
+    public string SetMain(string userId, string productId, string angleId)
+    {
+        ProductRecord record = Find(userId, productId);
+        ProductAngle angle = record?.Angles.FirstOrDefault(item => item.Id == angleId);
+        if (record is null || angle is null)
+        {
+            return "商品里没有这张角度图。";
+        }
+        if (angle != record.Angles[0])
+        {
+            record.Angles.Remove(angle);
+            record.Angles.Insert(0, angle);
+            record.SyncLegacy();
+        }
+        return null;
     }
 }

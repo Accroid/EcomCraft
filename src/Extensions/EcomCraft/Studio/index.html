@@ -7,22 +7,22 @@
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 工作台</title>
-    <link rel="icon" href="/favicon.ico?v=0.58.0">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.58.0">
-    <script src="/EcomCraft/lang/en.js?v=0.58.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.58.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.58.0" defer></script>
-    <script src="/EcomCraft/js/simple/brand.js?v=0.58.0" defer></script>
-    <script src="/EcomCraft/js/simple/storyboard.js?v=0.58.0" defer></script>
-    <script src="/EcomCraft/js/simple/rules.js?v=0.58.0" defer></script>
-    <script src="/EcomCraft/js/simple/prompt.js?v=0.58.0" defer></script>
-    <script src="/EcomCraft/js/simple/export.js?v=0.58.0" defer></script>
-    <script src="/EcomCraft/js/simple/placement.js?v=0.58.0" defer></script>
-    <script src="/EcomCraft/js/simple/products.js?v=0.58.0" defer></script>
-    <script src="/EcomCraft/js/simple/reference.js?v=0.58.0" defer></script>
-    <script src="/EcomCraft/js/simple/batch.js?v=0.58.0" defer></script>
-    <script src="/EcomCraft/js/simple/tasks.js?v=0.58.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.58.0" defer></script>
+    <link rel="icon" href="/favicon.ico?v=0.59.0">
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.59.0">
+    <script src="/EcomCraft/lang/en.js?v=0.59.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.59.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.59.0" defer></script>
+    <script src="/EcomCraft/js/simple/brand.js?v=0.59.0" defer></script>
+    <script src="/EcomCraft/js/simple/storyboard.js?v=0.59.0" defer></script>
+    <script src="/EcomCraft/js/simple/rules.js?v=0.59.0" defer></script>
+    <script src="/EcomCraft/js/simple/prompt.js?v=0.59.0" defer></script>
+    <script src="/EcomCraft/js/simple/export.js?v=0.59.0" defer></script>
+    <script src="/EcomCraft/js/simple/placement.js?v=0.59.0" defer></script>
+    <script src="/EcomCraft/js/simple/products.js?v=0.59.0" defer></script>
+    <script src="/EcomCraft/js/simple/reference.js?v=0.59.0" defer></script>
+    <script src="/EcomCraft/js/simple/batch.js?v=0.59.0" defer></script>
+    <script src="/EcomCraft/js/simple/tasks.js?v=0.59.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.59.0" defer></script>
 </head>
 
 <body>
@@ -116,6 +116,7 @@
                         <button type="button" class="btn" id="simple-gallery-btn">从画廊选择</button>
                     </div>
                     <input type="file" id="simple-camera" accept="image/*" capture="environment" class="visually-hidden">
+                    <input type="file" id="simple-angle-file" accept="image/*" multiple class="visually-hidden">
                     <div class="simple-products" id="simple-products" hidden></div>
                     <div class="simple-quality" id="simple-quality" role="status" hidden></div>
                     <div class="inline-row simple-bg-row" id="simple-bg-row" role="group" aria-label="预览背景" hidden>
@@ -998,6 +999,26 @@
             <div class="modal-body">
                 <p class="hint" id="simple-picker-empty" aria-live="polite" hidden></p>
                 <div class="simple-picker-grid" id="simple-picker-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 简易模式：一次选了多张照片时先说明它们是同一个商品的不同角度还是不同的商品（F84） -->
+    <div class="modal" id="simple-angles-ask-modal" hidden>
+        <div class="modal-backdrop" id="simple-angles-ask-backdrop"></div>
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="simple-angles-ask-title">
+            <div class="modal-head">
+                <div>
+                    <h3 id="simple-angles-ask-title">这些照片是？</h3>
+                    <p class="hint" id="simple-angles-ask-hint">一次选择了多张照片，请说明它们的关系；同一个商品最多 3 张角度图（含主图）。</p>
+                </div>
+                <button type="button" class="icon-btn" id="simple-angles-ask-close" aria-label="关闭">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="recover-actions">
+                    <button type="button" class="btn" id="simple-angles-ask-same">同一个商品的不同角度</button>
+                    <button type="button" class="btn" id="simple-angles-ask-separate">不同的商品</button>
+                </div>
             </div>
         </div>
     </div>

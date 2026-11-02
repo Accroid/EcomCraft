@@ -36,6 +36,10 @@ class SimpleMode {
     static picker = '';
     static galleryItems = null;
     static galleryError = '';
+    /** A multi-file pick waiting for the "angles of one product or separate products?" answer (F84): { files, origin }, or null. */
+    static pendingFiles = null;
+    /** The saved product whose card opened the angle picker (F84), or null. */
+    static angleTarget = null;
     /** The optional image slots ticked for the chosen platform (F58); same-kind optional slots only add export targets, so only kinds not already in the default set are offered. */
     static optionalSlots = new Set();
 

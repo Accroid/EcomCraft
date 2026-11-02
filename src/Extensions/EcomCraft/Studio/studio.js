@@ -6010,6 +6010,15 @@
                 }
                 return;
             }
+            if (!$('simple-angles-ask-modal').hidden) {
+                if (e.key == 'Escape') {
+                    SimpleMode.resolveAngleAsk(null);
+                }
+                else {
+                    DialogFocus.trap($('simple-angles-ask-modal'), e);
+                }
+                return;
+            }
             if (!$('standard-modal').hidden) {
                 if (e.key == 'Escape') {
                     StandardWorkflowView.close();

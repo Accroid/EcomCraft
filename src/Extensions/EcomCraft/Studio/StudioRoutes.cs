@@ -80,12 +80,13 @@ public static class StudioRoutes
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
             }
         });
-        // Product library images (F36): only the owner can read them.
+        // Product library images (F36): only the owner can read them. The optional ?angle= names one angle photo (F84); without it the main angle serves.
         WebServer.WebApp.MapGet("/EcomCraft/product-image/{id}/{kind}", async (HttpContext context, string id, string kind) =>
         {
             User user = WebServer.GetUserFor(context);
+            string angle = context.Request.Query["angle"].ToString();
             (byte[] bytes, string extension) = user is null || !user.HasPermission(Permissions.FundamentalGenerateTabAccess) || kind is not ("original" or "cutout")
-                ? (null, null) : Products.ProductLibrary.FileFor(user.UserID, id, kind);
+                ? (null, null) : Products.ProductLibrary.FileFor(user.UserID, id, angle, kind);
             if (bytes is null)
             {
                 context.Response.StatusCode = StatusCodes.Status404NotFound;

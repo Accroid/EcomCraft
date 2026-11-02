@@ -51,6 +51,8 @@ public static class ProductLibrary
         if (state == JsonFileState.Ok)
         {
             Index.Items = items;
+            // Records saved before angles existed (F84) become one main angle here, in memory; the next successful save writes the angle list.
+            Index.Migrate();
         }
         return Index;
     }
@@ -130,28 +132,41 @@ public static class ProductLibrary
         }
     }
 
-    /// <summary>What generation needs from a product: the original or cut-out as a data URL and the confirmed placement. Null with a reason when it cannot be used.</summary>
+    /// <summary>What generation needs from a product's main angle: the original or cut-out as a data URL and the confirmed placement. Null with a reason
+    /// when it cannot be used. Existing callers keep this behavior (F84): generation unchanged uses the main image.</summary>
     public static (string Image, Placement Placement, string Error) ForGeneration(string userId, string productId, bool cutout)
     {
+        return ForGeneration(userId, productId, null, cutout);
+    }
+
+    /// <summary>What generation needs from one angle of a product (F84): the original or cut-out as a data URL and the angle's confirmed placement.
+    /// A null or empty <paramref name="angleId"/> picks the main angle; a missing or malformed angle is refused with a reason.</summary>
+    public static (string Image, Placement Placement, string Error) ForGeneration(string userId, string productId, string angleId, bool cutout)
+    {
         ProductRecord record;
+        ProductAngle angle;
         lock (Lock)
         {
-            record = Loaded().Find(userId, productId);
+            (record, angle) = Loaded().FindAngle(userId, productId, angleId);
         }
         if (record is null)
         {
             return (null, null, "商品不存在，请刷新商品库。");
         }
-        if (cutout && record.Cutout is null)
+        if (angle is null)
+        {
+            return (null, null, "商品里没有这张角度图，请刷新商品库。");
+        }
+        if (cutout && angle.Cutout is null)
         {
             return (null, null, "这个商品还没有确认过抠图，请先在出图页完成抠图。");
         }
-        string image = ReadDataUrl(record, cutout ? record.Cutout : record.Original);
+        string image = ReadDataUrl(record, cutout ? angle.Cutout : angle.Original);
         if (image is null)
         {
             return (null, null, "商品图暂时无法读取：作品库位置可能离线，请稍后重试。");
         }
-        Placement.TryCreate(record.X, record.Y, record.Size, out Placement placement);
+        Placement.TryCreate(angle.X, angle.Y, angle.Size, out Placement placement);
         return (image, placement ?? Placement.Default, null);
     }
 
@@ -164,15 +179,17 @@ public static class ProductLibrary
         }
     }
 
-    /// <summary>The account's product file for the image route ("original" or "cutout"), or null.</summary>
-    public static (byte[] Bytes, string Extension) FileFor(string userId, string productId, string kind)
+    /// <summary>The account's product file for the image route ("original" or "cutout") of one angle — the main angle when <paramref name="angleId"/>
+    /// is null or empty — or null. A malformed angle ID is never looked up, so it can never reach a file path.</summary>
+    public static (byte[] Bytes, string Extension) FileFor(string userId, string productId, string angleId, string kind)
     {
         ProductRecord record;
+        ProductAngle angle;
         lock (Lock)
         {
-            record = Loaded().Find(userId, productId);
+            (record, angle) = Loaded().FindAngle(userId, productId, angleId);
         }
-        string file = record is null ? null : kind == "cutout" ? record.Cutout : record.Original;
+        string file = angle is null ? null : kind == "cutout" ? angle.Cutout : angle.Original;
         if (file is null)
         {
             return (null, null);
@@ -187,17 +204,36 @@ public static class ProductLibrary
         }
     }
 
-    /// <summary>A product as its owner sees it: no file locations.</summary>
-    private static JObject Json(ProductRecord record) => new()
+    /// <summary>The image route of one angle: the main angle keeps the historical URL, added angles carry their ID as a query parameter.</summary>
+    private static string AngleImage(string productId, ProductAngle angle, bool cutout)
     {
-        ["id"] = record.Id,
-        ["name"] = record.Name,
-        ["created"] = record.Created,
-        ["has_cutout"] = record.Cutout is not null,
-        ["placement"] = new JObject() { ["x"] = record.X, ["y"] = record.Y, ["size"] = record.Size },
-        ["image"] = $"/EcomCraft/product-image/{record.Id}/original",
-        ["cutout_image"] = record.Cutout is null ? null : $"/EcomCraft/product-image/{record.Id}/cutout"
-    };
+        string url = $"/EcomCraft/product-image/{productId}/{(cutout ? "cutout" : "original")}";
+        return angle.Id == ProductAngleRules.MainId ? url : $"{url}?angle={angle.Id}";
+    }
+
+    /// <summary>A product as its owner sees it: no file locations. The first angle is the main image (F84); the historical top-level fields mirror it.</summary>
+    private static JObject Json(ProductRecord record)
+    {
+        ProductAngle main = record.MainAngle() ?? new ProductAngle() { Original = record.Original, Cutout = record.Cutout, X = record.X, Y = record.Y, Size = record.Size };
+        return new JObject()
+        {
+            ["id"] = record.Id,
+            ["name"] = record.Name,
+            ["created"] = record.Created,
+            ["has_cutout"] = main.Cutout is not null,
+            ["placement"] = new JObject() { ["x"] = main.X, ["y"] = main.Y, ["size"] = main.Size },
+            ["image"] = $"/EcomCraft/product-image/{record.Id}/original",
+            ["cutout_image"] = main.Cutout is null ? null : $"/EcomCraft/product-image/{record.Id}/cutout",
+            ["angles"] = new JArray(record.Angles.Select(angle => new JObject()
+            {
+                ["id"] = angle.Id,
+                ["has_cutout"] = angle.Cutout is not null,
+                ["placement"] = new JObject() { ["x"] = angle.X, ["y"] = angle.Y, ["size"] = angle.Size },
+                ["image"] = AngleImage(record.Id, angle, false),
+                ["cutout_image"] = angle.Cutout is null ? null : AngleImage(record.Id, angle, true)
+            }))
+        };
+    }
 
     /// <summary>Edge warnings of a saved cut-out's rim (F83), analyzed at the work size: the cut-out is scaled down first, because a client can send
     /// up to 100 megapixels. Any failure only means no warnings — a save that already succeeded is never failed by the analysis, and there are none
@@ -281,6 +317,8 @@ public static class ProductLibrary
             Original = $"original.{extension}",
             Cutout = cut is null ? null : "cutout.png"
         };
+        // The first photo is the product's main angle (F84); the historical single-photo fields mirror it.
+        record.Angles = [new ProductAngle() { Id = ProductAngleRules.MainId, Original = record.Original, Cutout = record.Cutout }];
         try
         {
             Directory.CreateDirectory(record.Folder);
@@ -318,7 +356,7 @@ public static class ProductLibrary
         return Task.FromResult(saved);
     }
 
-    [API.APIDescription("Update one of the current account's products: name, confirmed cut-out (data URL) and placement (x, y as 0–1, size 0.1–1.5). Only given fields change. rawInput is the root request JSON.", "product: { id: \"…\" }")]
+    [API.APIDescription("Update one of the current account's products: name, confirmed cut-out (data URL) and placement (x, y as 0–1, size 0.1–1.5). The cut-out and placement apply to one angle — the main angle, or the one named by the optional angle_id (F84). Only given fields change. rawInput is the root request JSON.", "product: { id: \"…\" }")]
     public static Task<JObject> EcomCraftStudioProductUpdate(Session session, JObject rawInput)
     {
         if (!StudioApi.CanView(session))
@@ -326,6 +364,11 @@ public static class ProductLibrary
             return Task.FromResult(StudioApi.Error("无权访问创作工作台。", "bad_permissions"));
         }
         string id = rawInput["product_id"]?.ToString();
+        string angleId = rawInput["angle_id"]?.ToString();
+        if (!string.IsNullOrEmpty(angleId) && !ProductAngleRules.IsValidId(angleId))
+        {
+            return Task.FromResult(StudioApi.Error("角度图编号无效。", "invalid_parameters"));
+        }
         lock (Lock)
         {
             ProductIndex index = Loaded();
@@ -333,6 +376,11 @@ public static class ProductLibrary
             if (record is null)
             {
                 return Task.FromResult(StudioApi.Error("商品不存在，请刷新商品库。", "task_not_found"));
+            }
+            ProductAngle angle = string.IsNullOrEmpty(angleId) ? record.MainAngle() : record.Angles.FirstOrDefault(item => item.Id == angleId);
+            if (angle is null)
+            {
+                return Task.FromResult(StudioApi.Error("商品里没有这张角度图，请刷新商品库。", "task_not_found"));
             }
             if (rawInput["name"]?.Type == JTokenType.String)
             {
@@ -348,7 +396,8 @@ public static class ProductLibrary
                 {
                     return Task.FromResult(StudioApi.Error("商品位置无效：中心须在画面内，大小在 0.1–1.5 之间。", "invalid_parameters"));
                 }
-                (record.X, record.Y, record.Size) = (parsed.CenterX, parsed.CenterY, parsed.Size);
+                (angle.X, angle.Y, angle.Size) = (parsed.CenterX, parsed.CenterY, parsed.Size);
+                record.SyncLegacy();
             }
             if (rawInput["cutout"]?.Type == JTokenType.String)
             {
@@ -365,8 +414,10 @@ public static class ProductLibrary
                     {
                         return Task.FromResult(StudioApi.Error("抠图尺寸过大，请缩小到 1 亿像素以内。", "invalid_reference"));
                     }
-                    File.WriteAllBytes(Path.Combine(record.Folder, "cutout.png"), cut);
-                    record.Cutout = "cutout.png";
+                    string cutoutFile = ProductAngleRules.CutoutFile(angle.Id);
+                    File.WriteAllBytes(Path.Combine(record.Folder, cutoutFile), cut);
+                    angle.Cutout = cutoutFile;
+                    record.SyncLegacy();
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
@@ -381,6 +432,156 @@ public static class ProductLibrary
             }
             if (!Save())
             {
+                return Task.FromResult(SaveFailed());
+            }
+            return Task.FromResult(new JObject() { ["product"] = Json(record) });
+        }
+    }
+
+    [API.APIDescription("Add another angle photo (PNG, JPEG or WebP data URL, at most 5 MB and 100 megapixels; at most 3 angles per product, F84) to one of the current account's saved products, optionally with its cut-out. Phone photos are turned upright and stripped like first uploads (F85). Returns the product and edge_warnings codes about the cut-out rim's quality (F83).", "product: { id: \"…\" }, angle_id: \"…\", edge_warnings: []")]
+    public static Task<JObject> EcomCraftStudioProductAngleAdd(Session session, string product_id, string image, string cutout = "")
+    {
+        if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.BasicImageGeneration))
+        {
+            return Task.FromResult(StudioApi.Error("此账号没有生成权限。", "bad_permissions"));
+        }
+        (byte[] original, string extension) = Decode(image);
+        (byte[] cut, _) = string.IsNullOrEmpty(cutout) ? (null, null) : Decode(cutout);
+        if (original is null || (!string.IsNullOrEmpty(cutout) && cut is null))
+        {
+            return Task.FromResult(StudioApi.Error("商品图须为不超过 5 MB 的 PNG、JPEG 或 WebP 图片。", "invalid_reference"));
+        }
+        try
+        {
+            // An angle photo goes through the same turning and metadata removal as a first upload (F85, F84).
+            original = PostProcess.ProductComposite.AutoOrient(original, out extension);
+            if (original is null)
+            {
+                return Task.FromResult(StudioApi.Error("商品图尺寸过大，请缩小到 1 亿像素以内。", "invalid_reference"));
+            }
+            if (cut is not null)
+            {
+                cut = PostProcess.ProductComposite.AutoOrient(cut, out _);
+                if (cut is null)
+                {
+                    return Task.FromResult(StudioApi.Error("抠图尺寸过大，请缩小到 1 亿像素以内。", "invalid_reference"));
+                }
+            }
+        }
+        catch (Exception ex) when (ex is SixLabors.ImageSharp.UnknownImageFormatException or SixLabors.ImageSharp.InvalidImageContentException
+            or SixLabors.ImageSharp.Memory.InvalidMemoryOperationException or NotSupportedException)
+        {
+            return Task.FromResult(StudioApi.Error("无法读取商品图，请重新导出为 PNG、JPEG 或 WebP。", "invalid_reference"));
+        }
+        string angleId = ProductAngleRules.NewId();
+        ProductAngle angle = new() { Id = angleId, Original = ProductAngleRules.OriginalFile(angleId, extension), Cutout = cut is null ? null : ProductAngleRules.CutoutFile(angleId) };
+        string folder;
+        lock (Lock)
+        {
+            ProductRecord record = Loaded().Find(session.User.UserID, product_id);
+            if (record is null)
+            {
+                return Task.FromResult(StudioApi.Error("商品不存在，请刷新商品库。", "task_not_found"));
+            }
+            folder = record.Folder;
+        }
+        try
+        {
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, angle.Original), original);
+            if (cut is not null)
+            {
+                File.WriteAllBytes(Path.Combine(folder, angle.Cutout), cut);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Logs.Warning($"EcomCraft could not save product files: {ex.Message}");
+            return Task.FromResult(StudioApi.Error("商品图无法保存：作品库位置可能离线或空间不足，请稍后重试。", "product_save_failed"));
+        }
+        JObject saved;
+        lock (Lock)
+        {
+            ProductIndex index = Loaded();
+            string error = index.AddAngle(session.User.UserID, product_id, angle);
+            if (error is not null)
+            {
+                TryDeleteFile(folder, angle.Original);
+                TryDeleteFile(folder, angle.Cutout);
+                return Task.FromResult(StudioApi.Error(error, "invalid_parameters"));
+            }
+            ProductRecord record = index.Find(session.User.UserID, product_id);
+            if (!Save())
+            {
+                record.Angles.Remove(angle);
+                TryDeleteFile(folder, angle.Original);
+                TryDeleteFile(folder, angle.Cutout);
+                return Task.FromResult(SaveFailed());
+            }
+            saved = new JObject() { ["product"] = Json(record), ["angle_id"] = angleId };
+        }
+        // Edge quality becomes plain-language notices like a first upload's; the analysis runs outside the index lock and on a work-size copy.
+        saved["edge_warnings"] = new JArray(EdgeWarnings(cut));
+        return Task.FromResult(saved);
+    }
+
+    [API.APIDescription("Delete one angle of one of the current account's saved products (F84). The next angle becomes the main image; the last angle cannot be deleted — delete the whole product instead.", "product: { id: \"…\" }")]
+    public static Task<JObject> EcomCraftStudioProductAngleDelete(Session session, string product_id, string angle_id)
+    {
+        if (!StudioApi.CanView(session))
+        {
+            return Task.FromResult(StudioApi.Error("无权访问创作工作台。", "bad_permissions"));
+        }
+        lock (Lock)
+        {
+            ProductIndex index = Loaded();
+            ProductRecord record = index.Find(session.User.UserID, product_id);
+            if (record is null || !ProductAngleRules.IsValidId(angle_id) || record.MainAngle() is null)
+            {
+                return Task.FromResult(StudioApi.Error("商品里没有这张角度图，请刷新商品库。", "task_not_found"));
+            }
+            string error = index.RemoveAngle(session.User.UserID, product_id, angle_id, out ProductAngle angle, out int position);
+            if (error is not null)
+            {
+                return Task.FromResult(StudioApi.Error(error, "invalid_parameters"));
+            }
+            if (!Save())
+            {
+                record.Angles.Insert(Math.Clamp(position, 0, record.Angles.Count), angle);
+                record.SyncLegacy();
+                return Task.FromResult(SaveFailed());
+            }
+            // The index is saved first; a file that cannot be deleted (for example an offline share) is only left behind and logged.
+            TryDeleteFile(record.Folder, angle.Original);
+            TryDeleteFile(record.Folder, angle.Cutout);
+            return Task.FromResult(new JObject() { ["product"] = Json(record) });
+        }
+    }
+
+    [API.APIDescription("Make one angle of one of the current account's saved products the main image (F84); the previous main image becomes a normal angle and the angles keep their IDs and order.", "product: { id: \"…\" }")]
+    public static Task<JObject> EcomCraftStudioProductAngleMain(Session session, string product_id, string angle_id)
+    {
+        if (!StudioApi.CanView(session))
+        {
+            return Task.FromResult(StudioApi.Error("无权访问创作工作台。", "bad_permissions"));
+        }
+        lock (Lock)
+        {
+            ProductIndex index = Loaded();
+            ProductRecord record = index.Find(session.User.UserID, product_id);
+            if (record is null || !ProductAngleRules.IsValidId(angle_id) || record.MainAngle() is null)
+            {
+                return Task.FromResult(StudioApi.Error("商品里没有这张角度图，请刷新商品库。", "task_not_found"));
+            }
+            string previousMain = record.Angles[0].Id;
+            string error = index.SetMain(session.User.UserID, product_id, angle_id);
+            if (error is not null)
+            {
+                return Task.FromResult(StudioApi.Error(error, "invalid_parameters"));
+            }
+            if (!Save())
+            {
+                index.SetMain(session.User.UserID, product_id, previousMain);
                 return Task.FromResult(SaveFailed());
             }
             return Task.FromResult(new JObject() { ["product"] = Json(record) });
@@ -409,6 +610,23 @@ public static class ProductLibrary
             TryDeleteFolder(record.Folder);
         }
         return Task.FromResult(new JObject() { ["success"] = true });
+    }
+
+    /// <summary>Removes one file of a product folder; a failure (for example an offline share) only leaves the file behind and is logged.</summary>
+    private static void TryDeleteFile(string folder, string file)
+    {
+        if (string.IsNullOrEmpty(folder) || string.IsNullOrEmpty(file))
+        {
+            return;
+        }
+        try
+        {
+            File.Delete(Path.Combine(folder, file));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Logs.Warning($"EcomCraft could not delete product files: {ex.Message}");
+        }
     }
 
     /// <summary>Removes a product folder; a failure (for example an offline share) only leaves files behind and is logged.</summary>

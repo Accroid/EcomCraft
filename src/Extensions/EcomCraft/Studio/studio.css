@@ -419,6 +419,12 @@ main:focus:not(:focus-visible) { outline: none; }
 .simple-product img { width: 100%; height: 100%; object-fit: contain; border-radius: 4px; }
 .simple-product-meta { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; font-size: var(--fs-13); }
 .simple-product-source { position: absolute; left: 2px; bottom: 2px; max-width: calc(100% - 4px); padding: 0 4px; border-radius: 3px; font-size: 10px; line-height: 16px; background: var(--panel); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+/* 商品多角度（F84）：卡片主体选择商品，角度条在卡片下方，可换行适应窄屏 */
+.simple-product-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.simple-angles { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px; max-width: 200px; }
+.simple-angle { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.simple-angle img { width: 40px; height: 40px; object-fit: contain; border: 1px solid var(--line); border-radius: 4px; background: var(--backdrop); }
+.simple-angle-badge { font-size: 10px; line-height: 14px; color: var(--ink-2); white-space: nowrap; }
 .simple-upload-actions { margin-top: 8px; }
 .simple-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 .simple-picker-item { display: grid; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--backdrop); color: var(--ink); text-align: left; cursor: pointer; }
