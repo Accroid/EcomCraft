@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "note": "模型配方（F86 / T117）：'模型 + 硬件变体'两层。模型层声明这个模型怎么跑（蓝图、采样、尺寸、能力、许可）；变体层按操作系统 / 显卡 / 硬件档位声明用哪些文件。文件来源的 region 用 cn（国内镜像）或 global（官方源）；bytes 和 sha256 用于下载校验（A22），未知时留 0 或空。tier 只是推荐目标，不锁功能（A19）；os / gpu / tier 留空表示不限。本文件随版本发布，管理员可在 Data/EcomCraft/model-recipes.json 放一份同格式文件整体覆盖（与 platforms.json 同机制）。文件损坏或条目不合法时，该条目按字段回退或整条跳过，不影响现有配置。数据为 2026-11-03 的现状：UC 主模型的下载来源未记录，待 T92 补齐并核对。",
+  "models": [
+    {
+      "id": "qwen-image-2.1",
+      "name": { "zh-CN": "Qwen-Image 2.1", "en": "Qwen-Image 2.1" },
+      "license": "模型 Apache-2.0（Qwen 发布）；GGUF 量化来自 unsloth、文本编码器和 VAE 来自 Comfy-Org，均沿用原许可。商用许可方案待定（A31），管理员界面按此处原文展示。",
+      "min_comfyui": "0.42.5",
+      "nodes": ["UnetLoaderGGUF", "CLIPLoader", "VAELoader", "TextEncodeQwenImage21", "EmptySD3LatentImage", "KSampler", "VAEDecode"],
+      "blueprints": {
+        "scene": "text-to-image.json",
+        "detail": "text-to-image.json",
+        "reference-edit": "image-edit.json"
+      },
+      "sampling": {
+        "steps": 25,
+        "cfg": {
+          "default": 1,
+          "min": 1,
+          "max": 4,
+          "hint": {
+            "zh-CN": "Qwen Image 2.1 常用 1–2：1 时不使用排除内容，2 更遵循复杂提示词但边缘略锐；更高会明显损坏画面。",
+            "en": "Qwen Image 2.1 usually runs at 1-2: 1 skips the negative prompt, 2 follows complex prompts closer but sharpens edges; higher values visibly damage the picture."
+          }
+        },
+        "negative_hint": {
+          "zh-CN": "提示词强度为 1 时负向提示词不生效，需要生效请调高提示词强度。",
+          "en": "At cfg 1 the negative prompt has no effect; raise cfg if you need it."
+        },
+        "sampler": "euler",
+        "scheduler": "simple"
+      },
+      "second_pass": { "steps": 10 },
+      "resolution_budget": 1048576,
+      "size_step": 16,
+      "max_edge": 2048,
+      "prompt_syntax": "<image1>",
+      "capabilities": { "edit": true, "alpha_channel": false, "max_input_images": 4 },
+      "variants": [
+        {
+          "id": "uc-q4-gguf",
+          "name": { "zh-CN": "Q4 量化（现用默认）", "en": "Q4 quantized (current default)" },
+          "os": [],
+          "gpu": [],
+          "tier": ["minimum", "recommended", "conditional"],
+          "disk_gb_hint": 15,
+          "files": [
+            {
+              "role": "unet",
+              "folder": "unet",
+              "filename": "qwen-image-2.1-UC-Q4_K_M.gguf",
+              "bytes": 0,
+              "sha256": "",
+              "sources": []
+            },
+            {
+              "role": "text_encoder",
+              "folder": "text_encoders",
+              "filename": "qwen3vl_8b_int8_convrot.safetensors",
+              "bytes": 0,
+              "sha256": "",
+              "sources": [
+                { "region": "cn", "url": "https://hf-mirror.com/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors" },
+                { "region": "global", "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors" }
+              ]
+            },
+            {
+              "role": "vae",
+              "folder": "VAE",
+              "filename": "qwen_image_2.1_vae_bf16.safetensors",
+              "bytes": 0,
+              "sha256": "",
+              "sources": [
+                { "region": "cn", "url": "https://hf-mirror.com/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors" },
+                { "region": "global", "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "qwen-image-2.1-turbo",
+      "name": { "zh-CN": "Qwen-Image 2.1 Turbo", "en": "Qwen-Image 2.1 Turbo" },
+      "license": "模型 Apache-2.0（Qwen 发布）；GGUF 量化来自 unsloth，沿用原许可。商用许可方案待定（A31）。",
+      "min_comfyui": "0.42.5",
+      "nodes": ["UnetLoaderGGUF", "CLIPLoader", "VAELoader", "TextEncodeQwenImage21", "EmptySD3LatentImage", "KSampler", "VAEDecode"],
+      "blueprints": {},
+      "sampling": {
+        "steps": 8,
+        "cfg": {
+          "default": 1,
+          "min": 1,
+          "max": 2,
+          "hint": {
+            "zh-CN": "Turbo 按蒸馏训练使用：8 步、提示词强度 1；更高步数或强度会损坏画面。",
+            "en": "Turbo is distilled: use 8 steps at cfg 1; more steps or higher cfg damages the picture."
+          }
+        },
+        "negative_hint": {
+          "zh-CN": "提示词强度为 1 时负向提示词不生效。",
+          "en": "At cfg 1 the negative prompt has no effect."
+        },
+        "sampler": "euler",
+        "scheduler": "simple"
+      },
+      "second_pass": { "steps": 10 },
+      "resolution_budget": 1048576,
+      "size_step": 16,
+      "max_edge": 2048,
+      "prompt_syntax": "<image1>",
+      "capabilities": { "edit": true, "alpha_channel": false, "max_input_images": 4 },
+      "variants": [
+        {
+          "id": "q4-gguf",
+          "name": { "zh-CN": "Q4 量化", "en": "Q4 quantized" },
+          "os": [],
+          "gpu": [],
+          "tier": ["minimum", "recommended", "conditional"],
+          "disk_gb_hint": 15,
+          "files": [
+            {
+              "role": "unet",
+              "folder": "unet",
+              "filename": "qwen-image-2.1-turbo-Q4_K_M.gguf",
+              "bytes": 4199565120,
+              "sha256": "8940e8b522af886e0c0f5afddf720e82dd223cb9a43580b5f61c4d740452ac20",
+              "sources": [
+                { "region": "cn", "url": "https://hf-mirror.com/unsloth/Qwen-Image-2.1-Turbo-GGUF/resolve/main/qwen-image-2.1-turbo-Q4_K_M.gguf" },
+                { "region": "global", "url": "https://huggingface.co/unsloth/Qwen-Image-2.1-Turbo-GGUF/resolve/main/qwen-image-2.1-turbo-Q4_K_M.gguf" }
+              ]
+            },
+            {
+              "role": "text_encoder",
+              "folder": "text_encoders",
+              "filename": "qwen3vl_8b_int8_convrot.safetensors",
+              "bytes": 0,
+              "sha256": "",
+              "sources": [
+                { "region": "cn", "url": "https://hf-mirror.com/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors" },
+                { "region": "global", "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors" }
+              ]
+            },
+            {
+              "role": "vae",
+              "folder": "VAE",
+              "filename": "qwen_image_2.1_vae_bf16.safetensors",
+              "bytes": 0,
+              "sha256": "",
+              "sources": [
+                { "region": "cn", "url": "https://hf-mirror.com/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors" },
+                { "region": "global", "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
