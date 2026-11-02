@@ -15,6 +15,11 @@ class SimpleTasksPart {
         if (!this.loaded) {
             await this.load();
         }
+        if (recipe.template == 'reference-edit') {
+            // The direct-fusion trial (F84) has no repeatable settings of its own: its prompt and workflow are chosen per product by the server.
+            this.message(tr('直接融合（试用）的作品不支持用相同参数重做。'), true);
+            return false;
+        }
         let template = this.data.templates.find(item => item.id == recipe.template);
         if (!template) {
             this.message(tr('这件作品用的图片类型已停用或不存在，无法用相同参数重做。'), true);
@@ -453,6 +458,10 @@ class SimpleTasksPart {
                 media.loading = 'lazy';
             }
             button.append(media, el('span', 'simple-result-check', picked ? '✓' : ''));
+            // The direct-fusion trial's results say what they are on the tile (F84): the model's own output, the original product not pasted back.
+            if (this.trialImages.has(url)) {
+                button.append(el('span', 'simple-result-trial', this.api.tr('试用：模型直接输出，未贴回原商品')));
+            }
             button.addEventListener('click', () => {
                 if (this.selected.has(url)) {
                     this.selected.delete(url);

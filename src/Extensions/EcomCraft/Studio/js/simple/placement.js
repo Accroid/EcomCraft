@@ -95,7 +95,8 @@ class SimplePlacementPart {
             this.placementRef = -1;
         }
         let box = this.api.$('simple-ref-place');
-        box.hidden = !this.references.length;
+        // The direct-fusion trial places nothing (F84): the model takes the reference and the product photos as they are.
+        box.hidden = !this.references.length || this.referenceEditOn();
         let buttons = [];
         for (let index = -1; index < this.references.length; index++) {
             let reference = this.references[index];

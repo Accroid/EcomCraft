@@ -5322,7 +5322,8 @@
             $('lb-gallery').hidden = gallery || !item.src;
             $('lb-edit').hidden = Boolean(item.video) || reference;
             $('lb-file').hidden = !gallery || !GalleryProjects.current || GalleryProjects.has(item);
-            $('lb-redo').hidden = !gallery || Boolean(item.video) || !GalleryProjects.recipe(item)?.template;
+            $('lb-redo').hidden = !gallery || Boolean(item.video) || !GalleryProjects.recipe(item)?.template
+                || GalleryProjects.recipe(item)?.template == 'reference-edit';
             $('lb-prev').disabled = this.index == 0;
             $('lb-next').disabled = this.index >= this.items.length - 1;
             $('lb-prev').hidden = this.items.length < 2;

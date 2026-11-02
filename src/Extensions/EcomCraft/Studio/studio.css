@@ -529,6 +529,9 @@ main:focus:not(:focus-visible) { outline: none; }
 .simple-result-star[aria-pressed="true"] { color: var(--key); border-color: var(--key); }
 .simple-result-check { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--panel); border: 1px solid var(--line-strong); font-size: 13px; }
 .simple-result[aria-pressed="true"] .simple-result-check { background: var(--key); color: var(--on-key); border-color: var(--key); }
+.simple-result-trial { position: absolute; left: 6px; bottom: 6px; max-width: calc(100% - 12px); padding: 2px 8px; border-radius: 4px; background: var(--panel); border: 1px solid var(--line-strong); color: var(--ink-2); font-size: var(--fs-12); line-height: 1.4; text-align: center; }
+.simple-edit-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; cursor: pointer; }
+.simple-edit-row { margin-top: 6px; }
 .sheet-kind.is-pending { color: var(--tally); }
 .lang-toggle { width: auto; min-width: 32px; padding: 0 8px; font-size: var(--fs-12); font-weight: 600; }
 .inline-input { display: inline-flex; align-items: center; gap: 8px; }

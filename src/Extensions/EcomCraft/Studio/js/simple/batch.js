@@ -196,6 +196,10 @@ class SimpleBatchPart {
                 if (!this.results.includes(url)) {
                     this.results.push(url);
                     this.resultGroups.set(url, this.batchProducts[job.product] || tr('商品 {0}', job.product + 1));
+                    // The trial's results carry the "model output, not pasted back" notice on their tiles (F84).
+                    if (this.batchEdit) {
+                        this.trialImages.add(url);
+                    }
                     added = true;
                 }
             }

@@ -55,6 +55,19 @@ class SimpleMode {
     /** Reference images of reference mode (F59): each { image, promptEn, promptZh, edited, queued, describing, failed }; one image is made per reference. */
     static references = [];
 
+    /** Whether the direct-fusion trial's switch is on (F84): the references go straight to the edit model with the product's angles, the
+     * per-reference prompts and image description are not used, and the prompt is written by the server. Always starts off. */
+    static editFusion = false;
+
+    /** Whether the direct-fusion trial can run now (F84): { available, reason } from the server, or null before it was asked. */
+    static editStatus = null;
+
+    /** Candidate URLs made by the direct-fusion trial (F84): they carry the "model output, not pasted back" notice on their tiles. */
+    static trialImages = new Set();
+
+    /** Whether the current batch is the direct-fusion trial (F84), so its finished images join trialImages. */
+    static batchEdit = false;
+
     /** References waiting to be described, in order: a local vision model reads one image at a time, so they are sent one by one rather than all at once. */
     static describeWaiting = [];
 
@@ -396,10 +409,11 @@ class SimpleMode {
         box.hidden = !rows.length;
     }
 
-    /** Templates that suit the chosen platform. */
+    /** Templates that suit the chosen platform. The direct-fusion trial's template (F84) is server-driven only: it has no page fields,
+     * so it never joins the single-image picker; the reference step's switch is its only entrance. */
     static visibleTemplates() {
         let platform = this.choice.platform;
-        return this.data.templates.filter(template => !platform || (template.platforms || []).includes('*') || (template.platforms || []).includes(platform));
+        return this.data.templates.filter(template => template.id != 'reference-edit' && (!platform || (template.platforms || []).includes('*') || (template.platforms || []).includes(platform)));
     }
 
     /** Builds one selectable card with an optional example image. */

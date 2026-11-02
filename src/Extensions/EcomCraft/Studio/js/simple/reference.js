@@ -4,9 +4,36 @@
  * Simple mode: reference mode: uploads, vision describing and generation (F59). Part of simple.js since R15; static methods are copied onto SimpleMode by adopt(), so callers and this stay unchanged.
  */
 class SimpleReferencePart {
+    /** Whether the direct-fusion trial's switch is on (F84): only meaningful in the "follow a reference" task. */
+    static referenceEditOn() {
+        return this.referenceMode() && this.editFusion;
+    }
+
+    /** Asks the server whether the direct-fusion trial can run (F84) and shows the reason when it cannot. */
+    static async loadEditStatus() {
+        if (this.editStatus || !this.api.state.session) {
+            return;
+        }
+        try {
+            let status = await this.api.request('EcomCraftStudioReferenceEditStatus', {});
+            this.editStatus = { available: status.available == true, reason: String(status.reason || '') };
+        }
+        catch (error) {
+            // Without an answer the switch stays usable; submitting then reports the server's own error.
+            this.editStatus = { available: true, reason: '' };
+        }
+        this.renderReferences();
+        this.update();
+    }
+
     /** Opens the reference picker only when image description can work (F59/F68): without a usable vision model the guidance
-     * below shows instead — its settings steps open the configuration directly — so references never sit undescribable. */
+     * below shows instead — its settings steps open the configuration directly — so references never sit undescribable.
+     * The direct-fusion trial (F84) needs no vision model: its prompt is written by the server, so the picker opens at once. */
     static async addReferenceClick() {
+        if (this.referenceEditOn()) {
+            this.api.$('simple-reference-file').click();
+            return;
+        }
         if (!this.vision || this.vision.state == 'unknown') {
             await this.loadVision();
         }
@@ -45,6 +72,10 @@ class SimpleReferencePart {
         }
         this.renderReferences();
         this.update();
+        // The trial (F84) never describes references: its prompt comes from the server.
+        if (this.referenceEditOn()) {
+            return;
+        }
         for (let item of this.references) {
             if (!item.queued && !item.describing && !item.promptEn && !item.failed) {
                 this.queueDescribe(item);
@@ -372,13 +403,15 @@ class SimpleReferencePart {
         this.api.openImages(items, index, opener);
     }
 
-    /** Shows the reference thumbnails and the per-reference prompt list (F59): the English prompt is editable, the Chinese translation read-only. */
+    /** Shows the reference thumbnails and the per-reference prompt list (F59): the English prompt is editable, the Chinese translation read-only.
+     * With the direct-fusion trial on (F84) the prompts do not apply, so only the thumbnails show and the placement picker and its note hide. */
     static renderReferences() {
         if (!this.api) {
             return;
         }
         let tr = this.api.tr;
         let el = this.api.el;
+        let edit = this.referenceEditOn();
         let thumbs = [];
         for (let [index, item] of this.references.entries()) {
             let wrap = el('span', 'simple-ref-thumb');
@@ -407,7 +440,7 @@ class SimpleReferencePart {
         }
         this.api.$('simple-references').replaceChildren(...thumbs);
         let block = this.api.$('simple-reference-list-block');
-        block.hidden = !this.references.length;
+        block.hidden = edit || !this.references.length;
         let rows = [];
         for (let [index, item] of this.references.entries()) {
             let row = el('div', 'simple-ref-item');
@@ -451,8 +484,16 @@ class SimpleReferencePart {
         this.api.$('simple-reference-list').replaceChildren(...rows);
         this.api.$('simple-reference-add').hidden = this.references.length >= 8;
         this.renderPlacementPicker();
-        this.api.$('simple-reference-hint').textContent = tr('参考图只用于借鉴构图与光线，请使用有权使用的图片（自己拍摄、已授权或无版权限制）；生成结果请勿与参考图雷同。');
-        this.api.$('simple-reference-place-note').hidden = !this.references.length;
+        this.api.$('simple-reference-edit-note').hidden = !edit;
+        this.api.$('simple-ref-place').hidden = edit || !this.references.length;
+        this.api.$('simple-reference-place-note').hidden = edit || !this.references.length;
+        this.api.$('simple-reference-hint').textContent = edit
+            ? tr('试用：结果由模型直接输出，未贴回原商品；参考图仅用于本次生成，不会保存到商品库或项目。请使用有权使用的参考图。')
+            : tr('参考图只用于借鉴构图与光线，请使用有权使用的图片（自己拍摄、已授权或无版权限制）；生成结果请勿与参考图雷同。');
+        if (edit && this.editStatus && !this.editStatus.available) {
+            this.api.$('simple-reference-edit-note').hidden = false;
+            this.api.$('simple-reference-edit-note').textContent = tr('直接融合试用暂不可用：{0}', this.editStatus.reason);
+        }
     }
 
     /** Turns the other step-2 options on or off (F59): in reference mode they do not apply (and are hidden by the task, F61).
@@ -482,10 +523,30 @@ class SimpleReferencePart {
         }
     }
 
-    /** Why "generate by reference" cannot run yet (F59); empty when it can. */
+    /** Why "generate by reference" cannot run yet (F59); empty when it can. With the trial on (F84) no prompts or vision model are needed:
+     * the references and the workflow's availability are all that matter. */
     static referenceProblem() {
         let tr = this.api.tr;
         if (!this.referenceMode()) {
+            return '';
+        }
+        if (this.referenceEditOn()) {
+            if (!this.references.length) {
+                return '请添加参考图（1–8 张），每张参考图出 1 张。';
+            }
+            if (!this.products.length) {
+                return '请先在第 1 步上传商品图。';
+            }
+            if (this.editStatus && !this.editStatus.available) {
+                return tr('直接融合试用暂不可用：{0}', this.editStatus.reason);
+            }
+            let total = this.products.length * this.references.length;
+            if (total > 20) {
+                return tr('预计 {0} 张，超过 20 张总上限，请减少商品图或参考图。', total);
+            }
+            if (this.submitting) {
+                return '提交中…';
+            }
             return '';
         }
         if (this.visionGuide()) {
@@ -513,22 +574,31 @@ class SimpleReferencePart {
         return '';
     }
 
-    /** Starts reference mode: one image per reference for every product, each with the prompt shown to the user (F59). */
+    /** Starts reference mode: one image per reference for every product, each with the prompt shown to the user (F59).
+     * With the trial on (F84) the images go straight to the edit model: no per-reference prompts, no placements, one batch flag marks
+     * the finished candidates as the trial's direct output. */
     static async generateReference() {
         let tr = this.api.tr;
         if (!this.products.length || this.submitting || this.referenceProblem()) {
             return;
         }
+        let edit = this.referenceEditOn();
         let payload = {
             language: I18n.current,
             platform: this.choice.platform,
-            reference_prompts: this.references.map(item => item.promptEn.trim()),
-            reference_placements: this.references.map(item => item.placement ? this.clampPlacement(item.placement) : null),
             output_size: this.outputSizeField(),
             products: this.products.map(product => product.id
                 ? { product_id: product.id, placement: this.clampPlacement(this.placement) }
                 : { image: product.cutout || product.data, placement: this.clampPlacement(this.placement) })
         };
+        if (edit) {
+            payload.reference_mode = 'edit';
+            payload.reference_images = this.references.map(item => item.image);
+        }
+        else {
+            payload.reference_prompts = this.references.map(item => item.promptEn.trim());
+            payload.reference_placements = this.references.map(item => item.placement ? this.clampPlacement(item.placement) : null);
+        }
         this.submitting = true;
         this.update();
         this.batchProducts = this.products.map(product => product.name || '');
@@ -537,10 +607,13 @@ class SimpleReferencePart {
             this.batch = batch;
             this.batchAt = Date.now();
             this.batchDone = 0;
+            this.batchEdit = edit;
             this.api.titleAdd((batch.jobs || []).length);
             this.renderBatch();
             this.trackBatch();
-            this.api.$('simple-status').textContent = tr('已按参考图开始出图：共 {0} 个任务，会分配到空闲的执行服务器上并行完成。', (batch.jobs || []).length);
+            this.api.$('simple-status').textContent = edit
+                ? tr('已开始直接融合（试用）：共 {0} 个任务，结果由模型直接输出，不会贴回原商品。', (batch.jobs || []).length)
+                : tr('已按参考图开始出图：共 {0} 个任务，会分配到空闲的执行服务器上并行完成。', (batch.jobs || []).length);
             this.batchSent = this.promptSnapshot();
             this.batchPromptShown = true;
             this.message('', false);
@@ -554,13 +627,22 @@ class SimpleReferencePart {
         }
     }
 
-    /** Reference uploads and the reference generation button (F59). */
+    /** Reference uploads, the direct-fusion switch (F84) and the reference generation button (F59). */
     static bindReference() {
         let $ = this.api.$;
         $('simple-reference-add').addEventListener('click', () => this.addReferenceClick());
         $('simple-reference-file').addEventListener('change', e => {
             this.addReferenceFiles(Array.from(e.target.files || []));
             e.target.value = '';
+        });
+        $('simple-reference-edit').addEventListener('change', e => {
+            this.editFusion = e.target.checked;
+            this.editStatus = null;
+            if (this.referenceEditOn()) {
+                this.loadEditStatus();
+            }
+            this.renderReferences();
+            this.update();
         });
         $('simple-generate-reference').addEventListener('click', () => this.generateReference());
     }

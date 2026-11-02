@@ -1198,5 +1198,12 @@ window.EcomCraftLanguages.en = {
     "已等待 {0} 秒": "Waiting for {0} s",
     "已等待 {0} 分 {1} 秒": "Waiting for {0} min {1} s",
     "如果一直连不上，请确认 EcomCraft 服务已经启动，或联系管理员。": "If it never connects, make sure the EcomCraft service is running, or contact your administrator.",
-    "启动时间比平时长。如果一直没有完成，请管理员查看执行服务器的日志。": "Starting takes longer than usual. If it never finishes, ask an administrator to check the execution server log."
+    "启动时间比平时长。如果一直没有完成，请管理员查看执行服务器的日志。": "Starting takes longer than usual. If it never finishes, ask an administrator to check the execution server log.",
+    "直接融合（试用）": "Direct fusion (trial)",
+    "试用：把参考图和商品图（含全部角度）一起交给编辑模型直接融合，不经抠图摆放，也不贴回原商品；提示词由服务端生成。效果未定型，仅供试用。": "Trial: hands the reference and the product photos (all angles included) to the edit model for direct fusion — no cut-out placement, and the original product is not pasted back; the prompt is written by the server. The quality is not final; for trial use only.",
+    "试用：结果由模型直接输出，未贴回原商品；参考图仅用于本次生成，不会保存到商品库或项目。请使用有权使用的参考图。": "Trial: results are the model's direct output and the original product is not pasted back; references are used for this generation only and are never saved to the product library or projects. Use only references you have the right to use.",
+    "直接融合试用暂不可用：{0}": "The direct-fusion trial is unavailable right now: {0}",
+    "已开始直接融合（试用）：共 {0} 个任务，结果由模型直接输出，不会贴回原商品。": "Direct fusion (trial) started: {0} tasks in total. Results are the model's direct output; the original product is not pasted back.",
+    "试用：模型直接输出，未贴回原商品": "Trial: model output, original product not pasted back",
+    "直接融合（试用）的作品不支持用相同参数重做。": "Works made by direct fusion (trial) cannot be remade with the same settings."
 };
