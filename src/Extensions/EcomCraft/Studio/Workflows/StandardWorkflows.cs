@@ -21,19 +21,33 @@ public static class StandardWorkflows
     /// <summary>Source label of system generated workflows, shown to reviewers in place of a server name.</summary>
     public const string Source = "系统生成";
 
-    /// <summary>The generated workflows: published ID (matching the templates' "*/ecomcraft/…" names), description, the blueprint file it is built from and
-    /// whether the product repainting pass is added (R13). Scene and detail share the text-to-image blueprint; the templates differ by prompt,
-    /// and "with a model" is a prompt fragment (F53).</summary>
-    private sealed record KindEntry(string Kind, string Id, string Description, string BlueprintFile, bool AddProductInpaint);
+    /// <summary>The generated workflows: published ID (matching the templates' "*/ecomcraft/…" names), description, the blueprint file it is built from,
+    /// whether the product repainting pass is added (R13) and, above zero, how many product angle photos the reference-edit trial wires in (F84, T123).
+    /// Scene and detail share the text-to-image blueprint; the templates differ by prompt, and "with a model" is a prompt fragment (F53).
+    /// The reference-edit kinds share the Image Edit blueprint: they differ only in how many LoadImage inputs are wired.</summary>
+    private sealed record KindEntry(string Kind, string Id, string Description, string BlueprintFile, bool AddProductInpaint, int EditAngles = 0);
 
     private static readonly KindEntry[] Kinds =
     [
         new("scene", $"{Source}/ecomcraft/scene", "系统按默认模型生成的场景图工作流（围绕放好的商品重绘场景，出图后贴回原商品）。", "text-to-image.json", true),
-        new("detail", $"{Source}/ecomcraft/detail", "系统按默认模型生成的细节图工作流（围绕放好的商品重绘场景，出图后贴回原商品）。", "text-to-image.json", true)
+        new("detail", $"{Source}/ecomcraft/detail", "系统按默认模型生成的细节图工作流（围绕放好的商品重绘场景，出图后贴回原商品）。", "text-to-image.json", true),
+        new("reference-edit-1", ReferenceEditId(1), "系统按默认模型生成的直接融合工作流（试用版，1 张商品角度图）。", "image-edit.json", false, 1),
+        new("reference-edit-2", ReferenceEditId(2), "系统按默认模型生成的直接融合工作流（试用版，2 张商品角度图）。", "image-edit.json", false, 2),
+        new("reference-edit-3", ReferenceEditId(3), "系统按默认模型生成的直接融合工作流（试用版，3 张商品角度图）。", "image-edit.json", false, 3)
     ];
 
     /// <summary>Whether a published ID is one of the generated standard workflows.</summary>
     public static bool IsStandard(string id) => Kinds.Any(item => item.Id == id);
+
+    /// <summary>Whether a standard workflow repaints the scene around a placed product canvas (R13): the transparent-canvas input check applies only to these,
+    /// not to the reference-edit trial whose product inputs are white-flattened photos (F84).</summary>
+    public static bool NeedsProductCanvas(string id) => Kinds.Any(item => item.Id == id && item.AddProductInpaint);
+
+    /// <summary>The published ID of the reference-edit trial's workflow for a product with this many angle photos (F84): one workflow per angle count, 1–3.</summary>
+    public static string ReferenceEditId(int angles) => $"{Source}/ecomcraft/reference-edit-{Math.Clamp(angles, 1, 3)}";
+
+    /// <summary>The kind name of the reference-edit workflow for this many angle photos, as <see cref="Unavailable"/> takes it.</summary>
+    public static string ReferenceEditKind(int angles) => $"reference-edit-{Math.Clamp(angles, 1, 3)}";
 
     /// <summary>ID of the product image input added to every generated workflow, so the templates' "@image" field and product preservation work.
     /// The graph loads it (N10): the product canvas is transparent around the product, its alpha becomes the mask, and only the scene around the product
@@ -170,14 +184,26 @@ public static class StandardWorkflows
                 property.Value["default"] = -1;
             }
         }
-        metadata[ProductImageParam] = new JObject()
+        if (kind.EditAngles > 0)
         {
-            ["id"] = ProductImageParam, ["name"] = "商品图", ["type"] = "image", ["default"] = "", ["visible"] = true, ["form"] = null,
-            ["description"] = "放好商品的透明画布：只重绘商品以外的场景，出图后由平台把原商品贴回画面。"
-        };
-        if (kind.AddProductInpaint && !AddProductInpaint(prompt))
+            // The edit trial (F84) wires its own hidden LoadImage inputs (the reference and up to three product angles) and the pixel-budget parameter instead;
+            // its product inputs are white-flattened photos, so the transparent product canvas does not apply.
+            if (!ReferenceEditRules.Apply(prompt, metadata, values, kind.EditAngles))
+            {
+                return (null, null, null, null, "unsupported");
+            }
+        }
+        else
         {
-            return (null, null, null, null, "unsupported");
+            metadata[ProductImageParam] = new JObject()
+            {
+                ["id"] = ProductImageParam, ["name"] = "商品图", ["type"] = "image", ["default"] = "", ["visible"] = true, ["form"] = null,
+                ["description"] = "放好商品的透明画布：只重绘商品以外的场景，出图后由平台把原商品贴回画面。"
+            };
+            if (kind.AddProductInpaint && !AddProductInpaint(prompt))
+            {
+                return (null, null, null, null, "unsupported");
+            }
         }
         return (prompt, metadata, values, json, null);
     }
@@ -251,14 +277,16 @@ public static class StandardWorkflows
             WorkflowReview.Restore();
             List<(string, string, string, List<string>)> result = [];
             List<BackendHandler.T2IBackendData> ready = [.. ExecutionServers.All.Where(ExecutionServers.IsReady)];
-            // Kinds may share a blueprint file: convert each file once per run (R13).
+            // Kinds may share a blueprint file: convert each file once per run (R13). The edit trial's kinds share the file but wire a different
+            // number of product angles into it (F84), so they cache apart by their angle count.
             Dictionary<string, (JObject Prompt, JObject Metadata, JObject Values, string Canvas, string Problem)> blueprints = [];
             foreach (KindEntry kind in Kinds)
             {
-                if (!blueprints.TryGetValue(kind.BlueprintFile, out (JObject Prompt, JObject Metadata, JObject Values, string Canvas, string Problem) built))
+                string cacheKey = kind.BlueprintFile + (kind.EditAngles > 0 ? $":{kind.EditAngles}" : "");
+                if (!blueprints.TryGetValue(cacheKey, out (JObject Prompt, JObject Metadata, JObject Values, string Canvas, string Problem) built))
                 {
                     built = Blueprint(kind);
-                    blueprints[kind.BlueprintFile] = built;
+                    blueprints[cacheKey] = built;
                 }
                 (string state, List<string> problems) = Publish(kind.Id, kind.Description, built.Prompt, built.Metadata, built.Values, built.Canvas, built.Problem, ready, force);
                 Status[kind.Kind] = (state, problems);
@@ -380,5 +408,25 @@ public static class StandardWorkflows
                 : (item.Kind, item.Id, WorkflowReview.IsPublished(item.Id) ? "published" : "not_checked", new List<string>()))];
         }
         return Task.FromResult(StatusJson(items));
+    }
+
+    [API.APIDescription("Whether the direct-fusion trial can run now (F84): available once every of its three standard workflows (one per angle count) is "
+        + "published. reason is null when available, else the plain-language explanation also shown on the page. Only the trial's availability is "
+        + "disclosed here, never nodes, addresses or graphs.", "available: true, reason: null")]
+    public static Task<JObject> EcomCraftStudioReferenceEditStatus(Session session)
+    {
+        if (!StudioApi.CanView(session) || !session.User.HasPermission(EcomCraft.PermUsePublishedWorkflows))
+        {
+            return Task.FromResult(StudioApi.Error("此账号没有使用模板的权限。", "bad_permissions"));
+        }
+        string reason = null;
+        for (int angles = 1; angles <= 3 && reason is null; angles++)
+        {
+            if (!WorkflowReview.IsPublished(ReferenceEditId(angles)))
+            {
+                reason = Unavailable(ReferenceEditKind(angles));
+            }
+        }
+        return Task.FromResult(new JObject() { ["available"] = reason is null, ["reason"] = reason });
     }
 }

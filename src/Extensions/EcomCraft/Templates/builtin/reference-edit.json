@@ -1,0 +1,34 @@
+{
+  "id": "reference-edit",
+  "name": {
+    "zh-CN": "直接融合（试用）",
+    "en": "Direct fusion (trial)"
+  },
+  "description": {
+    "zh-CN": "试用版：把参考图和商品图一起交给编辑模型直接融合；结果是模型直接输出的，未贴回原商品，多角度商品会把全部角度一起送给模型。只在“照参考图做”的“直接融合（试用）”开关中使用。",
+    "en": "Trial version: hands the reference and the product photos to the edit model together; the result is the model's direct output, the original product is not pasted back, and a multi-angle product sends all of its angles. Used only by the \"direct fusion (trial)\" switch of \"follow a reference\"."
+  },
+  "example_image": null,
+  "platforms": [
+    "*"
+  ],
+  "sets": [],
+  "kind": "scene_main",
+  "prompt": {
+    "prefix": "",
+    "suffix": "",
+    "negative": ""
+  },
+  "preserve_product": false,
+  "categories": [],
+  "brand_kit": null,
+  "execution_plans": [
+    {
+      "kind": "local",
+      "workflow": "*/ecomcraft/reference-edit-1",
+      "presets": {},
+      "user_fields": []
+    }
+  ],
+  "enabled": true
+}
