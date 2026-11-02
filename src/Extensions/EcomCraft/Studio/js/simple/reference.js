@@ -76,6 +76,12 @@ class SimpleReferencePart {
         if (this.referenceEditOn()) {
             return;
         }
+        this.queueMissingDescriptions();
+    }
+
+    /** Queues the description of every reference that still has no prompt and is not on its way to one (F59): the ones just added, and the ones
+     * uploaded while the direct-fusion trial (F84) was on, whose descriptions the trial skipped — the same condition addReferenceFiles uses. */
+    static queueMissingDescriptions() {
         for (let item of this.references) {
             if (!item.queued && !item.describing && !item.promptEn && !item.failed) {
                 this.queueDescribe(item);
@@ -640,6 +646,10 @@ class SimpleReferencePart {
             this.editStatus = null;
             if (this.referenceEditOn()) {
                 this.loadEditStatus();
+            }
+            else {
+                // References uploaded while the trial was on were never described: closing the switch catches them up (F84, T123fix).
+                this.queueMissingDescriptions();
             }
             this.renderReferences();
             this.update();

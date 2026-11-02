@@ -72,6 +72,9 @@ class SimpleBatchPart {
             this.batch = batch;
             this.batchAt = Date.now();
             this.batchDone = 0;
+            // Every path that starts a batch sets the trial flag: a set batch is never the direct-fusion trial, so a previous trial's
+            // flag must not mark its results as trial output (T123fix).
+            this.batchEdit = false;
             this.api.titleAdd((batch.jobs || []).length);
             this.renderBatch();
             this.trackBatch();

@@ -29,9 +29,6 @@ public static partial class StudioApi
     /// <summary>Value of <see cref="ExecutionScopeKey"/> that restricts a request to registered execution servers.</summary>
     public const string ExecutionScopeValue = "registered_comfy";
 
-    /// <summary>Upper bound for an uploaded reference image.</summary>
-    private const int MaxReferenceBytes = 5 * 1024 * 1024;
-
     /// <summary>Upper bound for LoRAs in one standard request.</summary>
     private const int MaxLoras = 5;
 

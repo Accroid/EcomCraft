@@ -24,7 +24,21 @@ namespace EcomCraftStudio.Studio;
 public static partial class StudioApi
 {
     [API.APIDescription("Generate using a validated allowlist on registered ComfyUI execution servers only. No cloud fallback, automatic retries or durable task guarantees. rawInput is the root request JSON.", "images: [\"View/user/result.png\"]")]
-    public static Task<JObject> EcomCraftStudioGenerate(Session session, JObject rawInput) => GenerateInternal(session, rawInput, new GenerateOptions());
+    public static Task<JObject> EcomCraftStudioGenerate(Session session, JObject rawInput)
+    {
+        if (!CanView(session) || !session.User.HasPermission(Permissions.BasicImageGeneration))
+        {
+            return Task.FromResult(Error("此账号没有生成权限。请联系管理员。", "bad_permissions"));
+        }
+        // The direct-fusion trial's template (F84) is driven only by the batch's server-side options: its images, prompt tags and workflow choice never
+        // come from a request, so a direct call would reach the engine without its inputs (T123fix). Reject it here with the reason; the internal
+        // path (GenerateInternal) keeps serving the batch, whose server-written options are untouched.
+        if (rawInput["template_id"]?.Type == JTokenType.String && rawInput.Value<string>("template_id") == "reference-edit")
+        {
+            return Task.FromResult(Error("直接融合（试用）只能在“照参考图做”里开启开关使用，不能单独提交。", "invalid_template"));
+        }
+        return GenerateInternal(session, rawInput, new GenerateOptions());
+    }
 
     /// <summary>The generate route's implementation, shared with server-side callers (R08): internal flags such as a raw prompt travel in
     /// <paramref name="options"/>, so no client-visible request field can set them.</summary>

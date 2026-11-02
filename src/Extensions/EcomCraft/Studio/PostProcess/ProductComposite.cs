@@ -196,24 +196,56 @@ public static class ProductComposite
         return cutout.Clone(context => context.Crop(crop));
     }
 
-    /// <summary>Largest side of the edit trial's flattened product input (F84): the edit model's own pixel budget stays far below it, and the
-    /// white-flattened PNG stays small enough for the 5 MB image-parameter limit.</summary>
+    /// <summary>Upper bound, in bytes, for one inline image a request may carry (StudioApi's reference and image-parameter checks). The server's own
+    /// built images obey the same limit: <see cref="WhiteFlattened"/> steps its PNG down until it fits, so what it builds can always travel as a
+    /// workflow parameter without failing the check (T123fix).</summary>
+    public const int MaxReferenceBytes = 5 * 1024 * 1024;
+
+    /// <summary>Largest side of the edit trial's flattened product input (F84): the edit model's own pixel budget stays far below it. A picture whose
+    /// PNG still passes <see cref="MaxReferenceBytes"/> at this size steps down further (<see cref="WhiteFlattened"/>).</summary>
     public const int EditMaxSide = 2048;
+
+    /// <summary>Smallest long side the edit trial's flattened input may step down to when its PNG still passes <see cref="MaxReferenceBytes"/>: a fully
+    /// incompressible picture is far below the limit at this size already, so the ladder always ends here (T123fix).</summary>
+    public const int EditMinSide = 256;
 
     /// <summary>A cut-out as the direct-fusion trial's product input (F84, T123): trimmed to the product, scaled down to <see cref="EditMaxSide"/> at most,
     /// flattened onto pure white and encoded as PNG — the edit model's LoadImage drops the alpha channel, so a transparent cut-out would arrive on black.
-    /// Returns null when the picture has no visible pixel at all.</summary>
+    /// A dense picture (random noise does not compress) can still pass <see cref="MaxReferenceBytes"/> as a PNG at <see cref="EditMaxSide"/>, so the long
+    /// side steps down, three quarters at a time (2048 → 1536 → …, never below <see cref="EditMinSide"/>), until the PNG fits the image-parameter limit;
+    /// every step rescales from the trimmed original, so quality is not lost by rescaling an already rescaled copy. A fully transparent cut-out comes
+    /// back as a plain white PNG.</summary>
     public static byte[] WhiteFlattened(Image<Rgba32> cutout)
     {
-        using Image<Rgba32> work = Trim(cutout) ?? cutout.Clone();
-        if (Math.Max(work.Width, work.Height) > EditMaxSide)
+        using Image<Rgba32> source = Trim(cutout) ?? cutout.Clone();
+        int side = Math.Min(EditMaxSide, Math.Max(source.Width, source.Height));
+        while (true)
         {
-            double scale = (double)EditMaxSide / Math.Max(work.Width, work.Height);
-            work.Mutate(context => context.Resize(Math.Max(1, (int)Math.Round(work.Width * scale)), Math.Max(1, (int)Math.Round(work.Height * scale))));
+            using Image<Rgba32> work = ScaledToSide(source, side);
+            work.Mutate(context => context.BackgroundColor(new Rgba32(255, 255, 255)));
+            byte[] png = SavePng(work);
+            if (png.Length <= MaxReferenceBytes || side <= EditMinSide)
+            {
+                return png;
+            }
+            side = Math.Max(EditMinSide, side * 3 / 4);
         }
-        work.Mutate(context => context.BackgroundColor(new Rgba32(255, 255, 255)));
+    }
+
+    /// <summary>A copy of the image scaled to at most <paramref name="side"/> on its long side (aspect kept); at or below that size it is copied
+    /// without resampling, so pixels stay exact.</summary>
+    private static Image<Rgba32> ScaledToSide(Image<Rgba32> image, int side)
+    {
+        double scale = (double)side / Math.Max(image.Width, image.Height);
+        return scale >= 1 ? image.Clone()
+            : image.Clone(context => context.Resize(Math.Max(1, (int)Math.Round(image.Width * scale)), Math.Max(1, (int)Math.Round(image.Height * scale))));
+    }
+
+    /// <summary>The image encoded as a PNG in memory.</summary>
+    private static byte[] SavePng(Image<Rgba32> image)
+    {
         using System.IO.MemoryStream stream = new();
-        work.SaveAsPng(stream);
+        image.SaveAsPng(stream);
         return stream.ToArray();
     }
 
