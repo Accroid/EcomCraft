@@ -1208,4 +1208,7 @@ window.EcomCraftLanguages.en = {
     "直接融合（试用）的作品不支持用相同参数重做。": "Works made by direct fusion (trial) cannot be remade with the same settings.",
     "已带入这件作品的提示词和种子，可以直接生成或修改后再生成。照参考图做的作品不保存参考图，按参考重做请在出图页重新上传。": "This work's prompt and seed are filled in; generate right away or edit first. Works made by following a reference do not keep their reference images; to redo those, upload the references again on the create page.",
     "这件作品没有读到提示词，已带入种子，请自己填写创作描述。照参考图做的作品不保存参考图，按参考重做请在出图页重新上传。": "No prompt could be read from this work; the seed is filled in, so write the description yourself. Works made by following a reference do not keep their reference images; to redo those, upload the references again on the create page."
+,
+    "已按模型配方把步数设为 {0}。": "Sampling steps set to {0} from this model's recipe.",
+    "简易模式": "Simple mode"
 };

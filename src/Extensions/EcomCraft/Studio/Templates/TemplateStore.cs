@@ -16,7 +16,7 @@ public static class TemplateStore
     public sealed record class Entry(EcomTemplate Template, string Id, string Source, List<string> Errors, JObject Raw);
 
     /// <summary>Folder of built-in template files and their example images.</summary>
-    private static string BuiltinDir;
+    internal static string BuiltinDir;
 
     /// <summary>Templates as last loaded.</summary>
     private static List<Entry> Cache = [];

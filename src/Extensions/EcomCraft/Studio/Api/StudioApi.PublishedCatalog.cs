@@ -7,6 +7,7 @@ using EcomCraftStudio.Studio.Generation;
 using EcomCraftStudio.Studio.Storage;
 using EcomCraftStudio.Studio.Templates;
 using EcomCraftStudio.Studio.Prompting;
+using EcomCraftStudio.Studio.Setup;
 using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
@@ -230,9 +231,41 @@ public static partial class StudioApi
                     return new JArray();
                 }
             }
+            if (type == "dropdown" && definition.Value<bool?>("native_model") == true
+                && (definition["native_input"]?.ToString() ?? "") is "unet_name" or "ckpt_name"
+                && field["values"] is JArray finalValues)
+            {
+                // Steps and cfg follow the model's recipe when the account switches models (F86); numbers only, nothing else leaves.
+                JObject recipeSampling = RecipeSamplingFor(finalValues);
+                if (recipeSampling.Count > 0)
+                {
+                    field["recipe_sampling"] = recipeSampling;
+                }
+            }
             fields.Add(field);
         }
         return fields;
+    }
+
+    /// <summary>The sampling each recipe's main-model file declares, keyed by file name and restricted to the dropdown's own values: the page
+    /// follows these numbers when the account switches models (F86). Numbers and nothing else — no sources, addresses or checksums leave.</summary>
+    private static JObject RecipeSamplingFor(JArray modelValues)
+    {
+        JObject map = new();
+        HashSet<string> offered = new(modelValues.Select(value => value?.ToString() ?? ""), StringComparer.OrdinalIgnoreCase);
+        foreach (ModelRecipeRules.Recipe recipe in ModelRecipes.Load())
+        {
+            foreach (ModelRecipeRules.Variant variant in recipe.Variants)
+            {
+                ModelRecipeRules.FileSpec unet = ModelRecipeRules.FileFor(variant, ModelRecipeRules.RoleUnet);
+                if (unet is null || !offered.Contains(unet.Filename) || map.ContainsKey(unet.Filename))
+                {
+                    continue;
+                }
+                map[unet.Filename] = new JObject() { ["steps"] = recipe.Sampling.Steps, ["cfg"] = recipe.Sampling.Cfg.Default };
+            }
+        }
+        return map;
     }
 
     private static string InferWorkflowKind(ComfyUIBackendExtension.ComfyCustomWorkflow workflow) => InferWorkflowKind(workflow?.Prompt);

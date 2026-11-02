@@ -686,7 +686,7 @@
 
     function selectWorkflow() {
         const next = $('workflow-select').value;
-        if (next !== state.workflowId) { state.workflowValues = {}; }
+        if (next !== state.workflowId) { state.workflowValues = {}; recipeSamplingTouched = false; }
         state.workflowId = next;
         renderWorkflowFields();
         updateWorkflowUi();
@@ -736,6 +736,34 @@
         updateControls();
     }
 
+    /** Whether the recipe sampling currently overrides the standard steps field, so switching back can restore the workflow's own numbers. */
+    let recipeSamplingTouched = false;
+
+    /** Sampling follows the model recipe (F86): switching to a model the recipe book declares sets the standard steps and cfg to its numbers,
+     * and switching back restores the workflow's own defaults; switches between models without recipes never touch manual values. */
+    function applyRecipeSampling(field, value) {
+        const entry = (field.recipe_sampling || {})[String(value ?? '')];
+        if (entry && entry.steps != null) {
+            $('steps').value = entry.steps;
+            if (entry.cfg != null) {
+                NativeWorkflowForm.setValue($('cfg'), entry.cfg);
+            }
+            recipeSamplingTouched = true;
+            setStatus(tr('已按模型配方把步数设为 {0}。', entry.steps));
+            return;
+        }
+        if (recipeSamplingTouched) {
+            recipeSamplingTouched = false;
+            const defaults = currentWorkflow()?.defaults || {};
+            if (defaults.steps != null) {
+                $('steps').value = defaults.steps;
+            }
+            if (defaults.cfgscale != null) {
+                NativeWorkflowForm.setValue($('cfg'), defaults.cfgscale);
+            }
+        }
+    }
+
     function renderWorkflowFields() {
         const container = $('workflow-params');
         container.replaceChildren();
@@ -775,7 +803,10 @@
                     if (found) { control.value = rawInitial; }
                 }
                 if (control.selectedIndex < 0 && control.options.length) { control.selectedIndex = 0; }
-                control.addEventListener('change', () => setWorkflowValue(field.id, control.value));
+                control.addEventListener('change', () => {
+                    setWorkflowValue(field.id, control.value);
+                    applyRecipeSampling(field, control.value);
+                });
             }
             else if (type === 'boolean') {
                 control = document.createElement('input');
