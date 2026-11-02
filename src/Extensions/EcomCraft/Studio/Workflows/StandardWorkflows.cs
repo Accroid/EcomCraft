@@ -170,12 +170,21 @@ public static class StandardWorkflows
         foreach (JProperty property in metadata.Properties())
         {
             string input = property.Value["native_input"]?.ToString() ?? "";
-            if (property.Value.Value<bool?>("native_model") == true && ModelInputs.TryGetValue(input, out Func<Settings.EcomCraftData, string> pick)
-                && !string.IsNullOrWhiteSpace(pick(settings)))
+            if (property.Value.Value<bool?>("native_model") == true && ModelInputs.TryGetValue(input, out Func<Settings.EcomCraftData, string> pick))
             {
-                values[property.Name] = pick(settings).Trim();
-                property.Value["default"] = pick(settings).Trim();
-                property.Value["values"] = new JArray(pick(settings).Trim());
+                string chosen = pick(settings).Trim();
+                if (!string.IsNullOrWhiteSpace(chosen))
+                {
+                    values[property.Name] = chosen;
+                    property.Value["default"] = chosen;
+                }
+                // The dropdown offers every model the server actually has (A19), keeping the settings pick or the blueprint's saved model as the default.
+                JArray available = ModelFileScan.Choices(input, values[property.Name], Environment.CurrentDirectory,
+                    Program.ServerSettings.Paths.ModelRoot.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                if (available.Count > 0)
+                {
+                    property.Value["values"] = available;
+                }
             }
             // The blueprint's saved seed would make every generation with the same prompt the same image; -1 picks a new one each time, and a redo still sets its own.
             if (property.Value.Value<bool?>("native_seed") == true)

@@ -141,6 +141,9 @@ public class EcomCraft : Extension
         TemplateStore.Init(FilePath);
         PromptService.Init(FilePath);
         StandardWorkflows.Init(FilePath);
+        // The model dropdown scan reads the configured model roots; without this (unit tests) dropdowns narrow to their saved value.
+        EcomCraftStudio.Studio.NativeWorkflowConverter.ModelRoots = () => (Environment.CurrentDirectory,
+            Program.ServerSettings.Paths.ModelRoot.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         EcomCraftStudio.Studio.Export.SellingImageService.Init(FilePath);
         HardwareProbe.Init(FilePath);
     }

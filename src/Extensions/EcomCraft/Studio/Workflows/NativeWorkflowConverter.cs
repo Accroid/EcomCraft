@@ -398,6 +398,10 @@ public sealed class NativeWorkflowConverter
     /// <summary>One primary page control per semantic input; additional nodes retain independent editable fields.</summary>
     private readonly HashSet<string> FormBindings = new();
 
+    /// <summary>Model roots the model dropdown scan reads: the working directory and the configured model root paths, set once at startup.
+/// Null (as in the unit tests) narrows every model dropdown to its current value, the behavior before the scan existed.</summary>
+    internal static Func<(string BaseDirectory, string[] Roots)> ModelRoots;
+
     /// <summary>Publishes literal inputs, following only known primitive value links without replacing graph connections.</summary>
     private void Bind(string nodeId, string inputName, string type, string label, string form, double min = 0, double max = 0, double step = 1, bool model = false, string description = null)
     {
@@ -439,7 +443,10 @@ public sealed class NativeWorkflowConverter
         };
         if (type == "dropdown")
         {
-            definition["values"] = new JArray(value.DeepClone());
+            // Model dropdowns offer every model the server actually has (A19: server-side scan only); other dropdowns keep only their saved value.
+            // Without configured roots (unit tests) this narrows to the saved value, as before the scan existed.
+            (string baseDirectory, string[] roots) = ModelRoots?.Invoke() ?? (null, []);
+            definition["values"] = model ? ModelFileScan.Choices(inputName, value, baseDirectory, roots) : new JArray(value.DeepClone());
         }
         if (description is not null)
         {
