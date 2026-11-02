@@ -130,6 +130,9 @@ public class EcomCraft : Extension
         API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateRequirements, false, PermReviewWorkflows);
         API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateSave, true, PermReviewWorkflows);
         API.RegisterAPICall(TemplateAdminApi.EcomCraftTemplateDelete, true, PermReviewWorkflows);
+        API.RegisterAPICall(ModelDownload.EcomCraftStudioModelDownloadStart, true, Permissions.EditServerSettings);
+        API.RegisterAPICall(ModelDownload.EcomCraftStudioModelDownloadStatus, false, Permissions.EditServerSettings);
+        API.RegisterAPICall(ModelDownload.EcomCraftStudioModelDownloadCancel, true, Permissions.EditServerSettings);
         T2IEngine.AltBackendValidators.Add(StudioApi.ValidateExecutionBackend);
         T2IEngine.PreGenerateEvent += StudioApi.PrepareNativeWorkflowSeeds;
         ComfyUIAPIAbstractBackend.QueueProgressObserved += StudioApi.ObserveComfyProgress;
@@ -169,5 +172,6 @@ public class EcomCraft : Extension
         EcomCraftStudio.Studio.Generation.BatchService.Shutdown();
         DiskMonitor.Shutdown();
         VisionModelInstall.Shutdown();
+        ModelDownload.Shutdown();
     }
 }

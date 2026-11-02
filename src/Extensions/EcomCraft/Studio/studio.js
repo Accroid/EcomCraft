@@ -220,6 +220,7 @@
         'invalid_template','template_image_failed','prompt_settings_failed','cutout_failed','product_save_failed','invalid_export','export_failed','diagnostics_failed',
         'backup_failed','backup_invalid','backup_confirm_required','disk_full','invalid_product_type','prompt_service_unavailable','invalid_brand_kit','brand_kit_save_failed','invalid_selling_text','selling_font_missing','project_save_failed','vision_disabled','vision_unreachable','invalid_vision_model','vision_check_unavailable',
         'vision_install_busy','vision_install_unsupported','vision_install_missing','vision_install_start_failed',
+        'model_download_input','model_download_exists','model_download_limit','model_download_not_found',
         'workflow_too_large','workflow_api_format','workflow_unsupported','workflow_denied','workflow_limit',
         'enhancer_not_configured','enhancer_upstream_error','enhancer_bad_response','enhancer_timeout','enhancer_transport_error']);
     const uncertainErrors = new Set(['generation_failed','generation_uncertain','transport_error','api_error']);
@@ -708,6 +709,28 @@
         $('upscale-fld').hidden = selected || !meta.upscale;
         $('lora-fld').hidden = selected;
         $('workflow-tag').textContent = selected ? (workflow.name || '自定义工作流') : meta.tag;
+        updateWorkflowEditUi(workflow);
+    }
+
+    /** The administrator's "修改 Comfy 工作流" link and the changed-source hint (native engine is admin-only, F62/A13). */
+    function updateWorkflowEditUi(workflow) {
+        const canEdit = Boolean(state.catalog?.can_manage_settings) && Boolean(workflow?.native) && !workflow?.own;
+        const link = $('edit-comfy-workflow');
+        link.hidden = !canEdit;
+        link.href = canEdit ? `/EcomCraft/WorkflowEdit?id=${encodeURIComponent(workflow.id)}` : '#';
+        const hint = $('workflow-source-hint');
+        if (canEdit && workflow.source_changed) {
+            hint.replaceChildren(
+                tr('来源工作流已在服务器上修改，重新发布后本页才会使用新参数：'),
+                el('a', 'link-btn', tr('去工作流审核'))
+            );
+            hint.lastChild.href = '#workflows';
+            hint.hidden = false;
+        }
+        else {
+            hint.hidden = true;
+            hint.replaceChildren();
+        }
     }
 
     /** The explanation under the workflow selector for the selected workflow, or for the standard workspace when none is selected. */
@@ -5136,6 +5159,186 @@
         }
     }
 
+    /** The administrators' model downloader (管理 → 下载模型): a link is downloaded on the server in the background,
+     * progress is polled while the dialog is open, and a finished download refreshes the catalog so the model shows up in professional mode. */
+    class ModelDownloadView {
+        static timer = null;
+        static polling = false;
+        static finishedSeen = new Set();
+
+        /** Opens the dialog and starts polling; downloads continue on the server when it closes. */
+        static open(opener) {
+            $('model-download-modal').hidden = false;
+            DialogFocus.enter($('model-download-modal'), opener, $('model-download-url'));
+            this.message('');
+            this.poll();
+            if (!this.timer) {
+                this.timer = setInterval(() => this.poll(), 2000);
+            }
+        }
+
+        /** Closes the dialog and stops polling; running downloads keep going. */
+        static close() {
+            $('model-download-modal').hidden = true;
+            DialogFocus.leave($('model-download-modal'));
+            if (this.timer) {
+                clearInterval(this.timer);
+                this.timer = null;
+            }
+        }
+
+        /** Shows a status line inside the dialog, or clears it. */
+        static message(text, isOk = false) {
+            let box = $('model-download-message');
+            box.textContent = text || '';
+            box.classList.toggle('is-ok', isOk);
+            box.hidden = !text;
+        }
+
+        /** Human-readable byte size. */
+        static sizeText(bytes) {
+            if (!bytes || bytes <= 0) {
+                return '';
+            }
+            let units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            let value = bytes;
+            let unit = 0;
+            while (value >= 1024 && unit < units.length - 1) {
+                value = value / 1024;
+                unit++;
+            }
+            return `${unit == 0 || value >= 100 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+        }
+
+        /** The plain status line of one download. */
+        static rowText(item) {
+            if (item.state == 'downloading') {
+                let speed = this.sizeText(item.per_second);
+                if (!item.total_bytes) {
+                    return speed ? tr('正在下载…（{0}/秒）', speed) : tr('正在下载…');
+                }
+                return tr('正在下载… {0}%（{1}/秒）', Math.min(100, Math.round(item.done_bytes * 100 / item.total_bytes)), speed);
+            }
+            if (item.state == 'done') {
+                return tr('已完成，模型已加入列表。');
+            }
+            return item.error || tr('已取消。');
+        }
+
+        /** Redraws the progress list; a finished download refreshes the model catalog once. */
+        static render(result) {
+            let select = $('model-download-type');
+            if (!select.options.length) {
+                for (let type of result.types || []) {
+                    select.append(new Option(type, type));
+                }
+            }
+            let rows = [];
+            for (let item of result.downloads || []) {
+                let row = el('li', item.state == 'downloading' ? '' : (item.state == 'done' ? 'is-ok' : 'is-problem'));
+                row.append(el('span', 'model-download-name', tr('{0}（{1}）', item.name, item.type)));
+                if (item.state == 'downloading') {
+                    let bar = document.createElement('progress');
+                    bar.className = 'queue-progress';
+                    if (item.total_bytes > 0) {
+                        bar.max = item.total_bytes;
+                        bar.value = item.done_bytes;
+                    }
+                    row.append(bar);
+                    let cancel = el('button', 'btn btn-sm', tr('取消'));
+                    cancel.type = 'button';
+                    cancel.setAttribute('aria-label', tr('取消下载 {0}', item.name));
+                    cancel.addEventListener('click', async () => {
+                        cancel.disabled = true;
+                        try {
+                            await request('EcomCraftStudioModelDownloadCancel', { id: item.id });
+                            await this.poll();
+                        }
+                        catch (error) {
+                            this.message(error.message);
+                            cancel.disabled = false;
+                        }
+                    });
+                    row.append(cancel);
+                }
+                row.append(el('span', 'model-download-state', this.rowText(item)));
+                rows.push(row);
+                if (item.state == 'done' && !this.finishedSeen.has(item.id)) {
+                    this.finishedSeen.add(item.id);
+                    this.message(tr('“{0}”下载完成，正在刷新模型列表…', item.name), true);
+                    refreshCatalog();
+                }
+            }
+            $('model-download-list').replaceChildren(...rows);
+        }
+
+        /** Reads the current progress; a failure shows its message and keeps the last list. */
+        static async poll() {
+            if ($('model-download-modal').hidden || this.polling) {
+                return;
+            }
+            this.polling = true;
+            try {
+                this.render(await request('EcomCraftStudioModelDownloadStatus'));
+            }
+            catch (error) {
+                this.message(error.message);
+            }
+            finally {
+                this.polling = false;
+            }
+        }
+
+        /** Submits the link as one download start. */
+        static async start() {
+            let button = $('model-download-start');
+            let url = $('model-download-url').value.trim();
+            let name = $('model-download-name').value.trim();
+            if (!url) {
+                this.message(tr('请先填写模型的下载链接。'));
+                $('model-download-url').focus();
+                return;
+            }
+            button.disabled = true;
+            try {
+                await request('EcomCraftStudioModelDownloadStart', {
+                    url,
+                    type: $('model-download-type').value || 'Stable-Diffusion',
+                    name
+                });
+                this.message(tr('已开始下载“{0}”。', name || url));
+                await this.poll();
+            }
+            catch (error) {
+                this.message(error.message);
+            }
+            finally {
+                button.disabled = false;
+            }
+        }
+
+        /** Prefills the save name from the file part of the URL while the name field is empty. */
+        static guessName() {
+            if ($('model-download-name').value.trim()) {
+                return;
+            }
+            let url = $('model-download-url').value.trim();
+            let part = url.split('#')[0].split('?')[0].split('/').pop() || '';
+            part = part.replace(/\.(safetensors|gguf|bin|pt|pth|ckpt)$/i, '');
+            if (part) {
+                $('model-download-name').value = part.slice(0, 120);
+            }
+        }
+
+        /** Binds the dialog buttons. */
+        static bind() {
+            $('model-download-close').addEventListener('click', () => this.close());
+            $('model-download-backdrop').addEventListener('click', () => this.close());
+            $('model-download-start').addEventListener('click', () => this.start());
+            $('model-download-url').addEventListener('input', () => this.guessName());
+        }
+    }
+
     /** The administrators' "Manage" menu (F62): workflow review, setup wizard, prompt settings, storage and backup, diagnostics and the native engine. */
     class AdminMenu {
         /** Shows the menu and its entries for the account's permissions; reviewers see the review, server administrators everything else. */
@@ -5207,6 +5410,7 @@
                 'admin-menu-wizard': () => SetupWizard.open($('admin-menu-btn')),
                 'admin-menu-standard': () => StandardWorkflowView.open($('admin-menu-btn')),
                 'admin-menu-prompt': () => openEnhancerSettings(),
+                'admin-menu-downloader': () => ModelDownloadView.open($('admin-menu-btn')),
                 'admin-menu-storage': () => StorageSettingsView.open($('admin-menu-btn')),
                 'admin-menu-diagnostics': () => downloadDiagnostics($('admin-menu-diagnostics'))
             };
@@ -5950,6 +6154,7 @@
         AdminMenu.bind();
         StandardWorkflowView.bind();
         OwnWorkflows.bind();
+        ModelDownloadView.bind();
         $('storage-close').addEventListener('click', () => StorageSettingsView.close());
         $('storage-cancel').addEventListener('click', () => StorageSettingsView.close());
         $('storage-backdrop').addEventListener('click', () => StorageSettingsView.close());
@@ -5970,7 +6175,10 @@
         setInterval(pollBackendStatus, 5000);
         setInterval(() => WorkflowCatalogRefresh.refresh(), 30000);
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) { pollBackendStatus(); }
+            if (!document.hidden) {
+                pollBackendStatus();
+                WorkflowCatalogRefresh.refresh();
+            }
         });
         state.queue.timer = setInterval(() => {
             if (state.view === 'queue') { loadQueue(); }

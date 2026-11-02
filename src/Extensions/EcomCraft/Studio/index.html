@@ -31,7 +31,7 @@
     <header class="topbar">
         <a class="brand" href="#simple" translate="no">EcomCraft</a>
         <nav class="views" aria-label="工作台视图">
-            <a class="nav-item" data-view="simple" href="#simple">出图</a>
+            <a class="nav-item" data-view="simple" href="#simple">简易模式</a>
             <a class="nav-item pro-only" data-view="create" href="#create" id="nav-create" hidden>专业模式</a>
             <a class="nav-item" data-view="gallery" href="#gallery">画廊<span class="nav-count" id="gallery-count" hidden></span></a>
             <a class="nav-item" data-view="queue" href="#queue">队列<span class="nav-count" id="queue-count" hidden></span></a>
@@ -64,6 +64,7 @@
                     <button type="button" class="admin-menu-item" id="admin-menu-wizard" data-admin-only>首次设置向导</button>
                     <button type="button" class="admin-menu-item" id="admin-menu-standard" data-admin-only>标准工作流</button>
                     <button type="button" class="admin-menu-item" id="admin-menu-prompt" data-admin-only>提示词优化设置</button>
+                    <button type="button" class="admin-menu-item" id="admin-menu-downloader" data-admin-only>下载模型</button>
                     <button type="button" class="admin-menu-item" id="admin-menu-storage" data-admin-only>存储与备份</button>
                     <button type="button" class="admin-menu-item" id="admin-menu-diagnostics" data-admin-only>下载诊断包</button>
                     <a class="admin-menu-item" href="/Text2Image" target="_blank" rel="noopener" data-admin-only>原生引擎</a>
@@ -363,12 +364,16 @@
                             <div class="fld" id="workflow-select-fld">
                                 <div class="fld-head">
                                     <label for="workflow-select">创作工作流</label>
-                                    <button type="button" class="link-btn" id="refresh-workflows">刷新列表</button>
+                                    <span class="fld-actions">
+                                        <a class="link-btn" id="edit-comfy-workflow" href="#" target="_blank" rel="noopener" hidden>修改 Comfy 工作流</a>
+                                        <button type="button" class="link-btn" id="refresh-workflows">刷新列表</button>
+                                    </span>
                                 </div>
                                 <select id="workflow-select" name="workflow">
                                     <option value="">标准参数（不用工作流）</option>
                                 </select>
                                 <p class="hint" id="workflow-description">可选择管理员发布到简单工作台的 ComfyUI 工作流。</p>
+                                <p class="hint workflow-source-hint" id="workflow-source-hint" hidden></p>
                                 <div class="own-workflows" id="own-workflows">
                                     <div class="inline-row">
                                         <button type="button" class="btn btn-sm" id="own-workflow-upload">上传工作流</button>
@@ -1139,6 +1144,48 @@
             <div class="modal-foot">
                 <button type="button" class="btn" id="project-cancel" hidden>取消重命名</button>
                 <button type="button" class="btn btn-primary" id="project-save">新建项目</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 下载模型（管理员） -->
+    <div class="modal" id="model-download-modal" hidden>
+        <div class="modal-backdrop" id="model-download-backdrop"></div>
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="model-download-title">
+            <div class="modal-head">
+                <div>
+                    <h3 id="model-download-title">下载模型</h3>
+                    <p class="hint">把模型下载链接交给平台下载；完成后模型会出现在专业模式的模型列表里。</p>
+                </div>
+                <button type="button" class="icon-btn" id="model-download-close" aria-label="关闭下载模型">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="fld">
+                    <div class="fld-head">
+                        <label for="model-download-url">下载链接</label>
+                    </div>
+                    <input type="url" id="model-download-url" maxlength="2000" autocomplete="off"
+                        placeholder="例如：https://huggingface.co/…/model.safetensors">
+                </div>
+                <div class="fld">
+                    <div class="fld-head">
+                        <label for="model-download-type">模型类型</label>
+                    </div>
+                    <select id="model-download-type"></select>
+                </div>
+                <div class="fld">
+                    <div class="fld-head">
+                        <label for="model-download-name">保存名称</label>
+                    </div>
+                    <input type="text" id="model-download-name" maxlength="120" autocomplete="off"
+                        placeholder="例如：qwen-image-2.1">
+                    <p class="hint">不需要写后缀；链接以 .gguf 结尾时自动保存为 GGUF。</p>
+                </div>
+                <div class="own-workflow-message" id="model-download-message" role="status" aria-live="polite" hidden></div>
+                <ul class="model-download-list" id="model-download-list" aria-label="下载任务"></ul>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn btn-primary" id="model-download-start">开始下载</button>
             </div>
         </div>
     </div>

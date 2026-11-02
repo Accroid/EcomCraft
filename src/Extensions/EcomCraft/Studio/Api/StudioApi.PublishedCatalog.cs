@@ -91,6 +91,7 @@ public static partial class StudioApi
         }
         WorkflowCatalogFilter filter = new(servers.Select(ExecutionServers.Schema));
         HashSet<string> modelKinds = new(LocalModels(session).Select(Kind).Where(kind => kind is not null));
+        bool adminSeesChanges = session.User.HasPermission(Permissions.EditServerSettings);
         foreach (string name in ComfyUIBackendExtension.CustomWorkflows.Keys.OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
         {
             // Another account's own upload (F60) never appears here.
@@ -132,10 +133,27 @@ public static partial class StudioApi
                 ["description"] = workflow.Description ?? "",
                 ["inputs"] = fields,
                 ["native"] = native,
+                // Administrators only (F62/A13): whether the source on its server changed after this snapshot was published,
+                // so the page can point at the review instead of silently showing the old parameters.
+                ["source_changed"] = adminSeesChanges && SourceChanged(workflow.Name),
                 ["defaults"] = native ? NativeWorkflowParameters.FormDefaults(metadata, savedValues) : null
             });
         }
         return published;
+    }
+
+    /// <summary>Whether the discovered source of a published workflow changed since its snapshot (mirrors the review's "rereview" check).
+    /// Own uploads and system-generated workflows have no editable source and never count as changed.</summary>
+    private static bool SourceChanged(string name)
+    {
+        WorkflowDiscovery.Entry entry = WorkflowDiscovery.Find(name);
+        if (entry?.Workflow is null)
+        {
+            return false;
+        }
+        WorkflowReview.Record record = WorkflowReview.Get(name);
+        return record?.Snapshot is not null && entry.Fingerprint != record.Snapshot.Fingerprint
+            && entry.Fingerprint != record.RejectedFingerprint;
     }
 
     private static JArray PublishedWorkflowInputs(Session session, JObject metadata, JObject savedValues, out bool supported)

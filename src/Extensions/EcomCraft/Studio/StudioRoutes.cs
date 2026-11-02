@@ -161,6 +161,35 @@ public static class StudioRoutes
             context.Response.ContentType = "application/zip";
             await context.Response.SendFileAsync(path, context.RequestAborted);
         });
+        // ComfyUI editor of a published workflow's source server (administrators): resolves the editor page and redirects to it.
+        // Local self-starting servers use the session-checked proxy; LAN servers use their own address.
+        WebServer.WebApp.MapGet("/EcomCraft/WorkflowEdit", async (HttpContext context) =>
+        {
+            User user = WebServer.GetUserFor(context);
+            if (user is null || !user.HasPermission(Permissions.EditServerSettings))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                context.Response.ContentType = "text/plain; charset=utf-8";
+                await context.Response.WriteAsync("此账号没有管理服务器的权限。\nThis account cannot manage the server.", context.RequestAborted);
+                return;
+            }
+            string id = context.Request.Query["id"].ToString();
+            bool requesterLocal = System.Net.IPAddress.IsLoopback(context.Connection.RemoteIpAddress ?? System.Net.IPAddress.None);
+            WorkflowEditLink.Result result = WorkflowEditLink.Resolve(id, requesterLocal);
+            if (result.Error is not null)
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                context.Response.ContentType = "text/html; charset=utf-8";
+                context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+                context.Response.Headers["Referrer-Policy"] = "same-origin";
+                await context.Response.WriteAsync($"<!DOCTYPE html>\n<html lang=\"zh-CN\"><head><meta charset=\"utf-\"><title>EcomCraft</title></head>"
+                    + $"<body style=\"font-family:system-ui;background:#101010;color:#eee;margin:40px auto;max-width:560px\">"
+                    + $"<p>{System.Net.WebUtility.HtmlEncode(result.Error)}</p>"
+                    + "<p><a href=\"/EcomCraft\" style=\"color:#7fd0a0\">返回工作台 / Back to the workspace</a></p></body></html>", context.RequestAborted);
+                return;
+            }
+            context.Response.Redirect(result.Url);
+        });
         WebServer.WebApp.MapGet("/EcomCraft", async (HttpContext context) =>
         {
             User user = WebServer.GetUserFor(context);
