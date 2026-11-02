@@ -63,7 +63,9 @@ MagicPrompt:
     description: Provides LLM (language model) usage inside SwarmUI to enhance your prompts.
     url: https://github.com/HartsyAI/SwarmUI-MagicPromptExtension
     license: MIT
-    ci-test: true
+    # EcomCraft absorbed this extension's functionality (EcomCraft/MagicPrompt registers the same permission keys),
+    # so the CI extension test must not clone the external duplicate: its startup crashes on the duplicate key.
+    ci-test: false
     tags:
     - tabs
     - ui
