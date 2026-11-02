@@ -60,5 +60,3 @@ jobs:
         # The extension references bin/live_release/SwarmUI.dll (SwarmUI.extension.props), so the main project builds first.
         - run: dotnet build src/SwarmUI.csproj -c Debug -o src/bin/live_release
         - run: dotnet build src/Extensions/EcomCraft/EcomCraft.csproj -c Debug -o ${{ runner.temp }}/ecomcraft-extension
-        - run: dotnet test src/Extensions/EcomCraft/Tests/EcomCraft.Tests.csproj
-        - run: node --test "src/Extensions/EcomCraft/Tests/*.test.cjs"

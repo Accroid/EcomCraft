@@ -103,7 +103,7 @@ Invalid templates are never offered to users; the reasons are written to the ser
 
 ## LAN execution servers
 
-A LAN device with only ComfyUI installed can be registered as an execution server and called by the platform server. For account login, firewalls and shared storage when several people use the platform, see the [LAN Deployment Guide](EcomCraft%20LAN%20Deployment.md). For the development plan and upcoming features, see [LAN Multi-Server Platform Requirements](EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md).
+A LAN device with only ComfyUI installed can be registered as an execution server and called by the platform server. For account login, firewalls and shared storage when several people use the platform, see the [LAN Deployment Guide](EcomCraft%20LAN%20Deployment.md).
 
 1. Start ComfyUI on the LAN device with `--listen 0.0.0.0` (you can also choose the port with `--port`); otherwise ComfyUI only accepts local connections.
 2. In that device's firewall, allow only the platform server to reach the ComfyUI port. ComfyUI has no login of its own; do not open the port to the whole LAN or the internet.

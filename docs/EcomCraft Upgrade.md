@@ -51,5 +51,4 @@ A restore only touches system data; it never deletes or overwrites generated wor
 ## Related guides
 
 - [EcomCraft LAN Deployment](EcomCraft%20LAN%20Deployment.md)
-- [EcomCraft Architecture](EcomCraft%20Architecture.md)
 - [EcomCraft ComfyUI Workflows](EcomCraft%20ComfyUI%20Workflows.md)

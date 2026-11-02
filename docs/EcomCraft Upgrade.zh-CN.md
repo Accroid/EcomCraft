@@ -51,5 +51,4 @@
 ## 相关文档
 
 - [EcomCraft 局域网部署指南](EcomCraft%20局域网部署指南.zh-CN.md)
-- [EcomCraft 架构与路线图](EcomCraft%20Architecture.zh-CN.md)
 - [EcomCraft ComfyUI 工作流](EcomCraft%20ComfyUI%20工作流.zh-CN.md)

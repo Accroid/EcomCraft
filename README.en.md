@@ -18,19 +18,28 @@ EcomCraft Studio is a **LAN product-image production platform** for e-commerce t
 
 Demo video: (to be added)
 
-## What It Solves
+## Advantages: Compared with Local ComfyUI and Cloud Generation
 
-| Pain point | How EcomCraft handles it |
-|---|---|
-| No prompt or design skills | **Follow a reference**: upload a reference image you like and get its composition and light — no prompts to write |
-| AI distorts the product, its logo and text | **Product preservation**: the cut-out goes onto the canvas and the product's logo, text and shape are pasted back unchanged after generation, with light matched to the scene; selling-point text is laid out by the program in fixed layouts, never written by AI |
-| Every platform has its own sizes, white backgrounds and file caps | One-click sets and exports by the platform's **slots**; Amazon white main images use the cut-out only, with a pure-white check and AI metadata |
-| Product photos must not leave the company | Generation runs **only on registered local or LAN** ComfyUI servers, never falling back to the cloud; the vision model defaults to local Ollama |
-| Several GPU computers and nobody to schedule them | Tasks go to idle execution servers automatically; the queue shows progress and the estimated time left, and lets you stop your own tasks |
-| Building workflows is hard | The built-in templates' workflows are **generated automatically** with the default models; a designer's uploaded workflow works for them at once and is published to everyone after review |
-| Starting from scratch every time | Product library, starring candidates, and "Edit this image" (refine in professional mode) |
+There are three common ways to produce product images: set up local ComfyUI yourself, use a cloud generation service, or outsource to a studio. EcomCraft's generation engine is still ComfyUI, but the platform runs it on registered local or LAN execution servers — **operators and shop owners never set it up themselves, and generation never touches any cloud**. A comparison:
 
-The full feature list and progress are in the [Architecture and Roadmap](docs/EcomCraft%20Architecture.md); APIs and security rules are in the [workflow calls guide](docs/EcomCraft%20ComfyUI%20Workflows.md).
+| | EcomCraft | Self-managed ComfyUI | Cloud generation services |
+|---|---|---|---|
+| **Product privacy** | Generation runs only on registered local or LAN execution servers, never falling back to the cloud; image description defaults to local Ollama (images leave the machine only if an administrator switches to a cloud vision service) | Images stay on the machine | Product photos are uploaded to the provider |
+| **Getting started** | Three steps: upload the product → pick platform and reference → choose and export; no prompts, no parameters; a first-run wizard and hardware check get you started | Install environments, download models, learn nodes and workflows | Easy to start, but you write prompts and reroll repeatedly |
+| **Phone photos work directly** | Snap and upload: automatic compression, straightening and cut-out, with EXIF and other capture metadata stripped | Find your own tools to compress, straighten and cut out | Most accept uploads, but capture metadata goes to the provider along with the photo |
+| **Product fidelity** | The cut-out goes onto the canvas and the product's logo, text and shape are **pasted back unchanged** after generation; selling-point text is laid out by the program in fixed layouts, never written by AI | You must build the cut-out, paste-back and edge-fix chain yourself; products often drift | The product is repainted from scratch; logos and text often distort into gibberish |
+| **Full image sets** | One-click sets for major platforms at home and abroad (Amazon, Taobao/Tmall, JD, TikTok Shop and more), exported to each platform's specs; Amazon white main images get a pure-white check and AI metadata | Every image generated and resized manually | Usually single images; sizes, formats and counts limited by the service |
+| **Teamwork** | Account login, per-person limits, tasks auto-dispatched to idle GPUs, queue with progress and estimated time left | One user per machine; no accounts, queueing or permissions; sharing one machine is painful | Everyone opens their own account; images scatter across accounts |
+| **Workflows** | Built-in templates' workflows are **generated automatically** per model; a designer's upload works for them at once and is shared with everyone after review | Everyone builds and stores their own; nobody manages node dependencies and versions | No custom workflows |
+| **Finding your work** | Product library, starred candidates, project archive, "redo with the same settings" | You organize output folders yourself | Images live in the provider's account; migration means manual downloads |
+| **Cost** | One-time GPU investment; unlimited generation, no per-image fees | The same hardware, plus your own setup and maintenance time | No hardware; pay per image or by subscription, and costs keep growing with volume |
+| **Hardware** | A GPU is required (NVIDIA with 8 GB VRAM minimum on Windows; Apple silicon with 24 GB unified memory on Mac) | A GPU too, plus solving environments and dependencies yourself | None |
+
+**How to choose**: teams that already have GPUs and care about confidentiality and full sets should pick EcomCraft; a single technical user who enjoys tinkering will find plain ComfyUI enough; with no GPU and photos that may leave the company, a cloud service can be a starting point.
+
+"Follow a reference" is the single entry of simple mode: upload a product photo and a reference image you like, and the platform borrows the reference's composition and light for generation — no prompts; the product's pixels always come from your original photo and are pasted back by the platform, never repainted by the model.
+
+APIs and security rules are in the [workflow calls guide](docs/EcomCraft%20ComfyUI%20Workflows.md).
 
 ## Quick Start
 
@@ -81,7 +90,6 @@ The first launch builds the server and takes a few minutes. macOS only gets the 
 
 - [Documentation index](docs/README.md) · [Chinese documentation index](docs/README.zh-CN.md) · [Basic Usage (Chinese)](docs/Basic%20Usage.zh-CN.md) · [Troubleshooting (Chinese)](docs/Troubleshooting.zh-CN.md)
 - [Workflow calls and APIs](docs/EcomCraft%20ComfyUI%20Workflows.md) · [LAN Deployment Guide](docs/EcomCraft%20LAN%20Deployment.md) · [Prompt enhancement and vision model](docs/EcomCraft%20Prompt%20Enhancement.md) · [Upgrade and Data Guide](docs/EcomCraft%20Upgrade.md)
-- Development planning: [Architecture and Roadmap](docs/EcomCraft%20Architecture.md) · [Implementation Plan](docs/EcomCraft%20Implementation%20Plan.md) · [Refactoring Plan](docs/EcomCraft%20Refactoring%20Plan.md) · [Product Realignment Plan](docs/EcomCraft%20Product%20Realignment%20Plan.md) · [UI and Workflow Redesign](docs/EcomCraft%20UI%20Redesign.md) · [Simple Mode Redesign](docs/EcomCraft%20Simple%20Mode%20Redesign.md) · [LAN Multi-Server Platform Requirements](docs/EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md)
 
 ## Contact and Deployment Service
 
