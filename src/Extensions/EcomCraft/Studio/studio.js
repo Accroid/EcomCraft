@@ -630,8 +630,9 @@
                 control.closest('.num-fld').hidden = native && workflow.defaults?.[key] == null;
             }
             if (native) {
+                // The latent is 16-aligned (A24), so the width and height step matches the server's native workflow bindings.
                 for (let key of ['width', 'height']) {
-                    $(key).step = 8;
+                    $(key).step = 16;
                 }
                 $('resolution-hint').textContent = '读取自工作流，可修改';
             }
@@ -835,7 +836,7 @@
 
     function updateModelMeta() {
         const model = currentModel();
-        const step = currentWorkflow()?.native ? 8 : model?.resolution_step || 16;
+        const step = currentWorkflow()?.native ? 16 : model?.resolution_step || 16;
         for (const field of ['width', 'height']) {
             $(field).step = step;
             $(field).min = Math.ceil(256 / step) * step;

@@ -406,7 +406,7 @@ public static class TemplateApi
         {
             JProperty bound = parameters.Properties().FirstOrDefault(property => property.Value["form"]?.ToString() == form);
             JToken value = (bound is null ? null : workflowParams[bound.Name]) ?? defaults[form];
-            return value?.Type is JTokenType.Integer or JTokenType.Float ? Math.Clamp((int)value.Value<double>(), 64, 8192) : 1024;
+            return value?.Type is JTokenType.Integer or JTokenType.Float ? Math.Clamp((int)value.Value<double>(), 64, 2048) : 1024;
         }
         return (read("width"), read("height"));
     }

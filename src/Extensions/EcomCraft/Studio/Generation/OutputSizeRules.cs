@@ -6,8 +6,9 @@ namespace EcomCraftStudio.Studio.Generation;
 /// then scaled to the exact size, so a 2000 × 2000 main image is neither slow nor repeated by generating it directly. Independent of SwarmUI so it can be unit tested.</summary>
 public static class OutputSizeRules
 {
-    /// <summary>Smallest and largest accepted output side, the same range as export sizes.</summary>
-    public const int MinSide = 64, MaxSide = 8192;
+    /// <summary>Smallest and largest accepted output side: capped at 2K by decision A24 (the cap follows the model recipe once F86/T118 lands).
+    /// Export presets accept the same range, so a platform slot above it is refused.</summary>
+    public const int MinSide = 64, MaxSide = 2048;
 
     /// <summary>Pixel count pictures are generated at.</summary>
     public const long GenerationPixels = 1024 * 1024;

@@ -359,8 +359,9 @@ public sealed class NativeWorkflowConverter
             }
             if (type is "EmptyLatentImage" or "EmptySD3LatentImage")
             {
-                Bind(id, "width", "integer", "宽度", "width", 256, 2048, 8);
-                Bind(id, "height", "integer", "高度", "height", 256, 2048, 8);
+                // The latent is 16-aligned (A24); Bind moves a saved default that is not a multiple of 16 to the nearest valid value.
+                Bind(id, "width", "integer", "宽度", "width", 256, 2048, 16);
+                Bind(id, "height", "integer", "高度", "height", 256, 2048, 16);
                 Values["images"] ??= inputs["batch_size"]?.DeepClone() ?? new JValue(1);
                 // SwarmUI schedules each requested image separately, avoiding images squared.
                 inputs["batch_size"] = 1;
@@ -412,6 +413,13 @@ public sealed class NativeWorkflowConverter
         if (inputs[inputName] is not JValue value || value.Type == JTokenType.Null)
         {
             return;
+        }
+        // Stepped integer inputs (the width and height of the empty latent, multiples of 16) keep their saved default usable: a default that is not
+        // a multiple of the step moves to the nearest valid value, so a converted workflow's own size never fails every later request.
+        if (type == "integer" && step > 1 && value.Type == JTokenType.Integer)
+        {
+            long snapped = (long)(Math.Round(value.Value<double>() / step, MidpointRounding.AwayFromZero) * step);
+            value = new JValue(min < max ? Math.Clamp(snapped, (long)min, (long)max) : snapped);
         }
         // SwarmUI canonical parameter IDs retain letters only; encode digits to avoid collisions.
         string encoded = string.Concat((nodeId + "x" + inputName.Replace("_", "")).Select(character =>

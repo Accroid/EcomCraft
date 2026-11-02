@@ -34,8 +34,8 @@ class SimpleExportPart {
         if (this.outputSize.mode != 'custom') {
             return '';
         }
-        let ok = value => Number.isInteger(value) && value >= 64 && value <= 8192;
-        return ok(this.outputSize.width) && ok(this.outputSize.height) ? '' : '出图尺寸的宽和高须为 64–8192 的整数。';
+        let ok = value => Number.isInteger(value) && value >= 64 && value <= this.outputSideMax;
+        return ok(this.outputSize.width) && ok(this.outputSize.height) ? '' : '出图尺寸的宽和高须为 64–2048 的整数。';
     }
 
     /** The output_size to send: null for "by platform" (the server takes each image kind's slot size), otherwise { width, height }. */

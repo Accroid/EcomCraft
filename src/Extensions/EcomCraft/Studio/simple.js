@@ -66,6 +66,8 @@ class SimpleMode {
     static exportOptions = { platforms: [], folder_available: false };
     /** The output size chosen before generating: 'auto' (the platform's slot size for each image kind), a preset 'WxH' or 'custom' with width and height. */
     static outputSize = { mode: 'auto', width: 1000, height: 1000 };
+    /** Largest accepted output side: generation and export are capped at 2K (2048, decision A24); the cap follows the model recipe once F86 lands. */
+    static outputSideMax = 2048;
     /** Common output sizes offered besides the platform's own: width, height and the aspect label. */
     static sizePresets = [[800, 800, '1:1'], [1000, 1000, '1:1'], [1200, 1200, '1:1'], [750, 1000, '3:4'], [1080, 1440, '3:4'], [1080, 1920, '9:16'], [1920, 1080, '16:9']];
     static resultGroups = new Map();
@@ -167,7 +169,7 @@ class SimpleMode {
                 this.moreOpen = parsed.more_open == true;
                 let size = parsed.output_size;
                 if (size && typeof size.mode == 'string' && Number.isInteger(size.width) && Number.isInteger(size.height)) {
-                    this.outputSize = { mode: size.mode, width: size.width, height: size.height };
+                    this.outputSize = this.clampedSize(size);
                 }
             }
             catch (error) {
@@ -203,6 +205,12 @@ class SimpleMode {
             this.renderCutout();
             this.choosePlacementRef(this.placementRef);
         }
+    }
+
+    /** Clamps a saved output size into 64–2048 (A24): a preference saved before the 2K cap would otherwise keep failing every request. */
+    static clampedSize(size) {
+        let clamp = value => Math.min(this.outputSideMax, Math.max(64, value));
+        return { mode: size.mode, width: clamp(size.width), height: clamp(size.height) };
     }
 
     /** Remembers the platform, product type, style, task and "More options" state in this browser (never the photo or description). */

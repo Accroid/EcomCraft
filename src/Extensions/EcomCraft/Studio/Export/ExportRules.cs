@@ -36,9 +36,9 @@ public static class ExportRules
         string rawFormat = export.Value<string>("format") ?? "jpg";
         string format = string.Equals(rawFormat, "png", StringComparison.OrdinalIgnoreCase) ? "png" : string.Equals(rawFormat, "jpg", StringComparison.OrdinalIgnoreCase) ? "jpg" : null;
         int quality = export.Value<int?>("quality") ?? 92;
-        if (width < 64 || height < 64 || width > 8192 || height > 8192)
+        if (width < 64 || height < 64 || width > 2048 || height > 2048)
         {
-            error = "导出尺寸须在 64–8192 像素之间。";
+            error = "导出尺寸须在 64–2048 像素之间。";
             return null;
         }
         if (!Regex.IsMatch(background, "^#[0-9A-Fa-f]{6}$"))

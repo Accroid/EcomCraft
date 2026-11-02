@@ -166,7 +166,7 @@ window.EcomCraftLanguages.en = {
     "出图尺寸": "Output size",
     "宽（像素）": "Width (pixels)",
     "高（像素）": "Height (pixels)",
-    "出图尺寸的宽和高须为 64–8192 的整数。": "The output width and height must be whole numbers from 64 to 8192.",
+    "出图尺寸的宽和高须为 64–2048 的整数。": "The output width and height must be whole numbers from 64 to 2048.",
     "按平台自动（每种图片用平台规定的尺寸）": "By platform (each image type at the platform's size)",
     "按平台自动（{0} {1}×{2}）": "By platform ({0} {1}×{2})",
     "按平台自动（平台没有规定时为 1024×1024）": "By platform (1024×1024 when the platform sets none)",
