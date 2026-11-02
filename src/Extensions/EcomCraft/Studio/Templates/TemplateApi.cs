@@ -364,6 +364,12 @@ public static class TemplateApi
         {
             if (!ProductComposite.HasTransparency(loaded))
             {
+                // The same work-image rule as the cut-out API (F85): turned upright by its EXIF and EXIF-free, so the mask lines up.
+                bytes = ProductComposite.FitForWork(bytes);
+                if (bytes is null)
+                {
+                    return StudioApi.Error("商品图尺寸过大，请缩小到 1 亿像素以内。", "invalid_reference");
+                }
                 (byte[] png, _, string error, string errorId) = await CutoutService.CutoutAsync(bytes);
                 if (png is null)
                 {
