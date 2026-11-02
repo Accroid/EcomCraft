@@ -204,14 +204,8 @@ public static class ProductLibrary
         }
     }
 
-    /// <summary>The image route of one angle: the main angle keeps the historical URL, added angles carry their ID as a query parameter.</summary>
-    private static string AngleImage(string productId, ProductAngle angle, bool cutout)
-    {
-        string url = $"/EcomCraft/product-image/{productId}/{(cutout ? "cutout" : "original")}";
-        return angle.Id == ProductAngleRules.MainId ? url : $"{url}?angle={angle.Id}";
-    }
-
-    /// <summary>A product as its owner sees it: no file locations. The first angle is the main image (F84); the historical top-level fields mirror it.</summary>
+    /// <summary>A product as its owner sees it: no file locations. The first angle is the main image (F84); the historical top-level fields mirror it
+    /// and keep the plain main-image address, while every entry of the angle list names its own angle (see <see cref="ProductAngleRules.ImageRoute"/>).</summary>
     private static JObject Json(ProductRecord record)
     {
         ProductAngle main = record.MainAngle() ?? new ProductAngle() { Original = record.Original, Cutout = record.Cutout, X = record.X, Y = record.Y, Size = record.Size };
@@ -222,15 +216,15 @@ public static class ProductLibrary
             ["created"] = record.Created,
             ["has_cutout"] = main.Cutout is not null,
             ["placement"] = new JObject() { ["x"] = main.X, ["y"] = main.Y, ["size"] = main.Size },
-            ["image"] = $"/EcomCraft/product-image/{record.Id}/original",
-            ["cutout_image"] = main.Cutout is null ? null : $"/EcomCraft/product-image/{record.Id}/cutout",
+            ["image"] = ProductAngleRules.ImageRoute(record.Id, null, false),
+            ["cutout_image"] = main.Cutout is null ? null : ProductAngleRules.ImageRoute(record.Id, null, true),
             ["angles"] = new JArray(record.Angles.Select(angle => new JObject()
             {
                 ["id"] = angle.Id,
                 ["has_cutout"] = angle.Cutout is not null,
                 ["placement"] = new JObject() { ["x"] = angle.X, ["y"] = angle.Y, ["size"] = angle.Size },
-                ["image"] = AngleImage(record.Id, angle, false),
-                ["cutout_image"] = angle.Cutout is null ? null : AngleImage(record.Id, angle, true)
+                ["image"] = ProductAngleRules.ImageRoute(record.Id, angle.Id, false),
+                ["cutout_image"] = angle.Cutout is null ? null : ProductAngleRules.ImageRoute(record.Id, angle.Id, true)
             }))
         };
     }

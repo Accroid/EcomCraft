@@ -239,6 +239,9 @@ class SimpleRulesPart {
         if (issue.code == 'edge_semi_transparent') {
             return tr('这张图有大量半透明边缘（玻璃、毛发类商品）；这类边缘只能按图片自带的透明度呈现，效果不保证。也可以继续使用。');
         }
+        if (issue.code == 'angle_cutout_failed') {
+            return tr('这张角度图没有自动抠图成功，出图时会自动再抠一次。');
+        }
         return tr('抠图后商品只占画面约 {0}%，建议拍得更近一些，让商品占满画面。也可以继续使用。', Math.round((issue.ratio || 0) * 100));
     }
 }

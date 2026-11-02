@@ -33,4 +33,13 @@ public static class ProductAngleRules
     {
         return angleId == MainId ? "cutout.png" : $"angle-{angleId}-cutout.png";
     }
+
+    /// <summary>The image route of a product photo. The top-level route (a null or empty angle ID, the server's "image" and "cutout_image" fields)
+    /// keeps the historical main-image address, while every entry of the angle list carries its angle ID as a query parameter, so a URL always names
+    /// one photo even after another angle became the main image.</summary>
+    public static string ImageRoute(string productId, string angleId, bool cutout)
+    {
+        string url = $"/EcomCraft/product-image/{productId}/{(cutout ? "cutout" : "original")}";
+        return string.IsNullOrEmpty(angleId) ? url : $"{url}?angle={angleId}";
+    }
 }

@@ -390,7 +390,8 @@ class SimpleProductsPart {
         }
     }
 
-    /** Sends one angle photo to a saved product after the browser-side checks (F84); resolves true when it was added. */
+    /** Sends one angle photo to a saved product after the browser-side checks (F84); resolves true when it was added. An opaque photo then goes
+     * through the same automatic cut-out as the main photo's button and the result is stored on that angle (cutoutAngle). */
     static async addAngle(product, data) {
         let tr = this.api.tr;
         let cutout = '';
@@ -434,11 +435,49 @@ class SimpleProductsPart {
                 }
             }
             this.renderProducts();
+            // An opaque angle photo gets the same automatic cut-out as the main photo's button (F84), stored on that angle; a transparent
+            // photo already carries its own cut-out. The cut-out never blocks the add: a failure only notices below.
+            if (!cutout) {
+                await this.cutoutAngle(product, result.angle_id, data);
+            }
             return true;
         }
         catch (error) {
             this.message(error.message || tr('角度图没有添加，请稍后重试。'), true);
             return false;
+        }
+    }
+
+    /** Runs the same automatic cut-out as the main photo's button for one just-added opaque angle photo (F84), and stores the result on that angle.
+     * A failure only shows a notice — the angle stays added, and generation cuts out again when it needs to. */
+    static async cutoutAngle(product, angleId, data) {
+        let tr = this.api.tr;
+        try {
+            let result = await this.api.request('EcomCraftStudioCutout', { product_image: data });
+            // The angle notices of the add are re-tagged after the server's answer, so they survive applyAngles dropping tagged notices.
+            let kept = (product.qualityIssues || []).filter(issue => issue.angle);
+            let updated = await this.api.request('EcomCraftStudioProductUpdate', { product_id: product.id, angle_id: angleId, cutout: result.cutout });
+            this.applyAngles(product, updated.product);
+            let index = (product.angles || []).findIndex(angle => angle.id == angleId);
+            if (index > 0) {
+                let tagged = kept.concat(this.edgeIssues(result.edge_warnings)).map(issue => ({ ...issue, angle: index + 1 }));
+                product.qualityIssues = this.mergeIssues(product.qualityIssues || [], tagged);
+                if (product == this.product) {
+                    this.renderQuality();
+                }
+            }
+            this.renderProducts();
+        }
+        catch (error) {
+            // The failure notice also becomes a quality notice of that angle, so it stays visible after the add flow's summary banner.
+            let index = (product.angles || []).findIndex(item => item.id == angleId);
+            if (index > 0) {
+                product.qualityIssues = this.mergeIssues(product.qualityIssues || [], [{ code: 'angle_cutout_failed', angle: index + 1 }]);
+                if (product == this.product) {
+                    this.renderQuality();
+                }
+            }
+            this.message(tr('这张角度图没有自动抠图成功，已按原图添加：{0}', error.message || tr('请稍后重试，或换一张透明背景的 PNG。')), true);
         }
     }
 
