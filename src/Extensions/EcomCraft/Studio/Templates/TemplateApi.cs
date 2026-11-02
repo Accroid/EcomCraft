@@ -359,24 +359,23 @@ public static class TemplateApi
         {
             return StudioApi.Error("无法读取商品图。", "invalid_reference");
         }
-        string cutout = image;
-        using (SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32> loaded = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(bytes))
+        // The same work-image rule as everywhere (F85) — upright and metadata-free before the transparency is judged, not only
+        // after it — so the transparent branch hands the white canvas the same upright photo ProductPreserve.Prepare builds from,
+        // and an image over the pixel limit is refused before anything is decoded.
+        byte[] work = ProductComposite.CutoutWorkImage(bytes, out bool isCutout, out string mime);
+        if (work is null)
         {
-            if (!ProductComposite.HasTransparency(loaded))
+            return StudioApi.Error("商品图尺寸过大，请缩小到 1 亿像素以内。", "invalid_reference");
+        }
+        string cutout = ImageDataUrl.ToDataUrl(work, mime);
+        if (!isCutout)
+        {
+            (byte[] png, _, string error, string errorId) = await CutoutService.CutoutAsync(work);
+            if (png is null)
             {
-                // The same work-image rule as the cut-out API (F85): turned upright by its EXIF and EXIF-free, so the mask lines up.
-                bytes = ProductComposite.FitForWork(bytes);
-                if (bytes is null)
-                {
-                    return StudioApi.Error("商品图尺寸过大，请缩小到 1 亿像素以内。", "invalid_reference");
-                }
-                (byte[] png, _, string error, string errorId) = await CutoutService.CutoutAsync(bytes);
-                if (png is null)
-                {
-                    return StudioApi.Error(error, errorId);
-                }
-                cutout = ImageDataUrl.ToDataUrl(png, "image/png");
+                return StudioApi.Error(error, errorId);
             }
+            cutout = ImageDataUrl.ToDataUrl(png, "image/png");
         }
         ExportImageSize(platform, out int width, out int height);
         if (outputSize is (int chosenWidth, int chosenHeight))

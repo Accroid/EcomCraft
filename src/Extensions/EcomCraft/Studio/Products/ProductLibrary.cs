@@ -214,7 +214,7 @@ public static class ProductLibrary
             return ProductEdgeRules.TryAnalyze(fitted);
         }
         catch (Exception ex) when (ex is IOException or SixLabors.ImageSharp.UnknownImageFormatException or SixLabors.ImageSharp.InvalidImageContentException
-            or NotSupportedException)
+            or SixLabors.ImageSharp.Memory.InvalidMemoryOperationException or NotSupportedException)
         {
             return [];
         }
@@ -233,7 +233,7 @@ public static class ProductLibrary
         }
     }
 
-    [API.APIDescription("Save a product photo (PNG, JPEG or WebP data URL, at most 5 MB) to the current account's product library, optionally with its cut-out and placement; phone photos are turned upright by their EXIF orientation and the EXIF block, GPS included, is removed before saving. Returns the product and edge_warnings codes about the cut-out rim's quality (F83).", "product: { id: \"…\" }, edge_warnings: []")]
+    [API.APIDescription("Save a product photo (PNG, JPEG or WebP data URL, at most 5 MB and 100 megapixels) to the current account's product library, optionally with its cut-out and placement; phone photos are turned upright by their EXIF orientation and their EXIF, XMP and IPTC metadata, GPS included, is removed before saving. Returns the product and edge_warnings codes about the cut-out rim's quality (F83).", "product: { id: \"…\" }, edge_warnings: []")]
     public static Task<JObject> EcomCraftStudioProductSave(Session session, string image, string name = "", string cutout = "")
     {
         if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.BasicImageGeneration))
@@ -248,12 +248,25 @@ public static class ProductLibrary
         }
         try
         {
-            // Phone photos arrive upright only by their EXIF orientation: turn them upright and drop the whole block, GPS included (F85),
-            // so the saved file is what every later step (cut-out mask, placement preview) expects, and carries no location.
+            // Phone photos arrive upright only by their EXIF orientation: turn them upright and drop the metadata blocks, GPS included (F85),
+            // so the saved file is what every later step (cut-out mask, placement preview) expects, and carries no location. An image over
+            // the pixel limit is refused here — its size is read from the header and it is never decoded (T111).
             original = PostProcess.ProductComposite.AutoOrient(original, out extension);
-            cut = cut is null ? null : PostProcess.ProductComposite.AutoOrient(cut, out _);
+            if (original is null)
+            {
+                return Task.FromResult(StudioApi.Error("商品图尺寸过大，请缩小到 1 亿像素以内。", "invalid_reference"));
+            }
+            if (cut is not null)
+            {
+                cut = PostProcess.ProductComposite.AutoOrient(cut, out _);
+                if (cut is null)
+                {
+                    return Task.FromResult(StudioApi.Error("抠图尺寸过大，请缩小到 1 亿像素以内。", "invalid_reference"));
+                }
+            }
         }
-        catch (Exception ex) when (ex is SixLabors.ImageSharp.UnknownImageFormatException or SixLabors.ImageSharp.InvalidImageContentException or NotSupportedException)
+        catch (Exception ex) when (ex is SixLabors.ImageSharp.UnknownImageFormatException or SixLabors.ImageSharp.InvalidImageContentException
+            or SixLabors.ImageSharp.Memory.InvalidMemoryOperationException or NotSupportedException)
         {
             return Task.FromResult(StudioApi.Error("无法读取商品图，请重新导出为 PNG、JPEG 或 WebP。", "invalid_reference"));
         }
@@ -346,8 +359,12 @@ public static class ProductLibrary
                 }
                 try
                 {
-                    // A cut-out goes upright and EXIF-free like the photo it belongs to (F85), so it lines up with the rotated photo.
+                    // A cut-out goes upright and metadata-free like the photo it belongs to (F85), so it lines up with the rotated photo.
                     cut = PostProcess.ProductComposite.AutoOrient(cut, out _);
+                    if (cut is null)
+                    {
+                        return Task.FromResult(StudioApi.Error("抠图尺寸过大，请缩小到 1 亿像素以内。", "invalid_reference"));
+                    }
                     File.WriteAllBytes(Path.Combine(record.Folder, "cutout.png"), cut);
                     record.Cutout = "cutout.png";
                 }
@@ -356,7 +373,8 @@ public static class ProductLibrary
                     Logs.Warning($"EcomCraft could not save a product cut-out: {ex.Message}");
                     return Task.FromResult(StudioApi.Error("抠图无法保存：作品库位置可能离线，请稍后重试。", "product_save_failed"));
                 }
-                catch (Exception ex) when (ex is SixLabors.ImageSharp.UnknownImageFormatException or SixLabors.ImageSharp.InvalidImageContentException or NotSupportedException)
+                catch (Exception ex) when (ex is SixLabors.ImageSharp.UnknownImageFormatException or SixLabors.ImageSharp.InvalidImageContentException
+                    or SixLabors.ImageSharp.Memory.InvalidMemoryOperationException or NotSupportedException)
                 {
                     return Task.FromResult(StudioApi.Error("无法读取抠图，请重新抠图或换一张透明 PNG。", "invalid_reference"));
                 }

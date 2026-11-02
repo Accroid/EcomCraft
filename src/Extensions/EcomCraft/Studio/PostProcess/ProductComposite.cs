@@ -29,13 +29,16 @@ public static class ProductComposite
     /// visible, low enough that the file stays near the original size.</summary>
     public const int WorkJpegQuality = 92;
 
-    /// <summary>Whether the image carries an EXIF block at all, orientation or not: turning a phone photo upright (F85) also drops the whole
-    /// block, GPS included, so nothing about where the photo was taken survives. An unreadable block counts as present, to be on the safe side.</summary>
-    private static bool HasExif(ImageInfo info)
+    /// <summary>Whether the image carries any of the metadata blocks that are removed when it is turned upright (F85): EXIF, XMP or
+    /// IPTC — a GPS coordinate can sit in any of the three, so any of them counts. The ICC color profile is not one of them: it
+    /// carries no location and losing it would shift the colors. An unreadable block counts as present, to be on the safe side.</summary>
+    private static bool HasRemovableMetadata(ImageInfo info)
     {
         try
         {
-            return info.Metadata.ExifProfile?.Values.Count > 0;
+            return info.Metadata.ExifProfile?.Values.Count > 0
+                || info.Metadata.XmpProfile?.ToByteArray()?.Length > 0
+                || info.Metadata.IptcProfile?.Values.Count() > 0;
         }
         catch (Exception ex) when (ex is FormatException or InvalidOperationException)
         {
@@ -43,20 +46,26 @@ public static class ProductComposite
         }
     }
 
-    /// <summary>An upright copy of a photo with its whole EXIF block removed, GPS included (F85): a portrait phone photo stores its rotation in
-    /// EXIF, and neither a saved product file nor a cut-out mask may keep it, or the mask no longer lines up with the photo. An image without any
-    /// EXIF returns its own bytes unchanged, so nothing is re-encoded without need; a JPEG re-encodes as JPEG at <see cref="WorkJpegQuality"/> and
-    /// anything else as PNG, so transparency stays. <paramref name="extension"/> is the file extension of what came back ("jpg", "png" or the
-    /// source's own when the bytes did not change). Throws the ImageSharp format exceptions for unreadable data.</summary>
+    /// <summary>An upright copy of a photo with its EXIF, XMP and IPTC blocks removed, GPS and other location data included (F85): a portrait
+    /// phone photo stores its rotation in EXIF, and neither a saved product file nor a cut-out mask may keep it, or the mask no longer lines
+    /// up with the photo; the ICC color profile stays, so the colors do not shift. An image without any of these blocks returns its own bytes
+    /// unchanged, so nothing is re-encoded without need; a JPEG re-encodes as JPEG at <see cref="WorkJpegQuality"/> and anything else as PNG,
+    /// so transparency stays. <paramref name="extension"/> is the file extension of what came back ("jpg", "png" or the source's own when
+    /// the bytes did not change), or null when the image is over <see cref="MaxPixels"/> — the size is read from the header and the image is
+    /// never decoded then (the T111 rule). Throws the ImageSharp format exceptions for unreadable data.</summary>
     public static byte[] AutoOrient(byte[] bytes, out string extension)
     {
         ImageInfo info = Image.Identify(bytes);
         extension = info.Metadata.DecodedImageFormat is SixLabors.ImageSharp.Formats.Jpeg.JpegFormat ? "jpg" : info.Metadata.DecodedImageFormat is SixLabors.ImageSharp.Formats.Webp.WebpFormat ? "webp" : "png";
-        if (!HasExif(info))
+        if ((long)info.Width * info.Height > MaxPixels)
+        {
+            return null;
+        }
+        if (!HasRemovableMetadata(info))
         {
             return bytes;
         }
-        using Image<Rgba32> image = LoadUpright(bytes);
+        using Image<Rgba32> image = LoadUprightStripped(bytes);
         using System.IO.MemoryStream stream = new();
         if (info.Metadata.DecodedImageFormat is SixLabors.ImageSharp.Formats.Jpeg.JpegFormat)
         {
@@ -71,9 +80,9 @@ public static class ProductComposite
         return stream.ToArray();
     }
 
-    /// <summary>The image turned upright by its EXIF orientation with the EXIF block removed. An unreadable orientation flag leaves the pixels as
-    /// they are — the block is still dropped, and the photo stays usable instead of failing.</summary>
-    private static Image<Rgba32> LoadUpright(byte[] bytes)
+    /// <summary>The image turned upright by its EXIF orientation with its EXIF, XMP and IPTC blocks removed (the ICC color profile stays).
+    /// An unreadable orientation flag leaves the pixels as they are — the blocks are still dropped, and the photo stays usable instead of failing.</summary>
+    private static Image<Rgba32> LoadUprightStripped(byte[] bytes)
     {
         Image<Rgba32> image = Image.Load<Rgba32>(bytes);
         try
@@ -85,6 +94,8 @@ public static class ProductComposite
             // A broken orientation flag must not lose the photo: keep the pixels as stored.
         }
         image.Metadata.ExifProfile = null;
+        image.Metadata.XmpProfile = null;
+        image.Metadata.IptcProfile = null;
         return image;
     }
 
@@ -99,12 +110,12 @@ public static class ProductComposite
         {
             return null;
         }
-        bool exif = HasExif(info);
-        if (pixels <= workPixels && !exif)
+        bool hasMetadata = HasRemovableMetadata(info);
+        if (pixels <= workPixels && !hasMetadata)
         {
             return bytes;
         }
-        using Image<Rgba32> image = LoadUpright(bytes);
+        using Image<Rgba32> image = LoadUprightStripped(bytes);
         if ((long)image.Width * image.Height > workPixels)
         {
             double scale = Math.Sqrt((double)workPixels / ((long)image.Width * image.Height));
@@ -120,6 +131,27 @@ public static class ProductComposite
             image.SaveAsPng(stream);
         }
         return stream.ToArray();
+    }
+
+    /// <summary>The product image of a cut-out-only request (F22) brought to the common work form first (F85): turned upright, freed of its
+    /// metadata blocks and scaled to the work size — the same treatment <see cref="FitForWork"/> gives the photo in ProductPreserve.Prepare —
+    /// and only then judged for transparency, so a portrait phone photo whose rotation lives in its EXIF reaches the white canvas upright on
+    /// both paths. <paramref name="isCutout"/> receives whether the work image is already a cut-out and <paramref name="mime"/> its data-URL
+    /// mime type; returns null when the image is over <see cref="MaxPixels"/>. Throws the ImageSharp format exceptions for unreadable data.</summary>
+    public static byte[] CutoutWorkImage(byte[] bytes, out bool isCutout, out string mime)
+    {
+        byte[] work = FitForWork(bytes);
+        if (work is null)
+        {
+            isCutout = false;
+            mime = null;
+            return null;
+        }
+        using Image<Rgba32> loaded = Image.Load<Rgba32>(work);
+        isCutout = HasTransparency(loaded);
+        mime = loaded.Metadata.DecodedImageFormat is SixLabors.ImageSharp.Formats.Jpeg.JpegFormat ? "image/jpeg"
+            : loaded.Metadata.DecodedImageFormat is SixLabors.ImageSharp.Formats.Webp.WebpFormat ? "image/webp" : "image/png";
+        return work;
     }
 
     /// <summary>Transparent margin kept around a trimmed cut-out, as a fraction of its longer side, so it still counts as a cut-out.</summary>
