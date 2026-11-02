@@ -141,11 +141,11 @@
         "commercial product photography, a single product on a clean surface, soft studio lighting, high detail",
         "",
         1,
-        20,
+        25,
         "euler",
         "simple",
         1095546475779037,
-        "qwen_image_2.1_int8_convrot.safetensors",
+        "qwen-image-2.1-UC-Q4_K_M.gguf",
         "qwen3vl_8b_int8_convrot.safetensors",
         "qwen_image_2.1_vae_bf16.safetensors",
         1024,
@@ -155,7 +155,7 @@
         "prompt": "commercial product photography, a single product on a clean surface, soft studio lighting, high detail",
         "negative_prompt": "",
         "cfg": 1,
-        "steps": 20,
+        "steps": 25,
         "scheduler": "euler",
         "scheduler_1": "simple",
         "seed": 1095546475779037,
@@ -614,12 +614,12 @@
             "widgets_values": [
               "",
               "",
-              512
+              1024
             ],
             "widgets_values_named": {
               "prompt": "",
               "negative_prompt": "",
-              "resolution": 512
+              "resolution": 1024
             }
           },
           {
@@ -680,19 +680,19 @@
               "Node name for S&R": "CLIPLoader",
               "models": [
                 {
-                  "name": "qwen3vl_8b_bf16.safetensors",
-                  "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_bf16.safetensors",
+                  "name": "qwen3vl_8b_int8_convrot.safetensors",
+                  "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
                   "directory": "text_encoders"
                 }
               ]
             },
             "widgets_values": [
-              "qwen3vl_8b_bf16.safetensors",
+              "qwen3vl_8b_int8_convrot.safetensors",
               "qwen_image",
               "default"
             ],
             "widgets_values_named": {
-              "clip_name": "qwen3vl_8b_bf16.safetensors",
+              "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
               "type": "qwen_image",
               "device": "default"
             }

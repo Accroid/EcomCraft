@@ -291,30 +291,36 @@ public sealed class NativeWorkflowConverter
             }
         }
         HashSet<(string Node, string Input)> positive = new(), negative = new();
-        foreach (JObject node in Prompt.Properties().Select(property => property.Value).OfType<JObject>())
+        foreach (JProperty property in Prompt.Properties())
         {
-            if (node["class_type"]?.ToString() is "KSampler" or "KSamplerAdvanced")
+            if (((JObject)property.Value)["class_type"]?.ToString() is not ("KSampler" or "KSamplerAdvanced"))
             {
-                foreach (string name in new[] { "positive", "negative" })
+                continue;
+            }
+            foreach (string name in new[] { "positive", "negative" })
+            {
+                if (((JObject)property.Value)["inputs"]?[name] is not JArray source || source.Count != 2
+                    || source[1].Type != JTokenType.Integer || Prompt[source[0].ToString()] is not JObject encoder)
                 {
-                    if (node["inputs"]?[name] is not JArray source || source.Count != 2
-                        || source[1].Type != JTokenType.Integer || Prompt[source[0].ToString()] is not JObject encoder)
-                    {
-                        throw new InvalidDataException();
-                    }
-                    string field = encoder["class_type"]?.ToString() switch
-                    {
-                        "CLIPTextEncode" when source[1].Value<int>() == 0 => "text",
-                        "TextEncodeQwenImage21" when source[1].Value<int>() == (name == "positive" ? 0 : 1)
-                            => name == "positive" ? "prompt" : "negative_prompt",
-                        _ => null
-                    };
-                    if (field is null || encoder["inputs"]?[field]?.Type != JTokenType.String)
-                    {
-                        throw new InvalidDataException();
-                    }
-                    (name == "positive" ? positive : negative).Add((source[0].ToString(), field));
+                    throw new InvalidDataException();
                 }
+                string field = encoder["class_type"]?.ToString() switch
+                {
+                    "CLIPTextEncode" when source[1].Value<int>() == 0 => "text",
+                    "TextEncodeQwenImage21" when source[1].Value<int>() == (name == "positive" ? 0 : 1)
+                        => name == "positive" ? "prompt" : "negative_prompt",
+                    _ => null
+                };
+                if (field is null || encoder["inputs"]?[field]?.Type != JTokenType.String)
+                {
+                    throw new InvalidDataException();
+                }
+                if (encoder["class_type"]?.ToString() == "TextEncodeQwenImage21")
+                {
+                    QwenEncoders.Add(source[0].ToString());
+                    QwenSamplers.Add(property.Name);
+                }
+                (name == "positive" ? positive : negative).Add((source[0].ToString(), field));
             }
         }
         if (positive.Count == 0 || negative.Count == 0 || positive.Overlaps(negative))
@@ -324,7 +330,8 @@ public sealed class NativeWorkflowConverter
         foreach ((string nodeId, string field) in positive.Concat(negative))
         {
             bool isPositive = positive.Contains((nodeId, field));
-            Bind(nodeId, field, "text", isPositive ? "创作描述" : "排除内容", isPositive ? "prompt" : "negativeprompt");
+            Bind(nodeId, field, "text", isPositive ? "创作描述" : "排除内容", isPositive ? "prompt" : "negativeprompt",
+                description: !isPositive && QwenEncoders.Contains(nodeId) ? QwenNegativeHint : null);
         }
         foreach (JProperty property in Prompt.Properties())
         {
@@ -337,7 +344,15 @@ public sealed class NativeWorkflowConverter
                 Bind(id, "seed", "integer", "随机种子", "seed", -1, 9007199254740991);
                 Bind(id, "noise_seed", "integer", "随机种子", "seed", -1, 9007199254740991);
                 Bind(id, "steps", "integer", "采样步数", "steps", 1, 100);
-                Bind(id, "cfg", "decimal", "提示词强度", "cfgscale", 0, 30);
+                // Qwen Image 2.1 releases with cfg 1 (the engine then skips negative conditioning entirely); 2 follows complex prompts closer, and higher values visibly damage the picture.
+                if (QwenSamplers.Contains(id))
+                {
+                    Bind(id, "cfg", "decimal", "提示词强度", "cfgscale", 1, 4, description: QwenCfgHint);
+                }
+                else
+                {
+                    Bind(id, "cfg", "decimal", "提示词强度", "cfgscale", 0, 30);
+                }
                 Bind(id, "sampler_name", "dropdown", "采样器", "sampler");
                 Bind(id, "scheduler", "dropdown", "调度器", "scheduler");
                 Bind(id, "denoise", "decimal", "降噪强度", null, 0, 1);
@@ -367,11 +382,23 @@ public sealed class NativeWorkflowConverter
     /// <summary>Saved values before placeholders replace literal node inputs.</summary>
     private readonly JObject Values = new();
 
+    /// <summary>Encoders of type <c>TextEncodeQwenImage21</c> in the graph, by prompt node ID.</summary>
+    private readonly HashSet<string> QwenEncoders = new();
+
+    /// <summary>Samplers whose conditioning comes from a <c>TextEncodeQwenImage21</c> encoder, by prompt node ID.</summary>
+    private readonly HashSet<string> QwenSamplers = new();
+
+    /// <summary>Hint for the negative prompt of Qwen Image 2.1 workflows: at cfg 1 the engine skips negative conditioning, so it has no effect.</summary>
+    private const string QwenNegativeHint = "提示词强度为 1 时负向提示词不生效，需要生效请调高提示词强度。";
+
+    /// <summary>Hint for the cfg of Qwen Image 2.1 workflows: released at cfg 1, 2 follows complex prompts closer but sharpens edges, higher values damage the picture.</summary>
+    private const string QwenCfgHint = "Qwen Image 2.1 常用 1–2：1 时不使用排除内容，2 更遵循复杂提示词但边缘略锐；更高会明显损坏画面。";
+
     /// <summary>One primary page control per semantic input; additional nodes retain independent editable fields.</summary>
     private readonly HashSet<string> FormBindings = new();
 
     /// <summary>Publishes literal inputs, following only known primitive value links without replacing graph connections.</summary>
-    private void Bind(string nodeId, string inputName, string type, string label, string form, double min = 0, double max = 0, double step = 1, bool model = false)
+    private void Bind(string nodeId, string inputName, string type, string label, string form, double min = 0, double max = 0, double step = 1, bool model = false, string description = null)
     {
         JObject node = (JObject)Prompt[nodeId];
         JObject inputs = (JObject)node["inputs"];
@@ -379,7 +406,7 @@ public sealed class NativeWorkflowConverter
             && Prompt[link[0].ToString()] is JObject primitive
             && primitive["class_type"]?.ToString() is "PrimitiveInt" or "PrimitiveFloat")
         {
-            Bind(link[0].ToString(), "value", type, label, form, min, max, step, model);
+            Bind(link[0].ToString(), "value", type, label, form, min, max, step, model, description);
             return;
         }
         if (inputs[inputName] is not JValue value || value.Type == JTokenType.Null)
@@ -405,6 +432,10 @@ public sealed class NativeWorkflowConverter
         if (type == "dropdown")
         {
             definition["values"] = new JArray(value.DeepClone());
+        }
+        if (description is not null)
+        {
+            definition["description"] = description;
         }
         if (inputName is "seed" or "noise_seed")
         {
