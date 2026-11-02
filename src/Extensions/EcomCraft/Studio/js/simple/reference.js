@@ -191,7 +191,7 @@ class SimpleReferencePart {
         }
         this.renderVision();
         this.update();
-        if (this.vision.can_manage && !this.visionModels) {
+        if (this.visionModelShown && this.vision.can_manage && !this.visionModels) {
             this.loadVisionModels();
         }
     }
@@ -256,7 +256,11 @@ class SimpleReferencePart {
         }
     }
 
-    /** Shows the vision model under the references (F68): administrators get a switcher, other accounts only see the model name. */
+    /** 出图页是否仍显示看图模型。2026-11-02（P1b）起从界面隐藏：运营和老板不在这页接触模型，管理员改在“提示词优化设置”里
+     * 查看和切换。切换代码与接口保留（隐藏不删除，A30），需要恢复时把这面旗设回 true 即可。 */
+    static visionModelShown = false;
+
+    /** Shows the vision model under the references (F68): administrators get a switcher, other accounts only see the model name. Hidden since P1b. */
     static renderVisionModel() {
         if (!this.api) {
             return;
@@ -264,6 +268,11 @@ class SimpleReferencePart {
         let tr = this.api.tr;
         let el = this.api.el;
         let box = this.api.$('simple-vision-model');
+        if (!this.visionModelShown) {
+            box.hidden = true;
+            box.replaceChildren();
+            return;
+        }
         let vision = this.vision;
         if (!vision || (!vision.model && !vision.can_manage)) {
             box.hidden = true;

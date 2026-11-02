@@ -836,7 +836,11 @@ main:focus:not(:focus-visible) { outline: none; }
     .stage { min-height: 360px; }
 }
 @media (max-width: 720px) {
-    .topbar { gap: 12px; padding: 0 12px; }
+    /* 顶栏放不下时换行收纳（P1b，校验报告 E1/E4）：不裁切、不隐藏按钮，窄屏不再把页面撑出横向滚动，
+       弹窗也随视口居中回到屏内。导航标签加内边距，换行后仍有不小于 32px 的点击高度。 */
+    .topbar { flex-wrap: wrap; gap: 6px 12px; height: auto; min-height: var(--topbar-h); padding: 0 12px; }
+    .views { flex-wrap: wrap; }
+    .nav-item { padding: 10px 12px; }
     .user { display: none; }
     .view { padding: 20px 12px 0; }
     .page-head { flex-wrap: wrap; }
