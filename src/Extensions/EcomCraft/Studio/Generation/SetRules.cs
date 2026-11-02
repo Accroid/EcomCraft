@@ -11,6 +11,15 @@ public static class SetRules
     /// <summary>Most reference images in reference mode (F59), matching the storyboard shot cap.</summary>
     public const int MaxReferences = 8;
 
+    /// <summary>Reference mode's default: follow each reference's own prompt (F59).</summary>
+    public const string ReferenceModeComposition = "composition";
+
+    /// <summary>Reference mode's direct-fusion trial (F84): the server writes the prompt, no per-reference prompts are sent.</summary>
+    public const string ReferenceModeEdit = "edit";
+
+    /// <summary>Whether a reference_mode value is one reference mode accepts: empty means <see cref="ReferenceModeComposition"/>; anything else is refused.</summary>
+    public static bool IsValidReferenceMode(string mode) => string.IsNullOrEmpty(mode) || mode is (ReferenceModeComposition or ReferenceModeEdit);
+
     /// <summary>Most tasks one batch may expand into.</summary>
     public const int MaxJobs = 80;
 

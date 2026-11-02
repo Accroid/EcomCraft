@@ -3,6 +3,7 @@ using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.Export;
 using EcomCraftStudio.Studio.PostProcess;
 using EcomCraftStudio.Studio.Prompting;
+using EcomCraftStudio.Studio.Setup;
 using EcomCraftStudio.Studio.Templates;
 using Newtonsoft.Json.Linq;
 using SixLabors.ImageSharp;
@@ -23,7 +24,7 @@ public static partial class BatchService
     private sealed record PromptInputs(string Description, string StyleId, string ProductTypeId, bool NeedModel, string PromptEn, string PromptZh);
 
     /// <summary>Validates a one-click set, registers it and starts composing its prompt in the background (F56).</summary>
-    private static JObject StartSet(Session session, JObject rawInput)
+    private static async Task<JObject> StartSet(Session session, JObject rawInput)
     {
         if (!StudioApi.CanView(session) || !session.User.HasPermission(Permissions.BasicImageGeneration) || !session.User.HasPermission(EcomCraft.PermUsePublishedWorkflows))
         {
@@ -63,7 +64,22 @@ public static partial class BatchService
         List<SetRules.TemplateRef> references = [.. runnable.Select(item => new SetRules.TemplateRef(item.Template.Id, item.Template.Platforms, item.Template.Sets, item.Template.Kind))];
         List<SetRules.Job> expanded;
         // Reference mode (F59): one image per reference, prompts already final and user-edited, a fixed scene template, and no other step-2 options.
-        if (rawInput["reference_prompts"] is JArray promptItems)
+        // The direct-fusion trial (F84) is a second reference mode: the images are required but the prompts are written by the server instead.
+        string referenceMode = rawInput["reference_mode"]?.Type == JTokenType.String ? rawInput.Value<string>("reference_mode") : "";
+        if (!SetRules.IsValidReferenceMode(referenceMode))
+        {
+            return StudioApi.Error("未知的参考图模式。", "invalid_parameters");
+        }
+        if (referenceMode == SetRules.ReferenceModeEdit)
+        {
+            JObject editError = await StartEditSet(session, rawInput, batch, runnable);
+            if (editError is not null)
+            {
+                return editError;
+            }
+            expanded = SetRules.ExpandReferences(batch.Products.Count, "reference-edit", batch.ReferenceImages.Count);
+        }
+        else if (rawInput["reference_prompts"] is JArray promptItems)
         {
             JObject referenceError = ReadReferences(rawInput, batch, promptItems);
             if (referenceError is not null)
@@ -125,8 +141,9 @@ public static partial class BatchService
             });
         }
         // In reference mode none of the other step-2 options apply (F59): no description, style, product type, prompt panel or brand kit.
+        // The edit trial composes its own prompt server-side per product (F84), so it starts at once too.
         PromptInputs inputs = null;
-        if (batch.ReferencePrompts is null)
+        if (batch.ReferencePrompts is null && !batch.ReferenceEdit)
         {
             JObject optionsError = ReadPromptOptions(session, rawInput, batch, out inputs);
             if (optionsError is not null)
@@ -156,15 +173,17 @@ public static partial class BatchService
             if (item?["product_id"]?.Type == JTokenType.String)
             {
                 // A saved product: its cut-out (when confirmed) is used for every template; otherwise the original photo.
-                (string saved, Placement placementSaved, string problem) = Products.ProductLibrary.ForGeneration(session.User.UserID, item.Value<string>("product_id"), false);
+                string productId = item.Value<string>("product_id");
+                (string saved, Placement placementSaved, string problem) = Products.ProductLibrary.ForGeneration(session.User.UserID, productId, false);
                 if (saved is null)
                 {
                     return StudioApi.Error(problem, "invalid_reference");
                 }
-                (string cutout, _, _) = Products.ProductLibrary.ForGeneration(session.User.UserID, item.Value<string>("product_id"), true);
+                (string cutout, _, _) = Products.ProductLibrary.ForGeneration(session.User.UserID, productId, true);
                 product.Image = saved;
                 product.Cutout = cutout;
                 product.Placement = placementSaved;
+                product.ProductId = productId;
             }
             else
             {
@@ -256,6 +275,69 @@ public static partial class BatchService
         return null;
     }
 
+    /// <summary>Validates the direct-fusion trial's batch (F84, T123): reference images are required but per-reference prompts are not sent — the prompt
+    /// is written by the server per product. Checks the reference-edit template and the workflow of every product's angle count, and reads the angle IDs of
+    /// saved products. Returns the error, or null when accepted.</summary>
+    private static async Task<JObject> StartEditSet(Session session, JObject rawInput, Batch batch, List<(EcomTemplate Template, string WorkflowId, string ImageField)> runnable)
+    {
+        if (rawInput["reference_prompts"] is JArray)
+        {
+            return StudioApi.Error("直接融合不需要逐张提示词，提示词由服务端生成。", "invalid_prompt");
+        }
+        if (rawInput["shots"] is JArray withShots && withShots.Count > 0)
+        {
+            return StudioApi.Error("分镜与参考图不能同时使用，请二选一。", "invalid_parameters");
+        }
+        JArray imageItems = rawInput["reference_images"] as JArray;
+        if (imageItems is null || imageItems.Count == 0 || imageItems.Count > SetRules.MaxReferences)
+        {
+            return StudioApi.Error($"参考图须为 1–{SetRules.MaxReferences} 张。", "invalid_parameters");
+        }
+        foreach (JToken item in imageItems)
+        {
+            string image = item?.Type == JTokenType.String ? item.ToString() : "";
+            if (!ImageDataUrl.HasImagePrefix(image, SetRules.MaxImageDataLength))
+            {
+                return StudioApi.Error("参考图须为不超过 5 MB 的图片。", "invalid_reference");
+            }
+            batch.ReferenceImages.Add(image);
+        }
+        // The trial template must be runnable at all, and every product needs the workflow of its own angle count (1–3).
+        if (runnable.All(item => item.Template.Id != "reference-edit"))
+        {
+            return StudioApi.Error("直接融合试用版现在不可用，请稍后再试或联系管理员。", "invalid_template");
+        }
+        Dictionary<string, JObject> workflows = TemplateApi.Runnable(session);
+        foreach (Product product in batch.Products)
+        {
+            if (product.ProductId is null)
+            {
+                // An inline photo: a single angle.
+                continue;
+            }
+            (List<string> ids, string problem) = Products.ProductLibrary.AngleIdsFor(session.User.UserID, product.ProductId);
+            if (ids is null)
+            {
+                return StudioApi.Error(problem, "invalid_reference");
+            }
+            product.AngleIds = ids;
+        }
+        foreach (int angles in batch.Products.Select(product => Math.Clamp(product.AngleIds?.Count ?? 1, 1, 3)).Distinct())
+        {
+            if (!workflows.ContainsKey(StandardWorkflows.ReferenceEditId(angles)))
+            {
+                string reason = StandardWorkflows.Unavailable(StandardWorkflows.ReferenceEditKind(angles));
+                return StudioApi.Error(reason is null
+                    ? "直接融合的工作流现在不可用：执行服务器可能离线。请确认执行服务器在线，或请管理员检查。"
+                    : $"直接融合的工作流还不可用：{reason}", "invalid_template");
+            }
+        }
+        batch.ReferenceEdit = true;
+        batch.Candidates = 1;
+        batch.EditResolution = HardwareRules.ReferenceEditResolution(Program.ServerSettings.EcomCraft.ReferenceEditResolution, await HardwareProbe.CurrentTierAsync());
+        return null;
+    }
+
     /// <summary>Reads a confirmed storyboard (F25): every shot is checked again, since the page may have changed it; only template IDs and cleaned text are kept.
     /// Returns the error, or null when accepted, with each shot's template ID in <paramref name="shotTemplates"/>.</summary>
     private static JObject ReadStoryboard(JObject rawInput, Batch batch, JArray shotItems, List<SetRules.TemplateRef> references, string platform,
@@ -331,19 +413,21 @@ public static partial class BatchService
         return null;
     }
 
-    /// <summary>Registers the batch and starts its tasks: reference mode at once (F59, its prompts are already final), otherwise once the shared prompt is
-    /// written in the background (F56).</summary>
+    /// <summary>Registers the batch and starts its tasks: reference mode at once (F59, its prompts are already final), the edit trial too (F84, its prompts
+    /// are written by the server), otherwise once the shared prompt is written in the background (F56).</summary>
     private static JObject SubmitBatch(Session session, Batch batch, PromptInputs inputs)
     {
+        bool startsAtOnce = batch.ReferencePrompts is not null || batch.ReferenceEdit;
         foreach (Job job in batch.Jobs)
         {
-            job.State = batch.ReferencePrompts is null ? "prompt" : "queued";
+            job.State = startsAtOnce ? "queued" : "prompt";
         }
         Batches[batch.Id] = batch;
-        if (batch.ReferencePrompts is not null)
+        if (startsAtOnce)
         {
-            // Reference prompts are already final and user-edited (F59): no background composition, the tasks start at once.
-            batch.Composed = new PromptService.Composed("", "reference", null, null);
+            // Reference prompts are already final and user-edited (F59), and the edit trial writes its own (F84): no background composition,
+            // the tasks start at once.
+            batch.Composed = new PromptService.Composed("", batch.ReferenceEdit ? "edit" : "reference", null, null);
             foreach (Job job in batch.Jobs)
             {
                 _ = Utilities.RunCheckedTask(() => RunJobAsync(session, batch, job), "ecomcraft batch task");

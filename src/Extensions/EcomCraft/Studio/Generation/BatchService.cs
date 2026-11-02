@@ -33,17 +33,32 @@ public static partial class BatchService
         /// <summary>The photo as a data URL.</summary>
         public string Image;
 
+        /// <summary>ID of the saved product this photo comes from, or null for an inline photo (F36).</summary>
+        public string ProductId;
+
+        /// <summary>The saved product's angle IDs in order (F84 trial), or null for an inline photo, which holds a single angle.</summary>
+        public List<string> AngleIds;
+
         /// <summary>The cut-out as a data URL, made on first need.</summary>
         public string Cutout;
 
         /// <summary>Why the cut-out could not be made, if it failed.</summary>
         public string CutoutError;
 
+        /// <summary>The edit trial's per-angle white-flattened inputs (F84), made on first need; null until then.</summary>
+        public List<string> EditImages;
+
+        /// <summary>Why the edit inputs could not be made, if it failed (F84).</summary>
+        public string EditError;
+
         /// <summary>Where the product sits for preserving templates.</summary>
         public Placement Placement = Placement.Default;
 
         /// <summary>Serializes making the cut-out.</summary>
         public readonly SemaphoreSlim CutoutLock = new(1, 1);
+
+        /// <summary>Serializes preparing the edit inputs (F84).</summary>
+        public readonly SemaphoreSlim EditLock = new(1, 1);
     }
 
     /// <summary>One task of a batch, as reported to its owner.</summary>
@@ -128,6 +143,13 @@ public static partial class BatchService
         /// <summary>Reference images of reference mode (F59), kept in memory only for the batch's lifetime; never written under Data/.</summary>
         public List<string> ReferenceImages = [];
 
+        /// <summary>Whether this batch is the direct-fusion trial (F84): one server-written edit prompt per product, no per-reference prompts,
+        /// and the reference-edit standard workflows instead of the scene template.</summary>
+        public bool ReferenceEdit;
+
+        /// <summary>The edit trial's pixel budget resolved for this server (F84), written into every edit request; 0 before it is resolved.</summary>
+        public int EditResolution;
+
         /// <summary>Whether some shot fragment could not be translated and was left out (F25).</summary>
         public bool ShotsUntranslated;
 
@@ -163,7 +185,7 @@ public static partial class BatchService
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> Slots = new();
 
     [API.APIDescription("Start a one-click set or batch: products (1–20, each { image: data URL, placement?: { x, y, size } }) × the templates of set_id (default \"standard\") that suit platform. Answers at once with the batch ID and its tasks in state \"prompt\"; the prompt is composed once in the background from the prompt panel (prompt_en / prompt_zh) or style_id and description, and the tasks then start (F56). rawInput is the root request JSON.", "batch_id: \"…\", jobs: []")]
-    public static Task<JObject> EcomCraftStudioGenerateSet(Session session, JObject rawInput) => Task.FromResult(StartSet(session, rawInput));
+    public static Task<JObject> EcomCraftStudioGenerateSet(Session session, JObject rawInput) => StartSet(session, rawInput);
 
     /// <summary>One task as its owner sees it; a task waiting for its generation also carries its time estimate (F70). Callers hold the batch lock.</summary>
     private static JObject JobStatus(Job job)
@@ -316,6 +338,10 @@ public static partial class BatchService
             if (product.CutoutError is not null)
             {
                 product.CutoutError = null;
+            }
+            if (product.EditError is not null)
+            {
+                product.EditError = null;
             }
             // Cancelled while the prompt was still being written (F56): the task starts with the others once the prompt is ready.
             if (batch.Composed is null)

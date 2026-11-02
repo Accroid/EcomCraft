@@ -196,6 +196,27 @@ public static class ProductComposite
         return cutout.Clone(context => context.Crop(crop));
     }
 
+    /// <summary>Largest side of the edit trial's flattened product input (F84): the edit model's own pixel budget stays far below it, and the
+    /// white-flattened PNG stays small enough for the 5 MB image-parameter limit.</summary>
+    public const int EditMaxSide = 2048;
+
+    /// <summary>A cut-out as the direct-fusion trial's product input (F84, T123): trimmed to the product, scaled down to <see cref="EditMaxSide"/> at most,
+    /// flattened onto pure white and encoded as PNG — the edit model's LoadImage drops the alpha channel, so a transparent cut-out would arrive on black.
+    /// Returns null when the picture has no visible pixel at all.</summary>
+    public static byte[] WhiteFlattened(Image<Rgba32> cutout)
+    {
+        using Image<Rgba32> work = Trim(cutout) ?? cutout.Clone();
+        if (Math.Max(work.Width, work.Height) > EditMaxSide)
+        {
+            double scale = (double)EditMaxSide / Math.Max(work.Width, work.Height);
+            work.Mutate(context => context.Resize(Math.Max(1, (int)Math.Round(work.Width * scale)), Math.Max(1, (int)Math.Round(work.Height * scale))));
+        }
+        work.Mutate(context => context.BackgroundColor(new Rgba32(255, 255, 255)));
+        using System.IO.MemoryStream stream = new();
+        work.SaveAsPng(stream);
+        return stream.ToArray();
+    }
+
     /// <summary>Whether the image is a cut-out: at least 2% of its pixels are transparent, or at least 5% of the border ring is, which also catches
     /// a rounded product that fills almost the whole canvas and whose few transparent pixels lie along the border (F83).</summary>
     public static bool HasTransparency(Image<Rgba32> image)

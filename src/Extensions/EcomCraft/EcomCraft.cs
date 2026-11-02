@@ -76,6 +76,7 @@ public class EcomCraft : Extension
         API.RegisterAPICall(OwnWorkflowApi.EcomCraftStudioWorkflowDelete, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(OwnWorkflowApi.EcomCraftStudioWorkflowSubmitOwn, true, PermSubmitWorkflows);
         API.RegisterAPICall(StandardWorkflows.EcomCraftStandardWorkflows, true, Permissions.EditServerSettings);
+        API.RegisterAPICall(StandardWorkflows.EcomCraftStudioReferenceEditStatus, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(StorageApi.EcomCraftStorageSettings, false, Permissions.EditServerSettings);
         API.RegisterAPICall(StorageApi.EcomCraftStorageSave, true, Permissions.EditServerSettings);
         API.RegisterAPICall(StorageApi.EcomCraftStorageMigrate, true, Permissions.EditServerSettings);

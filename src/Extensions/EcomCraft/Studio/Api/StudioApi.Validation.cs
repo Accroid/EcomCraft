@@ -24,7 +24,7 @@ namespace EcomCraftStudio.Studio;
 /// <summary>Validation helpers for published-workflow parameters. Part of the StudioApi partial class (R07).</summary>
 public static partial class StudioApi
 {
-    internal static bool ValidatePublishedWorkflowInput(Session session, string id, JToken value, JObject definition, out string error)
+    internal static bool ValidatePublishedWorkflowInput(Session session, string id, JToken value, JObject definition, out string error, bool allowImageTags = false)
     {
         error = null;
         string type = definition["type"]?.ToString()?.ToLowerInvariant() ?? "";
@@ -39,7 +39,10 @@ public static partial class StudioApi
         switch (type)
         {
             case "text":
-                if (value.Type != JTokenType.String || raw.Length > 12000 || raw.Contains('<') || raw.Contains('>') || raw.Contains("__"))
+                // The server-written edit prompt (F84) may carry the edit model's official <imageN> tags and nothing else: those are removed
+                // before the check, so any other native syntax still fails.
+                string text = allowImageTags ? Regex.Replace(raw, "<image(?:[1-9]|10)>", "", RegexOptions.CultureInvariant) : raw;
+                if (value.Type != JTokenType.String || text.Length > 12000 || text.Contains('<') || text.Contains('>') || text.Contains("__"))
                 {
                     error = $"工作流参数“{id}”必须是普通文本，不能超过 12000 个字符，也不能包含原生指令语法。";
                     return false;

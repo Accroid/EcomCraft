@@ -54,7 +54,7 @@ public static partial class StudioApi
     }
 
     private static async Task<JObject> GeneratePublishedWorkflow(Session session, JObject rawInput, string workflowId, int? pinnedServer, string templateId = null,
-        Func<JObject, Task> postProcess = null)
+        Func<JObject, Task> postProcess = null, GenerateOptions options = null)
     {
         if (!session.User.HasPermission(EcomCraft.PermUsePublishedWorkflows))
         {
@@ -70,17 +70,17 @@ public static partial class StudioApi
         // Work on a copy from here on: the steps below fill defaults and the engine seed into the request.
         rawInput = (JObject)rawInput.DeepClone();
         PublishedPlan plan = new();
-        JObject headerError = ValidatePublishedHeader(session, rawInput, workflow, metadata, savedValues, plan);
+        JObject headerError = ValidatePublishedHeader(session, rawInput, workflow, metadata, savedValues, plan, options);
         if (headerError is not null)
         {
             return headerError;
         }
-        JObject paramsError = MergePublishedParams(session, rawInput, workflow, metadata, savedValues, plan, out JObject input);
+        JObject paramsError = MergePublishedParams(session, rawInput, workflow, metadata, savedValues, plan, out JObject input, options);
         if (paramsError is not null)
         {
             return paramsError;
         }
-        JObject finalizeError = FinalizePublishedRequest(session, rawInput, input, workflow, metadata, plan, templateId, postProcess);
+        JObject finalizeError = FinalizePublishedRequest(session, rawInput, input, workflow, metadata, plan, templateId, postProcess, options);
         if (finalizeError is not null)
         {
             return finalizeError;
@@ -106,7 +106,7 @@ public static partial class StudioApi
     /// <summary>The request-wide checks of a published-workflow generation: kind, the workflow's own defaults, the model, the prompt and the
     /// size; fills <paramref name="plan"/>. The check order and error texts are part of the API contract. Returns the error, or null when accepted.</summary>
     private static JObject ValidatePublishedHeader(Session session, JObject rawInput, ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
-        JObject metadata, JObject savedValues, PublishedPlan plan)
+        JObject metadata, JObject savedValues, PublishedPlan plan, GenerateOptions options = null)
     {
         string kind = (string)rawInput["kind"];
         if (kind is not ("image" or "video"))
@@ -144,7 +144,12 @@ public static partial class StudioApi
         {
             return Error("请填写创作描述（最多 12000 字符），排除内容最多 6000 字符。", "invalid_prompt");
         }
-        if (new[] { prompt, negative }.Any(p => p.Contains('<') || p.Contains('>') || p.Contains("__")))
+        // Native prompt directives may change parameters or apply presets after parsing. This adapter accepts plain text only, with one server-side
+        // exception: the reference-edit trial's own prompt uses the official <imageN> tags of the edit model (F84); anything but those exact tags
+        // is still refused, and the flag itself never comes from a request field.
+        string tagStripped = options?.AllowImageTagPrompt == true
+            ? Regex.Replace(prompt, "<image(?:[1-9]|10)>", "", RegexOptions.CultureInvariant) : prompt;
+        if (new[] { tagStripped, negative }.Any(p => p.Contains('<') || p.Contains('>') || p.Contains("__")))
         {
             return Error("本版工作台只接受普通描述，不支持原生 <…> 指令、预设或 __通配符__。", "unsupported_prompt_syntax");
         }
@@ -170,9 +175,10 @@ public static partial class StudioApi
     }
 
     /// <summary>Merges the workflow's own saved values and the request's parameters into one allowlisted <paramref name="input"/> object;
-    /// every parameter is validated against the published definition. Returns the error, or null when accepted.</summary>
+    /// every parameter is validated against the published definition. The server-side options (<paramref name="options"/>) may add parameters of its own:
+    /// they are validated the same way but never pass the page allowlist, because no page can list them (F84). Returns the error, or null when accepted.</summary>
     private static JObject MergePublishedParams(Session session, JObject rawInput, ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
-        JObject metadata, JObject savedValues, PublishedPlan plan, out JObject input)
+        JObject metadata, JObject savedValues, PublishedPlan plan, out JObject input, GenerateOptions options = null)
     {
         JToken rawWorkflowParams = rawInput["workflow_params"];
         if (rawWorkflowParams is not null && rawWorkflowParams.Type is not (JTokenType.Object or JTokenType.Null))
@@ -244,7 +250,7 @@ public static partial class StudioApi
                 input = null;
                 return Error($"工作流参数“{property.Name}”不在此工作流的允许输入列表中。", "invalid_workflow_parameters");
             }
-            if (!ValidatePublishedWorkflowInput(session, property.Name, property.Value, definitionObject, out string validationError))
+            if (!ValidatePublishedWorkflowInput(session, property.Name, property.Value, definitionObject, out string validationError, ImageTagsAllowed(options, definitionObject)))
             {
                 input = null;
                 return Error(validationError, "invalid_workflow_parameters");
@@ -259,13 +265,41 @@ public static partial class StudioApi
                 input[property.Name] = property.Value.DeepClone();
             }
         }
+        foreach (JProperty property in options?.ServerParams?.Properties() ?? Enumerable.Empty<JProperty>())
+        {
+            // Server-set parameters (the edit trial's images and pixel budget, F84): validated like any other value, but the page allowlist never
+            // contains them, so only this server-side path can deliver them.
+            if (!metadata.TryGetValue(property.Name, out JToken definition) || definition is not JObject definitionObject)
+            {
+                input = null;
+                return Error("服务端填写的工作流参数不在工作流定义中。", "invalid_workflow_parameters");
+            }
+            if (!ValidatePublishedWorkflowInput(session, property.Name, property.Value, definitionObject, out string serverError))
+            {
+                input = null;
+                return Error(serverError, "invalid_workflow_parameters");
+            }
+            if (definitionObject["type"]?.ToString()?.ToLowerInvariant() == "image" && string.IsNullOrWhiteSpace(property.Value.ToString()))
+            {
+                input.Remove(property.Name);
+            }
+            else
+            {
+                input[property.Name] = property.Value.DeepClone();
+            }
+        }
         return null;
     }
+
+    /// <summary>Whether the request allows the official <c>&lt;imageN&gt;</c> tags in this parameter's text: only the server-set edit prompt
+    /// (bound to the "prompt" page field) carries them (F84).</summary>
+    private static bool ImageTagsAllowed(GenerateOptions options, JObject definition) =>
+        options?.AllowImageTagPrompt == true && definition?["form"]?.ToString() == "prompt";
 
     /// <summary>Builds the root generation request from a strict allowlist; never forwards arbitrary client-supplied routes, metadata or workflow JSON.
     /// Returns the error, or null when accepted.</summary>
     private static JObject FinalizePublishedRequest(Session session, JObject rawInput, JObject input, ComfyUIBackendExtension.ComfyCustomWorkflow workflow,
-        JObject metadata, PublishedPlan plan, string templateId, Func<JObject, Task> postProcess)
+        JObject metadata, PublishedPlan plan, string templateId, Func<JObject, Task> postProcess, GenerateOptions options = null)
     {
         if (!plan.Native)
         {
@@ -277,7 +311,7 @@ public static partial class StudioApi
             {
                 JObject definition = (JObject)property.Value;
                 if (input[property.Name] is null || input[property.Name].Type == JTokenType.Null
-                    || !ValidatePublishedWorkflowInput(session, property.Name, input[property.Name], definition, out _))
+                    || !ValidatePublishedWorkflowInput(session, property.Name, input[property.Name], definition, out _, ImageTagsAllowed(options, definition)))
                 {
                     return Error("工作流参数缺失或无效，请刷新列表后重新选择工作流。", "invalid_workflow_parameters");
                 }
@@ -296,7 +330,7 @@ public static partial class StudioApi
                 }
             }
         }
-        if (plan.Native && StandardWorkflows.IsStandard(workflow.Name) && !StandardCanvasUsable(input[StandardWorkflows.ProductImageParam]?.ToString()))
+        if (plan.Native && StandardWorkflows.NeedsProductCanvas(workflow.Name) && !StandardCanvasUsable(input[StandardWorkflows.ProductImageParam]?.ToString()))
         {
             return Error("标准工作流只重绘商品周围的场景，商品图需要是透明背景的商品画布。请通过“场景图”或“细节图”模板出图，或上传已抠图的透明 PNG。", "invalid_reference");
         }

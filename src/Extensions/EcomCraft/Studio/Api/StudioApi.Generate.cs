@@ -127,7 +127,7 @@ public static partial class StudioApi
             }
             // The template decides the workflow and presets; the client's own workflow_id and workflow_params are replaced.
             // A background submission is resolved now with an empty subject, so invalid requests still fail at once; the prompt is filled in later.
-            JObject resolved = TemplateApi.Resolve(session, templateInput, requestedTemplate, out JObject templateError, out string preserveToken, generationSize, options.RawPrompt);
+            JObject resolved = TemplateApi.Resolve(session, templateInput, requestedTemplate, out JObject templateError, out string preserveToken, generationSize, options);
             if (resolved is null)
             {
                 return templateError;
@@ -141,7 +141,7 @@ public static partial class StudioApi
                 return StartPreparing(session, resolved, requestedTemplate, pinnedServer, preserveToken, postProcess,
                     async () => WithBrand(await PromptService.ComposePanelAsync(session, styleId, productTypeId, needModel, description, promptEn, promptZh), brandFragment), options.RawPrompt);
             }
-            JObject templateResult = await GeneratePublishedWorkflow(session, resolved, resolved.Value<string>("workflow_id"), pinnedServer, requestedTemplate, postProcess);
+            JObject templateResult = await GeneratePublishedWorkflow(session, resolved, resolved.Value<string>("workflow_id"), pinnedServer, requestedTemplate, postProcess, options);
             if (templateResult.ContainsKey("error"))
             {
                 PostProcess.GenerationFinish.Discard(preserveToken);
@@ -155,7 +155,7 @@ public static partial class StudioApi
         string requestedWorkflow = (string)rawInput["workflow_id"];
         if (!string.IsNullOrWhiteSpace(requestedWorkflow))
         {
-            return await GeneratePublishedWorkflow(session, rawInput, requestedWorkflow, pinnedServer);
+            return await GeneratePublishedWorkflow(session, rawInput, requestedWorkflow, pinnedServer, options: options);
         }
         string mode = (string)rawInput["mode"] ?? "text2img";
         if (mode is not ("text2img" or "img2img" or "inpaint" or "outpaint" or "upscale" or "video"))

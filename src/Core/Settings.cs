@@ -96,6 +96,12 @@ public class Settings : AutoConfiguration
         /// <summary>VAE of the standard workflows.</summary>
         [ConfigComment("VAE file name used by the standard workflows EcomCraft generates for its built-in templates.")]
         public string StandardWorkflowVae = "qwen_image_2.1_vae_bf16.safetensors";
+
+        /// <summary>Pixel budget of the reference-edit trial's workflows (the encoder's resolution input, F84).</summary>
+        [ConfigComment("Pixel budget (the Qwen Image 2.1 edit encoder's resolution input) of the direct-fusion trial's workflows. 0 picks it automatically from the "
+            + "hardware tier: 512 on the unsupported tier or when probing failed, 1024 otherwise. The value is written by the server into every edit request; "
+            + "clients never see or send it. T118 will move this into the model recipe.")]
+        public int ReferenceEditResolution = 0;
     }
 
     /// <summary>Settings related to Swarm server maintenance..</summary>

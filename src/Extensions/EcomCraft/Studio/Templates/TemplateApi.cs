@@ -154,7 +154,7 @@ public static class TemplateApi
     };
 
     /// <summary>Published workflows this account can run on an online server now, by ID, as the workspace catalog lists them.</summary>
-    private static Dictionary<string, JObject> Runnable(Session session)
+    internal static Dictionary<string, JObject> Runnable(Session session)
     {
         Dictionary<string, JObject> result = new(StringComparer.Ordinal);
         foreach (JObject workflow in StudioApi.PublishedWorkflowsFor(session).OfType<JObject>())
@@ -168,8 +168,8 @@ public static class TemplateApi
     /// (template_params, by parameter ID) and the prompt with the template's fragments. Returns null with an error response when the template cannot be used.
     /// Page fields bound to parameters the template does not open to users are removed or overwritten, so only presets, allowed fields and snapshot values apply.
     /// <paramref name="generationSize"/> (from the output size chosen before generating) sets the generated width and height and the product canvas size.</summary>
-    public static JObject Resolve(Session session, JObject rawInput, string templateId, out JObject error, out string preserveToken, (int Width, int Height)? generationSize = null,
-        bool rawPrompt = false)
+    internal static JObject Resolve(Session session, JObject rawInput, string templateId, out JObject error, out string preserveToken, (int Width, int Height)? generationSize = null,
+        GenerateOptions options = null)
     {
         error = null;
         preserveToken = null;
@@ -181,7 +181,9 @@ public static class TemplateApi
         }
         EcomTemplate template = entry.Template;
         ExecutionPlan plan = template.LocalPlan;
-        string workflowId = TemplateStore.WorkflowIdFor(plan);
+        // A server-side option may run another published workflow of the same template (the edit trial picks one per angle count, F84);
+        // it is still a published, reviewed snapshot, only ever set by server code.
+        string workflowId = options?.WorkflowOverride ?? TemplateStore.WorkflowIdFor(plan);
         if (workflowId is null || !Runnable(session).TryGetValue(workflowId, out JObject workflow))
         {
             error = StudioApi.Error("暂时没有执行服务器能运行此模板，或当前账号无权使用其中的模型。", "no_execution_server");
@@ -313,7 +315,7 @@ public static class TemplateApi
         // A raw prompt (F59 reference mode) is sent as is: what the user saw and edited is exactly what the engine gets, with no template fragments.
         // The flag is a server-side choice passed by the caller (R08); a client-sent field of the same name is stripped and ignored.
         request.Remove("raw_prompt");
-        request["prompt"] = rawPrompt
+        request["prompt"] = options?.RawPrompt == true
             ? (rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : "")
             : Join(" ", template.PromptPrefix, rawInput["prompt"]?.Type == JTokenType.String ? rawInput.Value<string>("prompt") : "", template.PromptSuffix);
         request["negativeprompt"] = Join(", ", template.Negative, rawInput["negativeprompt"]?.Type == JTokenType.String ? rawInput.Value<string>("negativeprompt") : "");

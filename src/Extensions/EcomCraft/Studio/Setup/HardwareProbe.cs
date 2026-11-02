@@ -36,6 +36,31 @@ public static class HardwareProbe
     /// <summary>An administrator's override of the tier thresholds and ROCm list (same format as the built-in file).</summary>
     private static string CustomRulesFile => Path.Combine(Program.DataDir, "EcomCraft", "hardware-tiers.json");
 
+    /// <summary>This platform server's tier, probed once and cached: the hardware cannot change while the server runs. Null until probed.
+    /// Probed lazily for defaults like the edit trial's pixel budget (F84); the status page still shows the full fresh report to administrators.</summary>
+    private static string CachedTier;
+
+    /// <summary>Protects the one-time tier probe.</summary>
+    private static readonly object TierLock = new();
+
+    /// <summary>This platform server's tier, probed on first use and then cached (F84): "recommended", "minimum", "conditional", "unsupported" or "unknown".</summary>
+    public static async Task<string> CurrentTierAsync()
+    {
+        lock (TierLock)
+        {
+            if (CachedTier is not null)
+            {
+                return CachedTier;
+            }
+        }
+        string tier = (await StatusAsync())["tier"]?.ToString() ?? HardwareRules.Unknown;
+        lock (TierLock)
+        {
+            CachedTier ??= tier;
+            return CachedTier;
+        }
+    }
+
     /// <summary>The tier rules in force: the administrator's file when present, otherwise the shipped one, otherwise the built-in defaults.</summary>
     public static HardwareRules.Rules LoadRules()
     {

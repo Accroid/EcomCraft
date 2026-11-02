@@ -170,6 +170,26 @@ public static class ProductLibrary
         return (image, placement ?? Placement.Default, null);
     }
 
+    /// <summary>The IDs of a saved product's angles in order, the main image first (F84 trial), so the direct-fusion batch knows how many photos it holds
+    /// without reading any file. Null with a reason when the product cannot be used. The count never exceeds <see cref="ProductAngleRules.MaxAngles"/>.</summary>
+    public static (List<string> Ids, string Error) AngleIdsFor(string userId, string productId)
+    {
+        ProductRecord record;
+        lock (Lock)
+        {
+            record = Loaded().Find(userId, productId);
+        }
+        if (record is null)
+        {
+            return (null, "商品不存在，请刷新商品库。");
+        }
+        if (record.MainAngle() is null)
+        {
+            return (null, "这个商品还没有照片，请重新保存。");
+        }
+        return ([.. record.Angles.Take(ProductAngleRules.MaxAngles).Select(angle => angle.Id)], null);
+    }
+
     /// <summary>Whether the account has a saved product with this ID (files are not read).</summary>
     public static bool Exists(string userId, string productId)
     {
