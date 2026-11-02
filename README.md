@@ -6,7 +6,7 @@ EcomCraft Studio 是给电商团队用的**局域网商品图生产平台**，�
 
 - **运营和小店老板**：用简易模式三步出图，不碰提示词、模型和参数。
 - **平面设计人员**：用专业模式调模型、采样器、LoRA，上传自己的 ComfyUI 工作流。
-- **销售方式**：按软件销售，按账号数收费。
+- **销售方式**：版本方案待定（原定开源核心 + 团队版、按账号数收费；模型商用许可处理完成前，不宣称可商用）。
 
 ## 效果对比
 
@@ -22,13 +22,13 @@ EcomCraft Studio 是给电商团队用的**局域网商品图生产平台**，�
 
 | 痛点 | EcomCraft 的做法 |
 |---|---|
-| 不会写提示词、不懂设计 | 先选要做的事：**照参考图做**（上传你想要的参考图，按它的构图和光线出图）、做一张图、出一整套；一句话描述可由 AI 扩写成中英文提示词 |
+| 不会写提示词、不懂设计 | **照参考图做**：上传你想要的参考图，按它的构图和光线出图，不用写提示词 |
 | AI 把商品画变形、Logo 和文字走样 | **商品保真**：抠图放到画布上生成，出图后把商品的 Logo、文字和形状原样贴回，光线融入场景；卖点文字由程序按固定版式排版，不让 AI 写字 |
 | 各平台尺寸、白底、大小上限都不一样 | 按平台**槽位**一键出整套、按规格导出；亚马逊白底主图走纯抠图，检查纯白并写入 AI 元数据 |
 | 商品图不能外传 | 生成**只在本机或局域网**登记的 ComfyUI 上执行，不回退云端；看图模型默认用本机 Ollama |
 | 团队多台显卡没人调度 | 自动分派到空闲的执行服务器，队列可看进度和预计剩余时间、可结束自己的任务 |
 | 搭工作流门槛高 | 内置模板的工作流由系统按默认模型**自动生成**；设计师上传的工作流自己马上能用，审核后发布给全员 |
-| 每次出图都要从头挑 | 商品库、品牌资料包（品牌色、Logo、参考图）、候选图收藏、“在专业模式里精修” |
+| 每次出图都要从头挑 | 商品库、候选图收藏、“在专业模式里精修” |
 
 完整的功能清单与进度见[架构与路线图](docs/EcomCraft%20Architecture.zh-CN.md)，接口与安全规则见[工作流调用文档](docs/EcomCraft%20ComfyUI%20工作流.zh-CN.md)。
 
@@ -81,7 +81,7 @@ cd EcomCraft
 
 - [中文文档总览](docs/README.zh-CN.md) · [基础使用](docs/Basic%20Usage.zh-CN.md) · [常见问题排查](docs/Troubleshooting.zh-CN.md)
 - [工作流调用与接口](docs/EcomCraft%20ComfyUI%20工作流.zh-CN.md) · [局域网部署指南](docs/EcomCraft%20局域网部署指南.zh-CN.md) · [提示词优化与看图模型](docs/EcomCraft%20提示词优化指南.zh-CN.md) · [升级与数据说明](docs/EcomCraft%20Upgrade.zh-CN.md)
-- 开发规划：[架构与路线图](docs/EcomCraft%20Architecture.zh-CN.md) · [实施计划](docs/EcomCraft%20实施计划.zh-CN.md) · [重构计划](docs/EcomCraft%20重构计划.zh-CN.md) · [界面与操作改版需求](docs/EcomCraft%20界面改版需求.zh-CN.md) · [简易模式改版需求](docs/EcomCraft%20简易模式改版需求.zh-CN.md) · [局域网多服务器平台需求](docs/EcomCraft%20局域网多服务器平台需求.zh-CN.md)
+- 开发规划：[架构与路线图](docs/EcomCraft%20Architecture.zh-CN.md) · [实施计划](docs/EcomCraft%20实施计划.zh-CN.md) · [重构计划](docs/EcomCraft%20重构计划.zh-CN.md) · [产品调整方案](docs/EcomCraft%20产品调整方案.zh-CN.md) · [界面与操作改版需求](docs/EcomCraft%20界面改版需求.zh-CN.md) · [简易模式改版需求](docs/EcomCraft%20简易模式改版需求.zh-CN.md) · [局域网多服务器平台需求](docs/EcomCraft%20局域网多服务器平台需求.zh-CN.md)
 
 ## 联系与部署服务
 

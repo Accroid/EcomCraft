@@ -6,7 +6,7 @@ EcomCraft Studio is a **LAN product-image production platform** for e-commerce t
 
 - **Operators and small shop owners** create images in three steps in simple mode, without prompts, models or parameters.
 - **Graphic designers** use professional mode to tune models, samplers and LoRAs, and upload their own ComfyUI workflows.
-- **Sales model**: sold as software, priced per account.
+- **Sales model**: to be decided (formerly an open-source core + team edition priced per account; commercial use is not claimed until model licensing is settled).
 
 ## Before and After
 
@@ -22,13 +22,13 @@ Demo video: (to be added)
 
 | Pain point | How EcomCraft handles it |
 |---|---|
-| No prompt or design skills | Choose a task first: **Follow a reference** (upload a reference image you like and get its composition and light), make one image, or make a full set; a one-line description can be expanded by AI into Chinese and English prompts |
+| No prompt or design skills | **Follow a reference**: upload a reference image you like and get its composition and light — no prompts to write |
 | AI distorts the product, its logo and text | **Product preservation**: the cut-out goes onto the canvas and the product's logo, text and shape are pasted back unchanged after generation, with light matched to the scene; selling-point text is laid out by the program in fixed layouts, never written by AI |
 | Every platform has its own sizes, white backgrounds and file caps | One-click sets and exports by the platform's **slots**; Amazon white main images use the cut-out only, with a pure-white check and AI metadata |
 | Product photos must not leave the company | Generation runs **only on registered local or LAN** ComfyUI servers, never falling back to the cloud; the vision model defaults to local Ollama |
 | Several GPU computers and nobody to schedule them | Tasks go to idle execution servers automatically; the queue shows progress and the estimated time left, and lets you stop your own tasks |
 | Building workflows is hard | The built-in templates' workflows are **generated automatically** with the default models; a designer's uploaded workflow works for them at once and is published to everyone after review |
-| Starting from scratch every time | Product library, brand kits (colors, logo, references), starring candidates, and "Refine in professional mode" |
+| Starting from scratch every time | Product library, starring candidates, and "Refine in professional mode" |
 
 The full feature list and progress are in the [Architecture and Roadmap](docs/EcomCraft%20Architecture.md); APIs and security rules are in the [workflow calls guide](docs/EcomCraft%20ComfyUI%20Workflows.md).
 
@@ -81,7 +81,7 @@ The first launch builds the server and takes a few minutes. macOS only gets the 
 
 - [Documentation index](docs/README.md) · [Chinese documentation index](docs/README.zh-CN.md) · [Basic Usage (Chinese)](docs/Basic%20Usage.zh-CN.md) · [Troubleshooting (Chinese)](docs/Troubleshooting.zh-CN.md)
 - [Workflow calls and APIs](docs/EcomCraft%20ComfyUI%20Workflows.md) · [LAN Deployment Guide](docs/EcomCraft%20LAN%20Deployment.md) · [Prompt enhancement and vision model](docs/EcomCraft%20Prompt%20Enhancement.md) · [Upgrade and Data Guide](docs/EcomCraft%20Upgrade.md)
-- Development planning: [Architecture and Roadmap](docs/EcomCraft%20Architecture.md) · [Implementation Plan](docs/EcomCraft%20Implementation%20Plan.md) · [Refactoring Plan](docs/EcomCraft%20Refactoring%20Plan.md) · [UI and Workflow Redesign](docs/EcomCraft%20UI%20Redesign.md) · [Simple Mode Redesign](docs/EcomCraft%20Simple%20Mode%20Redesign.md) · [LAN Multi-Server Platform Requirements](docs/EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md)
+- Development planning: [Architecture and Roadmap](docs/EcomCraft%20Architecture.md) · [Implementation Plan](docs/EcomCraft%20Implementation%20Plan.md) · [Refactoring Plan](docs/EcomCraft%20Refactoring%20Plan.md) · [Product Realignment Plan](docs/EcomCraft%20Product%20Realignment%20Plan.md) · [UI and Workflow Redesign](docs/EcomCraft%20UI%20Redesign.md) · [Simple Mode Redesign](docs/EcomCraft%20Simple%20Mode%20Redesign.md) · [LAN Multi-Server Platform Requirements](docs/EcomCraft%20LAN%20Multi-Server%20Platform%20Requirements.md)
 
 ## Contact and Deployment Service
 
