@@ -157,6 +157,9 @@ select {
     background-repeat: no-repeat; background-position: right 9px center; background-size: 14px;
 }
 input[type=range] { width: 100%; accent-color: var(--key); }
+/* The "excluded content" box while the prompt strength is exactly 1 (T126): the engine skips negative conditioning there, so the box
+   only looks inactive and stays editable; the hint under it stays fully visible. */
+textarea.is-ineffective { opacity: .55; }
 
 /* ---------- 顶栏 ---------- */
 .topbar {

@@ -2419,6 +2419,13 @@
         msg.classList.toggle('is-error', !!isError);
     }
 
+    /** Weakens the look of the "excluded content" box while the prompt strength (cfg) is exactly 1 (T126): the engine skips negative
+     conditioning there, so the box only looks inactive but stays editable, and the note under it stays visible. Standalone on purpose:
+     the parameter rendering and recipe linkage are being reworked elsewhere, so this must merge on its own. */
+    function updateNegativeEffectLook() {
+        $('negative').classList.toggle('is-ineffective', Number($('cfg').value) === 1);
+    }
+
     /** Counts advanced parameters the user filled in for the standard workspace; native workflows prefill them, so they show no count. */
     function advancedSummary() {
         if (currentWorkflow()?.native) {
@@ -2468,6 +2475,7 @@
         $('prompt-count').textContent = `${promptLength} / 12000`;
         $('prompt-count').classList.toggle('near-limit', promptLength > 11000);
         $('recover').hidden = !state.uncertain;
+        updateNegativeEffectLook();
     }
 
     /* ============================================================
@@ -6029,6 +6037,10 @@
         $('swap-dims').addEventListener('click', () => {
             const w = $('width').value; $('width').value = $('height').value; $('height').value = w;
         });
+        // A recipe-linked model switch sets the prompt strength programmatically (no input event), so the weakened look
+        // of the negative box also syncs on every later change event reaching the document (T126).
+        $('cfg').addEventListener('input', updateNegativeEffectLook);
+        document.addEventListener('change', updateNegativeEffectLook);
         $('insert-example').addEventListener('click', () => {
             if ($('prompt').value.trim() && !window.confirm(tr('用示例替换当前描述？'))) { return; }
             $('prompt').value = state.type === 'image'

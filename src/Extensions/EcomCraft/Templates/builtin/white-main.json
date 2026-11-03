@@ -18,7 +18,7 @@
   "kind": "white_main",
   "prompt": {
     "prefix": "professional e-commerce studio shot on a pure white seamless background,",
-    "suffix": "evenly lit, soft natural shadow, centered composition, high detail",
+    "suffix": "evenly lit, soft natural shadow, centered composition, high detail, the product alone on a seamless pure white background with no props, no text and no watermarks anywhere in the frame",
     "negative": "text, watermark, logo overlay, props, product, bottle, jar, box, packaging, container, colored background, busy background"
   },
   "preserve_product": true,

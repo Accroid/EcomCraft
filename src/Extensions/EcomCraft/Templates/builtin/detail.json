@@ -18,7 +18,7 @@
   "kind": "detail",
   "prompt": {
     "prefix": "macro close-up photography highlighting fine textures and materials,",
-    "suffix": "crisp focus, soft studio lighting, clean background",
+    "suffix": "crisp focus, soft studio lighting, clean background, the picture holds only this one product with no other bottles, jars, boxes, packaging or containers anywhere, the background and props are completely free of text, letters, logos and watermarks, and every fine detail is rendered sharp and true",
     "negative": "text, watermark, product, bottle, jar, box, packaging, container, blur, noise, deformed details"
   },
   "preserve_product": true,

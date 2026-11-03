@@ -18,7 +18,7 @@
   "kind": "model",
   "prompt": {
     "prefix": "lifestyle photo of a person naturally using or holding the product,",
-    "suffix": "natural pose, realistic skin and hands, soft flattering light",
+    "suffix": "natural pose, realistic skin and hands, soft flattering light, natural well-shaped hands with all five fingers, an undistorted face, the product held in its true shape without bending or distortion, and no text, letters or watermarks anywhere in the photo",
     "negative": "text, watermark, extra fingers, deformed hands, distorted face, distorted product"
   },
   "preserve_product": false,

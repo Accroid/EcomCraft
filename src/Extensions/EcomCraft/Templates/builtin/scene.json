@@ -18,7 +18,7 @@
   "kind": "scene_main",
   "prompt": {
     "prefix": "commercial photography of a realistic scene, eye-level straight-on camera, an open flat clear surface in the center foreground, props only at the sides and behind, soft directional light,",
-    "suffix": "photorealistic lighting that matches the scene, shallow depth of field",
+    "suffix": "photorealistic lighting that matches the scene, shallow depth of field, a tidy uncluttered composition, the picture holds only this one product with no other bottles, jars, boxes, packaging or containers anywhere in the scene, and the background and props are completely free of text, letters, logos and watermarks",
     "negative": "text, watermark, product, bottle, jar, tube, box, packaging, container, cluttered composition"
   },
   "preserve_product": true,
