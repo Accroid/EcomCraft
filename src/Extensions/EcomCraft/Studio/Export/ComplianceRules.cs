@@ -219,8 +219,9 @@ public static class ComplianceRules
     private static double? Number(JObject obj, string name) => obj[name]?.Type is JTokenType.Float or JTokenType.Integer ? obj.Value<double>(name) : null;
 
     /// <summary>Placement of the product pasted into a work, read from the work's own markers (F49): the resolved placement a product-preserving generation
-    /// kept (sui_extra_data.ecomcraft_placement), or the centered layout of a cut-out-only white main image. Older works, reference mode and the fusion trial
-    /// say nothing about where their product sits and give null, so the label falls back to its rule's corner.</summary>
+    /// kept (sui_extra_data.ecomcraft_placement — a placement object, or the same object as compact JSON text, because SwarmUI stores extra metadata values as
+    /// strings), or the centered layout of a cut-out-only white main image. Older works, reference mode and the fusion trial say nothing about where their
+    /// product sits and give null, so the label falls back to its rule's corner.</summary>
     public static Placement ProductPlacement(string metadataText)
     {
         bool cutout = metadataText?.Contains("\"ecomcraft_cutout_only\"", StringComparison.Ordinal) == true;
@@ -234,6 +235,17 @@ public static class ComplianceRules
             metadata = null;
         }
         JObject stored = metadata?["sui_extra_data"]?["ecomcraft_placement"] as JObject;
+        if (stored is null && metadata?["sui_extra_data"]?["ecomcraft_placement"]?.Type == JTokenType.String)
+        {
+            try
+            {
+                stored = JObject.Parse(metadata["sui_extra_data"]["ecomcraft_placement"].ToString());
+            }
+            catch (JsonException)
+            {
+                stored = null;
+            }
+        }
         if (stored is not null && Placement.TryCreate(stored.Value<double?>("x"), stored.Value<double?>("y"), stored.Value<double?>("size"), out Placement placement))
         {
             return placement;

@@ -407,10 +407,11 @@ public static partial class StudioApi
         {
             // Marks the work as a composite of the real product and a generated picture, for the provenance metadata written on export (F22).
             ((JObject)input["extra_metadata"])["ecomcraft_preserve"] = "true";
-            // The resolved placement the product is pasted back at (F49): the visible AI label keeps clear of it when exporting.
+            // The resolved placement the product is pasted back at (F49): the visible AI label keeps clear of it when exporting. SwarmUI stores extra
+            // metadata values as strings, so the object is written as compact JSON and parsed back when the work is exported.
             if (rawInput["placement"] is JObject resolved)
             {
-                ((JObject)input["extra_metadata"])["ecomcraft_placement"] = resolved.DeepClone();
+                ((JObject)input["extra_metadata"])["ecomcraft_placement"] = resolved.ToString(Newtonsoft.Json.Formatting.None);
             }
         }
         return null;
