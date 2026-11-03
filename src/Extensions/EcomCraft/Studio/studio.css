@@ -918,3 +918,14 @@ main:focus:not(:focus-visible) { outline: none; }
 .simple-ai-label:has(input:disabled) {
     color: var(--ink-2);
 }
+
+/* 按平台图位选择（T107）：扩图和放大面板里平台、图位两个下拉框共用一行 */
+.slotfit-row {
+    display: flex;
+    gap: 8px;
+}
+
+.slotfit-row select {
+    flex: 1;
+    min-width: 0;
+}

@@ -705,6 +705,7 @@
         $('reference-fld').hidden = selected || !meta.needsRef;
         $('mask-wrap').hidden = selected || !meta.mask || state.mode === 'outpaint';
         $('creativity-fld').hidden = selected || !meta.creativity;
+        $('slotfit-fld').hidden = selected || !(meta.outpaint || meta.upscale);
         $('outpaint-fld').hidden = selected || !meta.outpaint;
         $('upscale-fld').hidden = selected || !meta.upscale;
         $('lora-fld').hidden = selected;
@@ -1152,6 +1153,7 @@
         $('ref-optional').textContent = meta.tag;
         $('mask-wrap').hidden = !meta.mask || mode === 'outpaint';
         $('creativity-fld').hidden = !meta.creativity;
+        $('slotfit-fld').hidden = !(meta.outpaint || meta.upscale);
         $('outpaint-fld').hidden = !meta.outpaint;
         $('upscale-fld').hidden = !meta.upscale;
         $('reference-help').textContent = mode === 'inpaint'
@@ -1161,6 +1163,7 @@
             : '图生图会重绘原图，不保证商品细节、文字或标志完全不变。';
         if (meta.mask && mode === 'inpaint' && state.reference) { MaskEditor.init(); }
         if (meta.outpaint) { /* mask generated at submit */ }
+        if (meta.outpaint || meta.upscale) { SlotFitPicker.onModeChange(); }
         updateWorkflowUi();
         updateControls();
     }
@@ -1191,6 +1194,7 @@
         state.reference = null;
         MaskEditor.reset();
         renderReference();
+        SlotFitPicker.onReferenceChange();
         updateControls();
     }
 
@@ -1225,6 +1229,7 @@
             setStatus('初始图已选好，提交生成时才发送给服务。');
             if (state.mode === 'inpaint') { MaskEditor.init(); }
             if (state.mode === 'upscale') { syncUpscaleSize(); }
+            SlotFitPicker.onReferenceChange();
         } catch (error) {
             URL.revokeObjectURL(objectUrl);
             if (revision === state.referenceRevision) {
@@ -1422,6 +1427,202 @@
         const align = v => Math.round(v / step) * step;
         $('width').value = Math.max(256, Math.min(2048, align(ref.width)));
         $('height').value = Math.max(256, Math.min(2048, align(ref.height)));
+    }
+
+    /* ============================================================
+       Platform slot fit (T107): plan outpaint and upscale from a platform slot
+       ============================================================ */
+    class SlotFitPicker {
+        static platforms = [];
+        static loadedLanguage = '';
+        static loading = false;
+        static plan = null;
+        static requestId = 0;
+
+        /** Whether the current mode uses the panel (outpaint and upscale share it). */
+        static active() {
+            return state.mode === 'outpaint' || state.mode === 'upscale';
+        }
+
+        /** Loads the platform list from the export options, once per language; the panel is optional, so a failure only shows a hint. */
+        static async loadOptions() {
+            if (this.loading || (this.platforms.length && this.loadedLanguage === I18n.current)) { return; }
+            this.loading = true;
+            try {
+                let result = await request('EcomCraftStudioExportOptions', { language: I18n.current });
+                this.platforms = (result.platforms || []).filter(item => (item.slots || []).length > 0);
+                this.loadedLanguage = I18n.current;
+                this.renderPlatforms();
+            }
+            catch (error) {
+                this.platforms = [];
+                this.renderPlatforms();
+                this.hint(error.message || tr('平台图位读取失败，可稍后刷新重试。'));
+            }
+            finally {
+                this.loading = false;
+            }
+        }
+
+        /** Fills the platform select, keeping a choice that still exists; the slot select follows the platform. */
+        static renderPlatforms() {
+            let select = $('slotfit-platform');
+            let current = select.value;
+            select.replaceChildren(new Option(tr('选择平台'), ''));
+            for (let platform of this.platforms) {
+                select.append(new Option(platform.name || platform.id, platform.id || ''));
+            }
+            select.value = this.platforms.some(item => item.id === current) ? current : '';
+            select.disabled = this.platforms.length === 0;
+            this.renderSlots();
+        }
+
+        /** Fills the slot select of the chosen platform with each slot's name and size. */
+        static renderSlots() {
+            let select = $('slotfit-slot');
+            let platform = this.platforms.find(item => item.id === $('slotfit-platform').value);
+            let current = select.value;
+            select.replaceChildren(new Option(tr('选择图位'), ''));
+            if (platform) {
+                for (let slot of (platform.slots || [])) {
+                    select.append(new Option(tr('{0}（{1}×{2}）', slot.name || slot.id, slot.width, slot.height), slot.id || ''));
+                }
+            }
+            select.value = platform && (platform.slots || []).some(item => item.id === current) ? current : '';
+            select.disabled = !platform;
+        }
+
+        /** Called when the mode shows the panel: loads the platform list and refreshes the controls from the plan already made, if any. */
+        static onModeChange() {
+            this.loadOptions();
+            if (this.plan) {
+                this.applyToControls();
+                this.hint(this.describe(this.plan));
+            }
+            else {
+                this.applyPlan();
+            }
+        }
+
+        /** Called when the initial image changes: the plan was for its size, so it is asked for again. */
+        static onReferenceChange() {
+            this.plan = null;
+            if (this.active()) {
+                this.applyPlan();
+            }
+        }
+
+        /** Asks the server for the plan (numbers and IDs only) and applies it to the mode's controls; the user can still change everything after. */
+        static async applyPlan() {
+            let platformId = $('slotfit-platform').value;
+            let slotId = $('slotfit-slot').value;
+            this.plan = null;
+            if (!platformId) {
+                this.hint(tr('选择平台和图位后，会按图位尺寸自动计算扩图方向和放大倍数。'));
+                return;
+            }
+            if (!slotId) {
+                this.hint(tr('选择图位后自动计算。'));
+                return;
+            }
+            if (!state.reference) {
+                this.hint(tr('先选择初始图，再按图位计算。'));
+                return;
+            }
+            let requestId = ++this.requestId;
+            this.hint(tr('正在计算…'));
+            try {
+                let result = await request('EcomCraftStudioSlotPlan', {
+                    width: state.reference.width,
+                    height: state.reference.height,
+                    platform: platformId,
+                    slot: slotId
+                });
+                if (requestId !== this.requestId) { return; }
+                this.plan = result;
+                this.applyToControls();
+                this.hint(this.describe(result));
+            }
+            catch (error) {
+                if (requestId !== this.requestId) { return; }
+                this.hint(error.message || tr('计算失败，请稍后重试。'));
+            }
+        }
+
+        /** Writes the plan into the current mode's controls: the direction buttons and amount for outpaint, the factor slider for upscale. */
+        static applyToControls() {
+            if (!this.plan || !state.reference) { return; }
+            if (state.mode === 'outpaint' && this.plan.outpaint) {
+                // One amount serves every picked direction; the two sides differ by a pixel at most, so the larger is used.
+                let plan = this.plan.outpaint;
+                let amount = Math.max(plan.top, plan.bottom, plan.left, plan.right);
+                let input = $('outpaint-amount');
+                if (amount < 16 || amount % 16 !== 0) {
+                    // A plan can ask for an amount the default grid cannot express (an odd split, or less than 16 pixels);
+                    // loosen the field so the filled value stays valid; the user can keep typing any value.
+                    input.step = '1';
+                    input.min = '1';
+                }
+                input.value = amount;
+                let vertical = plan.top > 0 || plan.bottom > 0;
+                outpaintDirs.clear();
+                for (let dir of (vertical ? ['t', 'b'] : ['l', 'r'])) { outpaintDirs.add(dir); }
+                document.querySelectorAll('.op-cell').forEach(cell => {
+                    cell.setAttribute('aria-pressed', String(outpaintDirs.has(cell.dataset.dir)));
+                });
+                updateControls();
+            }
+            else if (state.mode === 'upscale' && this.plan.upscale && this.plan.upscale.factor >= 1.5) {
+                $('upscale').value = Math.min(4, Math.max(1.5, this.plan.upscale.factor));
+                $('upscale-val').textContent = `${Number($('upscale').value).toFixed(2)}×`;
+            }
+        }
+
+        /** Words the plan in one plain line: source → outpaint canvas → upscale result → the export's final scale, plus the limit notes. */
+        static describe(plan) {
+            let parts = [tr('原图 {0}×{1}', plan.source.width, plan.source.height)];
+            if (plan.outpaint) {
+                let sides = plan.outpaint.top > 0 || plan.outpaint.bottom > 0
+                    ? (plan.outpaint.top === plan.outpaint.bottom
+                        ? tr('上下各 {0} 像素', plan.outpaint.top)
+                        : tr('上 {0}、下 {1} 像素', plan.outpaint.top, plan.outpaint.bottom))
+                    : (plan.outpaint.left === plan.outpaint.right
+                        ? tr('左右各 {0} 像素', plan.outpaint.left)
+                        : tr('左 {0}、右 {1} 像素', plan.outpaint.left, plan.outpaint.right));
+                parts.push(tr('扩到 {0}×{1}（{2}）', plan.outpaint.width, plan.outpaint.height, sides));
+            }
+            else if (state.mode === 'outpaint') {
+                parts.push(tr('比例与图位一致，不用扩图'));
+            }
+            if (plan.upscale && plan.upscale.factor >= 1.5) {
+                parts.push(tr('放大 {0} 倍得到 {1}×{2}', Number(plan.upscale.factor).toFixed(2), plan.upscale.width, plan.upscale.height));
+            }
+            else if (state.mode === 'upscale') {
+                parts.push(tr('不到 1.5 倍，不用放大'));
+            }
+            parts.push(tr('导出时缩放到 {0}×{1}', plan.export_size.width, plan.export_size.height));
+            let text = parts.join(' → ');
+            for (let note of (plan.notes || [])) {
+                if (note === 'outpaint_capped') {
+                    text += tr('；受最长边 {0} 像素限制，扩图到此为止，导出时会补少量边', plan.max_edge);
+                }
+                else if (note === 'upscale_capped') {
+                    text += tr('；受最长边 {0} 像素限制，放大倍数已降低', plan.max_edge);
+                }
+                else if (note === 'two_pass' && plan.upscale && plan.upscale.remaining > 4) {
+                    text += tr('；这个图位需要放大 {0} 倍，一次最多 4 倍也补不齐，建议改用更大的原图', Number(plan.upscale.needed).toFixed(2));
+                }
+                else if (note === 'two_pass') {
+                    text += tr('；还需约 {0} 倍，请在放大结果上再执行一次放大', Number(plan.upscale.remaining).toFixed(2));
+                }
+            }
+            return text;
+        }
+
+        /** Shows one hint line under the selects. */
+        static hint(text) {
+            $('slotfit-plan').textContent = text;
+        }
     }
 
     /* ============================================================
@@ -6026,6 +6227,13 @@
         $('upscale').addEventListener('input', () => {
             $('upscale-val').textContent = `${Number($('upscale').value).toFixed(2)}×`;
         });
+
+        // Platform slot fit (T107)
+        $('slotfit-platform').addEventListener('change', () => {
+            SlotFitPicker.renderSlots();
+            SlotFitPicker.applyPlan();
+        });
+        $('slotfit-slot').addEventListener('change', () => SlotFitPicker.applyPlan());
         $('creativity').addEventListener('input', () => {
             $('creativity-val').textContent = Number($('creativity').value).toFixed(2);
         });

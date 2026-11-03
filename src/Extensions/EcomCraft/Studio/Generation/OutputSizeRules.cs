@@ -69,4 +69,100 @@ public static class OutputSizeRules
         int scaledHeight = Math.Max(height, (int)Math.Round(sourceHeight * scale));
         return (scaledWidth, scaledHeight, (scaledWidth - width) / 2, (scaledHeight - height) / 2);
     }
+
+    /// <summary>The plan for matching one picture to a platform slot (T107): the outpaint amounts that bring the picture to the slot's aspect ratio with the
+    /// subject centered, then the upscale factor towards its size. Below 1.5 the model is not used and the export scales instead; above 4 the plan covers the
+    /// first pass and <paramref name="RemainingFactor"/> says the rest. No step leaves the recipe's longest-edge cap (A24): what stops there is a note code.</summary>
+    /// <param name="Notes">Why the plan stops short: "outpaint_capped" (the canvas reached the cap before the slot's ratio), "upscale_capped" (the factor was
+    /// lowered to keep the result under the cap) and "two_pass" (the slot needs more than one 4x pass).</param>
+    public sealed record class SlotFitPlan(int SourceWidth, int SourceHeight, int TargetWidth, int TargetHeight, int Step, int MaxEdge,
+        int CanvasWidth, int CanvasHeight, int Left, int Top, int Right, int Bottom,
+        double NeededFactor, double UpscaleFactor, double RemainingFactor, int UpscaleWidth, int UpscaleHeight, string[] Notes)
+    {
+        /// <summary>Whether the plan outpaints at all; ratios that differ only by rounding do not.</summary>
+        public bool Outpaints => Left > 0 || Top > 0 || Right > 0 || Bottom > 0;
+    }
+
+    /// <summary>Plans how a picture reaches a platform slot (T107): symmetric outpaint on the one axis the ratios differ (the subject stays centered), the
+    /// extended side a multiple of <paramref name="step"/>, then an upscale factor inside 1.5–4 towards the slot's size. Both steps stay under
+    /// <paramref name="maxEdge"/> (A24): the canvas and the upscaled result stop at its step-rounded value and the plan says so in its notes. Pure calculation
+    /// for the page to word; the request itself still goes through the existing outpaint and upscale validation.</summary>
+    public static SlotFitPlan PlanSlotFit(int sourceWidth, int sourceHeight, int targetWidth, int targetHeight, int step, int maxEdge)
+    {
+        step = Math.Clamp(step, 8, 128);
+        int sourceSafeWidth = Math.Max(1, sourceWidth);
+        int sourceSafeHeight = Math.Max(1, sourceHeight);
+        // The cap every step must respect, aligned to the step the way generation sizes are.
+        int capSide = Math.Max(step, Math.Clamp(maxEdge, MinSide, 2048) / step * step);
+        List<string> notes = [];
+        int left = 0, top = 0, right = 0, bottom = 0;
+        int canvasWidth = sourceSafeWidth, canvasHeight = sourceSafeHeight;
+        int roundToStep(double value) => (int)Math.Round(value / step, MidpointRounding.AwayFromZero) * step;
+        double targetRatio = (double)Math.Max(1, targetWidth) / Math.Max(1, targetHeight);
+        if (targetRatio * canvasHeight > canvasWidth)
+        {
+            // The slot is relatively wider: extend the canvas sideways so the ratios meet, the subject staying centered.
+            int extended = roundToStep(canvasHeight * targetRatio);
+            if (extended > capSide)
+            {
+                extended = capSide;
+                notes.Add("outpaint_capped");
+            }
+            if (extended > canvasWidth)
+            {
+                left = (extended - canvasWidth) / 2;
+                right = extended - canvasWidth - left;
+                canvasWidth = extended;
+            }
+        }
+        else if (targetRatio * canvasHeight < canvasWidth)
+        {
+            // The slot is relatively taller: extend the canvas up and down the same way.
+            int extended = roundToStep(canvasWidth / targetRatio);
+            if (extended > capSide)
+            {
+                extended = capSide;
+                notes.Add("outpaint_capped");
+            }
+            if (extended > canvasHeight)
+            {
+                top = (extended - canvasHeight) / 2;
+                bottom = extended - canvasHeight - top;
+                canvasHeight = extended;
+            }
+        }
+        // The factor the slot needs from the canvas: the export fits the picture entirely, so the smaller side ratio decides.
+        double needed = Math.Min((double)Math.Max(1, targetWidth) / canvasWidth, (double)Math.Max(1, targetHeight) / canvasHeight);
+        double factor = 0;
+        double remaining = 0;
+        if (needed >= 1.5)
+        {
+            // Quarter steps like the page's slider, rounded up so the pass covers the slot instead of falling just short of it.
+            factor = Math.Min(Math.Ceiling(needed * 4) / 4, 4);
+            if (needed > 4)
+            {
+                remaining = Math.Round(needed / 4, 2);
+                notes.Add("two_pass");
+            }
+            // The pass may not push the long side past the cap (A24); the export scales the rest of the way.
+            double capped = (double)capSide / Math.Max(canvasWidth, canvasHeight);
+            if (factor > capped)
+            {
+                factor = Math.Floor(capped * 4) / 4;
+                notes.Add("upscale_capped");
+            }
+            if (factor < 1.5)
+            {
+                factor = 0;
+            }
+        }
+        int upscaleWidth = canvasWidth, upscaleHeight = canvasHeight;
+        if (factor >= 1.5)
+        {
+            upscaleWidth = Math.Min(capSide, (int)Math.Round(canvasWidth * factor, MidpointRounding.AwayFromZero));
+            upscaleHeight = Math.Min(capSide, (int)Math.Round(canvasHeight * factor, MidpointRounding.AwayFromZero));
+        }
+        return new SlotFitPlan(sourceSafeWidth, sourceSafeHeight, Math.Max(1, targetWidth), Math.Max(1, targetHeight), step, maxEdge,
+            canvasWidth, canvasHeight, left, top, right, bottom, Math.Round(needed, 2), Math.Round(factor, 2), remaining, upscaleWidth, upscaleHeight, [.. notes]);
+    }
 }

@@ -105,6 +105,7 @@ public class EcomCraft : Extension
         API.RegisterAPICall(HardwareProbe.EcomCraftStudioHardwareStatus, false, Permissions.EditServerSettings);
         API.RegisterAPICall(CutoutService.EcomCraftStudioCutout, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(EcomCraftStudio.Studio.Export.ExportService.EcomCraftStudioExportOptions, false, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(StudioApi.EcomCraftStudioSlotPlan, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(EcomCraftStudio.Studio.Export.ExportService.EcomCraftStudioExport, true, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(EcomCraftStudio.Studio.Export.SellingImageService.EcomCraftStudioSellingImage, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(EcomCraftStudio.Studio.Products.ProductLibrary.EcomCraftStudioProducts, false, Permissions.FundamentalGenerateTabAccess);
