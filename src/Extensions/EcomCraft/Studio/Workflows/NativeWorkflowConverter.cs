@@ -330,13 +330,29 @@ public sealed class NativeWorkflowConverter
         HashSet<(string Node, string Input)> positive = new(), negative = new();
         foreach (JProperty property in Prompt.Properties())
         {
-            if (((JObject)property.Value)["class_type"]?.ToString() is not ("KSampler" or "KSamplerAdvanced"))
+            JObject sampler = (JObject)property.Value;
+            string samplerType = sampler["class_type"]?.ToString();
+            // Where the sampler takes its conditioning: a KSampler carries its positive and negative inputs directly, while the advanced
+            // sampler of the official Turbo templates takes them through its guider (CFGGuider) — the same encoder check covers both.
+            JObject conditioning = null;
+            if (samplerType is "KSampler" or "KSamplerAdvanced")
+            {
+                conditioning = sampler;
+            }
+            else if (samplerType == "SamplerCustomAdvanced" && sampler["inputs"]?["guider"] is JArray guiderSource && guiderSource.Count == 2
+                && guiderSource[1].Type == JTokenType.Integer && Prompt[guiderSource[0].ToString()] is JObject guider
+                && guider["class_type"]?.ToString() == "CFGGuider")
+            {
+                conditioning = guider;
+                GuidersOfAdvanced[guiderSource[0].ToString()] = property.Name;
+            }
+            if (conditioning is null)
             {
                 continue;
             }
             foreach (string name in new[] { "positive", "negative" })
             {
-                if (((JObject)property.Value)["inputs"]?[name] is not JArray source || source.Count != 2
+                if (conditioning["inputs"]?[name] is not JArray source || source.Count != 2
                     || source[1].Type != JTokenType.Integer || Prompt[source[0].ToString()] is not JObject encoder)
                 {
                     throw new InvalidDataException();
@@ -394,6 +410,23 @@ public sealed class NativeWorkflowConverter
                 Bind(id, "scheduler", "dropdown", "调度器", "scheduler");
                 Bind(id, "denoise", "decimal", "降噪强度", null, 0, 1);
             }
+            // The official Turbo sampling path spreads the controls over helper nodes: the seed on the noise node, the cfg on the guider
+            // (with the matched recipe's bounds, as on a KSampler); the sampler itself stays on the fixed euler the sigma table is tuned for.
+            if (type == "RandomNoise")
+            {
+                Bind(id, "noise_seed", "integer", "随机种子", "seed", -1, 9007199254740991);
+            }
+            if (type == "CFGGuider")
+            {
+                if (GuidersOfAdvanced.TryGetValue(id, out string guiderSampler) && MatchedSamplers.Contains(guiderSampler))
+                {
+                    Bind(id, "cfg", "decimal", "提示词强度", "cfgscale", Matched.Sampling.Cfg.Min, Matched.Sampling.Cfg.Max, description: Matched.Sampling.Cfg.Hint.ZhCn);
+                }
+                else
+                {
+                    Bind(id, "cfg", "decimal", "提示词强度", "cfgscale", 0, 30);
+                }
+            }
             if (type is "EmptyLatentImage" or "EmptySD3LatentImage")
             {
                 // The latent follows the matched recipe's size step (T118); Bind moves a saved default that is not a multiple of it to the nearest valid value.
@@ -433,6 +466,9 @@ public sealed class NativeWorkflowConverter
     /// <summary>Samplers whose conditioning comes from an encoder the matched recipe declares, by prompt node ID.</summary>
     private readonly HashSet<string> MatchedSamplers = new();
 
+    /// <summary>The advanced sampler each guider feeds, by guider node ID, so the guider's cfg binds to the matched recipe's bounds (T118b).</summary>
+    private readonly Dictionary<string, string> GuidersOfAdvanced = new();
+
     /// <summary>The recipe the graph matched, chosen in <see cref="MatchRecipe"/>; null when no recipe's match conditions fit.</summary>
     private ModelRecipeRules.Recipe Matched;
 
@@ -450,8 +486,10 @@ public sealed class NativeWorkflowConverter
 /// Null (as in the unit tests) narrows every model dropdown to its current value, the behavior before the scan existed.</summary>
     internal static Func<(string BaseDirectory, string[] Roots)> ModelRoots;
 
-    /// <summary>Chooses the recipe the graph follows (T118): the first book entry whose declared encoder classes contain a class present in the
-    /// graph. Book order decides overlaps; no book or no match leaves the generic rules in place.</summary>
+    /// <summary>Chooses the recipe the graph follows (T118, T118b): the main model's file name decides first — the loader's <c>unet_name</c>
+    /// matched against the variants' unet files tells apart models that share an encoder class (the base model and its Turbo distillation) —
+    /// and graphs without a known file fall back to the declared encoder classes. Book order decides overlaps; no book or no match leaves
+    /// the generic rules in place.</summary>
     private void MatchRecipe()
     {
         List<ModelRecipeRules.Recipe> book = Book ?? RecipeBook?.Invoke();
@@ -463,6 +501,20 @@ public sealed class NativeWorkflowConverter
             .Select(property => ((JObject)property.Value)["class_type"]?.ToString())
             .Where(type => !string.IsNullOrEmpty(type))
             .Select(HardwareRules.Normalize)];
+        HashSet<string> files = [.. Prompt.Properties()
+            .Select(property => ((JObject)property.Value)["inputs"]?["unet_name"])
+            .Where(value => value?.Type == JTokenType.String)
+            .Select(value => HardwareRules.Normalize(value.ToString()))];
+        foreach (ModelRecipeRules.Recipe recipe in book)
+        {
+            if (recipe.Variants.Any(variant => ModelRecipeRules.FileFor(variant, ModelRecipeRules.RoleUnet) is ModelRecipeRules.FileSpec file
+                && files.Contains(HardwareRules.Normalize(file.Filename))))
+            {
+                Matched = recipe;
+                MatchedClasses = [.. recipe.Match.EncoderClasses];
+                return;
+            }
+        }
         foreach (ModelRecipeRules.Recipe recipe in book)
         {
             if (recipe.Match.EncoderClasses.Any(match => classes.Contains(match)))

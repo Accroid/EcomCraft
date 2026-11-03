@@ -280,7 +280,13 @@ public static partial class StudioApi
                 {
                     continue;
                 }
-                map[unet.Filename] = new JObject() { ["steps"] = recipe.Sampling.Steps, ["cfg"] = recipe.Sampling.Cfg.Default };
+                // A recipe without a step count (the fixed sigma-table models, T118b) only links cfg; the page leaves steps alone.
+                JObject entry = new() { ["cfg"] = recipe.Sampling.Cfg.Default };
+                if (recipe.Sampling.Steps is int steps)
+                {
+                    entry["steps"] = steps;
+                }
+                map[unet.Filename] = entry;
             }
         }
         return map;

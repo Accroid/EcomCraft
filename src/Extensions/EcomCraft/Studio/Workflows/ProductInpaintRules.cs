@@ -10,7 +10,8 @@ namespace EcomCraftStudio.Studio;
 /// decoded scene and the whole picture is sampled again at low strength, so product and scene share their light; the restored details come from the
 /// local paste afterwards. Which sampler and decoder to rewire comes from the recipe's blueprint access points (T118) — falling back to the graph's
 /// single KSampler and VAEDecode when the recipe declares none — and both sampler kinds the blueprints use are supported: KSampler, and
-/// SamplerCustomAdvanced with its steps and denoise on the sigmas node (BasicScheduler-style), whose chain the second pass copies.</summary>
+/// SamplerCustomAdvanced, whose second pass copies its sigmas chain with new values — steps and denoise on a BasicScheduler-style node, or the
+/// recipe's tail table on the official Turbo path's ManualSigmas (T118b).</summary>
 public static class ProductInpaintRules
 {
     /// <summary>The ComfyUI node that reads the product canvas from the request instead of the server's input folder (A34); execution servers without it cannot run these workflows.</summary>
@@ -53,7 +54,8 @@ public static class ProductInpaintRules
     public static bool Apply(JObject prompt, string samplerId = null, string decoderId = null, ModelRecipeRules.SecondPassRule secondPass = null)
     {
         double denoise = secondPass?.Denoise > 0 ? secondPass.Denoise : DefaultHarmonizeDenoise;
-        int steps = secondPass?.Steps > 0 ? secondPass.Steps : DefaultHarmonizeSteps;
+        int steps = secondPass?.Steps > 0 ? secondPass.Steps.Value : DefaultHarmonizeSteps;
+        string sigmas = secondPass?.Sigmas ?? "";
         JProperty sampler = Node(prompt, samplerId);
         if (sampler is null && !string.IsNullOrWhiteSpace(samplerId))
         {
@@ -115,7 +117,7 @@ public static class ProductInpaintRules
         };
         prompt[HarmonizeEncodeNode] = new JObject() { ["class_type"] = "VAEEncode", ["inputs"] = new JObject() { ["pixels"] = new JArray(CompositeNode, 0), ["vae"] = vae.DeepClone() } };
         harmonizeInputs["latent_image"] = new JArray(HarmonizeEncodeNode, 0);
-        if (!WireSecondPassSampler(prompt, harmonizeInputs, steps, denoise))
+        if (!WireSecondPassSampler(prompt, harmonizeInputs, steps, denoise, sigmas))
         {
             return false;
         }
@@ -129,9 +131,10 @@ public static class ProductInpaintRules
         string.IsNullOrWhiteSpace(id) ? null : prompt.Properties().FirstOrDefault(property => property.Name == id);
 
     /// <summary>Prepares the second pass's sampler inputs (<paramref name="harmonizeInputs"/>, the cloned first-pass inputs): a KSampler runs its own
-    /// steps and denoise, while an advanced sampler keeps its noise, guider and sampler chains and gets a copy of its sigmas chain (a scheduler node
-    /// with steps and denoise, such as BasicScheduler) with the second pass's values. False when an advanced sampler's sigmas cannot be copied.</summary>
-    private static bool WireSecondPassSampler(JObject prompt, JObject harmonizeInputs, int steps, double denoise)
+    /// steps and denoise, while an advanced sampler keeps its noise, guider and sampler chains and gets a copy of its sigmas chain with the second
+    /// pass's values — a scheduler node with steps and denoise (such as BasicScheduler) takes those, and a fixed sigma table (ManualSigmas, the
+    /// official Turbo path) takes the recipe's tail table (<paramref name="sigmas"/>). False when neither can be set.</summary>
+    private static bool WireSecondPassSampler(JObject prompt, JObject harmonizeInputs, int steps, double denoise, string sigmas)
     {
         if (harmonizeInputs["steps"] is not null)
         {
@@ -139,18 +142,32 @@ public static class ProductInpaintRules
             harmonizeInputs["denoise"] = denoise;
             return true;
         }
-        if (harmonizeInputs["sigmas"] is not JArray sigmas || sigmas.Count != 2 || sigmas[1].Type != JTokenType.Integer
-            || prompt[sigmas[0].ToString()] is not JObject scheduler || scheduler["inputs"] is not JObject schedulerInputs
-            || schedulerInputs["steps"] is not JValue || schedulerInputs["denoise"] is not JValue)
+        if (harmonizeInputs["sigmas"] is not JArray sigmasLink || sigmasLink.Count != 2 || sigmasLink[1].Type != JTokenType.Integer
+            || prompt[sigmasLink[0].ToString()] is not JObject sigmasNode || sigmasNode["inputs"] is not JObject sigmasInputs)
         {
             return false;
         }
-        JObject copiedScheduler = (JObject)scheduler.DeepClone();
-        JObject copiedInputs = (JObject)copiedScheduler["inputs"];
-        copiedInputs["steps"] = steps;
-        copiedInputs["denoise"] = denoise;
-        prompt[HarmonizeSchedulerNode] = copiedScheduler;
-        harmonizeInputs["sigmas"] = new JArray(HarmonizeSchedulerNode, sigmas[1].DeepClone());
-        return true;
+        // A scheduler node with steps and denoise: the copied chain runs the second pass at its own strength.
+        if (sigmasInputs["steps"] is JValue && sigmasInputs["denoise"] is JValue)
+        {
+            JObject copiedScheduler = (JObject)sigmasNode.DeepClone();
+            JObject copiedInputs = (JObject)copiedScheduler["inputs"];
+            copiedInputs["steps"] = steps;
+            copiedInputs["denoise"] = denoise;
+            prompt[HarmonizeSchedulerNode] = copiedScheduler;
+            harmonizeInputs["sigmas"] = new JArray(HarmonizeSchedulerNode, sigmasLink[1].DeepClone());
+            return true;
+        }
+        // A fixed sigma table (ManualSigmas): the second pass runs over the recipe's tail of the official table, a fixed short schedule
+        // that plays the role steps and denoise play elsewhere (T118b).
+        if (sigmasInputs["sigmas"] is JValue && sigmas.Length > 0)
+        {
+            JObject copiedTable = (JObject)sigmasNode.DeepClone();
+            ((JObject)copiedTable["inputs"])["sigmas"] = sigmas;
+            prompt[HarmonizeSchedulerNode] = copiedTable;
+            harmonizeInputs["sigmas"] = new JArray(HarmonizeSchedulerNode, sigmasLink[1].DeepClone());
+            return true;
+        }
+        return false;
     }
 }

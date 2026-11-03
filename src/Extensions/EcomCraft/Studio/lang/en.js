@@ -1243,5 +1243,6 @@ window.EcomCraftLanguages.en = {
     "这件作品没有读到提示词，已带入种子，请自己填写创作描述。照参考图做的作品不保存参考图，按参考重做请在出图页重新上传。": "No prompt could be read from this work; the seed is filled in, so write the description yourself. Works made by following a reference do not keep their reference images; to redo those, upload the references again on the create page."
 ,
     "已按模型配方把步数设为 {0}。": "Sampling steps set to {0} from this model's recipe.",
+    "已按模型配方把提示词强度设为 {0}。": "Prompt strength set to {0} from this model's recipe.",
     "简易模式": "Simple mode"
 };

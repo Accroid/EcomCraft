@@ -22,14 +22,8 @@ public static class ModelRecipeRules
     /// <summary>File role reserved for a future upscaler model (T114): parseable and unit-tested already, but no business code uses it yet.</summary>
     public const string RoleUpscale = "upscale";
 
-    /// <summary>Default sampling steps when the file does not give a usable whole number.</summary>
-    private const int DefaultSteps = 20;
-
     /// <summary>Upper bound of sampling steps, so a mistyped recipe cannot ask for endless sampling.</summary>
     private const int MaxSteps = 150;
-
-    /// <summary>Default steps of the second (harmonize) pass.</summary>
-    private const int DefaultSecondPassSteps = 10;
 
     /// <summary>Upper bound of the second pass's steps.</summary>
     private const int MaxSecondPassSteps = 50;
@@ -67,8 +61,19 @@ public static class ModelRecipeRules
     /// <summary>Upper bound of a variant's disk hint in gigabytes; 0 means unknown.</summary>
     private const long MaxDiskGbHint = 10240;
 
-    /// <summary>The recipe the server falls back to when the current-recipe setting is empty, invalid or unresolvable (T118): today's default model.</summary>
-    public const string DefaultRecipeId = "qwen-image-2.1", DefaultVariantId = "uc-q4-gguf";
+    /// <summary>The recipe the server falls back to when the current-recipe setting is empty, invalid or unresolvable (T118): the default
+    /// model, the Turbo distillation since T118b (the user's 2026-11-03 decision: the program ships on Qwen-Image 2.1 Turbo).</summary>
+    public const string DefaultRecipeId = "qwen-image-2.1-turbo", DefaultVariantId = "q4-gguf";
+
+    /// <summary>The pre-T118b default (the base model's UC quantization), still recognized by the startup migration: a server that never chose
+    /// a model of its own — the setting empty, or exactly this pair written by the T118 migration of the factory file names — moves to the new
+    /// default, while an administrator's own choice stays untouched (T118b).</summary>
+    public const string OldDefaultRecipeId = "qwen-image-2.1", OldDefaultVariantId = "uc-q4-gguf";
+
+    /// <summary>The factory values of the three legacy file-name settings (the Settings.cs defaults, the UC trio): the startup migration reads
+    /// them as "never changed by an administrator" and moves such a server to the default recipe (T118b).</summary>
+    public const string FactoryUnet = "qwen-image-2.1-UC-Q4_K_M.gguf", FactoryTextEncoder = "qwen3vl_8b_int8_convrot.safetensors",
+        FactoryVae = "qwen_image_2.1_vae_bf16.safetensors";
 
     /// <summary>The prompt image-tag syntax used when a recipe declares none (T118): the <c>&lt;image1&gt;</c> style of the current model.</summary>
     public const string DefaultPromptSyntax = "<image1>";
@@ -117,22 +122,28 @@ public static class ModelRecipeRules
     public sealed record class CfgRule(double Default, double Min, double Max, LocalizedText Hint);
 
     /// <summary>How the model is sampled.</summary>
-    /// <param name="Steps">The recipe's step count (the Qwen base model uses 25, its Turbo distillation 8).</param>
+    /// <param name="Steps">The recipe's step count (the Qwen base model uses 25); null when the model has no step count of its own and samples
+    /// over a fixed sigma table instead (the Turbo distillation), so nothing offers or links steps.</param>
     /// <param name="Cfg">The cfg rule with bounds and hint.</param>
     /// <param name="NegativeHint">The note about the negative prompt at cfg 1.</param>
     /// <param name="Sampler">The sampler name, such as "euler"; "" when the file does not give one.</param>
-    /// <param name="Scheduler">The scheduler name, such as "simple"; "" when the file does not give one.</param>
-    public sealed record class SamplingRule(int Steps, CfgRule Cfg, LocalizedText NegativeHint, string Sampler, string Scheduler);
+    /// <param name="Scheduler">The scheduler name, such as "simple"; "" when the file does not give one. A fixed sigma table has none.</param>
+    /// <param name="Sigmas">The fixed sigma table the model samples over, as the file writes it (comma-separated decimals); "" when the model
+    /// samples by steps and scheduler instead.</param>
+    public sealed record class SamplingRule(int? Steps, CfgRule Cfg, LocalizedText NegativeHint, string Sampler, string Scheduler, string Sigmas);
 
     /// <summary>How a converted graph is recognized as this recipe (T118): the encoder node classes declared under <c>match.encoder_classes</c>.
     /// A graph containing such an encoder follows the recipe's cfg bounds, hints and size step; empty classes never match.</summary>
     /// <param name="EncoderClasses">Encoder class names, normalized to lower case.</param>
     public sealed record class MatchRule(List<string> EncoderClasses);
 
-    /// <summary>The second repainting pass (the standard workflows' harmonize pass over the whole picture).</summary>
-    /// <param name="Steps">The pass's step count.</param>
+    /// <summary>The second repainting pass (the standard workflows' harmonize pass over the whole picture). A KSampler-based graph reads the
+    /// steps and denoise; a fixed sigma-table graph (SamplerCustomAdvanced with ManualSigmas) reads the tail table instead — one of the two
+    /// applies, the recipe declares the kind its blueprints use (T118b).</summary>
+    /// <param name="Steps">The pass's step count; null when the model has no step count.</param>
     /// <param name="Denoise">The pass's denoise strength (0–1).</param>
-    public sealed record class SecondPassRule(int Steps, double Denoise);
+    /// <param name="Sigmas">The pass's sigma table (a tail of the official table for a low-strength pass); "" when the pass runs by steps.</param>
+    public sealed record class SecondPassRule(int? Steps, double Denoise, string Sigmas);
 
     /// <summary>One workflow-kind blueprint entry of a recipe (T118): the shipped blueprint file for that kind, plus — for kinds the standard workflows
     /// repaint around the product — the blueprint nodes to wire in at (canvas node IDs, resolved through the converter's ID map). A plain string entry
@@ -171,6 +182,12 @@ public static class ModelRecipeRules
     /// <param name="Variant">The chosen variant; null when the recipe has none or the recipe itself is null.</param>
     /// <param name="Problem">Why the choice fell back, in words for the administrator's status list; null when the choice is exact.</param>
     public sealed record class CurrentChoice(Recipe Recipe, Variant Variant, string Problem);
+
+    /// <summary>The startup migration's decision when the default recipe changes (T118b): the recipe id to write into the setting (null leaves
+    /// everything as it is) and whether the legacy file names still carry values to clear.</summary>
+    /// <param name="Recipe">The "model id / variant id" to write; null when nothing should change.</param>
+    /// <param name="ClearLegacy">Whether the three legacy file-name settings hold factory values that should be cleared with the write.</param>
+    public sealed record class RecipeMigration(string Recipe, bool ClearLegacy);
 
     /// <summary>Everything the standard workflows need to build and publish: the resolved recipe with its variant, the effective model file names
     /// (the recipe's, or the administrator's legacy override), and problems to show in the status (T118).</summary>
@@ -358,6 +375,49 @@ public static class ModelRecipeRules
         return file is not null && string.Equals(file.Filename, legacyName.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>Whether the legacy file-name settings still carry their factory state (T118b): nothing at all, or exactly the UC trio the
+    /// settings shipped with — an administrator's own name (any difference) is a choice to keep (A19).</summary>
+    private static bool IsFactoryNames(ModelFiles legacy)
+    {
+        if (legacy is null || !legacy.Any())
+        {
+            return true;
+        }
+        return string.Equals(legacy.Unet?.Trim(), FactoryUnet, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(legacy.TextEncoder?.Trim(), FactoryTextEncoder, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(legacy.Vae?.Trim(), FactoryVae, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The startup migration when the default recipe changes (T118b): a server still on the factory state — the setting empty, or
+    /// exactly the old default pair the T118 migration wrote from the factory file names, with the file names factory or cleared — moves to the
+    /// current default. An administrator's own setting or file names keep everything as it is; null means no change. The new pair is written
+    /// only when the book actually resolves it, so a custom book without the default never stores an unusable value.</summary>
+    public static RecipeMigration MigrateDefault(IEnumerable<Recipe> book, string setting, ModelFiles legacy)
+    {
+        string current = (setting ?? "").Trim();
+        if (current.Length > 0 && current != $"{OldDefaultRecipeId}/{OldDefaultVariantId}")
+        {
+            return null;
+        }
+        ModelFiles names = new((legacy?.Unet ?? "").Trim(), (legacy?.TextEncoder ?? "").Trim(), (legacy?.Vae ?? "").Trim());
+        if (!IsFactoryNames(names))
+        {
+            return null;
+        }
+        Recipe recipe = Find(book, DefaultRecipeId);
+        if (recipe is null || recipe.Variants.All(variant => variant.Id != DefaultVariantId))
+        {
+            return null;
+        }
+        return new RecipeMigration($"{DefaultRecipeId}/{DefaultVariantId}", names.Any());
+    }
+
+    /// <summary>The loader node class a diffusion-model file needs (T118b): ".gguf" quantizations load through <c>UnetLoaderGGUF</c> and
+    /// safetensors through <c>UNETLoader</c> — a file-format distinction, not a model rule, so the same recipe may declare both kinds of file
+    /// (the official int8 safetensors and the community GGUF quantization) and the standard workflows' graph follows the file in effect.</summary>
+    public static string UnetLoaderClass(string filename) =>
+        (filename ?? "").Trim().EndsWith(".gguf", StringComparison.OrdinalIgnoreCase) ? "UnetLoaderGGUF" : "UNETLoader";
+
     /// <summary>Everything the standard workflows need (T118): non-empty legacy file-name settings keep acting as the administrator's override (A19) —
     /// matching a variant or not — while the recipe itself comes from the current-recipe setting with its default fallback. Never throws and never
     /// blocks a run; problems are words for the administrator's status list.</summary>
@@ -477,6 +537,7 @@ public static class ModelRecipeRules
         }
         double cfgDefault = Math.Clamp(BoundedDecimal(cfgEntry["default"], DefaultCfg, 0, MaxCfg), cfgMin, cfgMax);
         JObject capabilities = entry["capabilities"] as JObject ?? new JObject();
+        JObject secondPass = entry["second_pass"] as JObject ?? new JObject();
         return new Recipe(
             id,
             ParseText(entry["name"]),
@@ -486,14 +547,16 @@ public static class ModelRecipeRules
             new MatchRule(ParseList((entry["match"] as JObject ?? new JObject())["encoder_classes"])),
             ParseBlueprints(entry["blueprints"]),
             new SamplingRule(
-                StepCount(samplingEntry["steps"], DefaultSteps, MaxSteps),
+                OptionalStepCount(samplingEntry["steps"], MaxSteps),
                 new CfgRule(cfgDefault, cfgMin, cfgMax, ParseText(cfgEntry["hint"])),
                 ParseText(samplingEntry["negative_hint"]),
                 (samplingEntry["sampler"]?.ToString() ?? "").Trim(),
-                (samplingEntry["scheduler"]?.ToString() ?? "").Trim()),
+                (samplingEntry["scheduler"]?.ToString() ?? "").Trim(),
+                SigmaTable(samplingEntry["sigmas"])),
             new SecondPassRule(
-                StepCount((entry["second_pass"] as JObject ?? new JObject())["steps"], DefaultSecondPassSteps, MaxSecondPassSteps),
-                BoundedDecimal((entry["second_pass"] as JObject ?? new JObject())["denoise"], DefaultSecondPassDenoise, 0, 1)),
+                OptionalStepCount(secondPass["steps"], MaxSecondPassSteps),
+                BoundedDecimal(secondPass["denoise"], DefaultSecondPassDenoise, 0, 1),
+                SigmaTable(secondPass["sigmas"])),
             ParseReferenceEdit(entry["reference_edit"]),
             BoundedWhole(entry["resolution_budget"], DefaultResolutionBudget, MinResolutionBudget, MaxResolutionBudget),
             (int)BoundedWhole(entry["size_step"], DefaultSizeStep, MinSizeStep, MaxSizeStep),
@@ -699,14 +762,32 @@ public static class ModelRecipeRules
         return number >= minValue && number <= maxValue ? number : fallback;
     }
 
-    /// <summary>A step count: a positive whole number clamped to its upper bound; zero, negative or unusable values fall back to the default, so
-    /// a corrupt count never quietly becomes the minimum and runs a useless pass.</summary>
-    private static int StepCount(JToken token, int fallback, int max)
+    /// <summary>A step count the file may leave out (T118b): a positive whole number clamped to its upper bound, and null when the file gives
+    /// none — a model that samples over a fixed sigma table has no step count, and nothing should fall back to a number it does not use.</summary>
+    private static int? OptionalStepCount(JToken token, int max)
     {
         if (token is not JValue value || value.Type != JTokenType.Integer || value.Value is not long number || number <= 0)
         {
-            return fallback;
+            return null;
         }
         return (int)Math.Min(number, max);
+    }
+
+    /// <summary>A sigma table as the file writes it (comma-separated decimals, at least two values) — the fixed sampling path of models without
+    /// step counts, and of their second pass; "" when the file does not give a usable table.</summary>
+    private static string SigmaTable(JToken token)
+    {
+        string text = (token?.Type == JTokenType.String ? token.ToString() : "").Trim();
+        if (text.Length == 0)
+        {
+            return "";
+        }
+        string[] values = text.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (values.Length < 2 || values.Any(part => !double.TryParse(part, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out _)))
+        {
+            return "";
+        }
+        return text;
     }
 }

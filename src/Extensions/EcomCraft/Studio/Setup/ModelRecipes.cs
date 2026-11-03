@@ -40,20 +40,31 @@ public static class ModelRecipes
             new ModelRecipeRules.ModelFiles(settings.StandardWorkflowUnet?.Trim() ?? "", settings.StandardWorkflowTextEncoder?.Trim() ?? "", settings.StandardWorkflowVae?.Trim() ?? ""));
     }
 
-    /// <summary>One-time migration of the three legacy model file-name settings into the current recipe (T118): when the current recipe is unset and
-    /// the legacy names match a recipe variant, the recipe id is written and the legacy names cleared; otherwise (a name of the administrator's own)
-    /// everything stays as the override it already is (A19). Failures only log — the server must start whatever the settings contain.</summary>
+    /// <summary>One-time migration of the model settings into the current recipe (T118, T118b): a server still on the factory state — the
+    /// current recipe unset, or exactly the old default the T118 migration wrote from the factory file names — moves to the program's default
+    /// recipe (Turbo since T118b); legacy file names that match a recipe variant write it and clear themselves; anything of the administrator's
+    /// own stays as the override it already is (A19). Failures only log — the server must start whatever the settings contain.</summary>
     public static void MigrateLegacySettings()
     {
         try
         {
             Settings.EcomCraftData settings = Program.ServerSettings.EcomCraft;
-            if (!string.IsNullOrWhiteSpace(settings.CurrentRecipe))
+            ModelRecipeRules.ModelFiles legacy = new(settings.StandardWorkflowUnet?.Trim() ?? "", settings.StandardWorkflowTextEncoder?.Trim() ?? "", settings.StandardWorkflowVae?.Trim() ?? "");
+            ModelRecipeRules.RecipeMigration toDefault = ModelRecipeRules.MigrateDefault(Load(), settings.CurrentRecipe, legacy);
+            if (toDefault is not null)
             {
+                settings.CurrentRecipe = toDefault.Recipe;
+                if (toDefault.ClearLegacy)
+                {
+                    settings.StandardWorkflowUnet = "";
+                    settings.StandardWorkflowTextEncoder = "";
+                    settings.StandardWorkflowVae = "";
+                }
+                Program.SaveSettingsFile();
+                Logs.Info($"EcomCraft moved the model settings to the default recipe {settings.CurrentRecipe} (T118b).");
                 return;
             }
-            ModelRecipeRules.ModelFiles legacy = new(settings.StandardWorkflowUnet?.Trim() ?? "", settings.StandardWorkflowTextEncoder?.Trim() ?? "", settings.StandardWorkflowVae?.Trim() ?? "");
-            if (!legacy.Any())
+            if (!string.IsNullOrWhiteSpace(settings.CurrentRecipe) || !legacy.Any())
             {
                 return;
             }

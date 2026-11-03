@@ -85,8 +85,8 @@ public class Settings : AutoConfiguration
         [ConfigComment("ComfyUI node types (class names) refused in workflows that accounts upload for their own use, in addition to nodes whose names mark code or shell execution. Uploads with path-like inputs are always refused.")]
         public List<string> DeniedWorkflowNodes = [];
 
-        /// <summary>The recipe the standard workflows generate from: "model id / variant id" (F86, T118).</summary>
-        [ConfigComment("The model recipe the standard workflows and the simple mode generate from, as \"model id / variant id\" of model-recipes.json, for example \"qwen-image-2.1/uc-q4-gguf\". "
+        /// <summary>The recipe the standard workflows generate from: "model id / variant id" (F86, T118; the default is the Turbo distillation since T118b).</summary>
+        [ConfigComment("The model recipe the standard workflows and the simple mode generate from, as \"model id / variant id\" of model-recipes.json, for example \"qwen-image-2.1-turbo/q4-gguf\" (the default since T118b; a server still on the pre-T118b factory state moves there at startup). "
             + "An empty or unresolvable value falls back to the default recipe instead of stopping the server. Blueprints, sampling hints, size step and caps all follow this recipe.")]
         public string CurrentRecipe = "";
 

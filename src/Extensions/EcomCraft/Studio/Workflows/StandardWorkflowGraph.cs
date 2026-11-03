@@ -56,6 +56,28 @@ internal static class StandardWorkflowGraph
             {
                 values[property.Name] = chosen;
                 property.Value["default"] = chosen;
+                // The diffusion-model loader class must match the file actually in effect (T118b): a GGUF quantization loads through
+                // UnetLoaderGGUF, a safetensors through UNETLoader — one recipe may declare both kinds of file (the official int8 file and
+                // the community GGUF quant), so the blueprint's own node follows the variant or override instead of the other way around.
+                if (input is "unet_name" or "ckpt_name" && property.Value["native_node"]?.ToString() is string loaderId
+                    && prompt[loaderId] is JObject loader)
+                {
+                    string loaderClass = ModelRecipeRules.UnetLoaderClass(chosen);
+                    if (loader["class_type"]?.ToString() != loaderClass)
+                    {
+                        loader["class_type"] = loaderClass;
+                        JObject loaderInputs = (JObject)loader["inputs"];
+                        if (loaderClass == "UNETLoader")
+                        {
+                            loaderInputs["weight_dtype"] ??= "default";
+                        }
+                        else
+                        {
+                            loaderInputs.Remove("weight_dtype");
+                        }
+                        property.Value["native_class"] = loaderClass;
+                    }
+                }
             }
             // The dropdown offers every model the server actually has (A19), keeping the recipe's pick or the blueprint's saved model as the default.
             JArray available = ModelFileScan.Choices(input, values[property.Name], baseDirectory, modelRoots);

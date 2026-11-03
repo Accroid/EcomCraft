@@ -763,16 +763,21 @@
     let recipeSamplingTouched = false;
 
     /** Sampling follows the model recipe (F86): switching to a model the recipe book declares sets the standard steps and cfg to its numbers,
-     * and switching back restores the workflow's own defaults; switches between models without recipes never touch manual values. */
+     * and switching back restores the workflow's own defaults; switches between models without recipes never touch manual values. Recipes without
+     * a step count (the fixed sigma-table models, T118b) only move cfg and leave steps alone. */
     function applyRecipeSampling(field, value) {
         const entry = (field.recipe_sampling || {})[String(value ?? '')];
-        if (entry && entry.steps != null) {
-            $('steps').value = entry.steps;
+        if (entry && (entry.steps != null || entry.cfg != null)) {
+            if (entry.steps != null) {
+                $('steps').value = entry.steps;
+            }
             if (entry.cfg != null) {
                 NativeWorkflowForm.setValue($('cfg'), entry.cfg);
             }
             recipeSamplingTouched = true;
-            setStatus(tr('已按模型配方把步数设为 {0}。', entry.steps));
+            setStatus(entry.steps != null
+                ? tr('已按模型配方把步数设为 {0}。', entry.steps)
+                : tr('已按模型配方把提示词强度设为 {0}。', entry.cfg));
             return;
         }
         if (recipeSamplingTouched) {
