@@ -238,4 +238,51 @@ public static class ExportRules
         int middle = Math.Max(50, (quality + 50) / 2);
         return middle <= 50 ? [quality, 50] : [quality, middle, 50];
     }
+
+    /// <summary>Splits detail screens into long images (T100): screens keep their order and are never cut; each long image takes screens while its height
+    /// stays within the slot's <see cref="LongImageRules.MaxHeight"/> and its screen count within <see cref="LongImageRules.MaxSlices"/> (0 means the
+    /// rules say nothing, so no cap). A single screen taller than the cap still makes a long image of its own. Null rules (nothing known) behave as allowed
+    /// without caps; rules that do not allow long images give no long image at all. Returns each long image's first screen and screen count.</summary>
+    public static List<(int First, int Count)> PlanLongImages(IReadOnlyList<int> screenHeights, LongImageRules rules)
+    {
+        List<(int First, int Count)> images = [];
+        if (rules is not null && !rules.Allowed)
+        {
+            return images;
+        }
+        int maxHeight = rules?.MaxHeight > 0 ? rules.MaxHeight : int.MaxValue;
+        int maxScreens = rules?.MaxSlices > 0 ? rules.MaxSlices : int.MaxValue;
+        int first = 0;
+        long height = 0;
+        for (int index = 0; index < screenHeights.Count; index++)
+        {
+            int count = index - first;
+            if (count > 0 && (height + screenHeights[index] > maxHeight || count >= maxScreens))
+            {
+                images.Add((first, count));
+                first = index;
+                height = 0;
+            }
+            height += screenHeights[index];
+        }
+        if (screenHeights.Count > first)
+        {
+            images.Add((first, screenHeights.Count - first));
+        }
+        return images;
+    }
+
+    /// <summary>The folder of a slot group inside a grouped export (T100), in the page language.</summary>
+    public static string GroupFolder(string group, string language) => (group, language == "en") switch
+    {
+        ("main", true) => "Main images",
+        ("main", false) => "主图",
+        ("detail", true) => "Detail page",
+        ("detail", false) => "详情",
+        (_, true) => "Other",
+        _ => "其他"
+    };
+
+    /// <summary>A file's name inside a grouped export (T100): its number in the group, then the slot's name made safe for file systems, e.g. "01-白底图".</summary>
+    public static string GroupedFileName(int number, string slotName, string extension) => $"{number:D2}-{SafeName(slotName, "image")}.{extension}";
 }

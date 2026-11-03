@@ -39,7 +39,8 @@ public static partial class BatchService
             try
             {
                 (layoutBase, string baseProblem) = await WaitForFusionBaseAsync(batch, job, cancel);
-                if (baseProblem is not null)
+                // Detail screens fall back to the product's own photo (T100); a selling image needs the fusion picture.
+                if (baseProblem is not null && job.SlotKind != "detail_page")
                 {
                     SetState(batch, job, "failed", baseProblem, "generation_failed");
                     return;
@@ -311,8 +312,9 @@ public static partial class BatchService
         return result;
     }
 
-    /// <summary>One selling slot task (T98): the product's own selling info (T99) drawn by the selling-image service (F47) onto the product's finished fusion
-    /// picture. The candidates are the service's layouts, starting where this task's number falls so remakes differ.</summary>
+    /// <summary>One layout slot task (T98, T100): the product's own selling info (T99) laid out by the server. A selling slot draws it onto the product's
+    /// finished fusion picture, the first candidate in the layout that keeps clear of the product and later ones (more candidates, "one more") in the next
+    /// layouts; a detail-screen slot lays out the product's screens (<see cref="GenerateDetailScreens"/>).</summary>
     private static JObject GenerateLayout(Session session, Batch batch, Job job, string baseUrl)
     {
         Product product = batch.Products[job.Product];
@@ -321,21 +323,31 @@ public static partial class BatchService
             return StudioApi.Error("这个商品还没有填写卖点信息，无法排版卖点图。", "invalid_selling_text");
         }
         (Products.ProductSpecs specs, string name) = Products.ProductLibrary.SellingInfoFor(session.User.UserID, product.ProductId, batch.Language);
+        string path = baseUrl is null ? null : WorkSync.LocalPathFor(session.User, baseUrl, out _);
+        if (job.SlotKind == "detail_page")
+        {
+            return GenerateDetailScreens(session, batch, job, product, specs, name, path);
+        }
         (string title, List<string> points) = SellingImageRules.FromSpecs(specs, name);
         if (SellingImageRules.Problem(title, points) is string problem)
         {
             return StudioApi.Error(problem, "invalid_selling_text");
         }
-        string path = WorkSync.LocalPathFor(session.User, baseUrl, out _);
         if (path is null || !File.Exists(path))
         {
             return StudioApi.Error("融合结果无法读取，无法排版卖点图。", "invalid_reference");
         }
         int count = job.ImageCount ?? SetRules.JobImageCount(job.Source, batch.Candidates);
+        int start;
+        lock (batch.Lock)
+        {
+            start = batch.Jobs.Where(item => item.Id < job.Id && item.Product == job.Product && item.SlotId == job.SlotId).Sum(item => item.Images.Count);
+        }
+        List<string> order = SellingImageRules.LayoutOrder(SellingImageService.AutoLayoutFor(path));
         JArray images = [];
         for (int index = 0; index < count; index++)
         {
-            string layout = SellingImageRules.Layouts[(job.Id + index) % SellingImageRules.Layouts.Count];
+            string layout = order[(start + index) % order.Count];
             JObject rendered = SellingImageService.RenderFromWork(session.User, path, layout, title, points, SellingImageRules.DefaultAccent);
             if (rendered.ContainsKey("error"))
             {
@@ -348,6 +360,45 @@ public static partial class BatchService
         }
         CandidateCleanup.Register(session.User, images);
         return new JObject() { ["images"] = images, ["execution_server"] = "平台本机（服务端排版）" };
+    }
+
+    /// <summary>One detail-screen slot task (T100): every screen the product's saved info makes (points, parameters, size), laid out at the slot's size around
+    /// the product's fusion picture, or around its own photo when the batch has none. Screens are made once per product, whatever the candidate count.</summary>
+    private static JObject GenerateDetailScreens(Session session, Batch batch, Job job, Product product, Products.ProductSpecs specs, string name, string picturePath)
+    {
+        if (!DetailPageRules.HasContent(specs))
+        {
+            return StudioApi.Error("这个商品还没有填写卖点、参数或尺寸，无法排版详情屏。", "invalid_selling_text");
+        }
+        (int width, int height) = JobSize(batch, job, "detail_page");
+        Image<Rgba32> picture;
+        string baseMetadata = null;
+        if (picturePath is not null && File.Exists(picturePath))
+        {
+            picture = ISImage.Load<Rgba32>(picturePath);
+            baseMetadata = ExportService.MetadataText(picture);
+        }
+        else
+        {
+            string original = OriginalFor(session, product);
+            if (original is null)
+            {
+                return StudioApi.Error("商品原图无法读取，无法排版详情屏。", "invalid_reference");
+            }
+            picture = ISImage.Load<Rgba32>(Convert.FromBase64String(original[(original.IndexOf(',') + 1)..]));
+        }
+        using (picture)
+        {
+            (List<string> screens, string problem, string errorId) = DetailPageService.Render(session.User, picture, baseMetadata, specs, name, width, height,
+                batch.Language, SellingImageRules.DefaultAccent);
+            if (problem is not null)
+            {
+                return StudioApi.Error(problem, errorId);
+            }
+            JArray images = new(screens);
+            CandidateCleanup.Register(session.User, images);
+            return new JObject() { ["images"] = images, ["execution_server"] = "平台本机（服务端排版）" };
+        }
     }
 
     /// <summary>The size a slot task renders at (T98): its own slot size when the batch chose none, else the platform's size for the kind, else 2000 square.</summary>

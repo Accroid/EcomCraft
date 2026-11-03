@@ -498,7 +498,10 @@ class SimpleReferencePart {
             return filled ? 'layout' : 'no_selling_info';
         }
         if (slot.kind == 'detail_page') {
-            return 'layout_pending';
+            // Detail screens are laid out from the saved points, parameters or size (T100).
+            let info = product && product.info ? (product.info[I18n.current] || product.info['zh-CN'] || {}) : {};
+            let filled = (info.points || []).length > 0 || (info.params || []).length > 0 || (info.size || '').length > 0;
+            return filled ? 'layout' : 'no_selling_info';
         }
         return 'unsupported_kind';
     }
@@ -515,7 +518,11 @@ class SimpleReferencePart {
             for (let slot of slots) {
                 for (let product of products) {
                     let source = this.fullSetSlotSource(slot, product);
-                    if (source == 'fusion' || source == 'crop' || source == 'layout') {
+                    if (source == 'layout' && slot.kind == 'detail_page') {
+                        // Detail screens are laid out once per product, however many candidates (T100).
+                        total += 1;
+                    }
+                    else if (source == 'fusion' || source == 'crop' || source == 'layout') {
                         total += candidates;
                     }
                     else if (source == 'cutout') {

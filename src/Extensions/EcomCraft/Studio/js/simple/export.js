@@ -94,6 +94,9 @@ class SimpleExportPart {
         this.api.$('simple-export-zip').disabled = !ready;
         this.api.$('simple-export-folder').disabled = !ready;
         let note = this.selected.size ? tr('将导出已选的 {0} 张，每个商品一个文件夹。', this.selected.size) : tr('先点选要导出的图片。');
+        // Long images only apply to detail screens (T100): the option shows once a selected picture was made for one.
+        let detailSlots = platform ? (platform.slots || []).filter(slot => slot.kind == 'detail_page').map(slot => slot.id) : [];
+        this.api.$('simple-export-long-label').hidden = !Array.from(this.selected).some(url => detailSlots.includes(this.resultSlots.get(url)));
         if (platform && !platform.verified) {
             note += ' ' + tr('这个平台的尺寸规格还没有经过管理员核对，上传前请对照平台最新要求。');
         }
@@ -137,7 +140,7 @@ class SimpleExportPart {
                     filled++;
                 }
                 for (let [index, point] of (saved.points || []).map(point => String(point).trim()).filter(point => point).slice(0, 3).entries()) {
-                    this.api.$(`simple-selling-point-${index + 1}`).value = point.slice(0, 16);
+                    this.api.$(`simple-selling-point-${index + 1}`).value = point.slice(0, 40);
                     filled++;
                 }
             }
@@ -147,7 +150,7 @@ class SimpleExportPart {
                 for (let [index, point] of points.entries()) {
                     let input = this.api.$(`simple-selling-point-${index + 1}`);
                     if (!input.value) {
-                        input.value = point.slice(0, 16);
+                        input.value = point.slice(0, 40);
                     }
                 }
             }
@@ -197,6 +200,10 @@ class SimpleExportPart {
             }
             this.renderResults();
             this.message(tr('卖点图已生成，排在候选图最前面，也保存在作品画廊。'), false);
+            // Every layout covers part of the product (T100): the least-covering one was used; another layout may still read better.
+            if ((result.notes || []).includes('layout_on_product')) {
+                this.message(tr('每种版式都会压到一点商品，已选压得最少的一种；可以换一种版式再试。'), true);
+            }
         }
         catch (error) {
             this.message(error.message || tr('卖点图没有生成，请稍后重试。'), true);
@@ -232,7 +239,9 @@ class SimpleExportPart {
                 target,
                 ai_label: this.aiLabelField(),
                 language: I18n.current,
-                groups: Array.from(groups, ([name, images]) => ({ name, images }))
+                by_group: this.api.$('simple-export-bygroup').checked,
+                long_image: !this.api.$('simple-export-long-label').hidden && this.api.$('simple-export-long').checked,
+                groups: Array.from(groups, ([name, images]) => ({ name, images: images.map(url => this.exportEntry(url)) }))
             });
             if (result.download) {
                 let link = document.createElement('a');
@@ -292,7 +301,26 @@ class SimpleExportPart {
         if (warning.code == 'label_not_allowed') {
             return tr('这个平台不允许加可见 AI 标识，{0} 张图按原样导出。', count);
         }
+        if (warning.code == 'long_image_unverified') {
+            return tr('“{0}”的整张长图规则还没有核对，已按屏顺序拼好长图，上传前请对照平台要求。', this.slotName(warning.slot));
+        }
+        if (warning.code == 'long_image_not_allowed') {
+            return tr('这个平台的“{0}”不接受整张长图，只导出了分屏切片。', this.slotName(warning.slot));
+        }
+        if (warning.code == 'long_image_split') {
+            return tr('详情屏超过一张长图的高度或屏数上限，已按顺序拆成几张长图，文件名带序号。', count);
+        }
+        if (warning.code == 'slices_over') {
+            return tr('详情屏的屏数超过“{0}”的切片数量上限，全部照常导出，上传时请删减。', this.slotName(warning.slot));
+        }
         return tr('有 {0} 张图带促销文字，平台可能按“牛皮癣”拒收，建议只放在允许的位置。', count);
+    }
+
+    /** One picture of an export request (T100): with the slot it was made for when that slot belongs to the export platform, else the plain URL. */
+    static exportEntry(url) {
+        let platform = this.exportPlatform();
+        let slot = this.resultSlots.get(url);
+        return slot && platform && (platform.slots || []).some(item => item.id == slot) ? { url, slot } : url;
     }
 
     /** The display name of an export slot ID, from the export platform's slot list. */

@@ -21,12 +21,13 @@ public static class ComplianceRules
     public const string CreatorTool = "EcomCraft Studio";
 
     /// <summary>How a work was made, from the markers EcomCraft writes into its metadata: "cutout" (no generation — the original photo on white, or a
-    /// real crop of the user's own photo, T98), "composite" (original product pixels pasted onto a generated picture) or "generated" (everything else,
-    /// the safe default).</summary>
+    /// real crop of the user's own photo, T98, or a screen laid out from the user's own text and photo, T100), "composite" (original product pixels
+    /// pasted onto a generated picture) or "generated" (everything else, the safe default).</summary>
     public static string SourceKind(string metadataText)
     {
         string text = metadataText ?? "";
-        if (text.Contains("\"ecomcraft_cutout_only\"", StringComparison.Ordinal) || text.Contains("\"ecomcraft_photo_crop\"", StringComparison.Ordinal))
+        if (text.Contains("\"ecomcraft_cutout_only\"", StringComparison.Ordinal) || text.Contains("\"ecomcraft_photo_crop\"", StringComparison.Ordinal)
+            || text.Contains("\"ecomcraft_layout_only\"", StringComparison.Ordinal))
         {
             return "cutout";
         }

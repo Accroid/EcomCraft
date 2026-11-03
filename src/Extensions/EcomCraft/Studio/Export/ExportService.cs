@@ -192,6 +192,9 @@ public static class ExportService
         // The visible AI label (F49): the request says whether the user wants it; a rule that locks it overrides the checkbox, slot by slot.
         bool? wantedLabel = rawInput["ai_label"]?.Type == JTokenType.Boolean ? rawInput.Value<bool?>("ai_label") : null;
         string labelLanguage = rawInput.Value<string>("language") == "en" ? "en" : "zh-CN";
+        // Grouped packing (T100): main images and detail screens in their own folders, numbered in the platform's slot order; detail screens can also be
+        // stitched into long images. Requests without these flags keep the old flat numbering.
+        ExportLayout layout = new(rawInput.Value<bool?>("by_group") == true, rawInput.Value<bool?>("long_image") == true, labelLanguage);
         string exportRoot = StorageSettings.Get().ExportPath;
         if (target == "folder" && string.IsNullOrEmpty(exportRoot))
         {
@@ -226,6 +229,17 @@ public static class ExportService
         {
             return StudioApi.Error($"请选择 1–{MaxImages} 张作品。", "invalid_export");
         }
+        if (layout.ByGroup)
+        {
+            // Product folders keep the order they came in; inside each, main images come before detail screens, each in the platform's slot order.
+            List<string> groupOrder = [.. files.Select(file => file.Group).Distinct()];
+            files = [.. files.Select((file, index) => (file, index))
+                .OrderBy(item => groupOrder.IndexOf(item.file.Group))
+                .ThenBy(item => ExportSlot.GroupOf(item.file.Slot.Kind) switch { "main" => 0, "detail" => 1, _ => 2 })
+                .ThenBy(item => match.Slots.IndexOf(item.file.Slot))
+                .ThenBy(item => item.index)
+                .Select(item => item.file)];
+        }
         string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
         string label = $"{stamp}-{platformId}";
         // Exported works are kept forever (F39).
@@ -235,7 +249,7 @@ public static class ExportService
         }
         try
         {
-            return await Task.Run(() => target == "zip" ? WriteZip(session.User.UserID, label, files, match, wantedLabel, labelLanguage) : WriteFolder(session.User.UserID, exportRoot, label, files, match, wantedLabel, labelLanguage));
+            return await Task.Run(() => target == "zip" ? WriteZip(session.User.UserID, label, files, match, wantedLabel, labelLanguage, layout) : WriteFolder(session.User.UserID, exportRoot, label, files, match, wantedLabel, labelLanguage, layout));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or UnknownImageFormatException or InvalidImageContentException or NotSupportedException)
         {
@@ -281,7 +295,7 @@ public static class ExportService
     }
 
     /// <summary>Packs the rendered works into a zip with one folder per group.</summary>
-    private static JObject WriteZip(string userId, string label, List<FileEntry> files, PlatformExport platform, bool? wantedLabel, string labelLanguage)
+    private static JObject WriteZip(string userId, string label, List<FileEntry> files, PlatformExport platform, bool? wantedLabel, string labelLanguage, ExportLayout layout)
     {
         Cleanup();
         List<string> notWhite = [];
@@ -293,7 +307,7 @@ public static class ExportService
         using (FileStream stream = File.Create(zipPath))
         using (ZipArchive zip = new(stream, ZipArchiveMode.Create))
         {
-            foreach ((string name, byte[] data) in Rendered(label, files, platform, notWhite, warnings, wantedLabel, labelLanguage))
+            foreach ((string name, byte[] data) in Rendered(label, files, platform, notWhite, warnings, wantedLabel, labelLanguage, layout))
             {
                 ZipArchiveEntry entry = zip.CreateEntry(name, CompressionLevel.NoCompression);
                 using Stream entryStream = entry.Open();
@@ -304,11 +318,11 @@ public static class ExportService
     }
 
     /// <summary>Writes the rendered works under the export location: export/&lt;account&gt;/&lt;time-platform&gt;/&lt;group&gt;/.</summary>
-    private static JObject WriteFolder(string userId, string root, string label, List<FileEntry> files, PlatformExport platform, bool? wantedLabel, string labelLanguage)
+    private static JObject WriteFolder(string userId, string root, string label, List<FileEntry> files, PlatformExport platform, bool? wantedLabel, string labelLanguage, ExportLayout layout)
     {
         List<string> notWhite = [];
         ExportWarnings warnings = new();
-        foreach ((string name, byte[] data) in Rendered(label, files, platform, notWhite, warnings, wantedLabel, labelLanguage))
+        foreach ((string name, byte[] data) in Rendered(label, files, platform, notWhite, warnings, wantedLabel, labelLanguage, layout))
         {
             string path = Path.Combine(root, userId, name.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(path));
@@ -322,56 +336,155 @@ public static class ExportService
     /// placement and skipping itself on pure-white slots where it would break the white border; hints collect into <paramref name="warnings"/> (over-cap, low
     /// subject fill, text image, label outcomes) and works whose border is not pure white are added to <paramref name="notWhite"/> when the slot requires it.</summary>
     private static IEnumerable<(string Name, byte[] Data)> Rendered(string label, List<FileEntry> files, PlatformExport platform, List<string> notWhite, ExportWarnings warnings,
-        bool? wantedLabel, string labelLanguage)
+        bool? wantedLabel, string labelLanguage, ExportLayout layout)
     {
         Dictionary<string, int> counters = [];
         bool forbidsPromoText = ComplianceRules.ForbidsPromoText(platform.Platform);
         JObject root = TemplateStore.PlatformsRoot();
         SixLabors.Fonts.FontFamily? family = SellingImageService.SharedFonts();
-        foreach (FileEntry file in files)
+        // Detail screens kept for stitching (T100), per product folder, in export order, with how each was made.
+        Dictionary<string, List<(Image<Rgb24> Screen, ExportSlot Slot, string Kind)>> screens = [];
+        try
         {
-            int number = counters.GetValueOrDefault(file.Group) + 1;
-            counters[file.Group] = number;
-            using Image<Rgba32> source = ISImage.Load<Rgba32>(file.Path);
-            ExportSlot slot = file.KeepSize ? KeepSizeSlot(platform, file.Slot, source) : file.Slot;
-            string name = $"{label}/{file.Group}/{number:D2}.{slot.Preset.Format}";
-            using Image<Rgb24> rendered = ExportImage.Render(source, slot.Preset);
-            if (slot.RequireWhite && ComplianceRules.NonWhiteBorderFraction(rendered) > 0)
+            foreach (FileEntry file in files)
             {
-                notWhite.Add($"{file.Group}/{number:D2}.{slot.Preset.Format}");
+                using Image<Rgba32> source = ISImage.Load<Rgba32>(file.Path);
+                ExportSlot slot = file.KeepSize ? KeepSizeSlot(platform, file.Slot, source) : file.Slot;
+                string folder = layout.ByGroup ? $"{file.Group}/{ExportRules.GroupFolder(ExportSlot.GroupOf(file.Slot.Kind), layout.Language)}" : file.Group;
+                int number = counters.GetValueOrDefault(folder) + 1;
+                counters[folder] = number;
+                string fileName = layout.ByGroup ? ExportRules.GroupedFileName(number, SlotName(platform, file.Slot, layout.Language), slot.Preset.Format)
+                    : $"{number:D2}.{slot.Preset.Format}";
+                string name = $"{label}/{folder}/{fileName}";
+                using Image<Rgb24> rendered = ExportImage.Render(source, slot.Preset);
+                if (slot.RequireWhite && ComplianceRules.NonWhiteBorderFraction(rendered) > 0)
+                {
+                    notWhite.Add($"{folder}/{fileName}");
+                }
+                if (slot.SubjectRatioMin > 0 && slot.Kind == "white_main" && ComplianceRules.SubjectFillFraction(rendered) < slot.SubjectRatioMin)
+                {
+                    warnings.Add("subject_small", slot.Id);
+                }
+                if (forbidsPromoText && (ComplianceRules.CarriesDrawnText(slot.Kind) || MetadataText(source).Contains("ecomcraft_selling_image", StringComparison.Ordinal)))
+                {
+                    warnings.Add("text_image", slot.Id);
+                }
+                string kind = ComplianceRules.SourceKind(MetadataText(source));
+                Provenance(rendered, kind);
+                // The visible label (F49): the rule is the global default overlaid with this platform's and this slot's; the stored work is never touched.
+                JObject slotJson = (platform.Platform["slots"] as JArray)?.OfType<JObject>().FirstOrDefault(item => item["id"]?.ToString() == slot.Id);
+                string labelOutcome = VisibleLabel.Draw(rendered, ComplianceRules.VisibleLabel(root, platform.Platform, slotJson), wantedLabel, labelLanguage,
+                    ComplianceRules.ProductPlacement(MetadataText(source)), slot.RequireWhite, family);
+                if (labelOutcome is not null)
+                {
+                    warnings.Add(labelOutcome, slot.Id);
+                }
+                byte[] data = Encode(rendered, file.Slot, out bool overCap);
+                if (overCap)
+                {
+                    warnings.Add("size_over", slot.Id);
+                }
+                if (layout.LongImage && file.Slot.Kind == "detail_page")
+                {
+                    if (!screens.TryGetValue(file.Group, out List<(Image<Rgb24>, ExportSlot, string)> list))
+                    {
+                        list = [];
+                        screens[file.Group] = list;
+                    }
+                    list.Add((rendered.Clone(), file.Slot, kind));
+                }
+                yield return (name, data);
             }
-            if (slot.SubjectRatioMin > 0 && slot.Kind == "white_main" && ComplianceRules.SubjectFillFraction(rendered) < slot.SubjectRatioMin)
+            foreach ((string group, List<(Image<Rgb24> Screen, ExportSlot Slot, string Kind)> list) in screens)
             {
-                warnings.Add("subject_small", slot.Id);
+                foreach ((string name, byte[] data) in LongImages(label, group, list, layout, warnings))
+                {
+                    yield return (name, data);
+                }
             }
-            if (forbidsPromoText && (ComplianceRules.CarriesDrawnText(slot.Kind) || MetadataText(source).Contains("ecomcraft_selling_image", StringComparison.Ordinal)))
+        }
+        finally
+        {
+            foreach ((Image<Rgb24> screen, ExportSlot _, string _) in screens.Values.SelectMany(list => list))
             {
-                warnings.Add("text_image", slot.Id);
+                screen.Dispose();
             }
-            string kind = ComplianceRules.SourceKind(MetadataText(source));
-            string type = ComplianceRules.DigitalSourceType(kind);
-            if (type is not null)
+        }
+    }
+
+    /// <summary>The export options of one request (T100): grouped folders and numbered slot names, long images of detail screens, and the file-name language.</summary>
+    private sealed record class ExportLayout(bool ByGroup, bool LongImage, string Language);
+
+    /// <summary>A slot's display name in the export language, for grouped file names (T100); the slot ID when the platform gives no name.</summary>
+    private static string SlotName(PlatformExport platform, ExportSlot slot, string language)
+    {
+        JObject slotJson = (platform.Platform["slots"] as JArray)?.OfType<JObject>().FirstOrDefault(item => item["id"]?.ToString() == slot.Id);
+        Dictionary<string, string> names = slotJson?["name"]?.ToObject<Dictionary<string, string>>() ?? [];
+        return Templates.EcomTemplate.Pick(names, language) is string picked && picked.Length > 0 ? picked : slot.Id;
+    }
+
+    /// <summary>Writes the AI provenance of how a picture was made into an export copy (F22): XMP digital source type and description, EXIF software and
+    /// description; nothing for pictures made without generation.</summary>
+    private static void Provenance(Image<Rgb24> rendered, string kind)
+    {
+        string type = ComplianceRules.DigitalSourceType(kind);
+        if (type is null)
+        {
+            return;
+        }
+        string description = ComplianceRules.Description(kind);
+        rendered.Metadata.XmpProfile = new XmpProfile(Encoding.UTF8.GetBytes(ComplianceRules.Xmp(type, description)));
+        rendered.Metadata.ExifProfile ??= new ExifProfile();
+        rendered.Metadata.ExifProfile.SetValue(ExifTag.Software, ComplianceRules.CreatorTool);
+        rendered.Metadata.ExifProfile.SetValue(ExifTag.ImageDescription, description);
+    }
+
+    /// <summary>Stitches one product folder's detail screens into long images (T100), per the first screen slot's long-image rules: screens keep their order
+    /// and are never cut, a long image that would pass the height cap or the screen count goes on in the next one (numbered, with a notice), a platform
+    /// that does not allow long images gets none (notice), and unknown rules are noted as unverified. Each long image carries the strongest provenance of
+    /// its screens: generated over composite over none.</summary>
+    private static IEnumerable<(string Name, byte[] Data)> LongImages(string label, string group, List<(Image<Rgb24> Screen, ExportSlot Slot, string Kind)> screens,
+        ExportLayout layout, ExportWarnings warnings)
+    {
+        ExportSlot slot = screens[0].Slot;
+        if (slot.LongImage is null)
+        {
+            warnings.Add("long_image_unverified", slot.Id);
+        }
+        else if (!slot.LongImage.Allowed)
+        {
+            warnings.Add("long_image_not_allowed", slot.Id);
+        }
+        if (slot.LongImage?.MaxSlices > 0 && screens.Count > slot.LongImage.MaxSlices)
+        {
+            warnings.Add("slices_over", slot.Id);
+        }
+        List<(int First, int Count)> plan = ExportRules.PlanLongImages([.. screens.Select(item => item.Screen.Height)], slot.LongImage);
+        if (plan.Count > 1)
+        {
+            warnings.Add("long_image_split", slot.Id);
+        }
+        string folder = layout.ByGroup ? $"{group}/{ExportRules.GroupFolder("detail", layout.Language)}" : group;
+        for (int index = 0; index < plan.Count; index++)
+        {
+            (int first, int count) = plan[index];
+            List<(Image<Rgb24> Screen, ExportSlot Slot, string Kind)> part = screens.GetRange(first, count);
+            int width = part.Max(item => item.Screen.Width);
+            using Image<Rgb24> stitched = new(width, part.Sum(item => item.Screen.Height), new Rgb24(255, 255, 255));
+            int y = 0;
+            stitched.Mutate(context =>
             {
-                string description = ComplianceRules.Description(kind);
-                rendered.Metadata.XmpProfile = new XmpProfile(Encoding.UTF8.GetBytes(ComplianceRules.Xmp(type, description)));
-                rendered.Metadata.ExifProfile ??= new ExifProfile();
-                rendered.Metadata.ExifProfile.SetValue(ExifTag.Software, ComplianceRules.CreatorTool);
-                rendered.Metadata.ExifProfile.SetValue(ExifTag.ImageDescription, description);
-            }
-            // The visible label (F49): the rule is the global default overlaid with this platform's and this slot's; the stored work is never touched.
-            JObject slotJson = (platform.Platform["slots"] as JArray)?.OfType<JObject>().FirstOrDefault(item => item["id"]?.ToString() == slot.Id);
-            string labelOutcome = VisibleLabel.Draw(rendered, ComplianceRules.VisibleLabel(root, platform.Platform, slotJson), wantedLabel, labelLanguage,
-                ComplianceRules.ProductPlacement(MetadataText(source)), slot.RequireWhite, family);
-            if (labelOutcome is not null)
-            {
-                warnings.Add(labelOutcome, slot.Id);
-            }
-            byte[] data = Encode(rendered, file.Slot, out bool overCap);
-            if (overCap)
-            {
-                warnings.Add("size_over", slot.Id);
-            }
-            yield return (name, data);
+                foreach ((Image<Rgb24> screen, ExportSlot _, string _) in part)
+                {
+                    context.DrawImage(screen, new Point((width - screen.Width) / 2, y), 1f);
+                    y += screen.Height;
+                }
+            });
+            string kind = part.Any(item => item.Kind == "generated") ? "generated" : part.Any(item => item.Kind == "composite") ? "composite" : "cutout";
+            Provenance(stitched, kind);
+            byte[] data = Encode(stitched, slot.Preset);
+            string name = layout.Language == "en" ? $"long-{index + 1:D2}" : $"长图-{index + 1:D2}";
+            yield return ($"{label}/{folder}/{name}.{slot.Preset.Format}", data);
         }
     }
 

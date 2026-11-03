@@ -183,6 +183,11 @@ public static partial class BatchService
             foreach (int product in batch.Jobs.Where(job => job.Source == SetRules.SourceLayout).Select(job => job.Product).Distinct())
             {
                 batch.FusionBase[product] = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+                // A product with no fusion task never gets a fusion picture: its layouts start at once (detail screens then use the product's photo).
+                if (!batch.Jobs.Any(job => job.Product == product && job.Source == SetRules.SourceFusion))
+                {
+                    batch.FusionBase[product].TrySetResult(null);
+                }
             }
         }
         // In reference mode none of the other step-2 options apply (F59): no description, style, product type, prompt panel or brand kit.
@@ -526,8 +531,9 @@ public static partial class BatchService
     {
         (int Width, int Height)? photoSize = null;
         bool sellingFilled = false;
+        bool detailFilled = false;
         bool needsPhoto = composed.Any(slot => slot.Kind == "detail");
-        bool needsSelling = composed.Any(slot => slot.Kind == "selling");
+        bool needsSelling = composed.Any(slot => slot.Kind is "selling" or "detail_page");
         if (needsPhoto)
         {
             string original = OriginalFor(session, product);
@@ -550,13 +556,14 @@ public static partial class BatchService
         {
             (Products.ProductSpecs specs, string name) = Products.ProductLibrary.SellingInfoFor(session.User.UserID, product.ProductId, language);
             sellingFilled = specs is not null && specs.Points.Count > 0 && (!string.IsNullOrEmpty(specs.DisplayName) || !string.IsNullOrEmpty(name));
+            detailFilled = DetailPageRules.HasContent(specs);
         }
         List<SetRules.SlotPlan> plans = [];
         foreach (ExportSlot slot in composed)
         {
             bool detailHighResolution = photoSize is (int width, int height)
                 && SetRules.DetailCropSufficient(width, height, slot.Preset.Width, slot.Preset.Height);
-            string source = SetRules.FullSetSlotSource(slot.Kind, detailHighResolution, sellingFilled);
+            string source = SetRules.FullSetSlotSource(slot.Kind, detailHighResolution, sellingFilled, detailFilled);
             bool covered = source is (SetRules.SourceFusion or SetRules.SourceCutout or SetRules.SourceCrop or SetRules.SourceLayout);
             plans.Add(covered ? new SetRules.SlotPlan(slot.Id, slot.Kind, source, null) : new SetRules.SlotPlan(slot.Id, slot.Kind, null, source));
         }

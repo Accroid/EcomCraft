@@ -422,7 +422,7 @@ public static partial class BatchService
             }
             // The remake is one more picture of the same slot, so the batch's total may not pass the image cap (T98): count what the batch asks now.
             int limit = SetRules.ImageLimit(Program.ServerSettings.EcomCraft.BatchImageLimit);
-            int asked = batch.Jobs.Sum(item => item.ImageCount ?? SetRules.JobImageCount(item.Source, batch.Candidates));
+            int asked = batch.Jobs.Sum(item => item.ImageCount ?? SetRules.JobImageCount(item.Source, item.SlotKind, batch.Candidates));
             if (asked + 1 > limit)
             {
                 return Task.FromResult(StudioApi.Error($"再出一张会超过 {limit} 张总上限，请先减少这个批次的任务。", "invalid_parameters"));

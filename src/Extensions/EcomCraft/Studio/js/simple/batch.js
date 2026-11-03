@@ -255,6 +255,9 @@ class SimpleBatchPart {
                     if (this.batchEdit) {
                         this.trialImages.add(url);
                     }
+                    if (job.slot_id) {
+                        this.resultSlots.set(url, job.slot_id);
+                    }
                     // Fusion-slot results carry the "route not yet accepted" notice on their tiles (T98).
                     if (job.source == 'fusion') {
                         this.fusionImages.add(url);

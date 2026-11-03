@@ -80,15 +80,16 @@ public static class SetRules
         public bool Covered => Source is not null;
     }
 
-    /// <summary>Why a slot kind has no source in the one-reference full set (T98), or null when the kind is made. Kinds never in
-    /// <see cref="SetSlotKinds"/> never reach here. "model" has no automatic source yet; detail screens wait for T100's layouts.</summary>
-    public static string FullSetSlotSource(string kind, bool detailHighResolution, bool sellingInfoFilled) => kind switch
+    /// <summary>The source of a slot kind in the one-reference full set (T98), or the reason it stays uncovered. Kinds never in
+    /// <see cref="SetSlotKinds"/> never reach here. "model" has no automatic source yet; detail screens are laid out from the product's saved points,
+    /// parameters or size (T100) and stay uncovered without them.</summary>
+    public static string FullSetSlotSource(string kind, bool detailHighResolution, bool sellingInfoFilled, bool detailInfoFilled) => kind switch
     {
         "first_main" or "scene_main" => SourceFusion,
         "white_main" => SourceCutout,
         "detail" => detailHighResolution ? SourceCrop : "low_resolution",
         "selling" => sellingInfoFilled ? SourceLayout : "no_selling_info",
-        "detail_page" => "layout_pending",
+        "detail_page" => detailInfoFilled ? SourceLayout : "no_selling_info",
         _ => "unsupported_kind",
     };
 
@@ -151,9 +152,13 @@ public static class SetRules
     /// makes the chosen candidate count. The page mirrors this for its estimate before submitting.</summary>
     public static int JobImageCount(string source, int candidates) => source == SourceCutout ? 1 : Math.Max(1, candidates);
 
+    /// <summary>Images one task counts toward the image cap (T98, T100): detail screens are laid out locally once per product, however many candidates, so
+    /// they count as one; everything else follows <see cref="JobImageCount"/>.</summary>
+    public static int JobImageCount(string source, string kind, int candidates) => source == SourceLayout && kind == "detail_page" ? 1 : JobImageCount(source, candidates);
+
     /// <summary>Images one task of a slot batch makes (T98): a reference left without a slot keeps the old one picture per reference, the rest follow
     /// <see cref="JobImageCount"/>.</summary>
-    public static int SlotJobImageCount(Job job, int candidates) => job.SlotId is null ? 1 : JobImageCount(job.Source, candidates);
+    public static int SlotJobImageCount(Job job, int candidates) => job.SlotId is null ? 1 : JobImageCount(job.Source, job.SlotKind, candidates);
 
     /// <summary>Images a slot batch requests in total (T98): the sum over its tasks, each at its own count. Over the limit the server refuses the batch
     /// outright; nothing is silently truncated.</summary>

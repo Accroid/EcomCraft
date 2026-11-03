@@ -24,7 +24,7 @@ class SimpleMode {
     static prompt = { zh: '', en: '', base: { zh: '', en: '' }, last: '', tab: 'zh', expanding: false };
     static promptUsed = null;
     static storyboard = { points: [''], shots: [], running: false };
-    static selling = { layout: 'banner', running: false, accentTouched: false, prefilled: false };
+    static selling = { layout: 'auto', running: false, accentTouched: false, prefilled: false };
     /** The debounce timer of the selling image's advertising-wording check (F79, T99). */
     static sellingClaimTimer = null;
     static brandKits = [];
@@ -98,6 +98,8 @@ class SimpleMode {
     /** Common output sizes offered besides the platform's own: width, height and the aspect label. */
     static sizePresets = [[800, 800, '1:1'], [1000, 1000, '1:1'], [1200, 1200, '1:1'], [750, 1000, '3:4'], [1080, 1440, '3:4'], [1080, 1920, '9:16'], [1920, 1080, '16:9']];
     static resultGroups = new Map();
+    /** The platform slot each slot-batch result was made for (T98, T100), by URL, so exports file it under its slot and group. */
+    static resultSlots = new Map();
     static taskProducts = new Map();
     static batchProducts = [];
     static exporting = false;

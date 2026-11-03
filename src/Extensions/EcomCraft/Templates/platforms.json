@@ -64,6 +64,42 @@
           "quality": 92,
           "max_bytes": 3145728,
           "optional": true
+        },
+        {
+          "id": "selling",
+          "kind": "selling",
+          "name": { "zh-CN": "卖点图", "en": "Selling-point image" },
+          "width": 800,
+          "height": 800,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 92,
+          "max_bytes": 3145728,
+          "optional": true
+        },
+        {
+          "id": "detail",
+          "kind": "detail",
+          "name": { "zh-CN": "细节图", "en": "Detail close-up" },
+          "width": 800,
+          "height": 800,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 92,
+          "max_bytes": 3145728,
+          "optional": true
+        },
+        {
+          "id": "detail_page",
+          "kind": "detail_page",
+          "name": { "zh-CN": "详情屏", "en": "Detail screen" },
+          "width": 750,
+          "height": 1000,
+          "background": "#FFFFFF",
+          "format": "jpg",
+          "quality": 90,
+          "max_bytes": 3145728,
+          "optional": true
         }
       ],
       "main_image_count": 5,
@@ -71,7 +107,7 @@
       "forbidden": ["watermark", "promo_text", "price", "qr_code", "border", "collage"],
       "ai_label": { "implicit_metadata": true, "platform_declaration": true },
       "verified": false,
-      "source": "待 N06 核对：1:1 主图 800×800 起支持放大；第 5 张白底图纯白约 300KB；单张约 3MB；无线端可选 3:4；主图 800×800 经用户 2026-11-03 确认"
+      "source": "待 N06 核对：1:1 主图 800×800 起支持放大；第 5 张白底图纯白约 300KB；单张约 3MB；无线端可选 3:4；主图 800×800 经用户 2026-11-03 确认；卖点图、细节图、详情屏（750×1000）为可选图位，尺寸未核对，可在此修改"
     },
     {
       "id": "jd",
