@@ -407,6 +407,11 @@ public static partial class StudioApi
         {
             // Marks the work as a composite of the real product and a generated picture, for the provenance metadata written on export (F22).
             ((JObject)input["extra_metadata"])["ecomcraft_preserve"] = "true";
+            // The resolved placement the product is pasted back at (F49): the visible AI label keeps clear of it when exporting.
+            if (rawInput["placement"] is JObject resolved)
+            {
+                ((JObject)input["extra_metadata"])["ecomcraft_placement"] = resolved.DeepClone();
+            }
         }
         return null;
     }

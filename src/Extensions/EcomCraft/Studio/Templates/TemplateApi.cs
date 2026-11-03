@@ -286,6 +286,9 @@ public static class TemplateApi
                 error = StudioApi.Error(problem, "invalid_reference");
                 return null;
             }
+            // The resolved placement that pastes the product back (F49): kept with the request so the saved work carries it and exports can keep the visible AI
+            // label clear of the product even when the placement came from the saved product instead of the request.
+            request["placement"] = new JObject() { ["x"] = placement.CenterX, ["y"] = placement.CenterY, ["size"] = placement.Size };
             workflowParams[field] = canvas;
         }
         request["workflow_params"] = workflowParams;

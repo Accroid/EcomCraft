@@ -41,6 +41,9 @@ public static class SellingImageService
         FontDir = System.IO.Path.Combine(extensionFolder, "Assets", "fonts");
     }
 
+    /// <summary>The bundled font family for the server's other export drawings (the visible AI label, F49), or null while the font files are missing.</summary>
+    internal static FontFamily? SharedFonts() => Fonts();
+
     /// <summary>The bundled font family (regular and bold), loaded once; null when the font files are missing or unreadable.</summary>
     private static FontFamily? Fonts()
     {

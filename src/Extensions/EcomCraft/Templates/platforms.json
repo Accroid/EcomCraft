@@ -1,6 +1,19 @@
 {
   "version": 3,
-  "note": "Export presets come from commonly published platform guidelines and must be checked against the platforms' current official rules before use (N06). Set verified to true after checking, with source set to the official page URL and check date. Administrators can override this file with Data/EcomCraft/platforms.json. Each platform lists image slots (F58): sizes, per-file caps, subject fill, forbidden content and AI labelling; values without a check are marked in each platform's source. Slot kinds (T97): white_main, first_main, scene_main, selling, detail, model, detail_page, video_cover; detail_page slots may carry long_image stitching rules (allowed, max_height, max_slices) which are export rules only, never output sizes. T97 pass of 2026-11-03 ran offline: no value was checked, every platform stays verified: false, none of the second-batch platforms (Temu, AliExpress, Shopee, Lazada, WeChat Store, Kuaishou) was added and no platform got first_main / selling / detail_page slots until official sources are checked.",
+  "note": "Export presets come from commonly published platform guidelines and must be checked against the platforms' current official rules before use (N06). Set verified to true after checking, with source set to the official page URL and check date. Administrators can override this file with Data/EcomCraft/platforms.json. Each platform lists image slots (F58): sizes, per-file caps, subject fill, forbidden content and AI labelling; values without a check are marked in each platform's source. Slot kinds (T97): white_main, first_main, scene_main, selling, detail, model, detail_page, video_cover; detail_page slots may carry long_image stitching rules (allowed, max_height, max_slices) which are export rules only, never output sizes. T97 pass of 2026-11-03 ran offline: no value was checked, every platform stays verified: false, none of the second-batch platforms (Temu, AliExpress, Shopee, Lazada, WeChat Store, Kuaishou) was added and no platform got first_main / selling / detail_page slots until official sources are checked. Visible AI labels (F49): the top-level ai_label.visible object is the global default; a platform can override it with its own ai_label.visible and a single slot with slots[].ai_label.visible (for example to leave a white main image unlabelled), each field on its own, invalid values falling back to the layer below. T113 of 2026-11-03 shipped it off by default and unverified: the label text, size, opacity and the user's right to turn it off all wait for the Chinese AI-labelling regulation (in force 2025-09-01) and each platform's rules to be checked against their official texts.",
+  "ai_label": {
+    "note": "Visible AI label rules (F49), the global default every platform and slot inherits: enabled (added by default), text (per language), position (top_left / top_right / bottom_left / bottom_right / auto), font_ratio (of the canvas's shorter side), opacity (0-1), user_can_disable (false locks the checkbox). Labels are drawn on exported files only, never on stored works, and are skipped on slots whose pure-white border they would break.",
+    "visible": {
+      "enabled": false,
+      "text": { "zh-CN": "AI 生成", "en": "AI generated" },
+      "position": "auto",
+      "font_ratio": 0.03,
+      "opacity": 0.6,
+      "user_can_disable": true,
+      "verified": false,
+      "source": "待核对《人工智能生成合成内容标识办法》原文和平台规则"
+    }
+  },
   "upload_quality": {
     "note": "Upload quality checks (F38): photos below min_side pixels, under blur_variance (Laplacian variance) or cut-outs with less than min_cutout_ratio opaque pixels get a plain warning with a suggestion; the user can still continue.",
     "min_side": 512,

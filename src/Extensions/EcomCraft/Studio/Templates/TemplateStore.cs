@@ -42,26 +42,30 @@ public static class TemplateStore
         BuiltinDir = Path.Combine(extensionFolder, "Templates", "builtin");
     }
 
-    /// <summary>The platform list with names, region and export presets: Data/EcomCraft/platforms.json when an administrator provided one, otherwise the built-in
-    /// Templates/platforms.json. Unreadable files give an empty list.</summary>
-    public static List<JObject> Platforms()
+    /// <summary>The whole platform file (the same file <see cref="Platforms"/> reads): Data/EcomCraft/platforms.json when an administrator provided one,
+    /// otherwise the built-in Templates/platforms.json. It holds the rules kept beside the platform list, such as the global visible AI label default (F49).
+    /// Null when no file is there or it cannot be read.</summary>
+    public static JObject PlatformsRoot()
     {
         try
         {
             string custom = Path.Combine(Program.DataDir, "EcomCraft", "platforms.json");
             string file = File.Exists(custom) ? custom : Path.Combine(Path.GetDirectoryName(BuiltinDir) ?? "", "platforms.json");
-            if (!File.Exists(file))
-            {
-                return [];
-            }
-            return [.. (JObject.Parse(File.ReadAllText(file))["platforms"] as JArray ?? new JArray()).OfType<JObject>()
-                .Where(platform => System.Text.RegularExpressions.Regex.IsMatch(platform["id"]?.ToString() ?? "", "^[a-z0-9][a-z0-9-]{0,47}$") && platform["name"] is JObject)];
+            return File.Exists(file) ? JObject.Parse(File.ReadAllText(file)) : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             Logs.Error($"EcomCraft could not read the platform list: {ex.Message}");
-            return [];
+            return null;
         }
+    }
+
+    /// <summary>The platform list with names, region and export presets: Data/EcomCraft/platforms.json when an administrator provided one, otherwise the built-in
+    /// Templates/platforms.json. Unreadable files give an empty list.</summary>
+    public static List<JObject> Platforms()
+    {
+        return [.. (PlatformsRoot()?["platforms"] as JArray ?? new JArray()).OfType<JObject>()
+            .Where(platform => System.Text.RegularExpressions.Regex.IsMatch(platform["id"]?.ToString() ?? "", "^[a-z0-9][a-z0-9-]{0,47}$") && platform["name"] is JObject)];
     }
 
     /// <summary>The upload quality thresholds of the platform file (F38): minimum side in pixels, Laplacian-variance floor for sharpness and the smallest

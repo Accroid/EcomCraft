@@ -44,7 +44,8 @@ public static class CutoutOnly
                     ["ecomcraft_cutout_only"] = "true",
                     ["ecomcraft_template"] = templateId,
                     ["ecomcraft_published_workflow"] = templateId,
-                    ["ecomcraft_execution_server_name"] = "平台本机（纯抠图）"
+                    ["ecomcraft_execution_server_name"] = "平台本机（纯抠图）",
+                    ["ecomcraft_placement"] = new JObject() { ["x"] = 0.5, ["y"] = 0.5, ["size"] = ProductSize }
                 }
             };
             canvas.Metadata.GetPngMetadata().TextData.Add(new SixLabors.ImageSharp.Formats.Png.Chunks.PngTextData("parameters", metadata.ToString(Formatting.None), "", ""));

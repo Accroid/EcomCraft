@@ -110,7 +110,7 @@ public static class ExportService
         return best;
     }
 
-    [API.APIDescription("List the platforms that have an export slot (slots with size, group and optional flag, whether an administrator verified them) in the requested language, and whether exporting to the shared folder is available.", "platforms: [{ id: \"amazon\", name: \"\", width: 2000, height: 2000, verified: false, slots: [{ id: \"white_main\", kind: \"white_main\", group: \"main\", optional: false }], main_image_count: 9, ai_declaration: true }], folder_available: false")]
+    [API.APIDescription("List the platforms that have an export slot (slots with size, group and optional flag, whether an administrator verified them) in the requested language, whether exporting to the shared folder is available, and each platform's visible AI label rule (F49).", "platforms: [{ id: \"amazon\", name: \"\", width: 2000, height: 2000, verified: false, slots: [{ id: \"white_main\", kind: \"white_main\", group: \"main\", optional: false }], main_image_count: 9, ai_declaration: true, ai_label: { enabled: false, user_can_disable: true } }], folder_available: false")]
     public static Task<JObject> EcomCraftStudioExportOptions(Session session, string language = "zh-CN")
     {
         if (!StudioApi.CanView(session))
@@ -119,8 +119,11 @@ public static class ExportService
         }
         language = language == "en" ? "en" : "zh-CN";
         JArray platforms = new();
+        JObject root = TemplateStore.PlatformsRoot();
         foreach (PlatformExport platform in PlatformPresets())
         {
+            // The visible AI label rule of the platform itself (F49): the toggle's default and whether the user may turn it; slots can still differ.
+            ComplianceRules.VisibleLabelRule labelRule = ComplianceRules.VisibleLabel(root, platform.Platform, null);
             Dictionary<string, string> names = platform.Platform["name"]?.ToObject<Dictionary<string, string>>() ?? [];
             ExportSlot main = platform.DefaultSlot;
             JArray slots = new();
@@ -153,13 +156,18 @@ public static class ExportService
                 ["verified"] = platform.Verified,
                 ["slots"] = slots,
                 ["main_image_count"] = platform.Platform.Value<int?>("main_image_count") ?? 0,
-                ["ai_declaration"] = (platform.Platform["ai_label"] as JObject)?.Value<bool?>("platform_declaration") == true
+                ["ai_declaration"] = (platform.Platform["ai_label"] as JObject)?.Value<bool?>("platform_declaration") == true,
+                ["ai_label"] = new JObject()
+                {
+                    ["enabled"] = labelRule.Enabled,
+                    ["user_can_disable"] = labelRule.UserCanDisable
+                }
             });
         }
         return Task.FromResult(new JObject() { ["platforms"] = platforms, ["folder_available"] = !string.IsNullOrEmpty(StorageSettings.Get().ExportPath) });
     }
 
-    [API.APIDescription("Export the current account's works for a platform: groups [{ name, images: [gallery path, result URL or { url, slot }] }] (at most 200 images), target \"zip\" (returns a download URL) or \"folder\" (writes to the export location), and the optional slot ID every image goes to when the entries do not name one (F58). Warnings come back as codes the page words in its language. rawInput is the root request JSON.", "download: \"/EcomCraft/export/…\", count: 4, verified: false, warnings: [{ code: \"size_over\", slot: \"white_main\", count: 1 }]")]
+    [API.APIDescription("Export the current account's works for a platform: groups [{ name, images: [gallery path, result URL or { url, slot }] }] (at most 200 images), target \"zip\" (returns a download URL) or \"folder\" (writes to the export location), the optional slot ID every image goes to when the entries do not name one (F58), ai_label (whether the user wants the visible AI label, F49; rules can override it) and the page language for the label's text. Warnings come back as codes the page words in its language. rawInput is the root request JSON.", "download: \"/EcomCraft/export/…\", count: 4, verified: false, warnings: [{ code: \"size_over\", slot: \"white_main\", count: 1 }, { code: \"label_added\", slot: \"scene_main\", count: 3 }]")]
     public static async Task<JObject> EcomCraftStudioExport(Session session, JObject rawInput)
     {
         if (!StudioApi.CanView(session))
@@ -181,6 +189,9 @@ public static class ExportService
         string target = rawInput.Value<string>("target") == "folder" ? "folder" : "zip";
         // Works made at a size chosen before generating are downloaded at that size; only format and size cap follow the platform.
         bool keepSize = rawInput.Value<bool?>("keep_size") == true;
+        // The visible AI label (F49): the request says whether the user wants it; a rule that locks it overrides the checkbox, slot by slot.
+        bool? wantedLabel = rawInput["ai_label"]?.Type == JTokenType.Boolean ? rawInput.Value<bool?>("ai_label") : null;
+        string labelLanguage = rawInput.Value<string>("language") == "en" ? "en" : "zh-CN";
         string exportRoot = StorageSettings.Get().ExportPath;
         if (target == "folder" && string.IsNullOrEmpty(exportRoot))
         {
@@ -224,7 +235,7 @@ public static class ExportService
         }
         try
         {
-            return await Task.Run(() => target == "zip" ? WriteZip(session.User.UserID, label, files, match) : WriteFolder(session.User.UserID, exportRoot, label, files, match));
+            return await Task.Run(() => target == "zip" ? WriteZip(session.User.UserID, label, files, match, wantedLabel, labelLanguage) : WriteFolder(session.User.UserID, exportRoot, label, files, match, wantedLabel, labelLanguage));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or UnknownImageFormatException or InvalidImageContentException or NotSupportedException)
         {
@@ -246,9 +257,10 @@ public static class ExportService
         return slot with { Preset = slot.Preset with { Width = source.Width, Height = source.Height } };
     }
 
-    /// <summary>Export hints (F58), counted per code and slot; the page words them in the UI language. Codes: size_over (still over the slot's cap after
-    /// re-encoding), subject_small (below a white slot's subject fill) and text_image (a slot whose kind carries drawn text by definition, such as selling-point
-    /// images, or a picture with the selling-image marker, on a platform that forbids promotional text).</summary>
+    /// <summary>Export hints (F58, F49), counted per code and slot; the page words them in the UI language. Codes: size_over (still over the slot's cap after
+    /// re-encoding), subject_small (below a white slot's subject fill), text_image (a slot whose kind carries drawn text by definition, such as selling-point
+    /// images, or a picture with the selling-image marker, on a platform that forbids promotional text) and the visible AI label's outcomes (label_added,
+    /// label_shrunk, label_on_product, label_font_missing, label_white_skipped, label_not_allowed).</summary>
     private sealed class ExportWarnings
     {
         /// <summary>Counts per code and slot.</summary>
@@ -269,7 +281,7 @@ public static class ExportService
     }
 
     /// <summary>Packs the rendered works into a zip with one folder per group.</summary>
-    private static JObject WriteZip(string userId, string label, List<FileEntry> files, PlatformExport platform)
+    private static JObject WriteZip(string userId, string label, List<FileEntry> files, PlatformExport platform, bool? wantedLabel, string labelLanguage)
     {
         Cleanup();
         List<string> notWhite = [];
@@ -281,7 +293,7 @@ public static class ExportService
         using (FileStream stream = File.Create(zipPath))
         using (ZipArchive zip = new(stream, ZipArchiveMode.Create))
         {
-            foreach ((string name, byte[] data) in Rendered(label, files, platform, notWhite, warnings))
+            foreach ((string name, byte[] data) in Rendered(label, files, platform, notWhite, warnings, wantedLabel, labelLanguage))
             {
                 ZipArchiveEntry entry = zip.CreateEntry(name, CompressionLevel.NoCompression);
                 using Stream entryStream = entry.Open();
@@ -292,11 +304,11 @@ public static class ExportService
     }
 
     /// <summary>Writes the rendered works under the export location: export/&lt;account&gt;/&lt;time-platform&gt;/&lt;group&gt;/.</summary>
-    private static JObject WriteFolder(string userId, string root, string label, List<FileEntry> files, PlatformExport platform)
+    private static JObject WriteFolder(string userId, string root, string label, List<FileEntry> files, PlatformExport platform, bool? wantedLabel, string labelLanguage)
     {
         List<string> notWhite = [];
         ExportWarnings warnings = new();
-        foreach ((string name, byte[] data) in Rendered(label, files, platform, notWhite, warnings))
+        foreach ((string name, byte[] data) in Rendered(label, files, platform, notWhite, warnings, wantedLabel, labelLanguage))
         {
             string path = Path.Combine(root, userId, name.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(path));
@@ -306,12 +318,16 @@ public static class ExportService
     }
 
     /// <summary>Renders every work to its slot (F58), naming them "&lt;label&gt;/&lt;group&gt;/&lt;n&gt;.&lt;ext&gt;" numbered within each group. AI provenance metadata is written
-    /// from the work's own markers (F22); hints collect into <paramref name="warnings"/> (over-cap, low subject fill, text image) and works whose border is
-    /// not pure white are added to <paramref name="notWhite"/> when the slot requires it.</summary>
-    private static IEnumerable<(string Name, byte[] Data)> Rendered(string label, List<FileEntry> files, PlatformExport platform, List<string> notWhite, ExportWarnings warnings)
+    /// from the work's own markers (F22); the visible AI label (F49) is drawn on the export copy only, never on the stored work, keeping clear of the product's
+    /// placement and skipping itself on pure-white slots where it would break the white border; hints collect into <paramref name="warnings"/> (over-cap, low
+    /// subject fill, text image, label outcomes) and works whose border is not pure white are added to <paramref name="notWhite"/> when the slot requires it.</summary>
+    private static IEnumerable<(string Name, byte[] Data)> Rendered(string label, List<FileEntry> files, PlatformExport platform, List<string> notWhite, ExportWarnings warnings,
+        bool? wantedLabel, string labelLanguage)
     {
         Dictionary<string, int> counters = [];
         bool forbidsPromoText = ComplianceRules.ForbidsPromoText(platform.Platform);
+        JObject root = TemplateStore.PlatformsRoot();
+        SixLabors.Fonts.FontFamily? family = SellingImageService.SharedFonts();
         foreach (FileEntry file in files)
         {
             int number = counters.GetValueOrDefault(file.Group) + 1;
@@ -341,6 +357,14 @@ public static class ExportService
                 rendered.Metadata.ExifProfile ??= new ExifProfile();
                 rendered.Metadata.ExifProfile.SetValue(ExifTag.Software, ComplianceRules.CreatorTool);
                 rendered.Metadata.ExifProfile.SetValue(ExifTag.ImageDescription, description);
+            }
+            // The visible label (F49): the rule is the global default overlaid with this platform's and this slot's; the stored work is never touched.
+            JObject slotJson = (platform.Platform["slots"] as JArray)?.OfType<JObject>().FirstOrDefault(item => item["id"]?.ToString() == slot.Id);
+            string labelOutcome = VisibleLabel.Draw(rendered, ComplianceRules.VisibleLabel(root, platform.Platform, slotJson), wantedLabel, labelLanguage,
+                ComplianceRules.ProductPlacement(MetadataText(source)), slot.RequireWhite, family);
+            if (labelOutcome is not null)
+            {
+                warnings.Add(labelOutcome, slot.Id);
             }
             byte[] data = Encode(rendered, file.Slot, out bool overCap);
             if (overCap)
