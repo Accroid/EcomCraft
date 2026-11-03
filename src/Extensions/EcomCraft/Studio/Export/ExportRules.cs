@@ -215,7 +215,7 @@ public static class ExportRules
             error = "长图最大高度须不低于单屏高度且不超过 100000。";
             return null;
         }
-        if (maxSlices > 0 && (maxSlices < 1 || maxSlices > 100))
+        if (maxSlices != 0 && (maxSlices < 1 || maxSlices > 100))
         {
             error = "切片数量上限须在 1–100 之间。";
             return null;

@@ -2423,7 +2423,7 @@
      conditioning there, so the box only looks inactive but stays editable, and the note under it stays visible. Standalone on purpose:
      the parameter rendering and recipe linkage are being reworked elsewhere, so this must merge on its own. */
     function updateNegativeEffectLook() {
-        $('negative').classList.toggle('is-ineffective', Number($('cfg').value) === 1);
+        $('negative').classList.toggle('is-ineffective', Number($('cfg').value) == 1);
     }
 
     /** Counts advanced parameters the user filled in for the standard workspace; native workflows prefill them, so they show no count. */
