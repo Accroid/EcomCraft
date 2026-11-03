@@ -106,6 +106,7 @@ class SimpleExportPart {
         this.api.$('simple-export-note').textContent = note;
         this.renderSelling();
         this.renderAiLabel();
+        this.renderTone();
     }
 
     /** The selling info of the current product in the page's language (F79, T99), falling back to Chinese when that language has none, so the
