@@ -257,20 +257,26 @@ public static partial class BatchService
         }
         (int width, int height) = JobSize(batch, job, "detail");
         int count = job.ImageCount ?? SetRules.JobImageCount(job.Source, batch.Candidates);
+        // Later tasks of the same slot (retries aside, "one more") continue the crop positions instead of repeating the first ones.
+        int start;
+        lock (batch.Lock)
+        {
+            start = batch.Jobs.Where(item => item.Id < job.Id && item.Product == job.Product && item.SlotId == job.SlotId).Sum(item => item.Images.Count);
+        }
         JObject result = await Task.Run(() =>
         {
             try
             {
                 int comma = original.IndexOf(',');
                 using Image<Rgba32> photo = ISImage.Load<Rgba32>(Convert.FromBase64String(original[(comma + 1)..]));
-                if (!SetRules.DetailCrop(photo.Width, photo.Height, width, height, out int cropWidth, out int cropHeight))
+                if (!SetRules.DetailZoomCrop(photo.Width, photo.Height, width, height, out int cropWidth, out int cropHeight))
                 {
                     return StudioApi.Error("商品原图无法读取，无法裁切细节图。", "invalid_reference");
                 }
                 JArray images = [];
                 for (int index = 0; index < count; index++)
                 {
-                    (double fx, double fy) = SetRules.CropShift(index);
+                    (double fx, double fy) = SetRules.CropShift(start + index);
                     int x = (int)Math.Round(fx * (photo.Width - cropWidth));
                     int y = (int)Math.Round(fy * (photo.Height - cropHeight));
                     using Image<Rgba32> crop = photo.Clone(context => context.Crop(new Rectangle(x, y, cropWidth, cropHeight)).Resize(width, height));

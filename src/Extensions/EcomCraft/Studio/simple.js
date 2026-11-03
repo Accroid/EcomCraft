@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Three-step simple mode (F07), the default view: 1. upload a product photo, 2. pick the platform, the output size and 1–8 reference images (the
+ * Three-step simple mode (F07), the default view: 1. upload a product photo, 2. pick the platform, the output size and 1–15 reference images (the
  * single entry, A14), 3. pick and download candidates. The task-first cards (F61) and their fields — image type, product type, style, model, brand
  * kit, one-line description with AI expand, the bilingual prompt panel and the storyboard — stay in the code and the page but are hidden until G2
  * decides their fate; "follow a reference" (F59) is the only entrance. The direct-fusion trial's switch (F84) stays. studio.js hands over its

@@ -151,9 +151,13 @@ public static class SetRules
     /// makes the chosen candidate count. The page mirrors this for its estimate before submitting.</summary>
     public static int JobImageCount(string source, int candidates) => source == SourceCutout ? 1 : Math.Max(1, candidates);
 
+    /// <summary>Images one task of a slot batch makes (T98): a reference left without a slot keeps the old one picture per reference, the rest follow
+    /// <see cref="JobImageCount"/>.</summary>
+    public static int SlotJobImageCount(Job job, int candidates) => job.SlotId is null ? 1 : JobImageCount(job.Source, candidates);
+
     /// <summary>Images a slot batch requests in total (T98): the sum over its tasks, each at its own count. Over the limit the server refuses the batch
     /// outright; nothing is silently truncated.</summary>
-    public static int SlotImageTotal(IEnumerable<Job> jobs, int candidates) => jobs.Sum(job => JobImageCount(job.Source, candidates));
+    public static int SlotImageTotal(IEnumerable<Job> jobs, int candidates) => jobs.Sum(job => SlotJobImageCount(job, candidates));
 
     /// <summary>The largest center crop of a photo that matches a slot's aspect (T98): the crop the detail slot takes its close-up from. The wider side
     /// of the photo is kept, the other is centered to the aspect; the result is null-like (false) when either side would come out empty.</summary>
@@ -186,18 +190,32 @@ public static class SetRules
             && cropWidth * 2 >= slotWidth && cropHeight * 2 >= slotHeight;
     }
 
-    /// <summary>Where the n-th detail candidate's crop sits (T98): the first is centered, the rest step through the possible shifts so candidates differ.
-    /// Each fraction is of the maximum shift the photo allows (0–0.5), first horizontally then vertically.</summary>
-    public static (double X, double Y) CropShift(int index)
+    /// <summary>Linear share of the largest crop that a detail close-up keeps (T98): enough zoom to read as a close-up, enough room to shift.</summary>
+    public const double DetailZoom = 0.6;
+
+    /// <summary>The detail close-up's crop size (T98): <see cref="DetailZoom"/> of the largest crop at the slot's aspect, but never smaller than half the
+    /// slot's size (the enlargement stays at most twofold, as <see cref="DetailCropSufficient"/> promises) and never larger than the largest crop.</summary>
+    public static bool DetailZoomCrop(int photoWidth, int photoHeight, int slotWidth, int slotHeight, out int cropWidth, out int cropHeight)
     {
-        if (index <= 0)
+        if (!DetailCrop(photoWidth, photoHeight, slotWidth, slotHeight, out int maxWidth, out int maxHeight))
         {
-            return (0.5, 0.5);
+            cropWidth = cropHeight = 0;
+            return false;
         }
-        int ring = (index + 1) / 2;
-        bool horizontal = index % 2 == 1;
-        return (horizontal ? 0.5 + ring * 0.25 : 0.5, horizontal ? 0.5 : 0.5 + ring * 0.25);
+        double scale = Math.Max(DetailZoom, Math.Max((double)slotWidth / 2 / maxWidth, (double)slotHeight / 2 / maxHeight));
+        scale = Math.Min(1, scale);
+        cropWidth = Math.Max(1, (int)Math.Round(maxWidth * scale));
+        cropHeight = Math.Max(1, (int)Math.Round(maxHeight * scale));
+        return true;
     }
+
+    /// <summary>Crop positions the detail candidates step through (T98), as fractions (0–1) of the shift the photo allows on each axis: centered first,
+    /// then left/right, up/down, and the edges.</summary>
+    private static readonly (double X, double Y)[] CropShifts = [(0.5, 0.5), (0.25, 0.5), (0.75, 0.5), (0.5, 0.25), (0.5, 0.75), (0, 0.5), (1, 0.5), (0.5, 0), (0.5, 1)];
+
+    /// <summary>Where the n-th detail crop of a slot sits (T98): the first is centered and later ones (more candidates, or "one more") step through
+    /// <see cref="CropShifts"/>, starting over after the last, so every value stays inside the photo.</summary>
+    public static (double X, double Y) CropShift(int index) => CropShifts[Math.Max(0, index) % CropShifts.Length];
 
     /// <summary>Whether a template suits the platform (an empty platform means any; "*" in a template suits every platform).</summary>
     public static bool SuitsPlatform(TemplateRef template, string platform) =>

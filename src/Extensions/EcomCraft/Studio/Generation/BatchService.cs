@@ -443,6 +443,7 @@ public static partial class BatchService
                 SlotKind = job.SlotKind,
                 Source = job.Source,
                 ImageCount = 1,
+                OutputSize = job.OutputSize,
                 State = "queued"
             };
             batch.Jobs.Add(remake);

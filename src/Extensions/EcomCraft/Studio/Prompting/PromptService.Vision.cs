@@ -237,7 +237,7 @@ public static partial class PromptService
         return new JObject() { ["success"] = true, ["model"] = model };
     }
 
-    [API.APIDescription("Describe reference images for reference mode (F59): one English composition prompt and its Chinese translation per image (1–8), "
+    [API.APIDescription("Describe reference images for reference mode (F59): one English composition prompt and its Chinese translation per image (1–15), "
         + "for the page to show and the user to edit. Image description is on unless the administrator turned it off.", "items: [{ index: 0, prompt_en: \"\", prompt_zh: \"\" }], failed: 0")]
     public static async Task<JObject> EcomCraftStudioReferenceDescribe(Session session, JObject rawInput)
     {

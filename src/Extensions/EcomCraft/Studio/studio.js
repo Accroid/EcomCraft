@@ -212,7 +212,7 @@
         return `/${prefix}/${encoded}`;
     }
     const safeErrors = new Set(['bad_permissions','data_file_unreadable','cloud_unavailable','invalid_model','invalid_mode','invalid_workflow','invalid_workflow_parameters',
-        'local_unavailable','invalid_prompt','unsupported_prompt_syntax','invalid_parameters','invalid_reference','invalid_mask','invalid_loras','invalid_sampler',
+        'local_unavailable','invalid_prompt','unsupported_prompt_syntax','invalid_parameters','invalid_reference','invalid_slot','invalid_mask','invalid_loras','invalid_sampler',
         'invalid_scheduler','generation_failed','generation_uncertain','task_not_found','workflow_dependencies_missing',
         'no_execution_server','execution_server_unavailable','invalid_execution_server','queue_limit',
         'workflow_state','invalid_review','review_save_failed',

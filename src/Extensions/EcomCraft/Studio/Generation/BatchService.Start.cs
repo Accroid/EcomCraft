@@ -145,7 +145,7 @@ public static partial class BatchService
         // One shared cap for single generations and whole sets alike (F55): products × set types × candidates may not exceed the image total. The cap is
         // configurable per server since T98 (default 60); a larger batch is refused outright, never silently truncated.
         int imageLimit = SetRules.ImageLimit(Program.ServerSettings.EcomCraft.BatchImageLimit);
-        int totalImages = batch.ReferenceSlots is not null ? SetRules.SlotImageTotal(expanded, batch.Candidates) : expanded.Count * candidates;
+        int totalImages = batch.ReferenceSlots is not null ? SetRules.SlotImageTotal(expanded, batch.Candidates) : expanded.Count * batch.Candidates;
         if (totalImages > imageLimit)
         {
             return StudioApi.Error($"预计 {totalImages} 张，超过 {imageLimit} 张总上限，请减少商品图、图位或候选张数。", "invalid_parameters");
@@ -170,6 +170,8 @@ public static partial class BatchService
             {
                 Id = batch.Jobs.Count, Product = job.Product, Template = job.Template, TemplateName = EcomTemplate.Pick(template.Name, language),
                 Shot = job.Shot, Reference = job.Reference, SlotId = job.SlotId, SlotKind = job.SlotKind, Source = job.Source,
+                // A reference left without a slot in a slot batch keeps its old single picture (T98).
+                ImageCount = batch.ReferenceSlots is not null && job.SlotId is null ? 1 : null,
                 Purpose = job.Shot >= 0 && batch.ShotPurposes[job.Shot].Length > 0 ? batch.ShotPurposes[job.Shot] : null,
                 OutputSize = job.SlotId is null || customSize ? null : SlotSizeOf(platform, job.SlotId)
             });
