@@ -18,6 +18,10 @@ class SimpleBatchPart {
             if (slot.optional && !this.optionalSlots.has(slot.id)) {
                 continue;
             }
+            // Video covers only record specs and never join sets (T97, matching the server's SetRules.SetSlotKinds).
+            if (slot.kind == 'video_cover') {
+                continue;
+            }
             if (!kinds.includes(slot.kind)) {
                 kinds.push(slot.kind);
             }
