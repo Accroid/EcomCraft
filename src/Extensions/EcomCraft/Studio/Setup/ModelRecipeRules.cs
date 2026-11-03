@@ -174,7 +174,7 @@ public static class ModelRecipeRules
     }
 
     /// <summary>The professional mode's recommended pixel count per hardware tier (T114): a model's native size where the card can carry it, a smaller
-    /// size elsewhere. Only the preselected resolution — the user may pick another (A19); template generations (the simple mode) always run near one megapixel.</summary>
+    /// size elsewhere. Only marked as recommended (A19): both modes start at one megapixel.</summary>
     /// <param name="Default">The pixel count for tiers <see cref="ByTier"/> does not list.</param>
     /// <param name="ByTier">Per-tier pixel counts (HardwareRules tier names to values).</param>
     public sealed record class GenerationPixelsRule(long Default, Dictionary<string, long> ByTier)

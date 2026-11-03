@@ -155,7 +155,7 @@ public static partial class StudioApi
             ["samplers"] = OptionPairs(ComfyUIBackendExtension.Samplers),
             ["schedulers"] = OptionPairs(ComfyUIBackendExtension.Schedulers),
             ["workflows"] = PublishedWorkflowCatalog(session),
-            // The professional mode's recommended resolution (T114): the current recipe's pixel count for this machine's tier; only a guide (A19).
+            // The professional mode's recommended resolution (T114): the current recipe's pixel count for this machine's tier, only marked (A19); the picker starts at 1K.
             ["generation_pixels"] = ModelRecipes.Current().Recipe?.GenerationPixels.For(await HardwareProbe.CurrentTierAsync()) ?? OutputSizeRules.DefaultGenerationPixels
         };
         foreach (KeyValuePair<string, JToken> entry in LocalBackendStatus())

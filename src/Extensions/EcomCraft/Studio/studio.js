@@ -583,28 +583,22 @@
     }
 
     /** The professional mode's resolution presets (T114): scales the width and height to the chosen pixel count at the same aspect ratio, the way the
-     * server sizes template generations. The recipe's recommendation for this machine's tier is marked and preselected until the user picks a preset;
-     * a size typed by hand or taken from a picture switches the picker to custom. The simple mode always generates near one megapixel. */
+     * server sizes template generations. 1K is selected by default like the simple mode (user decision 2026-11-03); the recipe's recommendation for this
+     * machine's tier is only marked. A size typed by hand or taken from a picture switches the picker to custom. */
     class ResolutionPicker {
         static labels = { '': '自定义（按宽高）', '1048576': '1K（约 100 万像素）', '2359296': '1.5K（约 240 万像素）', '4194304': '2K（约 400 万像素）' };
         static recommended = null;
-        static chosen = false;
 
-        /** Marks the catalog's recommended preset (a value that is no preset marks none) and selects it while the user has not chosen. */
+        /** Marks the catalog's recommended preset (a value that is no preset marks none); the selection stays as it is. */
         static recommend(catalog) {
             let value = String(catalog?.generation_pixels ?? '');
             if (value == this.recommended) {
                 return;
             }
             this.recommended = value;
-            let select = $('resolution-preset');
-            for (let option of select.options) {
+            for (let option of $('resolution-preset').options) {
                 let label = tr(this.labels[option.value]);
                 option.textContent = option.value != '' && option.value == value ? label + tr('（推荐）') : label;
-            }
-            if (!this.chosen && value != '' && value in this.labels) {
-                select.value = value;
-                this.apply();
             }
         }
 
@@ -6305,15 +6299,9 @@
         $('swap-dims').addEventListener('click', () => {
             const w = $('width').value; $('width').value = $('height').value; $('height').value = w;
         });
-        $('resolution-preset').addEventListener('change', () => {
-            ResolutionPicker.chosen = true;
-            ResolutionPicker.apply();
-        });
+        $('resolution-preset').addEventListener('change', () => ResolutionPicker.apply());
         for (let field of ['width', 'height']) {
-            $(field).addEventListener('input', () => {
-                ResolutionPicker.chosen = true;
-                ResolutionPicker.markCustom();
-            });
+            $(field).addEventListener('input', () => ResolutionPicker.markCustom());
         }
         // A recipe-linked model switch sets the prompt strength programmatically (no input event), so the weakened look
         // of the negative box also syncs on every later change event reaching the document (T126).
