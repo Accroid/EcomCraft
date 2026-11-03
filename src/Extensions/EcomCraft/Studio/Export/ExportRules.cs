@@ -8,15 +8,31 @@ namespace EcomCraftStudio.Studio.Export;
 public sealed record class ExportPreset(int Width, int Height, byte R, byte G, byte B, string Format, int Quality, bool Verified, string Source, bool RequireWhite = false);
 
 /// <summary>One image slot of a platform (F58): the preset that renders it, plus slot-only rules — a per-file size cap, a minimum subject fill, the suggested
-/// position of the white image in the platform's image list and whether the slot joins image sets only when ticked.</summary>
-public sealed record class ExportSlot(string Id, string Kind, ExportPreset Preset, long MaxBytes, double SubjectRatioMin, int Position, bool Optional)
+/// position of the white image in the platform's image list and whether the slot joins image sets only when ticked. Detail screens (T97) also carry
+/// long-image stitching rules, which are export rules only, never output sizes.</summary>
+public sealed record class ExportSlot(string Id, string Kind, ExportPreset Preset, long MaxBytes, double SubjectRatioMin, int Position, bool Optional, LongImageRules LongImage = null)
 {
-    /// <summary>The slot kinds templates can serve; "white_main" also implies the pure-white background check.</summary>
-    public static readonly string[] Kinds = ["white_main", "scene_main", "detail", "model", "video_cover"];
+    /// <summary>The slot kinds templates can serve; "white_main" also implies the pure-white background check. Main-image kinds first (T97): white bottom,
+    /// first image, scene, selling point, detail, model; then detail screens; "video_cover" only records video specs.</summary>
+    public static readonly string[] Kinds = ["white_main", "first_main", "scene_main", "selling", "detail", "model", "detail_page", "video_cover"];
+
+    /// <summary>The slot kinds of the main-image group (F58, T97): the pictures shoppers browse at the top of a listing.</summary>
+    public static readonly string[] MainGroupKinds = ["white_main", "first_main", "scene_main", "selling", "detail", "model"];
+
+    /// <summary>The slot kinds of the detail-page group (T97): single screens of the long description, stitched per the slot's long-image rules.</summary>
+    public static readonly string[] DetailGroupKinds = ["detail_page"];
+
+    /// <summary>A slot kind's group for set and export grouping (T97): "main", "detail", or "record" for kinds that only note specs, such as video covers.</summary>
+    public static string GroupOf(string kind) => MainGroupKinds.Contains(kind) ? "main" : DetailGroupKinds.Contains(kind) ? "detail" : "record";
 
     /// <summary>Whether the slot's pictures must have a pure white border (F22).</summary>
     public bool RequireWhite => Preset.RequireWhite || Kind == "white_main";
 }
+
+/// <summary>Long-image stitching rules of a detail-screen slot (T97): whether the platform accepts one whole long picture, how tall it may be and how many
+/// single-screen slices may follow. Export rules only — the long image height is not an output size, so it is not bound by the output size cap; unset
+/// values are 0 and mean the official rules say nothing about them.</summary>
+public sealed record class LongImageRules(bool Allowed, int MaxHeight, int MaxSlices);
 
 /// <summary>Export rules independent of SwarmUI so sizes, padding and names can be unit tested.</summary>
 public static class ExportRules
@@ -168,7 +184,48 @@ public static class ExportRules
             return null;
         }
         bool requireWhite = slot.Value<bool?>("require_white") == true;
-        return new ExportSlot(id, kind, preset with { RequireWhite = requireWhite }, maxBytes, subjectRatio, position, slot.Value<bool?>("optional") == true);
+        LongImageRules longImage = ParseLongImage(slot, preset, out string longImageError);
+        if (longImageError is not null)
+        {
+            error = $"槽位 {id}：{longImageError}";
+            return null;
+        }
+        return new ExportSlot(id, kind, preset with { RequireWhite = requireWhite }, maxBytes, subjectRatio, position, slot.Value<bool?>("optional") == true, longImage);
+    }
+
+    /// <summary>Reads a detail screen's long-image stitching rules (T97), only on "detail_page" slots. Returns null with a reason when the object sits on another
+    /// kind or a value is out of range; a slot without a "long_image" object has none.</summary>
+    private static LongImageRules ParseLongImage(JObject slot, ExportPreset preset, out string error)
+    {
+        error = null;
+        if (slot["long_image"] is not JObject raw)
+        {
+            return null;
+        }
+        if ((slot["kind"]?.ToString() ?? "") != "detail_page")
+        {
+            error = "long_image 只能用于 detail_page 槽位。";
+            return null;
+        }
+        bool allowed = raw.Value<bool?>("allowed") == true;
+        int maxHeight = raw["max_height"]?.Type == JTokenType.Integer ? raw.Value<int>("max_height") : 0;
+        int maxSlices = raw["max_slices"]?.Type == JTokenType.Integer ? raw.Value<int>("max_slices") : 0;
+        if (maxHeight > 0 && (maxHeight < preset.Height || maxHeight > 100000))
+        {
+            error = "长图最大高度须不低于单屏高度且不超过 100000。";
+            return null;
+        }
+        if (maxSlices > 0 && (maxSlices < 1 || maxSlices > 100))
+        {
+            error = "切片数量上限须在 1–100 之间。";
+            return null;
+        }
+        if (!allowed && maxHeight > 0)
+        {
+            error = "未允许整张长图时不接受 max_height。";
+            return null;
+        }
+        return new LongImageRules(allowed, maxHeight, maxSlices);
     }
 
     /// <summary>The JPEG qualities to try when a slot has a size cap (F58): the preset's own quality, then a midpoint, then the floor — two re-encodes at most.</summary>

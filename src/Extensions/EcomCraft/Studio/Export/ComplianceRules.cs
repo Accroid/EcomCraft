@@ -125,4 +125,8 @@ public static class ComplianceRules
     {
         return (platform?["forbidden"] as JArray)?.Any(item => item?.Type == JTokenType.String && item.ToString() == "promo_text") == true;
     }
+
+    /// <summary>Whether a slot kind's pictures carry server-drawn text by definition (T97): selling-point images do (F47). Detail screens can be textless, so they
+    /// warn through their own marker when text is drawn. Together with <see cref="ForbidsPromoText"/> this hints before exporting to platforms that forbid promotional text.</summary>
+    public static bool CarriesDrawnText(string slotKind) => slotKind == "selling";
 }

@@ -81,16 +81,25 @@ public static class SetRules
         [.. templates.Where(template => template.Sets.Contains(setId) && SuitsPlatform(template, platform))];
 
     /// <summary>Templates of a set as a platform's slots compose them (F58): in slot order, every template whose kind matches a slot. Slot kinds the set has
-    /// no template for are skipped; templates without a kind do not join slot-composed sets (they are meant for the old, set-only platforms).</summary>
+    /// no template for are skipped, and so are kinds that never join sets ("video_cover" only records video specs, T97); templates without a kind do not join
+    /// slot-composed sets (they are meant for the old, set-only platforms).</summary>
     public static List<TemplateRef> SlotTemplates(IEnumerable<TemplateRef> templates, string platform, string setId, IReadOnlyList<string> slotKinds)
     {
         List<TemplateRef> result = [];
         foreach (string kind in slotKinds)
         {
+            if (!SetSlotKinds.Contains(kind))
+            {
+                continue;
+            }
             result.AddRange(templates.Where(template => template.Sets.Contains(setId) && SuitsPlatform(template, platform) && template.Kind == kind));
         }
         return result;
     }
+
+    /// <summary>The slot kinds one-click sets compose (F58, T97): the main-image kinds, then detail screens. "video_cover" only records video specs and never
+    /// joins sets (design decision 3, 2026-10-28). Kinds must also be listed in <see cref="Export.ExportSlot.Kinds"/>; extend both together.</summary>
+    public static readonly string[] SetSlotKinds = ["white_main", "first_main", "scene_main", "selling", "detail", "model", "detail_page"];
 
     /// <summary>Expands products × set templates into tasks, product by product, so the first product's set finishes first.</summary>
     public static List<Job> Expand(int products, IReadOnlyList<TemplateRef> setTemplates)

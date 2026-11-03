@@ -61,7 +61,8 @@ public sealed class EcomTemplate
     /// <summary>Platforms where the template skips generation and only centers the product cut-out on pure white (F22), for example Amazon main images.</summary>
     public List<string> CutoutOnlyPlatforms = [];
 
-    /// <summary>The image slot kind the template serves (F58): white_main, scene_main, detail or model; empty when the template joins sets the old way, by set membership only.</summary>
+    /// <summary>The image slot kind the template serves (F58): white_main, first_main, scene_main, selling, detail, model or detail_page; empty when the
+    /// template joins sets the old way, by set membership only.</summary>
     public string Kind = "";
 
     /// <summary>Models the template needs (F08), with commercial-use license status; installed by administrators by hand.</summary>

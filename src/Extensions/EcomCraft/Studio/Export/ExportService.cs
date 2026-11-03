@@ -110,7 +110,7 @@ public static class ExportService
         return best;
     }
 
-    [API.APIDescription("List the platforms that have an export slot (slots with size and optional flag, whether an administrator verified them) in the requested language, and whether exporting to the shared folder is available.", "platforms: [{ id: \"amazon\", name: \"\", width: 2000, height: 2000, verified: false, slots: [{ id: \"white_main\", kind: \"white_main\", optional: false }], main_image_count: 9, ai_declaration: true }], folder_available: false")]
+    [API.APIDescription("List the platforms that have an export slot (slots with size, group and optional flag, whether an administrator verified them) in the requested language, and whether exporting to the shared folder is available.", "platforms: [{ id: \"amazon\", name: \"\", width: 2000, height: 2000, verified: false, slots: [{ id: \"white_main\", kind: \"white_main\", group: \"main\", optional: false }], main_image_count: 9, ai_declaration: true }], folder_available: false")]
     public static Task<JObject> EcomCraftStudioExportOptions(Session session, string language = "zh-CN")
     {
         if (!StudioApi.CanView(session))
@@ -133,6 +133,7 @@ public static class ExportService
                 {
                     ["id"] = slot.Id,
                     ["kind"] = slot.Kind,
+                    ["group"] = ExportSlot.GroupOf(slot.Kind),
                     ["name"] = string.IsNullOrEmpty(slotName) ? slot.Id : slotName,
                     ["width"] = slot.Preset.Width,
                     ["height"] = slot.Preset.Height,
@@ -246,7 +247,8 @@ public static class ExportService
     }
 
     /// <summary>Export hints (F58), counted per code and slot; the page words them in the UI language. Codes: size_over (still over the slot's cap after
-    /// re-encoding), subject_small (below a white slot's subject fill) and text_image (a selling-point image on a platform that forbids promotional text).</summary>
+    /// re-encoding), subject_small (below a white slot's subject fill) and text_image (a slot whose kind carries drawn text by definition, such as selling-point
+    /// images, or a picture with the selling-image marker, on a platform that forbids promotional text).</summary>
     private sealed class ExportWarnings
     {
         /// <summary>Counts per code and slot.</summary>
@@ -326,7 +328,7 @@ public static class ExportService
             {
                 warnings.Add("subject_small", slot.Id);
             }
-            if (forbidsPromoText && MetadataText(source).Contains("ecomcraft_selling_image", StringComparison.Ordinal))
+            if (forbidsPromoText && (ComplianceRules.CarriesDrawnText(slot.Kind) || MetadataText(source).Contains("ecomcraft_selling_image", StringComparison.Ordinal)))
             {
                 warnings.Add("text_image", slot.Id);
             }
