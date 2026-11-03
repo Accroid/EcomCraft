@@ -206,7 +206,7 @@
         "sigmas": "0.414568, 0"
       },
       "resolution_budget": 1048576,
-      "size_step": 16,
+      "size_step": 32,
       "max_edge": 2048,
       "prompt_syntax": "<image1>",
       "variants": [

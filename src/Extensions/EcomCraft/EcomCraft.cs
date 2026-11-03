@@ -154,6 +154,7 @@ public class EcomCraft : Extension
         // current recipe (T118); both read per call, so an administrator's recipe override takes effect without a restart.
         EcomCraftStudio.Studio.NativeWorkflowConverter.RecipeBook = ModelRecipes.Load;
         EcomCraftStudio.Studio.Generation.OutputSizeRules.MaxEdgeSource = () => ModelRecipes.Current().Recipe?.MaxEdge ?? 2048;
+        EcomCraftStudio.Studio.Generation.OutputSizeRules.StepSource = () => ModelRecipes.Current().Recipe?.SizeStep ?? 16;
         ClaimWords.Init(FilePath);
         StandardWorkflows.Init(FilePath);
         // The model dropdown scan reads the configured model roots; without this (unit tests) dropdowns narrow to their saved value.

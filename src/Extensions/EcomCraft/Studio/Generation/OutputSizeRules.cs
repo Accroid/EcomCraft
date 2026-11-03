@@ -19,8 +19,12 @@ public static class OutputSizeRules
     /// <summary>Pixel count pictures are generated at.</summary>
     public const long GenerationPixels = 1024 * 1024;
 
-    /// <summary>Generated sides are multiples of this.</summary>
-    public const int Step = 16;
+    /// <summary>Generated sides are multiples of the current recipe's size step, read per call like the edge cap (M1: the official Turbo
+    /// template prefers multiples of 32); tests keep the pre-recipe default.</summary>
+    internal static Func<int> StepSource = () => 16;
+
+    /// <summary>Generated sides are multiples of this: the current recipe's size step, bounded like the recipe parser bounds its own values.</summary>
+    public static int Step => Math.Clamp(StepSource(), 8, 128);
 
     /// <summary>Smallest and largest generated side, the range the workflow path accepts.</summary>
     public const int MinGenerated = 256, MaxGenerated = 2048;
