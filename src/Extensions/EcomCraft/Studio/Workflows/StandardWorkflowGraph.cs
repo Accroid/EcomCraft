@@ -82,10 +82,14 @@ internal static class StandardWorkflowGraph
                 }
             }
             // The dropdown offers every model the server actually has (A19), keeping the recipe's pick or the blueprint's saved model as the default.
-            JArray available = ModelFileScan.Choices(input, values[property.Name], baseDirectory, modelRoots);
-            if (available.Count > 0)
+            // Only model inputs get the list: on the prompt or seed it would narrow the input to the blueprint's saved value.
+            if (property.Value.Value<bool?>("native_model") == true)
             {
-                property.Value["values"] = available;
+                JArray available = ModelFileScan.Choices(input, values[property.Name], baseDirectory, modelRoots);
+                if (available.Count > 0)
+                {
+                    property.Value["values"] = available;
+                }
             }
             // The blueprint's saved seed would make every generation with the same prompt the same image; -1 picks a new one each time, and a redo still sets its own.
             if (property.Value.Value<bool?>("native_seed") == true)
