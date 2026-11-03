@@ -59,7 +59,9 @@ internal static class StandardWorkflowGraph
                 // The diffusion-model loader class must match the file actually in effect (T118b): a GGUF quantization loads through
                 // UnetLoaderGGUF, a safetensors through UNETLoader — one recipe may declare both kinds of file (the official int8 file and
                 // the community GGUF quant), so the blueprint's own node follows the variant or override instead of the other way around.
-                if (input is "unet_name" or "ckpt_name" && property.Value["native_node"]?.ToString() is string loaderId
+                // Only unet_name swaps the class (M1 review): a checkpoint loader takes the same diffusion file through ckpt_name but must stay
+                // CheckpointLoaderSimple — UNETLoader would drop its clip/vae outputs and rewire the blueprint's text encoders.
+                if (input is "unet_name" && property.Value["native_node"]?.ToString() is string loaderId
                     && prompt[loaderId] is JObject loader)
                 {
                     string loaderClass = ModelRecipeRules.UnetLoaderClass(chosen);

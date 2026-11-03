@@ -388,14 +388,15 @@ public static class ModelRecipeRules
             && string.Equals(legacy.Vae?.Trim(), FactoryVae, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>The startup migration when the default recipe changes (T118b): a server still on the factory state — the setting empty, or
-    /// exactly the old default pair the T118 migration wrote from the factory file names, with the file names factory or cleared — moves to the
-    /// current default. An administrator's own setting or file names keep everything as it is; null means no change. The new pair is written
+    /// <summary>The startup migration when the default recipe changes (T118b): a server still on the factory state — the setting empty, with the
+    /// old file names empty or the factory trio — moves to the current default. An administrator's own setting or file names keep everything as it
+    /// is, including a deliberate choice of the old default pair (M1 review: this server's T118 migration never wrote that pair, so treating it as
+    /// factory state would undo a later deliberate switch back on every restart, against A19); null means no change. The new pair is written
     /// only when the book actually resolves it, so a custom book without the default never stores an unusable value.</summary>
     public static RecipeMigration MigrateDefault(IEnumerable<Recipe> book, string setting, ModelFiles legacy)
     {
         string current = (setting ?? "").Trim();
-        if (current.Length > 0 && current != $"{OldDefaultRecipeId}/{OldDefaultVariantId}")
+        if (current.Length > 0)
         {
             return null;
         }
