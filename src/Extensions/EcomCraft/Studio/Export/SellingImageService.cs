@@ -119,6 +119,26 @@ public static class SellingImageService
         }
     }
 
+    /// <summary>Draws the given title and points onto one of the account's works from its local file (T98: the full-set batch's selling slot). Same rule
+    /// and same result as the page's own selling images (F47): the text is the user's, drawn by the server, saved as a new work.</summary>
+    internal static JObject RenderFromWork(User user, string sourcePath, string layout, string title, List<string> points, string accent)
+    {
+        FontFamily? loadedFamily = Fonts();
+        if (loadedFamily is not FontFamily family)
+        {
+            return StudioApi.Error("卖点图字体缺失：请管理员确认扩展的 Assets/fonts 文件夹完整。", "selling_font_missing");
+        }
+        try
+        {
+            return Render(user, sourcePath, family, layout, title, points, accent);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or UnknownImageFormatException or InvalidImageContentException or NotSupportedException)
+        {
+            Logs.Warning($"EcomCraft could not make a selling image: {ex.Message}");
+            return StudioApi.Error("卖点图没有生成，请稍后重试。", "generation_failed");
+        }
+    }
+
     /// <summary>Draws the layout onto a copy of the work and saves it as a new PNG work with the original's metadata plus a selling-image marker.</summary>
     private static JObject Render(User user, string sourcePath, FontFamily family, string layout, string title, List<string> points, string accent)
     {

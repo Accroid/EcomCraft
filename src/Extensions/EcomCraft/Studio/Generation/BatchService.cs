@@ -51,6 +51,10 @@ public static partial class BatchService
         /// <summary>Why the edit inputs could not be made, if it failed (F84).</summary>
         public string EditError;
 
+        /// <summary>The inline photo's original (before any cut-out) when the request carried one (T98): the crop source of detail slots. A saved product
+        /// keeps its original in the library instead, so this stays null for it.</summary>
+        public string Original;
+
         /// <summary>Where the product sits for preserving templates.</summary>
         public Placement Placement = Placement.Default;
 
@@ -84,6 +88,22 @@ public static partial class BatchService
 
         /// <summary>The reference image this task makes (F59), or -1 for an ordinary set; the page shows that reference's thumbnail.</summary>
         public int Reference = -1;
+
+        /// <summary>The platform slot this task belongs to (T98), or null for the slot-less flows whose shape is unchanged.</summary>
+        public string SlotId;
+
+        /// <summary>The slot's kind (T98), such as "first_main"; the page groups by it.</summary>
+        public string SlotKind;
+
+        /// <summary>What makes this task's picture (T98): fusion, cut-out, crop or layout; null for the slot-less flows.</summary>
+        public string Source;
+
+        /// <summary>Images this task makes instead of the batch's candidate count (T98: a remake makes exactly one; cut-outs always make one).</summary>
+        public int? ImageCount;
+
+        /// <summary>This task's own output size (T98: a slot task generates at its slot's size when no size was chosen for the whole batch); null keeps the
+        /// batch's size, or the platform's slot size for the template's kind.</summary>
+        public JObject OutputSize;
 
         /// <summary>"prompt" (waiting for the batch prompt, F56), "queued", "running", "done", "failed" or "cancelled".</summary>
         public string State = "queued";
@@ -143,6 +163,18 @@ public static partial class BatchService
         /// <summary>Reference images of reference mode (F59), kept in memory only for the batch's lifetime; never written under Data/.</summary>
         public List<string> ReferenceImages = [];
 
+        /// <summary>The platform slot each reference was given (T98), parallel to the references; null where a reference has none. Uncovered platform
+        /// slots are collected in <see cref="Uncovered"/> instead of becoming tasks.</summary>
+        public List<(string SlotId, string Kind)> ReferenceSlots;
+
+        /// <summary>Slots of the platform no task covers (T98): product, slot and the reason code the page words. Slots without content are never
+        /// invented (A20); they only show here.</summary>
+        public List<(int Product, string SlotId, string Kind, string Reason)> Uncovered = [];
+
+        /// <summary>The first finished fusion picture of each product (T98): the base the selling-slot layout draws on. Completed with the picture's URL,
+        /// or with null when every fusion task of the product failed.</summary>
+        public Dictionary<int, TaskCompletionSource<string>> FusionBase = [];
+
         /// <summary>Whether this batch is the direct-fusion trial (F84): one server-written edit prompt per product, no per-reference prompts,
         /// and the reference-edit standard workflows instead of the scene template.</summary>
         public bool ReferenceEdit;
@@ -167,6 +199,9 @@ public static partial class BatchService
 
         /// <summary>Target platform, so main-image templates can take the cut-out-only branch.</summary>
         public string Platform = "";
+
+        /// <summary>The batch's language ("zh-CN" or "en"), for slot names and the selling info the layout draws (T98).</summary>
+        public string Language = "zh-CN";
 
         /// <summary>The output size chosen before generating, as { width, height } for every task; null where each task takes the platform's slot size for its image kind.</summary>
         public JObject OutputSize;
@@ -198,6 +233,9 @@ public static partial class BatchService
             ["template_name"] = job.TemplateName,
             ["purpose"] = job.Purpose,
             ["reference_index"] = job.Reference,
+            ["slot_id"] = job.SlotId,
+            ["slot_kind"] = job.SlotKind,
+            ["source"] = job.Source,
             ["state"] = job.State,
             ["error"] = job.Error,
             ["error_id"] = job.ErrorId,
@@ -223,7 +261,14 @@ public static partial class BatchService
                 ["prompt_ready"] = batch.Composed is not null,
                 ["batch_id"] = batch.Id,
                 ["products"] = batch.Products.Count,
-                ["jobs"] = new JArray(batch.Jobs.Select(JobStatus))
+                ["jobs"] = new JArray(batch.Jobs.Select(JobStatus)),
+                ["uncovered"] = new JArray(batch.Uncovered.Select(slot => new JObject()
+                {
+                    ["product"] = slot.Product,
+                    ["slot_id"] = slot.SlotId,
+                    ["slot_kind"] = slot.Kind,
+                    ["reason"] = slot.Reason
+                }))
             };
             if (batch.Composed is null)
             {
@@ -352,6 +397,57 @@ public static partial class BatchService
             job.State = "queued";
         }
         _ = Utilities.RunCheckedTask(() => RunJobAsync(session, batch, job), "ecomcraft batch retry");
+        return Task.FromResult(Status(batch));
+    }
+
+    [API.APIDescription("Make one more picture of a finished slot task of the current account's batch (T98): the new task repeats only that slot, one picture, other tasks untouched; still within the image cap and the per-person concurrency.", "batch_id: \"…\", jobs: []")]
+    public static Task<JObject> EcomCraftStudioBatchRemake(Session session, string batch_id, int job_id)
+    {
+        Batch batch = StudioApi.CanView(session) && session.User.HasPermission(Permissions.BasicImageGeneration) ? Find(session, batch_id) : null;
+        Job job = batch?.Jobs.FirstOrDefault(item => item.Id == job_id);
+        if (job is null)
+        {
+            return Task.FromResult(StudioApi.Error("找不到这个任务，可能已经过期。", "task_not_found"));
+        }
+        if (job.SlotId is null)
+        {
+            return Task.FromResult(StudioApi.Error("只有按图位出的任务可以再出一张。", "invalid_parameters"));
+        }
+        Job remake;
+        lock (batch.Lock)
+        {
+            if (job.State is not ("done" or "failed" or "cancelled"))
+            {
+                return Task.FromResult(StudioApi.Error("这个任务还没有结束，请等它完成后再补一张。", "workflow_state"));
+            }
+            // The remake is one more picture of the same slot, so the batch's total may not pass the image cap (T98): count what the batch asks now.
+            int limit = SetRules.ImageLimit(Program.ServerSettings.EcomCraft.BatchImageLimit);
+            int asked = batch.Jobs.Sum(item => item.ImageCount ?? SetRules.JobImageCount(item.Source, batch.Candidates));
+            if (asked + 1 > limit)
+            {
+                return Task.FromResult(StudioApi.Error($"再出一张会超过 {limit} 张总上限，请先减少这个批次的任务。", "invalid_parameters"));
+            }
+            if (batch.Cancel.IsCancellationRequested)
+            {
+                batch.Cancel.Dispose();
+                batch.Cancel = new CancellationTokenSource();
+            }
+            remake = new Job()
+            {
+                Id = batch.Jobs.Count,
+                Product = job.Product,
+                Template = job.Template,
+                TemplateName = job.TemplateName,
+                Reference = job.Reference,
+                SlotId = job.SlotId,
+                SlotKind = job.SlotKind,
+                Source = job.Source,
+                ImageCount = 1,
+                State = "queued"
+            };
+            batch.Jobs.Add(remake);
+        }
+        _ = Utilities.RunCheckedTask(() => RunJobAsync(session, batch, remake), "ecomcraft batch remake");
         return Task.FromResult(Status(batch));
     }
 

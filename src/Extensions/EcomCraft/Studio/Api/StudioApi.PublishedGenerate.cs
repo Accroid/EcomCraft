@@ -332,6 +332,8 @@ public static partial class StudioApi
             // Request-embedded image inputs (A34: the standard workflows' product canvas and the edit trial's photos) no longer pass through the backend's
             // upload path, which stretched them to the generation size first — reproduce that stretch here, from the same width and height, so the graphs
             // see exactly the pixels they saw before. Only this server's own data URLs are touched; user output references resolve later, as always.
+            // T98 exceptions, also server-chosen: the edit trial's reference is center-cropped to the output aspect (not stretched) and its product angles
+            // keep their own size, so neither is distorted on the way into the edit model.
             foreach (JProperty property in metadata.Properties())
             {
                 if (property.Value is not JObject embedDefinition || embedDefinition.Value<string>("type")?.ToLowerFast() != "image"
@@ -343,6 +345,20 @@ public static partial class StudioApi
                 string imageData = embedValue.Value<string>();
                 if (!imageData.StartsWith("data:", StringComparison.Ordinal))
                 {
+                    continue;
+                }
+                if (options?.ImageResizeSkips?.Contains(property.Name) == true)
+                {
+                    continue;
+                }
+                if (options?.ImageResizeCrops?.Contains(property.Name) == true)
+                {
+                    string cropped = Generation.EmbedResizeRules.CropToSize(imageData, plan.Width, plan.Height);
+                    if (cropped is null)
+                    {
+                        return Error("工作流参数缺失或无效，请刷新列表后重新选择工作流。", "invalid_workflow_parameters");
+                    }
+                    input[property.Name] = cropped;
                     continue;
                 }
                 try

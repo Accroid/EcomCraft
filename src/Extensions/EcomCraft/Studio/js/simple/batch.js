@@ -157,18 +157,50 @@ class SimpleBatchPart {
         return !(jobs || []).some(job => job.state == 'prompt' || job.state == 'queued' || job.state == 'running');
     }
 
-    /** Shows each task's state with a retry button for failed ones, and adds finished images to the candidates. */
+    /** Which group a slot kind belongs to (T97, T98): the main-image kinds, the detail screens, or the slot-less tasks. */
+    static slotGroup(kind) {
+        let mainKinds = ['white_main', 'first_main', 'scene_main', 'selling', 'detail', 'model'];
+        return mainKinds.includes(kind) ? 'main' : kind == 'detail_page' ? 'detail' : 'other';
+    }
+
+    /** A slot's display name, from the chosen platform's slot list (T98); falls back to the kind. */
+    static slotLabel(slotId, kind) {
+        let slot = this.platformSlots().find(item => item.id == slotId);
+        return slot ? slot.name : (slotId || kind || '');
+    }
+
+    /** Shows each task's state with a retry button for failed ones, and adds finished images to the candidates. Slot batches (T98) group their
+     * tasks by the slot groups (T97), show each group's uncovered slots with their reason, and offer "one more" per finished slot task. */
     static renderBatch() {
         let tr = this.api.tr;
         let el = this.api.el;
         let jobs = this.batch?.jobs || [];
+        let uncovered = (this.batch && this.batch.uncovered) || [];
         this.api.$('simple-batch').hidden = !jobs.length;
         let items = [];
         let added = false;
+        let slotBatch = jobs.some(job => job.slot_id) || uncovered.length > 0;
+        // The groups of a slot batch (T98): main images first, detail screens, then slot-less tasks.
+        let groups = [];
+        let groupOf = key => {
+            let found = groups.find(group => group.key == key);
+            if (!found) {
+                let titles = { main: '主图组', detail: '详情组', other: '按参考图' };
+                found = { key, title: tr(titles[key] || '按参考图'), rows: [] };
+                groups.push(found);
+            }
+            return found;
+        };
+        let order = ['main', 'detail', 'other'];
         for (let job of jobs) {
             let item = el('li', `simple-job${job.state == 'failed' ? ' is-failed' : ''}`);
             let name;
-            if (job.reference_index >= 0) {
+            if (job.slot_id) {
+                name = this.products.length > 1
+                    ? tr('商品 {0}｜{1}', job.product + 1, this.slotLabel(job.slot_id, job.slot_kind))
+                    : this.slotLabel(job.slot_id, job.slot_kind);
+            }
+            else if (job.reference_index >= 0) {
                 name = tr('商品 {0}｜参考图 {1}', job.product + 1, job.reference_index + 1);
                 let thumb = el('img', 'simple-job-ref');
                 let reference = this.references[job.reference_index];
@@ -188,6 +220,10 @@ class SimpleBatchPart {
                 state = this.stageWithEstimate(state, job, this.batchAt);
             }
             item.append(el('span', '', name), el('span', 'simple-job-state', state));
+            // How many pictures this slot task made so far (T98), so each group shows its progress.
+            if (job.slot_id && (job.images || []).length) {
+                item.append(el('span', 'simple-job-count', tr('已出 {0} 张', job.images.length)));
+            }
             if (job.state == 'failed' || job.state == 'cancelled') {
                 let retry = el('button', 'btn btn-sm', tr('重试'));
                 retry.type = 'button';
@@ -198,7 +234,19 @@ class SimpleBatchPart {
                     item.append(el('span', 'simple-job-error', job.error_id ? this.api.serverErrorText(job.error_id, job.error) : job.error));
                 }
             }
-            items.push(item);
+            else if (job.slot_id && job.state == 'done') {
+                // One more picture of only this slot (T98): other tasks are untouched; the server keeps the batch within its caps.
+                let remake = el('button', 'btn btn-sm', tr('再出一张'));
+                remake.type = 'button';
+                remake.addEventListener('click', () => this.remakeJob(job.id));
+                item.append(remake);
+            }
+            if (slotBatch) {
+                groupOf(job.slot_id ? this.slotGroup(job.slot_kind) : 'other').rows.push(item);
+            }
+            else {
+                items.push(item);
+            }
             for (let url of job.images || []) {
                 if (!this.results.includes(url)) {
                     this.results.push(url);
@@ -207,14 +255,51 @@ class SimpleBatchPart {
                     if (this.batchEdit) {
                         this.trialImages.add(url);
                     }
+                    // Fusion-slot results carry the "route not yet accepted" notice on their tiles (T98).
+                    if (job.source == 'fusion') {
+                        this.fusionImages.add(url);
+                    }
                     added = true;
                 }
+            }
+        }
+        if (slotBatch) {
+            // Uncovered slots (T98) join their group with the plain reason; they are facts to fill in later, never invented.
+            for (let entry of uncovered) {
+                let row = el('li', 'simple-job simple-job-uncovered');
+                let products = uncovered.filter(item => item.slot_id == entry.slot_id).length;
+                row.append(el('span', '', this.slotLabel(entry.slot_id, entry.slot_kind)),
+                    el('span', 'simple-job-state', tr('未覆盖：{0}', this.uncoveredReasonText(entry.reason))),
+                    products > 1 ? el('span', 'simple-job-count', tr('{0} 个商品', products)) : el('span'));
+                groupOf(this.slotGroup(entry.slot_kind)).rows.push(row);
+            }
+            for (let key of order) {
+                let group = groups.find(item => item.key == key);
+                if (!group) {
+                    continue;
+                }
+                let header = el('li', 'simple-job-group', group.title);
+                items.push(header, ...group.rows);
             }
         }
         this.api.$('simple-jobs').replaceChildren(...items);
         this.api.$('simple-batch-cancel').hidden = !jobs.some(job => job.state == 'queued' || job.state == 'prompt');
         if (added) {
             this.renderResults();
+        }
+    }
+
+    /** Makes one more picture of one finished slot task (T98): the server adds a single-picture task for that slot alone. */
+    static async remakeJob(id) {
+        try {
+            this.batch = await this.api.request('EcomCraftStudioBatchRemake', { batch_id: this.batch.batch_id, job_id: id });
+            this.batchAt = Date.now();
+            this.api.titleAdd();
+            this.renderBatch();
+            this.trackBatch();
+        }
+        catch (error) {
+            this.message(error.message || this.api.tr('操作失败，请稍后重试。'), true);
         }
     }
 

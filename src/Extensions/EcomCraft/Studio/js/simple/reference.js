@@ -51,8 +51,8 @@ class SimpleReferencePart {
     static async addReferenceFiles(files) {
         let tr = this.api.tr;
         for (let file of files) {
-            if (this.references.length >= 8) {
-                this.message(tr('参考图最多 8 张，后面的没有添加。'), true);
+            if (this.references.length >= this.limits.max_references) {
+                this.message(tr('参考图最多 {0} 张，后面的没有添加。', this.limits.max_references), true);
                 break;
             }
             if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
@@ -64,7 +64,7 @@ class SimpleReferencePart {
                 if (file.size > this.maxProductBytes) {
                     data = await this.compressImage(data, this.maxProductBytes);
                 }
-                this.references.push({ image: data, promptEn: '', promptZh: '', edited: false, queued: false, describing: false, failed: false });
+                this.references.push({ image: data, promptEn: '', promptZh: '', slot: '', edited: false, queued: false, describing: false, failed: false });
             }
             catch (error) {
                 this.message(tr('有参考图无法读取，请重新选择。'), true);
@@ -409,6 +409,160 @@ class SimpleReferencePart {
         return this.chosenTask == 'reference';
     }
 
+    /** The chosen platform's slots that join image sets (T98): video covers and record-only kinds never take pictures. */
+    static platformSlots() {
+        let platform = this.data.platforms.find(item => item.id == this.choice.platform);
+        return (platform && platform.slots ? platform.slots : []).filter(slot => slot.kind != 'video_cover');
+    }
+
+    /** Whether the "whole set" switch is on and applies (T98): exactly one reference and a platform with slots. */
+    static referenceFullSetOn() {
+        return this.references.length == 1 && this.platformSlots().length > 0
+            && this.api.$('simple-reference-fullset') && this.api.$('simple-reference-fullset').checked;
+    }
+
+    /** Whether this submission follows image slots (T98): the whole-set switch, or any reference with a chosen slot. */
+    static referenceSlotMode() {
+        return this.referenceFullSetOn() || this.references.some(item => item.slot);
+    }
+
+    /** The candidate count a slot submission asks for (T98): the page's number, clamped to 1–20; the server's default fills an empty box. */
+    static referenceCandidates() {
+        let raw = parseInt(this.api.$('simple-reference-count').value, 10);
+        if (!Number.isInteger(raw) || raw < 1) {
+            return this.limits.default_candidates;
+        }
+        return Math.min(20, raw);
+    }
+
+    /** The plain-language text for one uncovered-slot reason code (T98): the server sends only the code. */
+    static uncoveredReasonText(code) {
+        let tr = this.api.tr;
+        let texts = {
+            no_reference: '还没有参考图覆盖',
+            low_resolution: '原图分辨率不足',
+            no_selling_info: '请先填写卖点信息',
+            layout_pending: '详情页版式开发中',
+            unsupported_kind: '暂不支持自动生成'
+        };
+        return tr(texts[code] || '暂不支持自动生成');
+    }
+
+    /** The slots a whole set composes (T98): the platform's non-optional slots plus the ticked optional ones, one slot per kind in slot order — the same composition the server and one-click sets use. */
+    static composedSlots() {
+        let slots = this.platformSlots();
+        let ticked = this.optionalSlots;
+        let seen = new Set();
+        let composed = [];
+        for (let slot of [...slots.filter(slot => !slot.optional), ...slots.filter(slot => slot.optional)]) {
+            if (slot.optional && !ticked.has(slot.id)) {
+                continue;
+            }
+            if (!seen.has(slot.kind)) {
+                seen.add(slot.kind);
+                composed.push(slot);
+            }
+        }
+        return composed;
+    }
+
+    /** What this product contributes to a whole set (T98): 'fusion', 'cutout' (one picture), or the reason the slot stays uncovered. Inline photos carry
+     * their own size; saved products' selling info came with the library, so the estimate matches the server's check. */
+    static fullSetSlotSource(slot, product) {
+        if (slot.kind == 'first_main' || slot.kind == 'scene_main') {
+            return 'fusion';
+        }
+        if (slot.kind == 'white_main') {
+            return 'cutout';
+        }
+        if (slot.kind == 'detail') {
+            if (!product || !product.width || !product.height) {
+                // A saved product's own size is not known before submitting; the server checks it and reports the slot as uncovered if the photo is too small.
+                return 'fusion';
+            }
+            let aspect = slot.width / slot.height;
+            let cropWidth, cropHeight;
+            if (product.width / product.height > aspect) {
+                cropHeight = product.height;
+                cropWidth = Math.max(1, Math.round(product.height * aspect));
+            }
+            else {
+                cropWidth = product.width;
+                cropHeight = Math.max(1, Math.round(product.width / aspect));
+            }
+            return cropWidth * 2 >= slot.width && cropHeight * 2 >= slot.height ? 'crop' : 'low_resolution';
+        }
+        if (slot.kind == 'selling') {
+            let info = product && product.info ? (product.info[I18n.current] || product.info['zh-CN'] || {}) : {};
+            let filled = (info.points || []).length > 0 && ((info.display_name || '').length > 0 || (product && product.name || '').length > 0);
+            return filled ? 'layout' : 'no_selling_info';
+        }
+        if (slot.kind == 'detail_page') {
+            return 'layout_pending';
+        }
+        return 'unsupported_kind';
+    }
+
+    /** The slot submission's estimate before submitting (T98): total pictures, the uncovered slots with reasons, and whether it passes the image cap.
+     * Mirrors the server's expansion; the server re-checks everything and refuses rather than truncating. */
+    static referenceEstimate() {
+        let products = this.products;
+        let candidates = this.referenceCandidates();
+        if (this.referenceFullSetOn()) {
+            let slots = this.composedSlots();
+            let total = 0;
+            let uncovered = [];
+            for (let slot of slots) {
+                for (let product of products) {
+                    let source = this.fullSetSlotSource(slot, product);
+                    if (source == 'fusion' || source == 'crop' || source == 'layout') {
+                        total += candidates;
+                    }
+                    else if (source == 'cutout') {
+                        total += 1;
+                    }
+                    else if (!uncovered.some(item => item.id == slot.id && item.reason == source)) {
+                        uncovered.push({ id: slot.id, name: slot.name, reason: source });
+                    }
+                }
+            }
+            return { total, uncovered, overLimit: total > this.limits.max_images };
+        }
+        let total = 0;
+        let uncovered = [];
+        let slots = this.composedSlots();
+        for (let item of this.references) {
+            total += item.slot ? candidates : 1;
+        }
+        total *= products.length;
+        for (let slot of slots) {
+            if (!this.references.some(item => item.slot == slot.id)) {
+                uncovered.push({ id: slot.id, name: slot.name, reason: 'no_reference' });
+            }
+        }
+        return { total, uncovered, overLimit: total > this.limits.max_images };
+    }
+
+    /** The estimate as one line of hint text (T98), with the uncovered slots and, for a whole set, the advice to add more references. */
+    static referenceEstimateText() {
+        let tr = this.api.tr;
+        let estimate = this.referenceEstimate();
+        if (estimate.overLimit) {
+            return tr('预计 {0} 张，超过 {1} 张总上限，请减少商品图、图位或候选张数。', estimate.total, this.limits.max_images);
+        }
+        let parts = [this.referenceFullSetOn()
+            ? tr('出整套：预计共 {0} 张（上限 {1}）。', estimate.total, this.limits.max_images)
+            : tr('为 {0} 张商品图 × 参考图出图，预计共 {1} 张（上限 {2}）。', this.products.length, estimate.total, this.limits.max_images)];
+        if (estimate.uncovered.length) {
+            let names = estimate.uncovered.map(item => tr('{0}（{1}）', item.name, this.uncoveredReasonText(item.reason)));
+            parts.push(tr('未覆盖：{0}。', names.join(tr('、'))));
+        }
+        if (this.referenceFullSetOn()) {
+            parts.push(tr('可以再加参考图，让整套图更不一样。融合图位用的是现有路线，效果未验收。'));
+        }
+        return parts.join(' ');
+    }
+
     /** Opens the references full size in the gallery viewer, starting at one of them. */
     static openReference(index, opener) {
         let items = [];
@@ -450,7 +604,25 @@ class SimpleReferencePart {
                 this.renderStage();
                 this.update();
             });
-            wrap.append(open, remove);
+            // The slot this reference is for (T98): chosen by hand first (T83's automatic prefill comes later); "不指定" keeps the old one-image-per-reference flow.
+            let slots = this.platformSlots();
+            let slotWrap = el('label', 'simple-ref-slot');
+            let slotSelect = document.createElement('select');
+            slotSelect.dataset.i18nSkip = '';
+            slotSelect.setAttribute('aria-label', tr('参考图 {0} 的图位', index + 1));
+            slotSelect.append(new Option(tr('不指定图位'), ''));
+            for (let slot of slots) {
+                slotSelect.append(new Option(slot.name, slot.id));
+            }
+            slotSelect.value = slots.some(slot => slot.id == item.slot) ? item.slot : '';
+            slotSelect.disabled = !slots.length;
+            slotSelect.addEventListener('change', () => {
+                item.slot = slotSelect.value;
+                this.renderReferences();
+                this.update();
+            });
+            slotWrap.append(slotSelect);
+            wrap.append(open, slotWrap, remove);
             thumbs.push(wrap);
         }
         this.api.$('simple-references').replaceChildren(...thumbs);
@@ -497,7 +669,25 @@ class SimpleReferencePart {
             rows.push(row);
         }
         this.api.$('simple-reference-list').replaceChildren(...rows);
-        this.api.$('simple-reference-add').hidden = this.references.length >= 8;
+        this.api.$('simple-reference-add').hidden = this.references.length >= this.limits.max_references;
+        // The whole-set switch only fits one reference and a platform with slots; the candidate count only applies once slots are in play (T98).
+        let slots = this.platformSlots();
+        let fullSetUsable = this.references.length == 1 && slots.length > 0;
+        let fullSetBox = this.api.$('simple-reference-fullset');
+        if (!fullSetUsable && fullSetBox.checked) {
+            fullSetBox.checked = false;
+        }
+        this.api.$('simple-fullset-row').hidden = !fullSetUsable;
+        this.api.$('simple-ref-count-row').hidden = !this.referenceSlotMode();
+        if (this.referenceSlotMode()) {
+            let count = this.api.$('simple-reference-count');
+            count.value = this.referenceCandidates();
+            count.max = String(20);
+        }
+        this.api.$('simple-references-label').querySelector('.fld-optional').textContent = this.referenceFullSetOn()
+            ? tr('出整套：首图和场景图用这张融合，其余图位用抠图、真实裁切和排版补齐')
+            : tr('必填，1–{0} 张；一张参考出一张图，选了图位按图位出', this.limits.max_references);
+        this.renderPlatformSlots();
         this.renderPlacementPicker();
         this.api.$('simple-reference-edit-note').hidden = !edit;
         this.api.$('simple-ref-place').hidden = edit || !this.references.length;
@@ -547,7 +737,7 @@ class SimpleReferencePart {
         }
         if (this.referenceEditOn()) {
             if (!this.references.length) {
-                return '请添加参考图（1–8 张），每张参考图出 1 张。';
+                return tr('请添加参考图（1–{0} 张）。', this.limits.max_references);
             }
             if (!this.products.length) {
                 return '请先在第 1 步上传商品图。';
@@ -555,9 +745,9 @@ class SimpleReferencePart {
             if (this.editStatus && !this.editStatus.available) {
                 return tr('直接融合试用暂不可用：{0}', this.editStatus.reason);
             }
-            let total = this.products.length * this.references.length;
-            if (total > 20) {
-                return tr('预计 {0} 张，超过 20 张总上限，请减少商品图或参考图。', total);
+            let total = this.referenceSlotMode() ? this.referenceEstimate().total : this.products.length * this.references.length;
+            if (total > this.limits.max_images) {
+                return tr('预计 {0} 张，超过 {1} 张总上限，请减少商品图、图位或候选张数。', total, this.limits.max_images);
             }
             if (this.submitting) {
                 return '提交中…';
@@ -568,7 +758,7 @@ class SimpleReferencePart {
             return '照参考图做暂不可用，请按上方提示处理。';
         }
         if (!this.references.length) {
-            return '请添加参考图（1–8 张），每张参考图出 1 张。';
+            return tr('请添加参考图（1–{0} 张）。', this.limits.max_references);
         }
         if (!this.products.length) {
             return '请先在第 1 步上传商品图。';
@@ -579,9 +769,9 @@ class SimpleReferencePart {
         if (this.references.some(item => !item.promptEn.trim())) {
             return '还有参考图没有提示词，请等待描述完成、重试或手动填写。';
         }
-        let total = this.products.length * this.references.length;
-        if (total > 20) {
-            return tr('预计 {0} 张，超过 20 张总上限，请减少商品图或参考图。', total);
+        let total = this.referenceSlotMode() ? this.referenceEstimate().total : this.products.length * this.references.length;
+        if (total > this.limits.max_images) {
+            return tr('预计 {0} 张，超过 {1} 张总上限，请减少商品图、图位或候选张数。', total, this.limits.max_images);
         }
         if (this.submitting) {
             return '提交中…';
@@ -598,13 +788,16 @@ class SimpleReferencePart {
             return;
         }
         let edit = this.referenceEditOn();
+        let slotMode = this.referenceSlotMode();
         let payload = {
             language: I18n.current,
             platform: this.choice.platform,
             output_size: this.outputSizeField(),
             products: this.products.map(product => product.id
                 ? { product_id: product.id, placement: this.clampPlacement(this.placement) }
-                : { image: product.cutout || product.data, placement: this.clampPlacement(this.placement) })
+                : (slotMode
+                    ? { image: product.cutout || product.data, original: product.data, placement: this.clampPlacement(this.placement) }
+                    : { image: product.cutout || product.data, placement: this.clampPlacement(this.placement) }))
         };
         if (edit) {
             payload.reference_mode = 'edit';
@@ -613,6 +806,18 @@ class SimpleReferencePart {
         else {
             payload.reference_prompts = this.references.map(item => item.promptEn.trim());
             payload.reference_placements = this.references.map(item => item.placement ? this.clampPlacement(item.placement) : null);
+        }
+        // The slot submission (T98): each reference's chosen slot (or null), the whole-set switch, and the candidate count.
+        if (slotMode) {
+            // The whole set composes optional slots like one-click sets do (T98).
+            payload.optional_slots = Array.from(this.optionalSlots);
+            if (this.referenceFullSetOn()) {
+                payload.full_set = true;
+            }
+            else {
+                payload.reference_slots = this.references.map(item => item.slot || null);
+            }
+            payload.candidates = this.referenceCandidates();
         }
         this.submitting = true;
         this.update();
@@ -664,6 +869,14 @@ class SimpleReferencePart {
             this.update();
         });
         $('simple-generate-reference').addEventListener('click', () => this.generateReference());
+        $('simple-reference-fullset').addEventListener('change', () => {
+            this.renderReferences();
+            this.renderPlatformSlots();
+            this.update();
+        });
+        for (let event of ['input', 'change']) {
+            $('simple-reference-count').addEventListener(event, () => this.update());
+        }
     }
 }
 SimpleMode.adopt(SimpleReferencePart);

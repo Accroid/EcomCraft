@@ -1,14 +1,18 @@
+using System.IO;
 using System.Text.RegularExpressions;
 using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.Export;
 using EcomCraftStudio.Studio.PostProcess;
 using EcomCraftStudio.Studio.Prompting;
 using EcomCraftStudio.Studio.Setup;
+using EcomCraftStudio.Studio.Storage;
 using EcomCraftStudio.Studio.Templates;
 using Newtonsoft.Json.Linq;
 using SixLabors.ImageSharp;
 using ISImage = SixLabors.ImageSharp.Image;
+using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 using SwarmUI.Accounts;
 using SwarmUI.Core;
 using SwarmUI.Utils;
@@ -27,6 +31,25 @@ public static partial class BatchService
         lock (batch.Lock)
         {
             cancel = batch.Cancel.Token;
+        }
+        // A layout task first waits for its product's fusion picture (T98) — outside the per-person slot, so it never blocks the account's other tasks.
+        string layoutBase = null;
+        if (job.Source == SetRules.SourceLayout)
+        {
+            try
+            {
+                (layoutBase, string baseProblem) = await WaitForFusionBaseAsync(batch, job, cancel);
+                if (baseProblem is not null)
+                {
+                    SetState(batch, job, "failed", baseProblem, "generation_failed");
+                    return;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                SetState(batch, job, "cancelled", null, null);
+                return;
+            }
         }
         try
         {
@@ -53,7 +76,14 @@ public static partial class BatchService
                     job.Timing = timing;
                 }
             };
-            JObject result = await GenerateAsync(session, batch, job);
+            JObject result = job.Source switch
+            {
+                SetRules.SourceCutout => await GenerateCutoutAsync(session, batch, job),
+                SetRules.SourceCrop => await GenerateCropAsync(session, batch, job),
+                SetRules.SourceLayout => GenerateLayout(session, batch, job, layoutBase),
+                _ when batch.ReferenceEdit || job.Reference >= 0 => await GenerateFusionAsync(session, batch, job),
+                _ => await GenerateAsync(session, batch, job)
+            };
             lock (batch.Lock)
             {
                 job.Timing = null;
@@ -61,6 +91,7 @@ public static partial class BatchService
             if (result.ContainsKey("error"))
             {
                 SetState(batch, job, "failed", result["error"]?.ToString(), result["error_id"]?.ToString());
+                NoteFusionOutcome(batch, job);
                 return;
             }
             lock (batch.Lock)
@@ -74,14 +105,17 @@ public static partial class BatchService
             {
                 Logs.Warning($"EcomCraft batch task ended without images (template {job.Template}).");
                 SetState(batch, job, "failed", "执行服务器没有返回图片，请重试；仍然失败请把服务器日志发给管理员。", "generation_failed");
+                NoteFusionOutcome(batch, job);
                 return;
             }
             SetState(batch, job, "done", null, null);
+            NoteFusionOutcome(batch, job);
         }
         catch (Exception ex)
         {
             Logs.Warning($"EcomCraft batch task failed: {ex.GetType().Name}");
             SetState(batch, job, "failed", "任务没有完成，请重试。", "generation_uncertain");
+            NoteFusionOutcome(batch, job);
         }
         finally
         {
@@ -89,14 +123,11 @@ public static partial class BatchService
         }
     }
 
-    /// <summary>Builds the template request for one task and runs it through the normal generation path (synchronously, so results come back here).</summary>
+    /// <summary>Builds the template request for one non-reference task (set, single, storyboard) and runs it through the normal generation path
+    /// (synchronously, so results come back here). Reference and fusion tasks go through <see cref="GenerateFusionAsync"/> instead (T98).</summary>
     private static async Task<JObject> GenerateAsync(Session session, Batch batch, Job job)
     {
         Product product = batch.Products[job.Product];
-        if (batch.ReferenceEdit)
-        {
-            return await GenerateEditAsync(session, batch, job, product);
-        }
         (EcomTemplate Template, string WorkflowId, string ImageField) template = TemplateApi.RunnableTemplates(session).FirstOrDefault(item => item.Template.Id == job.Template);
         if (template.Template is null)
         {
@@ -116,28 +147,24 @@ public static partial class BatchService
             }
             parameters[template.ImageField] = image;
         }
-        Placement placement = job.Reference >= 0 && job.Reference < batch.ReferencePlacements.Count && batch.ReferencePlacements[job.Reference] is Placement forReference
-            ? forReference : product.Placement;
         JObject payload = new()
         {
             ["source"] = "local",
             ["template_id"] = template.Template.Id,
             ["template_params"] = parameters,
-            ["prompt"] = job.Reference >= 0 && job.Reference < batch.ReferencePrompts.Count ? batch.ReferencePrompts[job.Reference]
-                : job.Shot >= 0 && job.Shot < batch.ShotPrompts.Count && batch.ShotPrompts[job.Shot].Length > 0
+            ["prompt"] = job.Shot >= 0 && job.Shot < batch.ShotPrompts.Count && batch.ShotPrompts[job.Shot].Length > 0
                 ? string.Join(", ", new[] { batch.Prompt, batch.ShotPrompts[job.Shot] }.Where(part => !string.IsNullOrEmpty(part)))
                 : batch.Prompt,
             ["negativeprompt"] = batch.Negative,
             ["images"] = batch.Candidates,
-            ["placement"] = new JObject() { ["x"] = placement.CenterX, ["y"] = placement.CenterY, ["size"] = placement.Size },
+            ["placement"] = new JObject() { ["x"] = product.Placement.CenterX, ["y"] = product.Placement.CenterY, ["size"] = product.Placement.Size },
             ["platform"] = batch.Platform
         };
-        if (batch.OutputSize is not null)
+        if (job.OutputSize is not null || batch.OutputSize is not null)
         {
-            payload["output_size"] = batch.OutputSize.DeepClone();
+            payload["output_size"] = (job.OutputSize ?? batch.OutputSize).DeepClone();
         }
-        // A reference task's prompt is final and user-edited (F59): it is sent as is, without the template's own fragments (R08: server-side option, not a request field).
-        GenerateOptions options = new() { RawPrompt = job.Reference >= 0 };
+        GenerateOptions options = new();
         if (batch.Server is int server)
         {
             payload["execution_server_id"] = server;
@@ -149,53 +176,245 @@ public static partial class BatchService
         return await StudioApi.GenerateInternal(session, payload, options);
     }
 
-    /// <summary>Runs one task of the direct-fusion trial (F84, T123): the reference and the product's angles go to the reference-edit workflow of the
-    /// product's angle count, the prompt is written by the server, and the pixel budget is resolved for this server. Everything travels in the
-    /// server-side options, so no request field can carry the images, the prompt tags or the workflow choice.</summary>
-    private static async Task<JObject> GenerateEditAsync(Session session, Batch batch, Job job, Product product)
+    /// <summary>Runs one fusion task — the reference flows and the slot batches' fusion slots (T98) — through <see cref="FusionRoutes"/>, the one seam
+    /// both routes live behind. The direct-fusion trial (F84) keeps its server-written prompt, its angles and its pixel budget; the composition route
+    /// keeps its per-reference prompt, placement and product canvas. Everything else (sizes, candidates, the pinned server) is the same for both.</summary>
+    private static async Task<JObject> GenerateFusionAsync(Session session, Batch batch, Job job)
     {
+        Product product = batch.Products[job.Product];
+        FusionRequest request = new()
+        {
+            TemplateId = job.Template,
+            Negative = batch.Negative,
+            Images = job.ImageCount ?? SetRules.JobImageCount(job.Source, batch.Candidates),
+            Platform = batch.Platform,
+            OutputSize = job.OutputSize ?? batch.OutputSize,
+            Server = batch.Server
+        };
+        if (batch.ReferenceEdit)
+        {
+            List<string> angles = await PrepareEditInputsAsync(session, product);
+            if (angles is null)
+            {
+                return StudioApi.Error(product.EditError ?? "商品图没有准备好。", "cutout_failed");
+            }
+            request.ReferenceImage = batch.ReferenceImages[job.Reference];
+            request.ProductAngles = angles;
+            request.EditResolution = batch.EditResolution;
+            request.Prompt = PromptRules.ReferenceEditPrompt(angles.Count, ModelRecipeRules.EffectivePromptSyntax(ModelRecipes.Current().Recipe?.PromptSyntax));
+            return await FusionRoutes.RunAsync(FusionRoutes.Edit, session, request);
+        }
         (EcomTemplate Template, string WorkflowId, string ImageField) template = TemplateApi.RunnableTemplates(session).FirstOrDefault(item => item.Template.Id == job.Template);
-        if (template.Template is null)
+        if (template.ImageField is not null)
         {
-            return StudioApi.Error("直接融合试用版现在不可用：执行服务器可能离线，或工作流已被下架。", "no_execution_server");
+            request.ImageField = template.ImageField;
+            string canvas = product.Image;
+            if (template.Template.PreserveProduct)
+            {
+                canvas = await CutoutFor(product);
+                if (canvas is null)
+                {
+                    return StudioApi.Error(product.CutoutError ?? "抠图没有完成。", "cutout_failed");
+                }
+            }
+            request.ProductCanvas = canvas;
         }
-        List<string> angles = await PrepareEditInputsAsync(session, product);
-        if (angles is null)
+        request.Placement = job.Reference >= 0 && job.Reference < batch.ReferencePlacements.Count && batch.ReferencePlacements[job.Reference] is Placement forReference
+            ? forReference : product.Placement;
+        request.Prompt = job.Reference >= 0 && job.Reference < batch.ReferencePrompts.Count ? batch.ReferencePrompts[job.Reference] : batch.Prompt;
+        return await FusionRoutes.RunAsync(FusionRoutes.Composition, session, request);
+    }
+
+    /// <summary>One white-background slot task (T98): the product's cut-out on pure white, made locally like the cut-out-only main images (F22) — no
+    /// generation, one deterministic picture however many candidates were asked for.</summary>
+    private static async Task<JObject> GenerateCutoutAsync(Session session, Batch batch, Job job)
+    {
+        Product product = batch.Products[job.Product];
+        string cutout = await CutoutFor(product);
+        if (cutout is null)
         {
-            return StudioApi.Error(product.EditError ?? "商品图没有准备好。", "cutout_failed");
+            return StudioApi.Error(product.CutoutError ?? "抠图没有完成。", "cutout_failed");
         }
-        JObject serverParams = new() { [ReferenceEditRules.ReferenceParam] = batch.ReferenceImages[job.Reference] };
-        for (int index = 0; index < angles.Count; index++)
+        (int width, int height) = JobSize(batch, job, "white_main");
+        JObject result = await Task.Run(() => CutoutOnly.Create(session.User, cutout, width, height, job.SlotKind));
+        if (!result.ContainsKey("error"))
         {
-            serverParams[ReferenceEditRules.ProductParam(index)] = angles[index];
+            // The direct cut-out is also a candidate (F39): unpicked copies are cleaned after the retention time.
+            CandidateCleanup.Register(session.User, result["images"] as JArray);
         }
-        serverParams[ReferenceEditRules.ResolutionParam] = batch.EditResolution;
-        GenerateOptions options = new()
+        return result;
+    }
+
+    /// <summary>One detail slot task (T98): a real crop of the product's own photo — no generation — at the slot's aspect, enlarged to the slot's size.
+    /// The candidates are different crop positions, starting centered; the photo is the inline photo's original or the saved product's main angle.</summary>
+    private static async Task<JObject> GenerateCropAsync(Session session, Batch batch, Job job)
+    {
+        Product product = batch.Products[job.Product];
+        string original = OriginalFor(session, product);
+        if (original is null)
         {
-            RawPrompt = true,
-            AllowImageTagPrompt = true,
-            WorkflowOverride = StandardWorkflows.ReferenceEditId(angles.Count),
-            ServerParams = serverParams
-        };
-        JObject payload = new()
-        {
-            ["source"] = "local",
-            ["template_id"] = template.Template.Id,
-            ["template_params"] = new JObject(),
-            ["prompt"] = PromptRules.ReferenceEditPrompt(angles.Count, ModelRecipeRules.EffectivePromptSyntax(ModelRecipes.Current().Recipe?.PromptSyntax)),
-            ["negativeprompt"] = batch.Negative,
-            ["images"] = batch.Candidates,
-            ["platform"] = batch.Platform
-        };
-        if (batch.OutputSize is not null)
-        {
-            payload["output_size"] = batch.OutputSize.DeepClone();
+            return StudioApi.Error("商品原图无法读取，无法裁切细节图。", "invalid_reference");
         }
-        if (batch.Server is int server)
+        (int width, int height) = JobSize(batch, job, "detail");
+        int count = job.ImageCount ?? SetRules.JobImageCount(job.Source, batch.Candidates);
+        JObject result = await Task.Run(() =>
         {
-            payload["execution_server_id"] = server;
+            try
+            {
+                int comma = original.IndexOf(',');
+                using Image<Rgba32> photo = ISImage.Load<Rgba32>(Convert.FromBase64String(original[(comma + 1)..]));
+                if (!SetRules.DetailCrop(photo.Width, photo.Height, width, height, out int cropWidth, out int cropHeight))
+                {
+                    return StudioApi.Error("商品原图无法读取，无法裁切细节图。", "invalid_reference");
+                }
+                JArray images = [];
+                for (int index = 0; index < count; index++)
+                {
+                    (double fx, double fy) = SetRules.CropShift(index);
+                    int x = (int)Math.Round(fx * (photo.Width - cropWidth));
+                    int y = (int)Math.Round(fy * (photo.Height - cropHeight));
+                    using Image<Rgba32> crop = photo.Clone(context => context.Crop(new Rectangle(x, y, cropWidth, cropHeight)).Resize(width, height));
+                    string url = SaveLocalWork(session.User, crop, "ecomcraft/detail-crop", new JObject()
+                    {
+                        ["ecomcraft_photo_crop"] = "true",
+                        ["ecomcraft_template"] = job.SlotKind,
+                        ["ecomcraft_execution_server_name"] = "平台本机（真实裁切）"
+                    });
+                    if (url is null)
+                    {
+                        return StudioApi.Error("细节图没有生成，请稍后重试。", "generation_failed");
+                    }
+                    images.Add(url);
+                }
+                return new JObject() { ["images"] = images, ["execution_server"] = "平台本机（真实裁切）" };
+            }
+            catch (Exception ex) when (ex is FormatException or UnknownImageFormatException or InvalidImageContentException or NotSupportedException)
+            {
+                return StudioApi.Error("商品原图无法读取，无法裁切细节图。", "invalid_reference");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Logs.Warning($"EcomCraft could not save a detail crop: {ex.Message}");
+                return StudioApi.Error("细节图没有生成，请稍后重试。", "generation_failed");
+            }
+        });
+        if (!result.ContainsKey("error"))
+        {
+            CandidateCleanup.Register(session.User, result["images"] as JArray);
         }
-        return await StudioApi.GenerateInternal(session, payload, options);
+        return result;
+    }
+
+    /// <summary>One selling slot task (T98): the product's own selling info (T99) drawn by the selling-image service (F47) onto the product's finished fusion
+    /// picture. The candidates are the service's layouts, starting where this task's number falls so remakes differ.</summary>
+    private static JObject GenerateLayout(Session session, Batch batch, Job job, string baseUrl)
+    {
+        Product product = batch.Products[job.Product];
+        if (product.ProductId is null)
+        {
+            return StudioApi.Error("这个商品还没有填写卖点信息，无法排版卖点图。", "invalid_selling_text");
+        }
+        (Products.ProductSpecs specs, string name) = Products.ProductLibrary.SellingInfoFor(session.User.UserID, product.ProductId, batch.Language);
+        (string title, List<string> points) = SellingImageRules.FromSpecs(specs, name);
+        if (SellingImageRules.Problem(title, points) is string problem)
+        {
+            return StudioApi.Error(problem, "invalid_selling_text");
+        }
+        string path = WorkSync.LocalPathFor(session.User, baseUrl, out _);
+        if (path is null || !File.Exists(path))
+        {
+            return StudioApi.Error("融合结果无法读取，无法排版卖点图。", "invalid_reference");
+        }
+        int count = job.ImageCount ?? SetRules.JobImageCount(job.Source, batch.Candidates);
+        JArray images = [];
+        for (int index = 0; index < count; index++)
+        {
+            string layout = SellingImageRules.Layouts[(job.Id + index) % SellingImageRules.Layouts.Count];
+            JObject rendered = SellingImageService.RenderFromWork(session.User, path, layout, title, points, SellingImageRules.DefaultAccent);
+            if (rendered.ContainsKey("error"))
+            {
+                return rendered;
+            }
+            foreach (JToken image in rendered["images"] as JArray ?? new JArray())
+            {
+                images.Add(image);
+            }
+        }
+        CandidateCleanup.Register(session.User, images);
+        return new JObject() { ["images"] = images, ["execution_server"] = "平台本机（服务端排版）" };
+    }
+
+    /// <summary>The size a slot task renders at (T98): its own slot size when the batch chose none, else the platform's size for the kind, else 2000 square.</summary>
+    private static (int Width, int Height) JobSize(Batch batch, Job job, string fallbackKind)
+    {
+        if (job.OutputSize is JObject size)
+        {
+            return (size.Value<int>("width"), size.Value<int>("height"));
+        }
+        (int Width, int Height)? slotSize = Export.ExportService.SlotSize(batch.Platform, fallbackKind);
+        return slotSize ?? (2000, 2000);
+    }
+
+    /// <summary>Saves a locally made picture as a new PNG work with the given metadata markers (T98); its viewable URL, or null when it could not be written.</summary>
+    private static string SaveLocalWork(User user, Image<Rgba32> picture, string folder, JObject markers)
+    {
+        JObject metadata = new() { ["sui_extra_data"] = markers };
+        picture.Metadata.GetPngMetadata().TextData.Add(new SixLabors.ImageSharp.Formats.Png.Chunks.PngTextData("parameters", metadata.ToString(Newtonsoft.Json.Formatting.None), "", ""));
+        string relative = $"{folder}/{DateTime.Now:yyyy-MM-dd}/{DateTime.Now:HHmmss}-{Guid.NewGuid().ToString("N")[..8]}.png";
+        string path = Path.GetFullPath(UserImageHistoryHelper.GetRealPathFor(user, $"{user.OutputDirectory}/{relative}"));
+        Directory.CreateDirectory(Path.GetDirectoryName(path));
+        using (FileStream stream = File.Create(path))
+        {
+            picture.Save(stream, new PngEncoder());
+        }
+        return (Program.ServerSettings.Paths.AppendUserNameToOutputPath ? $"View/{user.UserID}/" : "Output/") + relative;
+    }
+
+    /// <summary>Waits for the product's first finished fusion picture (T98). Returns the picture's URL, or the plain-language reason it will not come;
+    /// throws <see cref="OperationCanceledException"/> when the batch is cancelled while waiting.</summary>
+    private static async Task<(string Url, string Problem)> WaitForFusionBaseAsync(Batch batch, Job job, CancellationToken cancel)
+    {
+        TaskCompletionSource<string> source;
+        lock (batch.Lock)
+        {
+            source = batch.FusionBase.GetValueOrDefault(job.Product);
+        }
+        if (source is null)
+        {
+            return (null, "这个任务缺少融合结果，无法排版。");
+        }
+        string url = await source.Task.WaitAsync(cancel);
+        return url is null ? (null, "首图没有生成，无法排版卖点图；请先重试首图，再重试这个任务。") : (url, null);
+    }
+
+    /// <summary>Hands a finished fusion task's pictures to the product's layout waiter (T98): the first task with pictures wins; when every fusion task of
+    /// the product has ended without pictures, the waiter is released with nothing so its layout task fails with a plain reason.</summary>
+    private static void NoteFusionOutcome(Batch batch, Job job)
+    {
+        if (job.Source != SetRules.SourceFusion)
+        {
+            return;
+        }
+        lock (batch.Lock)
+        {
+            if (!batch.FusionBase.TryGetValue(job.Product, out TaskCompletionSource<string> source) || source.Task.IsCompleted)
+            {
+                return;
+            }
+            Job withPictures = batch.Jobs.FirstOrDefault(item => item.Source == SetRules.SourceFusion && item.Product == job.Product
+                && item.State == "done" && item.Images.Count > 0);
+            if (withPictures is not null)
+            {
+                source.TrySetResult(withPictures.Images[0]);
+                return;
+            }
+            bool pending = batch.Jobs.Any(item => item.Source == SetRules.SourceFusion && item.Product == job.Product
+                && item.State is not ("done" or "failed" or "cancelled"));
+            if (!pending)
+            {
+                source.TrySetResult(null);
+            }
+        }
     }
 
     /// <summary>The edit trial's per-angle product inputs (F84, T123), made once per product: each angle's cut-out (its confirmed cut-out, or one made now

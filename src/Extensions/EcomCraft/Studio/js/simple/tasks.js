@@ -462,6 +462,10 @@ class SimpleTasksPart {
             if (this.trialImages.has(url)) {
                 button.append(el('span', 'simple-result-trial', this.api.tr('试用：模型直接输出，未贴回原商品')));
             }
+            // Fusion-slot results carry their own notice (T98): the fusion route works but its results are not yet accepted.
+            if (this.fusionImages.has(url)) {
+                button.append(el('span', 'simple-result-trial', this.api.tr('融合图位：效果未验收')));
+            }
             button.addEventListener('click', () => {
                 if (this.selected.has(url)) {
                     this.selected.delete(url);

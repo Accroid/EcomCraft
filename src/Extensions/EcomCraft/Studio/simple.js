@@ -70,6 +70,9 @@ class SimpleMode {
     /** Candidate URLs made by the direct-fusion trial (F84): they carry the "model output, not pasted back" notice on their tiles. */
     static trialImages = new Set();
 
+    /** Candidate URLs made by fusion slot tasks (T98): they carry the "route not yet accepted" notice on their tiles. */
+    static fusionImages = new Set();
+
     /** Whether the current batch is the direct-fusion trial (F84), so its finished images join trialImages. */
     static batchEdit = false;
 
@@ -86,6 +89,8 @@ class SimpleMode {
     static visionModels = null;
 
     static exportOptions = { platforms: [], folder_available: false };
+    /** Batch caps the server enforces and the page estimates with (F55, T98): replaced by the platforms response in load(); the defaults match a fresh server. */
+    static limits = { max_images: 60, default_candidates: 2, max_references: 15 };
     /** The output size chosen before generating: 'auto' (the platform's slot size for each image kind), a preset 'WxH' or 'custom' with width and height. */
     static outputSize = { mode: 'auto', width: 1000, height: 1000 };
     /** Largest accepted output side: generation and export are capped at 2K (2048, decision A24); the cap follows the model recipe once F86 lands. */
@@ -282,6 +287,13 @@ class SimpleMode {
             ]);
             this.data.platforms = platforms.platforms || [];
             this.quality = platforms.quality || this.quality;
+            if (platforms.limits) {
+                this.limits = {
+                    max_images: Number(platforms.limits.max_images) || 60,
+                    default_candidates: Number(platforms.limits.default_candidates) || 2,
+                    max_references: Number(platforms.limits.max_references) || 15
+                };
+            }
             this.data.templates = templates.templates || [];
             this.data.styles = styles.styles || [];
             this.data.categories = productTypes.categories || [];
@@ -412,7 +424,8 @@ class SimpleMode {
             rows.push(row);
         }
         box.replaceChildren(...rows);
-        box.hidden = !rows.length;
+        // The optional slots feed the set task and the reference flow's whole set (T98); the reference flow without "出整套" hides the box again.
+        box.hidden = !rows.length || (this.chosenTask == 'reference' && !this.referenceFullSetOn());
     }
 
     /** Templates that suit the chosen platform. The direct-fusion trial's template (F84) is server-driven only: it has no page fields,
@@ -605,7 +618,7 @@ class SimpleMode {
         this.api.$('simple-generate').disabled = Boolean(blocker);
         let countProblem = this.countProblem();
         let countHint = this.api.$('simple-count-hint');
-        countHint.textContent = countProblem || this.api.tr('可输入 1–20 的正整数；单次出图和一键出整套最多共 20 张。');
+        countHint.textContent = countProblem || this.api.tr('可输入 1–20 的正整数；单次出图和一键出整套最多共 {0} 张。', this.limits.max_images);
         countHint.classList.toggle('simple-hint-error', Boolean(countProblem));
         let count = countProblem ? 0 : this.countValue();
         // Reference mode shows its status only on simple-set-hint right under the button; repeating it on simple-hint would render the same message twice.
@@ -624,22 +637,25 @@ class SimpleMode {
         let storyboardProblem = this.storyboardProblem();
         // One shared cap of 20 for single generations and whole sets (F55): products × set types (or storyboard shots, F25) × candidates.
         let total = this.products.length * types * count;
-        let setReady = this.loaded && this.products.length > 0 && types > 0 && !storyboardProblem && Boolean(this.choice.subtype) && !countProblem && !this.outputSizeProblem() && total > 0 && total <= 20 && !this.submitting;
+        let limit = this.limits.max_images;
+        let setReady = this.loaded && this.products.length > 0 && types > 0 && !storyboardProblem && Boolean(this.choice.subtype) && !countProblem && !this.outputSizeProblem() && total > 0 && total <= limit && !this.submitting;
         let setButton = this.api.$('simple-generate-set');
         setButton.disabled = !setReady;
         setButton.textContent = shots ? this.api.tr('按分镜出整套') : this.api.tr('一键出整套');
         this.api.$('simple-set-hint').textContent = refMode
-            ? this.api.tr(refProblem || '为 {0} 张商品图 × {1} 张参考图各出 1 张，预计共 {2} 张（上限 20）。', this.products.length, this.references.length, this.products.length * this.references.length)
+            ? (refProblem
+                ? this.api.tr(refProblem)
+                : this.referenceEstimateText())
             : storyboardProblem
             ? this.api.tr(storyboardProblem)
             : !types
             ? this.api.tr('这个平台还没有可用的套图模板。')
-            : (total > 20
-                ? this.api.tr('预计 {0} 张，超过 20 张总上限，请减少商品图、类型或候选张数。', total)
+            : (total > limit
+                ? this.api.tr('预计 {0} 张，超过 {1} 张总上限，请减少商品图、类型或候选张数。', total, limit)
                 : shots
-                ? this.api.tr('按分镜为全部 {0} 张商品图各出 {1} 张图 × 每张 {2} 个候选，预计共 {3} 张（上限 20）。', this.products.length, shots, count, total)
-                : this.api.tr('为全部 {0} 张商品图 × 套图 {1} 种类型（{2}）× 每种 {3} 张，预计共 {4} 张（上限 20）。',
-                    this.products.length, set.length, set.map(template => template.name).join(this.api.tr('、')), count, total));
+                ? this.api.tr('按分镜为全部 {0} 张商品图各出 {1} 张图 × 每张 {2} 个候选，预计共 {3} 张（上限 {4}）。', this.products.length, shots, count, total, limit)
+                : this.api.tr('为全部 {0} 张商品图 × 套图 {1} 种类型（{2}）× 每种 {3} 张，预计共 {4} 张（上限 {5}）。',
+                    this.products.length, set.length, set.map(template => template.name).join(this.api.tr('、')), count, total, limit));
         this.api.$('simple-storyboard-run').disabled = this.storyboard.running || !this.loaded || !this.api.state.session;
         this.api.$('simple-storyboard-run').textContent = this.storyboard.running
             ? this.waitingLabel(this.api.tr('正在生成分镜…'), 'storyboard', this.storyboard.started) : this.api.tr('生成分镜');

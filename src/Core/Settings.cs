@@ -109,6 +109,16 @@ public class Settings : AutoConfiguration
             + "recipe declares). 0 picks it automatically from the hardware tier, using the recipe's per-tier values (512 on the unsupported tier or when probing "
             + "failed, 1024 otherwise). The value is written by the server into every edit request; clients never see or send it.")]
         public int ReferenceEditResolution = 0;
+
+        /// <summary>Most images one batch may request in total (F55, T98): the shared cap of single generations and whole sets, configurable since 2026-11-03 (default 60).</summary>
+        [ConfigComment("Most images one batch may request in total (products × image types × candidates, single generations and whole sets alike). "
+            + "The default since T98 is 60; 0 or less falls back to it, and the value is capped at 500. The server refuses a larger batch outright, never truncates it.")]
+        public int BatchImageLimit = 60;
+
+        /// <summary>Candidates each image slot makes by default in the reference flow's slot modes (T98): users may lower it to 1 in the page.</summary>
+        [ConfigComment("Candidates each image slot makes by default when a batch follows image slots (references with chosen slots, or one reference expanded into a "
+            + "whole set). Users can still change the number in the page; 0 or less falls back to 2, and the value is capped at 20.")]
+        public int SlotCandidates = 2;
     }
 
     /// <summary>Settings related to Swarm server maintenance..</summary>

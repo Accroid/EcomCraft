@@ -44,13 +44,14 @@ public static partial class BatchService
         string language = rawInput.Value<string>("language") == "en" ? "en" : "zh-CN";
         string platform = rawInput["platform"]?.Type == JTokenType.String ? rawInput.Value<string>("platform") : "";
         string setId = rawInput["set_id"]?.Type == JTokenType.String ? rawInput.Value<string>("set_id") : "standard";
+        batch.Language = language;
+        batch.Platform = platform;
         int candidates = rawInput["candidates"]?.Type == JTokenType.Integer ? rawInput.Value<int>("candidates") : 4;
         if (candidates < 1 || candidates > SetRules.MaxCandidates)
         {
             return StudioApi.Error($"每种图片的候选张数须为 1–{SetRules.MaxCandidates}。", "invalid_parameters");
         }
         batch.Candidates = candidates;
-        batch.Platform = platform;
         if (rawInput["execution_server_id"]?.Type == JTokenType.Integer)
         {
             int pinned = rawInput.Value<int>("execution_server_id");
@@ -77,7 +78,15 @@ public static partial class BatchService
             {
                 return editError;
             }
-            expanded = SetRules.ExpandReferences(batch.Products.Count, "reference-edit", batch.ReferenceImages.Count);
+            JObject slotError = ExpandSlotBatch(session, rawInput, batch, platform, language, "reference-edit", out expanded);
+            if (slotError is not null)
+            {
+                return slotError;
+            }
+            if (expanded is null)
+            {
+                expanded = SetRules.ExpandReferences(batch.Products.Count, "reference-edit", batch.ReferenceImages.Count);
+            }
         }
         else if (rawInput["reference_prompts"] is JArray promptItems)
         {
@@ -95,9 +104,17 @@ public static partial class BatchService
                     ? "参考模式需要“场景图”模板，但它现在不可用：执行服务器可能离线，或模板已被停用。请确认执行服务器在线，或请管理员检查模板。"
                     : $"参考模式需要“场景图”模板，但它用的场景图工作流还不可用：{reason}", "invalid_template");
             }
-            batch.Candidates = 1;
-            candidates = 1;
-            expanded = SetRules.ExpandReferences(batch.Products.Count, scene.Id, batch.ReferencePrompts.Count);
+            JObject slotError = ExpandSlotBatch(session, rawInput, batch, platform, language, scene.Id, out expanded);
+            if (slotError is not null)
+            {
+                return slotError;
+            }
+            if (expanded is null)
+            {
+                batch.Candidates = 1;
+                candidates = 1;
+                expanded = SetRules.ExpandReferences(batch.Products.Count, scene.Id, batch.ReferencePrompts.Count);
+            }
         }
         else if (rawInput["shots"] is JArray shotItems && shotItems.Count > 0)
         {
@@ -125,20 +142,46 @@ public static partial class BatchService
         {
             return StudioApi.Error($"一次最多 {SetRules.MaxJobs} 个任务，请减少商品数量。", "invalid_parameters");
         }
-        // One shared cap for single generations and whole sets alike (F55): products × set types × candidates may not exceed the image total.
-        if (!SetRules.WithinImageTotal(expanded.Count, candidates))
+        // One shared cap for single generations and whole sets alike (F55): products × set types × candidates may not exceed the image total. The cap is
+        // configurable per server since T98 (default 60); a larger batch is refused outright, never silently truncated.
+        int imageLimit = SetRules.ImageLimit(Program.ServerSettings.EcomCraft.BatchImageLimit);
+        int totalImages = batch.ReferenceSlots is not null ? SetRules.SlotImageTotal(expanded, batch.Candidates) : expanded.Count * candidates;
+        if (totalImages > imageLimit)
         {
-            return StudioApi.Error($"预计 {expanded.Count * candidates} 张，超过 {SetRules.MaxImages} 张总上限，请减少商品图、类型或候选张数。", "invalid_parameters");
+            return StudioApi.Error($"预计 {totalImages} 张，超过 {imageLimit} 张总上限，请减少商品图、图位或候选张数。", "invalid_parameters");
         }
+        bool customSize = rawInput["output_size"] is JObject;
+        Dictionary<string, string> slotNames = SlotNames(platform, language);
         foreach (SetRules.Job job in expanded)
         {
+            // Slot tasks the server makes itself (T98): no template behind them, so their card carries the slot's name and the slot's own size.
+            if (job.Source is (SetRules.SourceCutout or SetRules.SourceCrop or SetRules.SourceLayout))
+            {
+                batch.Jobs.Add(new Job()
+                {
+                    Id = batch.Jobs.Count, Product = job.Product, Template = "", TemplateName = slotNames.GetValueOrDefault(job.SlotId, job.SlotKind),
+                    Reference = job.Reference, SlotId = job.SlotId, SlotKind = job.SlotKind, Source = job.Source,
+                    OutputSize = customSize ? null : SlotSizeOf(platform, job.SlotId)
+                });
+                continue;
+            }
             EcomTemplate template = runnable.First(item => item.Template.Id == job.Template).Template;
             batch.Jobs.Add(new Job()
             {
                 Id = batch.Jobs.Count, Product = job.Product, Template = job.Template, TemplateName = EcomTemplate.Pick(template.Name, language),
-                Shot = job.Shot, Reference = job.Reference,
-                Purpose = job.Shot >= 0 && batch.ShotPurposes[job.Shot].Length > 0 ? batch.ShotPurposes[job.Shot] : null
+                Shot = job.Shot, Reference = job.Reference, SlotId = job.SlotId, SlotKind = job.SlotKind, Source = job.Source,
+                Purpose = job.Shot >= 0 && batch.ShotPurposes[job.Shot].Length > 0 ? batch.ShotPurposes[job.Shot] : null,
+                OutputSize = job.SlotId is null || customSize ? null : SlotSizeOf(platform, job.SlotId)
             });
+        }
+        // The selling slot draws on the product's first finished fusion picture (T98): one waiter per product, completed by whichever fusion task
+        // finishes with pictures first.
+        if (batch.Jobs.Any(job => job.Source == SetRules.SourceLayout))
+        {
+            foreach (int product in batch.Jobs.Where(job => job.Source == SetRules.SourceLayout).Select(job => job.Product).Distinct())
+            {
+                batch.FusionBase[product] = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
         }
         // In reference mode none of the other step-2 options apply (F59): no description, style, product type, prompt panel or brand kit.
         // The edit trial composes its own prompt server-side per product (F84), so it starts at once too.
@@ -193,6 +236,13 @@ public static partial class BatchService
                     return StudioApi.Error("商品图须为不超过 5 MB 的 PNG、JPEG 或 WebP 图片。", "invalid_reference");
                 }
                 product.Image = image;
+                // The optional pre-cut-out original (T98): the photo the detail slots crop from. Anything unreadable is simply not kept — the crop then
+                // falls back to the photo the request did carry.
+                string original = item?["original"]?.Type == JTokenType.String ? item.Value<string>("original") : null;
+                if (original is not null && ImageDataUrl.IsValid(original, ImageDataUrl.ImageDataFormats.PngJpegWebp, SetRules.MaxImageDataLength))
+                {
+                    product.Original = original;
+                }
             }
             if (item["placement"] is JObject placement)
             {
@@ -339,6 +389,215 @@ public static partial class BatchService
         return null;
     }
 
+    /// <summary>The slot modes of the reference flow (T98): references with a user-chosen slot each, or one reference expanded into the platform's whole
+    /// set. A request without either keeps the slot-less shape exactly as before. Slot batches take the request's candidate count (defaulting to the
+    /// server's configured slot candidates); uncovered slots are recorded for the page, never invented (A20). Returns the error, or null with the
+    /// expansion — null in <paramref name="expanded"/> means the request is slot-less and the caller expands as before.</summary>
+    private static JObject ExpandSlotBatch(Session session, JObject rawInput, Batch batch, string platform, string language, string fusionTemplateId,
+        out List<SetRules.Job> expanded)
+    {
+        expanded = null;
+        int references = batch.ReferenceEdit ? batch.ReferenceImages.Count : batch.ReferencePrompts.Count;
+        bool fullSet = rawInput["full_set"]?.Type == JTokenType.Boolean && rawInput.Value<bool>("full_set");
+        JArray slotItems = rawInput["reference_slots"] as JArray;
+        if (slotItems is null && !fullSet)
+        {
+            return null;
+        }
+        JObject platformData = string.IsNullOrEmpty(platform) ? null : TemplateStore.Platforms().FirstOrDefault(item => item["id"]?.ToString() == platform);
+        List<ExportSlot> slots = platformData is null ? null : ExportRules.ParseSlots(platformData, out _);
+        if (slots is null)
+        {
+            return StudioApi.Error("这个平台还没有定义图位，不能按图位出图，请换一个平台或直接按参考出图。", "invalid_slot");
+        }
+        // Every reference carries one slot of its own (T98): a null entry keeps that reference's slot-less behaviour.
+        List<(string SlotId, string Kind)> chosen = [];
+        if (slotItems is not null)
+        {
+            if (slotItems.Count != references)
+            {
+                return StudioApi.Error("图位选择的数量与参考图数量不一致。", "invalid_parameters");
+            }
+            foreach (JToken token in slotItems)
+            {
+                string id = token?.Type == JTokenType.String ? token.ToString() : "";
+                if (token is null || token.Type == JTokenType.Null || id.Length == 0)
+                {
+                    chosen.Add((null, null));
+                    continue;
+                }
+                ExportSlot slot = slots.FirstOrDefault(item => item.Id == id);
+                if (slot is null || !SetRules.SetSlotKinds.Contains(slot.Kind))
+                {
+                    return StudioApi.Error("所选图位不属于这个平台，请刷新后重新选择。", "invalid_slot");
+                }
+                chosen.Add((slot.Id, slot.Kind));
+            }
+        }
+        if (!fullSet)
+        {
+            if (!chosen.Any(slot => slot.SlotId is not null))
+            {
+                // Only null entries: the slot-less shape as before (T98).
+                return null;
+            }
+            batch.ReferenceSlots = chosen;
+            batch.Candidates = SlotCandidatesOf(rawInput);
+            expanded = SetRules.ExpandReferenceSlots(batch.Products.Count, fusionTemplateId, chosen);
+            // Slots of the platform no reference covers show as uncovered (T98): per product, in slot order, kinds that join sets only.
+            foreach (int product in Enumerable.Range(0, batch.Products.Count))
+            {
+                foreach (ExportSlot slot in ComposedSlots(rawInput, slots))
+                {
+                    if (!chosen.Any(entry => entry.SlotId == slot.Id))
+                    {
+                        batch.Uncovered.Add((product, slot.Id, slot.Kind, "no_reference"));
+                    }
+                }
+            }
+            return null;
+        }
+        if (references != 1)
+        {
+            return StudioApi.Error("出整套只支持一张参考图；多张参考图时请为每张选择图位。", "invalid_parameters");
+        }
+        if (slotItems is not null && chosen.Any(slot => slot.SlotId is not null))
+        {
+            return StudioApi.Error("出整套时不选图位，整套图由这一张参考图展开。", "invalid_parameters");
+        }
+        batch.ReferenceSlots = chosen.Count > 0 ? chosen : [(null, null)];
+        batch.Candidates = SlotCandidatesOf(rawInput);
+        List<ExportSlot> composed = ComposedSlots(rawInput, slots);
+        if (composed.Count == 0)
+        {
+            return StudioApi.Error("这个平台还没有可以出图的图位。", "invalid_slot");
+        }
+        expanded = [];
+        foreach ((Product product, int index) in batch.Products.Select((item, index) => (item, index)))
+        {
+            (List<SetRules.SlotPlan> plans, JObject planError) = FullSetPlans(session, rawInput, product, composed, batch, language);
+            if (planError is not null)
+            {
+                return planError;
+            }
+            foreach (SetRules.SlotPlan plan in plans.Where(plan => !plan.Covered))
+            {
+                batch.Uncovered.Add((index, plan.SlotId, plan.Kind, plan.Reason));
+            }
+            expanded.AddRange(SetRules.ExpandFullSet(1, fusionTemplateId, plans).Select(job => job with { Product = index }));
+        }
+        return null;
+    }
+
+    /// <summary>The slot batches' candidate count (T98): the request's number, else the server's configured default; 1–<see cref="SetRules.MaxCandidates"/>.</summary>
+    private static int SlotCandidatesOf(JObject rawInput)
+    {
+        int asked = rawInput["candidates"]?.Type == JTokenType.Integer ? rawInput.Value<int>("candidates") : 0;
+        return Math.Clamp(asked <= 0 ? SetRules.SlotCandidateCount(Program.ServerSettings.EcomCraft.SlotCandidates) : asked, 1, SetRules.MaxCandidates);
+    }
+
+    /// <summary>The slots a whole set composes (T98): the platform's non-optional slots plus the ticked optional ones, one slot per kind in slot order,
+    /// non-optional first — the same composition one-click sets use (F58), so the whole set and a plain set never disagree about what exists.</summary>
+    private static List<ExportSlot> ComposedSlots(JObject rawInput, List<ExportSlot> slots)
+    {
+        HashSet<string> seen = [];
+        List<ExportSlot> composed = [];
+        foreach (ExportSlot slot in slots.Where(slot => !slot.Optional).Concat(slots.Where(slot => slot.Optional)))
+        {
+            if (!SetRules.SetSlotKinds.Contains(slot.Kind) || slot.Optional && !TickedKinds(rawInput, slots).Contains(slot.Kind))
+            {
+                continue;
+            }
+            if (seen.Add(slot.Kind))
+            {
+                composed.Add(slot);
+            }
+        }
+        return composed;
+    }
+
+    /// <summary>One product's whole-set plans (T98): every composed slot with the source that makes it for this product, or the reason it stays uncovered —
+    /// the fusion slots need nothing, the detail slot needs a clear enough photo, the selling slot needs the product's selling info (T99). Nothing is
+    /// invented (A20). Returns the plans, or the error when the product's photo cannot be read for the check.</summary>
+    private static (List<SetRules.SlotPlan> Plans, JObject Error) FullSetPlans(Session session, JObject rawInput, Product product, List<ExportSlot> composed,
+        Batch batch, string language)
+    {
+        (int Width, int Height)? photoSize = null;
+        bool sellingFilled = false;
+        bool needsPhoto = composed.Any(slot => slot.Kind == "detail");
+        bool needsSelling = composed.Any(slot => slot.Kind == "selling");
+        if (needsPhoto)
+        {
+            string original = OriginalFor(session, product);
+            if (original is null)
+            {
+                return (null, StudioApi.Error("商品原图无法读取，无法裁切细节图。", "invalid_reference"));
+            }
+            try
+            {
+                int comma = original.IndexOf(',');
+                SixLabors.ImageSharp.ImageInfo identified = ISImage.Identify(Convert.FromBase64String(original[(comma + 1)..]));
+                photoSize = (identified.Width, identified.Height);
+            }
+            catch (Exception ex) when (ex is FormatException or UnknownImageFormatException or InvalidImageContentException or NotSupportedException)
+            {
+                return (null, StudioApi.Error("商品原图无法读取，无法裁切细节图。", "invalid_reference"));
+            }
+        }
+        if (needsSelling && product.ProductId is not null)
+        {
+            (Products.ProductSpecs specs, string name) = Products.ProductLibrary.SellingInfoFor(session.User.UserID, product.ProductId, language);
+            sellingFilled = specs is not null && specs.Points.Count > 0 && (!string.IsNullOrEmpty(specs.DisplayName) || !string.IsNullOrEmpty(name));
+        }
+        List<SetRules.SlotPlan> plans = [];
+        foreach (ExportSlot slot in composed)
+        {
+            bool detailHighResolution = photoSize is (int width, int height)
+                && SetRules.DetailCropSufficient(width, height, slot.Preset.Width, slot.Preset.Height);
+            string source = SetRules.FullSetSlotSource(slot.Kind, detailHighResolution, sellingFilled);
+            bool covered = source is (SetRules.SourceFusion or SetRules.SourceCutout or SetRules.SourceCrop or SetRules.SourceLayout);
+            plans.Add(covered ? new SetRules.SlotPlan(slot.Id, slot.Kind, source, null) : new SetRules.SlotPlan(slot.Id, slot.Kind, null, source));
+        }
+        return (plans, null);
+    }
+
+    /// <summary>The photo a product's detail crops come from (T98): the inline photo's original when the request carried one, a saved product's main-angle
+    /// original from the library, or the inline photo itself; null when it cannot be read.</summary>
+    private static string OriginalFor(Session session, Product product)
+    {
+        if (product.ProductId is null)
+        {
+            return product.Original ?? product.Image;
+        }
+        (string saved, _, string problem) = Products.ProductLibrary.ForGeneration(session.User.UserID, product.ProductId, false);
+        if (saved is null)
+        {
+            Logs.Warning($"EcomCraft full-set could not read a product's original photo: {problem}");
+        }
+        return saved;
+    }
+
+    /// <summary>The display names of a platform's slots in the batch's language (T98), keyed by slot ID.</summary>
+    private static Dictionary<string, string> SlotNames(string platform, string language)
+    {
+        JObject platformData = string.IsNullOrEmpty(platform) ? null : TemplateStore.Platforms().FirstOrDefault(item => item["id"]?.ToString() == platform);
+        Dictionary<string, string> names = [];
+        foreach (JObject slot in (platformData?["slots"] as JArray ?? new JArray()).OfType<JObject>())
+        {
+            Dictionary<string, string> slotNames = slot["name"]?.ToObject<Dictionary<string, string>>() ?? [];
+            names[slot["id"]?.ToString() ?? ""] = EcomTemplate.Pick(slotNames, language);
+        }
+        return names;
+    }
+
+    /// <summary>The output size { width, height } of a platform slot (T98), or null when the platform or slot has none.</summary>
+    private static JObject SlotSizeOf(string platform, string slotId)
+    {
+        JObject platformData = string.IsNullOrEmpty(platform) ? null : TemplateStore.Platforms().FirstOrDefault(item => item["id"]?.ToString() == platform);
+        ExportSlot slot = (ExportRules.ParseSlots(platformData, out _) ?? []).FirstOrDefault(item => item.Id == slotId);
+        return slot is null ? null : new JObject() { ["width"] = slot.Preset.Width, ["height"] = slot.Preset.Height };
+    }
+
     /// <summary>Reads a confirmed storyboard (F25): every shot is checked again, since the page may have changed it; only template IDs and cleaned text are kept.
     /// Returns the error, or null when accepted, with each shot's template ID in <paramref name="shotTemplates"/>.</summary>
     private static JObject ReadStoryboard(JObject rawInput, Batch batch, JArray shotItems, List<SetRules.TemplateRef> references, string platform,
@@ -477,17 +736,42 @@ public static partial class BatchService
         {
             return (SetRules.SetTemplates(references, platform, setId), null);
         }
-        HashSet<string> ticked = [];
+        string tickedError = ReadTickedSlots(rawInput, slots, out HashSet<string> _);
+        if (tickedError is not null)
+        {
+            return (null, tickedError);
+        }
+        List<string> kinds = [.. slots.Where(slot => !slot.Optional).Select(slot => slot.Kind).Concat(TickedKinds(rawInput, slots)).Distinct()];
+        return (SetRules.SlotTemplates(references, platform, setId, kinds), null);
+    }
+
+    /// <summary>Validates the request's ticked optional slots (F58): every ticked ID must be an optional slot of the platform. Returns the error, or null.</summary>
+    private static string ReadTickedSlots(JObject rawInput, List<ExportSlot> slots, out HashSet<string> ticked)
+    {
+        ticked = [];
         foreach (JToken token in rawInput["optional_slots"] as JArray ?? new JArray())
         {
             string id = token?.Type == JTokenType.String ? token.ToString() : "";
             if (!slots.Any(slot => slot.Id == id && slot.Optional))
             {
-                return (null, "所选的可选槽位不存在，请刷新后重新选择。");
+                return "所选的可选槽位不存在，请刷新后重新选择。";
             }
             ticked.Add(id);
         }
-        List<string> kinds = [.. slots.Where(slot => !slot.Optional || ticked.Contains(slot.Id)).Select(slot => slot.Kind).Distinct()];
-        return (SetRules.SlotTemplates(references, platform, setId, kinds), null);
+        return null;
+    }
+
+    /// <summary>The kinds of the optional slots the request ticked (F58), in slot order.</summary>
+    private static IEnumerable<string> TickedKinds(JObject rawInput, List<ExportSlot> slots)
+    {
+        HashSet<string> ticked = [];
+        foreach (JToken token in rawInput["optional_slots"] as JArray ?? new JArray())
+        {
+            if (token?.Type == JTokenType.String)
+            {
+                ticked.Add(token.ToString());
+            }
+        }
+        return slots.Where(slot => slot.Optional && ticked.Contains(slot.Id)).Select(slot => slot.Kind);
     }
 }

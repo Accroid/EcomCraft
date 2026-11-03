@@ -199,6 +199,22 @@ public static class ProductLibrary
         }
     }
 
+    /// <summary>The selling info a saved product holds in one language, with the product's own name (T99, for T98's selling slots); no file is read.
+    /// Either may be empty when the language was never filled in.</summary>
+    public static (ProductSpecs Specs, string Name) SellingInfoFor(string userId, string productId, string language)
+    {
+        lock (Lock)
+        {
+            ProductRecord record = Loaded().Find(userId, productId);
+            if (record is null)
+            {
+                return (null, null);
+            }
+            string known = ProductInfoRules.LanguageId(language) ?? "zh-CN";
+            return (record.Info?.GetValueOrDefault(known), record.Name);
+        }
+    }
+
     /// <summary>The account's product file for the image route ("original" or "cutout") of one angle — the main angle when <paramref name="angleId"/>
     /// is null or empty — or null. A malformed angle ID is never looked up, so it can never reach a file path.</summary>
     public static (byte[] Bytes, string Extension) FileFor(string userId, string productId, string angleId, string kind)

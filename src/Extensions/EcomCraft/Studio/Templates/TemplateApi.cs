@@ -4,6 +4,7 @@ using EcomCraftStudio.Studio.PostProcess;
 using EcomCraftStudio.Studio.Storage;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
+using SwarmUI.Core;
 using SwarmUI.WebAPI;
 
 namespace EcomCraftStudio.Studio.Templates;
@@ -116,7 +117,14 @@ public static class TemplateApi
         return Task.FromResult(new JObject()
         {
             ["platforms"] = platforms,
-            ["quality"] = new JObject() { ["min_side"] = minSide, ["blur_variance"] = blur, ["min_cutout_ratio"] = ratio }
+            ["quality"] = new JObject() { ["min_side"] = minSide, ["blur_variance"] = blur, ["min_cutout_ratio"] = ratio },
+            // The batch caps the page estimates with before submitting (F55, T98): the configurable image total and the default slot candidates.
+            ["limits"] = new JObject()
+            {
+                ["max_images"] = Generation.SetRules.ImageLimit(Program.ServerSettings.EcomCraft.BatchImageLimit),
+                ["default_candidates"] = Generation.SetRules.SlotCandidateCount(Program.ServerSettings.EcomCraft.SlotCandidates),
+                ["max_references"] = Generation.SetRules.MaxReferences
+            }
         });
     }
 

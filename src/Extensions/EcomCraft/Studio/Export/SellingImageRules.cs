@@ -137,4 +137,35 @@ public static class SellingImageRules
         }
         return min;
     }
+
+    /// <summary>The title and points a layout slot draws from a product's saved selling info (T98, F79): the display name (or the product's own name)
+    /// shortened to the image's title cap, and the first points the image has room for, each shortened to the point cap. The user's words are only ever
+    /// shortened, never rewritten; the caller still checks <see cref="Problem"/>.</summary>
+    public static (string Title, List<string> Points) FromSpecs(Products.ProductSpecs specs, string productName)
+    {
+        string title = specs?.DisplayName;
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            title = productName ?? "";
+        }
+        title = Shorten(title, MaxTitleLength);
+        List<string> points = [];
+        foreach (string point in (specs?.Points ?? []).Where(point => !string.IsNullOrWhiteSpace(point)).Take(MaxPoints))
+        {
+            points.Add(Shorten(point, MaxPointLength));
+        }
+        return (title, points);
+    }
+
+    /// <summary>The first <paramref name="maxLength"/> characters as people count them, trimmed, so text the fonts can draw survives.</summary>
+    private static string Shorten(string text, int maxLength)
+    {
+        string cleaned = CleanText(text);
+        if (Length(cleaned) <= maxLength)
+        {
+            return cleaned;
+        }
+        StringInfo info = new(cleaned);
+        return info.SubstringByTextElements(0, maxLength).Trim();
+    }
 }

@@ -7,24 +7,24 @@
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 工作台</title>
-    <link rel="icon" href="/favicon.ico?v=0.63.3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.63.3">
-    <script src="/EcomCraft/lang/en.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/js/simple/brand.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/js/simple/storyboard.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/js/simple/rules.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/js/simple/prompt.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/js/simple/export.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/js/simple/ai-label.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/js/simple/placement.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/js/simple/products.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/js/simple/productinfo.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/js/simple/reference.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/js/simple/batch.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/js/simple/tasks.js?v=0.63.3" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.63.3" defer></script>
+    <link rel="icon" href="/favicon.ico?v=0.64.0">
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.64.0">
+    <script src="/EcomCraft/lang/en.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/js/simple/brand.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/js/simple/storyboard.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/js/simple/rules.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/js/simple/prompt.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/js/simple/export.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/js/simple/ai-label.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/js/simple/placement.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/js/simple/products.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/js/simple/productinfo.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/js/simple/reference.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/js/simple/batch.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/js/simple/tasks.js?v=0.64.0" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.64.0" defer></script>
 </head>
 
 <body>
@@ -160,7 +160,7 @@
                         <label for="simple-platform">平台</label>
                         <select id="simple-platform"></select>
                         <p class="hint" id="simple-platform-note" hidden></p>
-                        <div class="simple-slot-opts" id="simple-optional-slots" data-tasks="single set" hidden></div>
+                        <div class="simple-slot-opts" id="simple-optional-slots" data-tasks="single set reference" hidden></div>
                     </div>
                     <div class="fld" id="simple-size-fld">
                         <label for="simple-output-size">出图尺寸</label>
@@ -173,13 +173,20 @@
                         <p class="hint" id="simple-output-note"></p>
                     </div>
                     <div class="fld" id="simple-references-fld" data-tasks="reference">
-                        <span class="fld-label" id="simple-references-label">参考图<span class="fld-optional">必填，1–8 张，一张参考出一张图</span></span>
+                        <span class="fld-label" id="simple-references-label">参考图<span class="fld-optional">必填，1–15 张；一张参考出一张图，选了图位按图位出</span></span>
                         <div class="simple-reference-row" id="simple-references"></div>
                         <div class="inline-row">
                             <button type="button" class="btn btn-sm" id="simple-reference-add">添加参考图</button>
                         </div>
                         <div class="inline-row simple-edit-row">
                             <label class="simple-edit-toggle" for="simple-reference-edit"><input type="checkbox" id="simple-reference-edit">直接融合（试用）</label>
+                        </div>
+                        <div class="inline-row simple-fullset-row" id="simple-fullset-row" hidden>
+                            <label class="simple-edit-toggle" for="simple-reference-fullset"><input type="checkbox" id="simple-reference-fullset">出整套<span class="fld-optional">按这个平台的图位把整套图出齐，没有参考图的图位用抠图、真实裁切和排版补齐</span></label>
+                        </div>
+                        <div class="inline-row simple-ref-count-row" id="simple-ref-count-row" hidden>
+                            <label for="simple-reference-count">候选张数</label>
+                            <input type="number" id="simple-reference-count" min="1" max="20" step="1" value="2" inputmode="numeric">
                         </div>
                         <p class="hint" id="simple-reference-edit-note" hidden>试用：把参考图和商品图（含全部角度）一起交给编辑模型直接融合，不经抠图摆放，也不贴回原商品；提示词由服务端生成。效果未定型，仅供试用。</p>
                         <div class="simple-vision-model" id="simple-vision-model" hidden></div>

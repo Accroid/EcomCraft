@@ -19,4 +19,12 @@ internal sealed class GenerateOptions
     /// <summary>Workflow parameters the server itself fills for this request (the reference-edit trial's images and pixel budget, F84). They are validated
     /// against the published definitions like any parameter but bypass the page allowlist, which never lists them; a client cannot set them.</summary>
     public JObject ServerParams;
+
+    /// <summary>Image parameters whose picture is center-cropped to the output aspect instead of stretched to the output size (T98: the edit trial's reference).
+    /// The crop keeps the reference's proportions — stretching flattened it to the canvas ratio before. Null or empty keeps the old stretch for every image.</summary>
+    public HashSet<string> ImageResizeCrops;
+
+    /// <summary>Image parameters left at their own size instead of pre-stretched to the output size (T98: the edit trial's product angles, which must not be
+    /// distorted). Null or empty keeps the old stretch for every image.</summary>
+    public HashSet<string> ImageResizeSkips;
 }
