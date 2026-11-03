@@ -102,6 +102,7 @@ class SimpleExportPart {
         }
         this.api.$('simple-export-note').textContent = note;
         this.renderSelling();
+        this.renderAiLabel();
     }
 
     /** The selling info of the current product in the page's language (F79, T99), falling back to Chinese when that language has none, so the
@@ -225,7 +226,14 @@ class SimpleExportPart {
         this.renderExport();
         try {
             // Works already have the size chosen before generating; the platform only decides each image's format and size cap.
-            let result = await this.api.request('EcomCraftStudioExport', { platform, keep_size: true, target, groups: Array.from(groups, ([name, images]) => ({ name, images })) });
+            let result = await this.api.request('EcomCraftStudioExport', {
+                platform,
+                keep_size: true,
+                target,
+                ai_label: this.aiLabelField(),
+                language: I18n.current,
+                groups: Array.from(groups, ([name, images]) => ({ name, images }))
+            });
             if (result.download) {
                 let link = document.createElement('a');
                 link.href = result.download;
@@ -242,7 +250,7 @@ class SimpleExportPart {
                 this.message(tr('注意：{0} 张图片的背景不是纯白（RGB 255,255,255），这个平台的主图可能被拒：{1}', result.not_white.length, result.not_white.join(tr('、'))), true);
             }
             for (let warning of result.warnings || []) {
-                this.message(this.warningText(warning), true);
+                this.message(this.warningText(warning), warning.code != 'label_added');
             }
         }
         catch (error) {
@@ -254,7 +262,9 @@ class SimpleExportPart {
         }
     }
 
-    /** The plain-language text for one export warning code (F58): still over the slot's size cap, subject fill too small, or drawn text on a platform that forbids it. */
+    /** The plain-language text for one export warning code (F58): still over the slot's size cap, subject fill too small, or drawn text on a platform that forbids it.
+     * The visible AI label's outcomes (F49) read here too: added, shrunk to clear the product, on the least-overlapping corner, not drawn because of missing
+     * fonts, a pure-white border or a rule that forbids it. */
     static warningText(warning) {
         let tr = this.api.tr;
         let count = warning.count || 1;
@@ -263,6 +273,24 @@ class SimpleExportPart {
         }
         if (warning.code == 'subject_small') {
             return tr('有 {0} 张白底图的商品占比低于“{1}”的要求，建议重新构图后再导出。', count, this.slotName(warning.slot));
+        }
+        if (warning.code == 'label_added') {
+            return tr('已给 {0} 张“{1}”的导出图加上“AI 生成”标识。', count, this.slotName(warning.slot));
+        }
+        if (warning.code == 'label_shrunk') {
+            return tr('有 {0} 张图的 AI 标识会压到商品，已缩小字号避开。', count);
+        }
+        if (warning.code == 'label_on_product') {
+            return tr('有 {0} 张图的 AI 标识避不开商品，已缩小并放在压到最少的角。', count);
+        }
+        if (warning.code == 'label_font_missing') {
+            return tr('AI 标识字库缺失，有 {0} 张图没有加上标识，请联系管理员。', count);
+        }
+        if (warning.code == 'label_white_skipped') {
+            return tr('有 {0} 张“{1}”的图加 AI 标识会破坏纯白背景，这几张没有加。', count, this.slotName(warning.slot));
+        }
+        if (warning.code == 'label_not_allowed') {
+            return tr('这个平台不允许加可见 AI 标识，{0} 张图按原样导出。', count);
         }
         return tr('有 {0} 张图带促销文字，平台可能按“牛皮癣”拒收，建议只放在允许的位置。', count);
     }

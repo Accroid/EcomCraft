@@ -23,6 +23,7 @@ public static class StudioRoutes
         ("/EcomCraft/js/simple/rules.js", "js/simple/rules.js", "text/javascript; charset=utf-8"),
         ("/EcomCraft/js/simple/prompt.js", "js/simple/prompt.js", "text/javascript; charset=utf-8"),
         ("/EcomCraft/js/simple/export.js", "js/simple/export.js", "text/javascript; charset=utf-8"),
+        ("/EcomCraft/js/simple/ai-label.js", "js/simple/ai-label.js", "text/javascript; charset=utf-8"),
         ("/EcomCraft/js/simple/placement.js", "js/simple/placement.js", "text/javascript; charset=utf-8"),
         ("/EcomCraft/js/simple/products.js", "js/simple/products.js", "text/javascript; charset=utf-8"),
         ("/EcomCraft/js/simple/productinfo.js", "js/simple/productinfo.js", "text/javascript; charset=utf-8"),

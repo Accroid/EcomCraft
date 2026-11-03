@@ -1285,5 +1285,15 @@ window.EcomCraftLanguages.en = {
 ,
     "已按模型配方把步数设为 {0}。": "Sampling steps set to {0} from this model's recipe.",
     "已按模型配方把提示词强度设为 {0}。": "Prompt strength set to {0} from this model's recipe.",
-    "简易模式": "Simple mode"
+    "简易模式": "Simple mode",
+    "加 AI 生成标识": "Add the AI-generated label",
+    "导出时在图片角落画上“AI 生成”字样，只改导出的文件，不改原图。规则待核对，默认关闭。": "Draws a short \"AI generated\" text in a corner of the exported files only; the stored works are never changed. The rules are unchecked, so it is off by default.",
+    "这个平台的规则要求加可见 AI 标识，不能关闭（规则待核对）。": "This platform's rules require the visible AI label and it cannot be turned off (rules pending verification).",
+    "这个平台的规则不允许加可见 AI 标识（规则待核对）。": "This platform's rules do not allow a visible AI label (rules pending verification).",
+    "已给 {0} 张“{1}”的导出图加上“AI 生成”标识。": "Added the \"AI generated\" label to {0} exported image(s) of \"{1}\".",
+    "有 {0} 张图的 AI 标识会压到商品，已缩小字号避开。": "The AI label would have covered the product on {0} image(s); the text was shrunk to stay clear.",
+    "有 {0} 张图的 AI 标识避不开商品，已缩小并放在压到最少的角。": "The AI label could not fully avoid the product on {0} image(s); it was shrunk and placed on the corner that covers it least.",
+    "AI 标识字库缺失，有 {0} 张图没有加上标识，请联系管理员。": "The label font is missing, so {0} image(s) went out without the label; contact the administrator.",
+    "有 {0} 张“{1}”的图加 AI 标识会破坏纯白背景，这几张没有加。": "Adding the AI label would break the pure-white border on {0} \"{1}\" image(s); those were exported without it.",
+    "这个平台不允许加可见 AI 标识，{0} 张图按原样导出。": "This platform does not allow a visible AI label; {0} image(s) were exported as is."
 };
