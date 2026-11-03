@@ -582,6 +582,60 @@
         if (schedulers.some(s => s.id === previousScheduler)) { $('scheduler').value = previousScheduler; }
     }
 
+    /** The professional mode's resolution presets (T114): scales the width and height to the chosen pixel count at the same aspect ratio, the way the
+     * server sizes template generations. The recipe's recommendation for this machine's tier is marked and preselected until the user picks a preset;
+     * a size typed by hand or taken from a picture switches the picker to custom. The simple mode always generates near one megapixel. */
+    class ResolutionPicker {
+        static labels = { '': '自定义（按宽高）', '1048576': '1K（约 100 万像素）', '2359296': '1.5K（约 240 万像素）', '4194304': '2K（约 400 万像素）' };
+        static recommended = null;
+        static chosen = false;
+
+        /** Marks the catalog's recommended preset (a value that is no preset marks none) and selects it while the user has not chosen. */
+        static recommend(catalog) {
+            let value = String(catalog?.generation_pixels ?? '');
+            if (value == this.recommended) {
+                return;
+            }
+            this.recommended = value;
+            let select = $('resolution-preset');
+            for (let option of select.options) {
+                let label = tr(this.labels[option.value]);
+                option.textContent = option.value != '' && option.value == value ? label + tr('（推荐）') : label;
+            }
+            if (!this.chosen && value != '' && value in this.labels) {
+                select.value = value;
+                this.apply();
+            }
+        }
+
+        /** Scales the width and height to the selected pixel count, the long side within 2048; custom sizes and video stay as they are. */
+        static apply() {
+            let pixels = Number($('resolution-preset').value);
+            if (!pixels || state.type != 'image') {
+                return;
+            }
+            let step = Number($('width').step) || 16;
+            let aspect = Math.max(1, Number($('width').value) || 1024) / Math.max(1, Number($('height').value) || 1024);
+            let width = Math.sqrt(pixels * aspect);
+            let height = width / aspect;
+            let cap = Math.floor(2048 / step) * step;
+            let over = Math.max(width, height) / cap;
+            if (over > 1) {
+                width /= over;
+                height /= over;
+            }
+            let min = Math.ceil(256 / step) * step;
+            let side = value => Math.max(min, Math.min(cap, Math.round(value / step) * step));
+            $('width').value = side(width);
+            $('height').value = side(height);
+        }
+
+        /** A size the user set by hand or took from a picture: the picker shows custom and leaves the size alone. */
+        static markCustom() {
+            $('resolution-preset').value = '';
+        }
+    }
+
     /** Keeps native workflow defaults separate from edits and from standard-mode form values. */
     class NativeWorkflowForm {
         static selection = '';
@@ -611,6 +665,8 @@
                         this.setValue(control, value);
                     }
                     this.promptsInitialized = true;
+                    // The workflow's saved size gives the aspect ratio; a chosen resolution preset still sets the pixel count.
+                    ResolutionPicker.apply();
                 }
                 else if (this.previous) {
                     for (let key of Object.keys(this.controls)) {
@@ -917,6 +973,7 @@
             $(field).value = Math.max(Math.ceil(256 / step) * step,
                 Math.min(Math.floor(2048 / step) * step, Math.round(suggested / step) * step));
         }
+        ResolutionPicker.apply();
     }
 
     /** One plain sentence about execution servers and available models for the status line above the form. */
@@ -955,6 +1012,7 @@
             if (!Array.isArray(catalog.models)) { throw new ApiError('模型列表格式不兼容，请联系管理员。', 'api_error'); }
             catalog.workflows = Array.isArray(catalog.workflows) ? catalog.workflows : [];
             state.catalog = catalog;
+            ResolutionPicker.recommend(catalog);
             TimeEstimate.refresh();
             populateWorkflows();
             ExecutionServerPicker.load(true);
@@ -1115,6 +1173,7 @@
         $('mode-video').setAttribute('aria-pressed', String(type === 'video'));
         $('video-fields').hidden = type !== 'video';
         $('image-count-row').hidden = type === 'video';
+        $('resolution-row').hidden = type == 'video';
         $('image-mode-tabs').style.display = type === 'video' ? 'none' : '';
         if (type === 'video') { setMode('text2img'); }
         else if (state.mode === 'video') { setMode('text2img'); }
@@ -1427,6 +1486,7 @@
         const align = v => Math.round(v / step) * step;
         $('width').value = Math.max(256, Math.min(2048, align(ref.width)));
         $('height').value = Math.max(256, Math.min(2048, align(ref.height)));
+        ResolutionPicker.markCustom();
     }
 
     /* ============================================================
@@ -6245,6 +6305,16 @@
         $('swap-dims').addEventListener('click', () => {
             const w = $('width').value; $('width').value = $('height').value; $('height').value = w;
         });
+        $('resolution-preset').addEventListener('change', () => {
+            ResolutionPicker.chosen = true;
+            ResolutionPicker.apply();
+        });
+        for (let field of ['width', 'height']) {
+            $(field).addEventListener('input', () => {
+                ResolutionPicker.chosen = true;
+                ResolutionPicker.markCustom();
+            });
+        }
         // A recipe-linked model switch sets the prompt strength programmatically (no input event), so the weakened look
         // of the negative box also syncs on every later change event reaching the document (T126).
         $('cfg').addEventListener('input', updateNegativeEffectLook);

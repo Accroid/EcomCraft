@@ -14,7 +14,7 @@ using SwarmUI.Utils;
 namespace EcomCraftStudio.Studio.PostProcess;
 
 /// <summary>Scales generated works to the output size chosen before generating (local postprocessing, R10.3): pictures are generated at the same aspect ratio
-/// at the recipe's pixel count for this machine's tier (<see cref="OutputSizeRules"/>, T114) and rewritten in place at the exact size, keeping their format and embedded metadata. Runs before
+/// near one megapixel (<see cref="OutputSizeRules"/>) and rewritten in place at the exact size, keeping their format and embedded metadata. Runs before
 /// product preservation, so the original product is pasted back at the final size and never scaled with the picture.</summary>
 public static class OutputResize
 {

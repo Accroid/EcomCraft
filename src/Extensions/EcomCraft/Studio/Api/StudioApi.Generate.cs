@@ -7,7 +7,6 @@ using EcomCraftStudio.Studio.Generation;
 using EcomCraftStudio.Studio.Storage;
 using EcomCraftStudio.Studio.Templates;
 using EcomCraftStudio.Studio.Prompting;
-using EcomCraftStudio.Studio.Setup;
 using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
@@ -85,13 +84,10 @@ public static partial class StudioApi
                 outputSize = Export.ExportService.SlotSize(rawInput["platform"]?.Type == JTokenType.String ? rawInput.Value<string>("platform") : "",
                     TemplateStore.Find(requestedTemplate)?.Template?.Kind);
             }
-            // The generated pixel count follows the current recipe and this machine's tier (T114): native 2K where the card carries it, about one megapixel elsewhere.
-            (int Width, int Height)? generationSize = null;
-            if (outputSize is (int sizeWidth, int sizeHeight))
-            {
-                long generationPixels = ModelRecipes.Current().Recipe?.GenerationPixels.For(await HardwareProbe.CurrentTierAsync()) ?? OutputSizeRules.DefaultGenerationPixels;
-                generationSize = OutputSizeRules.GenerationSize(sizeWidth, sizeHeight, generationPixels);
-            }
+            // Template generations (the simple mode) always run near one megapixel (T114, user decision 2026-11-03); the professional mode picks its own
+            // width and height, starting from the recipe's per-tier recommendation.
+            (int Width, int Height)? generationSize = outputSize is (int sizeWidth, int sizeHeight)
+                ? OutputSizeRules.GenerationSize(sizeWidth, sizeHeight, OutputSizeRules.DefaultGenerationPixels) : null;
             string description = rawInput["description"]?.Type == JTokenType.String ? rawInput.Value<string>("description").Trim() : "";
             string styleId = rawInput["style_id"]?.Type == JTokenType.String ? rawInput.Value<string>("style_id") : "";
             string productTypeId = rawInput["product_type_id"]?.Type == JTokenType.String ? rawInput.Value<string>("product_type_id") : "";

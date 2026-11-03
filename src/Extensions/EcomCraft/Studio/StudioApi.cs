@@ -7,6 +7,7 @@ using EcomCraftStudio.Studio.Generation;
 using EcomCraftStudio.Studio.Storage;
 using EcomCraftStudio.Studio.Templates;
 using EcomCraftStudio.Studio.Prompting;
+using EcomCraftStudio.Studio.Setup;
 using FreneticUtilities.FreneticExtensions;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Accounts;
@@ -121,12 +122,12 @@ public static partial class StudioApi
         return Task.FromResult(CanView(session) ? LocalBackendStatus() : Error("无权访问创作工作台。", "bad_permissions"));
     }
 
-    [API.APIDescription("Read authorized model metadata, discovered workflows and execution server availability. Workflow discovery runs in the background; no cloud calls.", "models: [], local_backends_observed: 0, can_generate: false, cloud_configured: false")]
-    public static Task<JObject> EcomCraftStudioCatalog(Session session)
+    [API.APIDescription("Read authorized model metadata, discovered workflows and execution server availability. Workflow discovery runs in the background; no cloud calls.", "models: [], local_backends_observed: 0, can_generate: false, cloud_configured: false, generation_pixels: 1048576")]
+    public static async Task<JObject> EcomCraftStudioCatalog(Session session)
     {
         if (!CanView(session))
         {
-            return Task.FromResult(Error("无权访问创作工作台或模型列表。", "bad_permissions"));
+            return Error("无权访问创作工作台或模型列表。", "bad_permissions");
         }
         WorkflowDiscovery.EnsureFresh();
         JObject result = new()
@@ -153,13 +154,15 @@ public static partial class StudioApi
             ["loras"] = new JArray(LocalLoras(session).OrderBy(n => n)),
             ["samplers"] = OptionPairs(ComfyUIBackendExtension.Samplers),
             ["schedulers"] = OptionPairs(ComfyUIBackendExtension.Schedulers),
-            ["workflows"] = PublishedWorkflowCatalog(session)
+            ["workflows"] = PublishedWorkflowCatalog(session),
+            // The professional mode's recommended resolution (T114): the current recipe's pixel count for this machine's tier; only a guide (A19).
+            ["generation_pixels"] = ModelRecipes.Current().Recipe?.GenerationPixels.For(await HardwareProbe.CurrentTierAsync()) ?? OutputSizeRules.DefaultGenerationPixels
         };
         foreach (KeyValuePair<string, JToken> entry in LocalBackendStatus())
         {
             result[entry.Key] = entry.Value;
         }
-        return Task.FromResult(result);
+        return result;
     }
 
     internal static JObject Error(string text, string id) => new() { ["error"] = text, ["error_id"] = id };

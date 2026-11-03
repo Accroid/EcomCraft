@@ -2,8 +2,8 @@ using Newtonsoft.Json.Linq;
 
 namespace EcomCraftStudio.Studio.Generation;
 
-/// <summary>The output size chosen before generating: the picture is generated at the same aspect ratio at the recipe's pixel count for this machine's
-/// tier (T114: the model's native size where the card can carry it, a smaller size elsewhere), then scaled to the exact size. Independent of SwarmUI so it can be unit tested.</summary>
+/// <summary>The output size chosen before generating: the picture is generated at the same aspect ratio at a given pixel count (template generations,
+/// that is the simple mode, always near one megapixel; T114), then scaled to the exact size. Independent of SwarmUI so it can be unit tested.</summary>
 public static class OutputSizeRules
 {
     /// <summary>Smallest accepted output side.</summary>
