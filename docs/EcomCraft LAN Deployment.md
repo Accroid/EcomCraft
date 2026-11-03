@@ -29,7 +29,7 @@ Team members only access the platform server. ComfyUI on the execution servers i
 
 3. On another computer, open `http://192.168.1.10:7801/EcomCraft` (use your platform server's address) and confirm you see the login page or the workspace.
 
-## 3. Enable account login (R9.1)
+## 3. Enable account login
 
 With several users, account login must be enabled, with one account per person. The steps are in the "Basic Setup Guide" of [Sharing Your Swarm](Sharing%20Your%20Swarm.md#basic-setup-guide); the key points:
 
@@ -52,7 +52,7 @@ Deleting works in the gallery needs SwarmUI's `user_delete_image` permission and
 
 If you lock yourself out after enabling login, stop the service, open `Data/Settings.fds` in a text editor, set `AuthorizationRequired` back to `false`, and start the service again.
 
-## 4. Per-person queue limit (R9.2)
+## 4. Per-person queue limit
 
 How many images each person can have queued at once is set by the `MaxQueued` value of their role. Set it per role under **Server → Users → Roles**:
 
@@ -85,14 +85,14 @@ ComfyUI has no login: anyone who can reach its port can submit any workflow and 
 3. On the platform server, register the server as a **ComfyUI API By URL** backend and enter its display name as the backend title. Set the name before reviewing the workflows on that server and do not change it afterwards: workflow IDs start with the server name. For detailed steps and the address ranges that can be registered, see [Workflows: LAN execution servers](EcomCraft%20ComfyUI%20Workflows.md#lan-execution-servers).
 4. Check: on another member's computer, `http://192.168.1.21:8188` should **not** open; on the platform server it should.
 
-## 6. Images and companion nodes on execution servers (A34)
+## 6. Images and companion nodes on execution servers
 
 Reference images, product photos and product canvases ride inside the generation request itself (ComfyUI's `SwarmLoadImageB64` node); they are never written to the execution server's ComfyUI input folder (`input/`), so no user pictures are left behind on execution servers.
 
 1. **Companion nodes**: the standard workflows, the direct-fusion trial and the cut-out need SwarmUI's companion nodes. The local self-starting ComfyUI gets them installed automatically; a LAN execution server needs the `SwarmComfyCommon` (contains `SwarmLoadImageB64`) and `SwarmComfyExtra` (contains `SwarmRemBg`) folders from `src/BuiltinExtensions/ComfyUIBackend/ExtraNodes/` in the SwarmUI folder copied into ComfyUI's `custom_nodes/`, followed by a ComfyUI restart. A server missing the node is never chosen, and there is no fallback to uploading images. Steps: [Workflows: LAN execution servers](EcomCraft%20ComfyUI%20Workflows.md#lan-execution-servers).
 2. **Manual cleanup of leftovers from older versions**: before this change (and whenever the professional mode runs a published native workflow with image parameters), images were written into the execution server's ComfyUI `input/` folder under file names starting with `init_image_sui_backend_`. Leftovers on the local self-starting server are deleted automatically at every startup; leftovers on a LAN server cannot be removed remotely — clean them on that device: in the ComfyUI install's `input/` folder, delete every file whose name starts with `init_image_sui_backend_` and touch nothing else. In the current version, the professional mode with published native workflows that have image parameters still writes such files and deletes them when the task ends (locally); that is SwarmUI's native behavior.
 
-## 7. Who can see works on shared storage (D9)
+## 7. Who can see works on shared storage
 
 In the workspace, works are visible only to their owner by default. That is only a platform-level restriction; **the storage layer is not isolated per user**:
 

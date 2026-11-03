@@ -29,7 +29,7 @@ SwarmUI 账号系统的通用说明见 [Sharing Your Swarm（分享你的 SwarmU
 
 3. 在另一台电脑上用浏览器打开 `http://192.168.1.10:7801/EcomCraft`（换成你的平台服务器地址），确认能看到登录页或工作台。
 
-## 3. 开启账号登录（R9.1）
+## 3. 开启账号登录
 
 多人使用时必须开启账号登录，每人一个账号。操作步骤见 [Sharing Your Swarm](Sharing%20Your%20Swarm.zh-CN.md#基础共享设置) 的“基础共享设置”，要点如下：
 
@@ -52,7 +52,7 @@ SwarmUI 账号系统的通用说明见 [Sharing Your Swarm（分享你的 SwarmU
 
 如果开启登录后自己进不去，先关闭服务，用文本编辑器打开 `Data/Settings.fds`，把 `AuthorizationRequired` 改回 `false`，再启动服务。
 
-## 4. 每人排队上限（R9.2）
+## 4. 每人排队上限
 
 每人能同时排队的图片数，由所在角色的 `MaxQueued` 决定。在 **Server → Users → Roles** 中逐个角色设置：
 
@@ -85,14 +85,14 @@ ComfyUI 没有登录验证：能连上它端口的人，就能直接提交任意
 3. 在平台服务器上用 **ComfyUI API By URL** 登记这台服务器，并在后端标题中填写显示名称。审核这台服务器上的工作流之前先设好名称，之后不要修改：工作流 ID 以服务器名称开头。详细步骤和可登记的地址范围见 [工作流文档：局域网执行服务器](EcomCraft%20ComfyUI%20工作流.zh-CN.md#局域网执行服务器)。
 4. 验证：在另一台成员电脑上打开 `http://192.168.1.21:8188`，应该**打不开**；在平台服务器上打开，应该能打开。
 
-## 6. 执行服务器的图片和配套节点（A34）
+## 6. 执行服务器的图片和配套节点
 
 参考图、商品图和商品画布只随生成请求内嵌发送（ComfyUI 的 `SwarmLoadImageB64` 节点），不写进执行服务器的 ComfyUI 输入目录（`input/`），因此不会在执行服务器上留下用户图片。
 
 1. **配套节点**：标准工作流、直接融合和抠图需要 SwarmUI 的配套节点。本机自启动 ComfyUI 由平台自动安装；局域网执行服务器需要把 SwarmUI 目录里 `src/BuiltinExtensions/ComfyUIBackend/ExtraNodes/` 下的 `SwarmComfyCommon`（含 `SwarmLoadImageB64`）和 `SwarmComfyExtra`（含 `SwarmRemBg`）复制到 ComfyUI 的 `custom_nodes/` 并重启 ComfyUI。缺节点的服务器不会被选中，也不会回退到上传图片的方式。安装步骤见[工作流文档：局域网执行服务器](EcomCraft%20ComfyUI%20工作流.zh-CN.md#局域网执行服务器)。
 2. **旧版本残留的手动清理**：本次改动之前（或用专业模式的原生工作流出图时），图片会以 `init_image_sui_backend_` 开头的文件名写进执行服务器 ComfyUI 的 `input/` 目录。本机自启动服务器的残留会在每次启动时自动删除；局域网服务器上的残留无法远程删除，需要在该设备上手动处理：进入 ComfyUI 安装目录的 `input/` 文件夹，删除所有 `init_image_sui_backend_` 开头的文件即可，其他文件不要动。当前版本的专业模式若使用带图片参数的已发布原生工作流，仍会写入这类文件并在任务结束后删除（本机），属 SwarmUI 原生行为。
 
-## 7. 作品放在共享存储时谁能看到（D9）
+## 7. 作品放在共享存储时谁能看到
 
 工作台里的作品默认只有本人能看到。但这只是平台内的限制，**存储层不按用户隔离**：
 

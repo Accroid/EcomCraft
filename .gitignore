@@ -45,48 +45,28 @@ plan.md
 PLAN.md
 *-plan.md
 /docs/*
-!/docs/EcomCraft *
+!/docs/README.md
 !/docs/README.zh-CN.md
 !/docs/*.zh-CN.md
+/docs/EcomCraft *
+!/docs/EcomCraft ComfyUI Workflows.md
+!/docs/EcomCraft ComfyUI 工作流.zh-CN.md
+!/docs/EcomCraft LAN Deployment.md
+!/docs/EcomCraft 局域网部署指南.zh-CN.md
+!/docs/EcomCraft Prompt Enhancement.md
+!/docs/EcomCraft 提示词优化指南.zh-CN.md
+!/docs/EcomCraft Upgrade.md
+!/docs/EcomCraft Upgrade.zh-CN.md
 !/docs/Features/
 !/docs/Features/*.zh-CN.md
 /src/Extensions/EcomCraft/README.md
 /src/Extensions/EcomCraft/docs/
 /src/Extensions/EcomCraft/Data/
 /src/Extensions/EcomCraft/Tests/
-/EcomCraft_产品需求与开发说明_V0.1.md
 .claude/
 
-# 内部规划、需求、设计与测试文档不上传（本地保留）
+# 内部开发文件不上传（本地保留）；根目录等处的内部文档清单在本地 .git/info/exclude，
+# docs/ 下以 “EcomCraft ” 开头的文件一律不上传，只有上面显式放行的 8 份对外文档例外
 /AGENTS.md
 /CLAUDE.md
 /.agents/
-/EcomCraft 实施计划.md
-/EcomCraft 重构计划.md
-/docs/EcomCraft Architecture.md
-/docs/EcomCraft Architecture.zh-CN.md
-/docs/EcomCraft Implementation Plan.md
-/docs/EcomCraft 实施计划.zh-CN.md
-/docs/EcomCraft Refactoring Plan.md
-/docs/EcomCraft 重构计划.zh-CN.md
-/docs/EcomCraft Product Realignment Plan.md
-/docs/EcomCraft 产品调整方案.zh-CN.md
-/docs/EcomCraft UI Redesign.md
-/docs/EcomCraft 界面改版需求.zh-CN.md
-/docs/EcomCraft Simple Mode Redesign.md
-/docs/EcomCraft 简易模式改版需求.zh-CN.md
-/docs/EcomCraft 简易模式改版原型.html
-/docs/EcomCraft Reference Images.md
-/docs/EcomCraft 参考图需求.zh-CN.md
-/docs/EcomCraft LAN Multi-Server Platform Requirements.md
-/docs/EcomCraft 局域网多服务器平台需求.zh-CN.md
-/docs/EcomCraft Workspace UI Design.md
-/docs/EcomCraft 工作台界面设计.zh-CN.md
-/docs/EcomCraft Platform Preset Slots.md
-/docs/EcomCraft 平台预设槽位设计.zh-CN.md
-/docs/EcomCraft 开发总表.xlsx
-/docs/EcomCraft Reference Route Trial.md
-/docs/EcomCraft 参考图路线实测.zh-CN.md
-/docs/EcomCraft 参考图路线实测记录表.csv
-/docs/EcomCraft Regression Checklist.md
-/docs/EcomCraft 回归清单.zh-CN.md
