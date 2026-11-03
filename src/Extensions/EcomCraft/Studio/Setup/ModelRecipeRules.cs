@@ -55,6 +55,12 @@ public static class ModelRecipeRules
     /// <summary>Bounds of the encoder pixel budget.</summary>
     private const long MinResolutionBudget = 256 * 256, MaxResolutionBudget = 4096 * 4096;
 
+    /// <summary>Default pixel count pictures are generated at when a recipe declares none (F73's one megapixel).</summary>
+    private const long DefaultGenerationPixels = 1024 * 1024;
+
+    /// <summary>Bounds of the generated pixel count: no lower than 512 × 512, no higher than the 2K square of A24.</summary>
+    private const long MinGenerationPixels = 512 * 512, MaxGenerationPixels = 2048 * 2048;
+
     /// <summary>Default and bounds of how many images one request may feed the encoder.</summary>
     private const int DefaultMaxInputImages = 1, MaxMaxInputImages = 16;
 
@@ -167,6 +173,17 @@ public static class ModelRecipeRules
             HardwareRules.Normalize(string.IsNullOrWhiteSpace(tier) ? HardwareRules.Unknown : tier), out int value) ? value : AutoDefault;
     }
 
+    /// <summary>The pixel count pictures are generated at per hardware tier (T114): a model's native size where the card can carry it, a smaller
+    /// size scaled up afterwards where it cannot. The tier only guides this default and never blocks a run (A19).</summary>
+    /// <param name="Default">The pixel count for tiers <see cref="ByTier"/> does not list.</param>
+    /// <param name="ByTier">Per-tier pixel counts (HardwareRules tier names to values).</param>
+    public sealed record class GenerationPixelsRule(long Default, Dictionary<string, long> ByTier)
+    {
+        /// <summary>The pixel count of one hardware tier ("" or an unlisted tier uses <see cref="Default"/>; a missing tier reading counts as unknown).</summary>
+        public long For(string tier) => ByTier.TryGetValue(
+            HardwareRules.Normalize(string.IsNullOrWhiteSpace(tier) ? HardwareRules.Unknown : tier), out long value) ? value : Default;
+    }
+
     /// <summary>The three model file names the standard workflows fill into their loaders.</summary>
     /// <param name="Unet">The diffusion model file; "" keeps the blueprint's own saved value.</param>
     /// <param name="TextEncoder">The text encoder file; "" keeps the blueprint's own value.</param>
@@ -217,12 +234,13 @@ public static class ModelRecipeRules
     /// <param name="ResolutionBudget">The encoder's pixel budget per image.</param>
     /// <param name="SizeStep">Widths and heights must be multiples of this.</param>
     /// <param name="MaxEdge">The longest edge generated and exported images may have; never above 2048 (A24).</param>
+    /// <param name="GenerationPixels">The pixel count pictures are generated at per hardware tier (T114); never null.</param>
     /// <param name="PromptSyntax">How images are referenced in prompts, such as "&lt;image1&gt;"; "" when plain text.</param>
     /// <param name="Capabilities">The capability flags.</param>
     /// <param name="Variants">The hardware variants, in file order; the first matching one wins.</param>
     public sealed record class Recipe(string Id, LocalizedText Name, string License, string MinComfyUI, List<string> Nodes, MatchRule Match,
         Dictionary<string, BlueprintEntry> Blueprints, SamplingRule Sampling, SecondPassRule SecondPass, ReferenceEditRule ReferenceEdit,
-        long ResolutionBudget, int SizeStep, int MaxEdge,
+        long ResolutionBudget, int SizeStep, int MaxEdge, GenerationPixelsRule GenerationPixels,
         string PromptSyntax, CapabilityRule Capabilities, List<Variant> Variants);
 
     /// <summary>Parses a recipe book from model-recipes.json text. Unreadable text, a missing "models" array, or an entry without an id yields
@@ -562,6 +580,7 @@ public static class ModelRecipeRules
             BoundedWhole(entry["resolution_budget"], DefaultResolutionBudget, MinResolutionBudget, MaxResolutionBudget),
             (int)BoundedWhole(entry["size_step"], DefaultSizeStep, MinSizeStep, MaxSizeStep),
             (int)BoundedWhole(entry["max_edge"], DefaultMaxEdge, MinMaxEdge, MaxMaxEdge),
+            ParseGenerationPixels(entry["generation_pixels"]),
             (entry["prompt_syntax"]?.ToString() ?? "").Trim(),
             new CapabilityRule(
                 capabilities["edit"]?.Value<bool?>() ?? false,
@@ -734,6 +753,27 @@ public static class ModelRecipeRules
             resolutionInput.Length > 0 ? resolutionInput : "resolution",
             (int)BoundedWhole(auto["default"], DefaultEditResolution, MinEditResolution, MaxEditResolution),
             byTier);
+    }
+
+    /// <summary>The generated pixel count per tier (T114): a whole number applies to every tier, an object gives a default plus per-tier values; a
+    /// missing or unusable value falls back to one megapixel, and per-tier values outside the bounds are dropped.</summary>
+    private static GenerationPixelsRule ParseGenerationPixels(JToken token)
+    {
+        if (token is not JObject obj)
+        {
+            return new GenerationPixelsRule(BoundedWhole(token, DefaultGenerationPixels, MinGenerationPixels, MaxGenerationPixels), []);
+        }
+        Dictionary<string, long> byTier = [];
+        foreach (JProperty property in (obj["by_tier"] as JObject ?? new JObject()).Properties())
+        {
+            string tier = HardwareRules.Normalize(property.Name);
+            long value = BoundedWhole(property.Value, 0, MinGenerationPixels, MaxGenerationPixels);
+            if (tier.Length > 0 && value > 0)
+            {
+                byTier[tier] = value;
+            }
+        }
+        return new GenerationPixelsRule(BoundedWhole(obj["default"], DefaultGenerationPixels, MinGenerationPixels, MaxGenerationPixels), byTier);
     }
 
     /// <summary>The auto pixel budgets used when no recipe declares a reference-edit block: today's values, kept so a missing recipe never breaks

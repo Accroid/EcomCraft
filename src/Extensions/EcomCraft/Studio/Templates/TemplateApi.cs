@@ -319,7 +319,7 @@ public static class TemplateApi
         }
         if (generationSize is (int generateWidth, int generateHeight))
         {
-            // The output size chosen before generating: generated at its aspect ratio near one megapixel, scaled to the exact size afterwards (OutputResize).
+            // The output size chosen before generating: generated at its aspect ratio at the recipe's pixel count for this machine's tier, scaled to the exact size afterwards (OutputResize).
             request["width"] = generateWidth;
             request["height"] = generateHeight;
         }

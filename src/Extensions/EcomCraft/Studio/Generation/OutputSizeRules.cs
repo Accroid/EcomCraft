@@ -2,8 +2,8 @@ using Newtonsoft.Json.Linq;
 
 namespace EcomCraftStudio.Studio.Generation;
 
-/// <summary>The output size chosen before generating: the picture is generated at the same aspect ratio near one megapixel, where the models do best, and
-/// then scaled to the exact size, so a 2000 × 2000 main image is neither slow nor repeated by generating it directly. Independent of SwarmUI so it can be unit tested.</summary>
+/// <summary>The output size chosen before generating: the picture is generated at the same aspect ratio at the recipe's pixel count for this machine's
+/// tier (T114: the model's native size where the card can carry it, a smaller size elsewhere), then scaled to the exact size. Independent of SwarmUI so it can be unit tested.</summary>
 public static class OutputSizeRules
 {
     /// <summary>Smallest accepted output side.</summary>
@@ -16,8 +16,8 @@ public static class OutputSizeRules
     /// Export presets accept the same range, so a platform slot above it is refused. The number also appears in the request error messages.</summary>
     public static int MaxSide => (int)Math.Clamp(MaxEdgeSource(), MinSide, 2048);
 
-    /// <summary>Pixel count pictures are generated at.</summary>
-    public const long GenerationPixels = 1024 * 1024;
+    /// <summary>Pixel count pictures are generated at when no recipe gives one (F73's one megapixel).</summary>
+    public const long DefaultGenerationPixels = 1024 * 1024;
 
     /// <summary>Generated sides are multiples of the current recipe's size step, read per call like the edge cap (M1: the official Turbo
     /// template prefers multiples of 32); tests keep the pre-recipe default.</summary>
@@ -49,14 +49,22 @@ public static class OutputSizeRules
         return true;
     }
 
-    /// <summary>The size to generate at for an output size: the same aspect ratio at about <see cref="GenerationPixels"/>, each side a multiple of
-    /// <see cref="Step"/> within <see cref="MinGenerated"/>–<see cref="MaxGenerated"/>.</summary>
-    public static (int Width, int Height) GenerationSize(int width, int height)
+    /// <summary>The size to generate at for an output size: the same aspect ratio at about <paramref name="pixels"/>, each side a multiple of
+    /// <see cref="Step"/> within <see cref="MinGenerated"/> and the recipe's longest-edge cap (A24). A ratio whose long side would pass the cap is
+    /// scaled down whole, keeping its aspect, instead of having that one side clamped.</summary>
+    public static (int Width, int Height) GenerationSize(int width, int height, long pixels)
     {
         double aspect = (double)Math.Max(1, width) / Math.Max(1, height);
-        double w = Math.Sqrt(GenerationPixels * aspect);
+        double w = Math.Sqrt(Math.Max(1, pixels) * aspect);
         double h = w / aspect;
-        int side(double value) => Math.Clamp((int)Math.Round(value / Step) * Step, MinGenerated, MaxGenerated);
+        int cap = Math.Max(MinGenerated, Math.Min(MaxGenerated, MaxSide) / Step * Step);
+        double over = Math.Max(w, h) / cap;
+        if (over > 1)
+        {
+            w /= over;
+            h /= over;
+        }
+        int side(double value) => Math.Clamp((int)Math.Round(value / Step) * Step, MinGenerated, cap);
         return (side(w), side(h));
     }
 
