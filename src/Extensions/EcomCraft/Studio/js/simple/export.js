@@ -104,8 +104,20 @@ class SimpleExportPart {
         this.renderSelling();
     }
 
-    /** Shows the selling-image panel once there are candidates (F47); it works on exactly one picked image. Points planned in the storyboard
-     * and the brand kit's first color are offered once as a start. */
+    /** The selling info of the current product in the page's language (F79, T99), falling back to Chinese when that language has none, so the
+     * panel's prefill is what the user filled in for this market; the user can still edit it. */
+    static savedSellingInfo() {
+        let info = this.product && this.product.id ? this.product.info || {} : null;
+        if (!info) {
+            return null;
+        }
+        let language = I18n.current == 'en' ? 'en' : 'zh-CN';
+        return info[language] || info['zh-CN'] || null;
+    }
+
+    /** Shows the selling-image panel once there are candidates (F47); it works on exactly one picked image. The product's saved selling info
+     * (F79, T99) prefills title and points once — the current language first, Chinese as the fallback — and before that the storyboard points and
+     * the brand kit's first color are offered as a start. */
     static renderSelling() {
         let tr = this.api.tr;
         let panel = this.api.$('simple-selling');
@@ -115,11 +127,27 @@ class SimpleExportPart {
         }
         if (!this.selling.prefilled) {
             this.selling.prefilled = true;
-            let points = this.storyboard.points.map(point => String(point).trim()).filter(point => point).slice(0, 3);
-            for (let [index, point] of points.entries()) {
-                let input = this.api.$(`simple-selling-point-${index + 1}`);
-                if (!input.value) {
-                    input.value = point.slice(0, 16);
+            let saved = this.savedSellingInfo();
+            let filled = 0;
+            if (saved) {
+                let title = saved.display_name || (this.product && this.product.name ? this.product.name : '');
+                if (title) {
+                    this.api.$('simple-selling-title').value = title.slice(0, 20);
+                    filled++;
+                }
+                for (let [index, point] of (saved.points || []).map(point => String(point).trim()).filter(point => point).slice(0, 3).entries()) {
+                    this.api.$(`simple-selling-point-${index + 1}`).value = point.slice(0, 16);
+                    filled++;
+                }
+            }
+            if (!filled) {
+                // No saved info (F79, T99) for this product: the storyboard points still offer a start, as before.
+                let points = this.storyboard.points.map(point => String(point).trim()).filter(point => point).slice(0, 3);
+                for (let [index, point] of points.entries()) {
+                    let input = this.api.$(`simple-selling-point-${index + 1}`);
+                    if (!input.value) {
+                        input.value = point.slice(0, 16);
+                    }
                 }
             }
         }
@@ -246,6 +274,26 @@ class SimpleExportPart {
         return slot ? slot.name : id;
     }
 
+    /** Checks the selling-image title and points for advertising wording (F79, T99): notices with a suggestion only, never a block; typing
+     * schedules one shared check. */
+    static scheduleSellingClaims() {
+        clearTimeout(this.sellingClaimTimer);
+        this.sellingClaimTimer = setTimeout(async () => {
+            let texts = [this.api.$('simple-selling-title').value, ...[1, 2, 3].map(index => this.api.$(`simple-selling-point-${index}`).value)].filter(text => text.trim());
+            if (!texts.length) {
+                this.renderClaims([], this.api.$('simple-selling-claims'));
+                return;
+            }
+            try {
+                let result = await this.api.request('EcomCraftStudioClaimCheck', { text: texts.join('\n') });
+                this.renderClaims(result.hits || [], this.api.$('simple-selling-claims'));
+            }
+            catch (error) {
+                // A failed check never blocks the selling image; the notices just stay as they were.
+            }
+        }, 600);
+    }
+
     /** Selling-point image controls (F47). */
     static bindSelling() {
         let $ = this.api.$;
@@ -260,6 +308,10 @@ class SimpleExportPart {
             this.selling.accentTouched = true;
         });
         $('simple-selling-run').addEventListener('click', () => this.makeSellingImage());
+        // Advertising wording notices (F79, T99) while writing the selling image's own text.
+        for (let id of ['simple-selling-title', 'simple-selling-point-1', 'simple-selling-point-2', 'simple-selling-point-3']) {
+            $(id).addEventListener('input', () => this.scheduleSellingClaims());
+        }
     }
 
     /** Export buttons and the output size choice (F73). */

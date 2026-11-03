@@ -224,8 +224,21 @@ public static class ProductLibrary
         }
     }
 
+    /// <summary>The selling info of one language as its owner sees it (F79, T99): display name, points, parameters and size, nothing else.</summary>
+    private static JObject SpecsJson(ProductSpecs specs)
+    {
+        return new JObject()
+        {
+            ["display_name"] = specs?.DisplayName ?? "",
+            ["points"] = new JArray(specs?.Points ?? []),
+            ["params"] = new JArray((specs?.Params ?? []).Select(param => new JObject() { ["name"] = param.Name, ["value"] = param.Value })),
+            ["size"] = specs?.Size ?? ""
+        };
+    }
+
     /// <summary>A product as its owner sees it: no file locations. The first angle is the main image (F84); the historical top-level fields mirror it
-    /// and keep the plain main-image address, while every entry of the angle list names its own angle (see <see cref="ProductAngleRules.ImageRoute"/>).</summary>
+    /// and keep the plain main-image address, while every entry of the angle list names its own angle (see <see cref="ProductAngleRules.ImageRoute"/>).
+    /// The selling info (F79, T99) follows per language; languages nothing was filled into are left out.</summary>
     private static JObject Json(ProductRecord record)
     {
         ProductAngle main = record.MainAngle() ?? new ProductAngle() { Original = record.Original, Cutout = record.Cutout, X = record.X, Y = record.Y, Size = record.Size };
@@ -238,6 +251,8 @@ public static class ProductLibrary
             ["placement"] = new JObject() { ["x"] = main.X, ["y"] = main.Y, ["size"] = main.Size },
             ["image"] = ProductAngleRules.ImageRoute(record.Id, null, false),
             ["cutout_image"] = main.Cutout is null ? null : ProductAngleRules.ImageRoute(record.Id, null, true),
+            ["info"] = new JObject((record.Info ?? []).Where(entry => ProductInfoRules.IsFilled(entry.Value))
+                .Select(entry => new JProperty(entry.Key, SpecsJson(entry.Value)))),
             ["angles"] = new JArray(record.Angles.Select(angle => new JObject()
             {
                 ["id"] = angle.Id,
@@ -270,16 +285,22 @@ public static class ProductLibrary
         }
     }
 
-    [API.APIDescription("List the current account's saved products (newest first), without file locations.", "products: [{ id: \"…\", name: \"\", has_cutout: true }]")]
-    public static Task<JObject> EcomCraftStudioProducts(Session session)
+    [API.APIDescription("List the current account's saved products (newest first), without file locations; each product's selling info (F79, T99) follows per language (display_name, points, params, size; unfilled languages left out). suggest_ready tells whether a prompt model is configured, so the page offers model-suggested selling points only when there is one.", "products: [{ id: \"…\", name: \"\", has_cutout: true }], suggest_ready: true")]
+    public static async Task<JObject> EcomCraftStudioProducts(Session session)
     {
         if (!StudioApi.CanView(session))
         {
-            return Task.FromResult(StudioApi.Error("无权访问创作工作台。", "bad_permissions"));
+            return StudioApi.Error("无权访问创作工作台。", "bad_permissions");
         }
+        // Read outside the index lock: it is a settings read, not an index change, and must not block the lock on I/O.
+        bool suggestReady = await Prompting.PromptService.PromptModelConfigured();
         lock (Lock)
         {
-            return Task.FromResult(new JObject() { ["products"] = new JArray(Loaded().ForUser(session.User.UserID).Select(Json)) });
+            return new JObject()
+            {
+                ["products"] = new JArray(Loaded().ForUser(session.User.UserID).Select(Json)),
+                ["suggest_ready"] = suggestReady
+            };
         }
     }
 
@@ -446,6 +467,55 @@ public static class ProductLibrary
             }
             if (!Save())
             {
+                return Task.FromResult(SaveFailed());
+            }
+            return Task.FromResult(new JObject() { ["product"] = Json(record) });
+        }
+    }
+
+    [API.APIDescription("Save the selling info of one language of one of the current account's products (F79, T99): display_name (up to 60 characters), up to 5 points of 40 characters, up to 20 params of name (30) and value (60), and size (60). Info is kept per language — zh-CN and en — and is never machine-translated; an all-empty entry clears the language. Only the owner's product can be changed. rawInput is the root request JSON.", "product: { id: \"…\" }")]
+    public static Task<JObject> EcomCraftStudioProductSaveInfo(Session session, JObject rawInput)
+    {
+        if (!StudioApi.CanView(session))
+        {
+            return Task.FromResult(StudioApi.Error("无权访问创作工作台。", "bad_permissions"));
+        }
+        string language = rawInput["language"]?.ToString();
+        JObject info = rawInput["info"] as JObject;
+        if (ProductInfoRules.LanguageId(language) is null || info is null)
+        {
+            return Task.FromResult(StudioApi.Error("卖点信息请求无效。", "invalid_parameters"));
+        }
+        ProductSpecs specs = new()
+        {
+            DisplayName = info["display_name"]?.Type == JTokenType.String ? info.Value<string>("display_name") : "",
+            Points = [.. (info["points"] as JArray ?? new JArray()).Where(point => point.Type == JTokenType.String).Select(point => point.ToString())],
+            Params = [.. (info["params"] as JArray ?? new JArray()).OfType<JObject>().Where(param => param["name"]?.Type == JTokenType.String && param["value"]?.Type == JTokenType.String)
+                .Select(param => new ProductParam() { Name = param.Value<string>("name"), Value = param.Value<string>("value") })],
+            Size = info["size"]?.Type == JTokenType.String ? info.Value<string>("size") : ""
+        };
+        (ProductSpecs cleaned, string cleanError) = ProductInfoRules.CleanSpecs(specs);
+        if (cleanError is not null)
+        {
+            return Task.FromResult(StudioApi.Error(cleanError, "invalid_product_info"));
+        }
+        lock (Lock)
+        {
+            ProductIndex index = Loaded();
+            ProductRecord record = index.Find(session.User.UserID, rawInput["product_id"]?.ToString());
+            if (record is null)
+            {
+                return Task.FromResult(StudioApi.Error("商品不存在，请刷新商品库。", "task_not_found"));
+            }
+            string error = index.SaveInfo(session.User.UserID, record.Id, language, cleaned, out ProductSpecs previous);
+            if (error is not null)
+            {
+                return Task.FromResult(StudioApi.Error(error, "invalid_parameters"));
+            }
+            if (!Save())
+            {
+                // A failed save puts the previous entry back, so the index in memory never drifts from the file.
+                index.SaveInfo(session.User.UserID, record.Id, language, previous, out _);
                 return Task.FromResult(SaveFailed());
             }
             return Task.FromResult(new JObject() { ["product"] = Json(record) });

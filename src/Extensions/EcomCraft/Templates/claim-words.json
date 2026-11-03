@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "note": "Advertising-claim wording checks (F79, T99): the words the workspace only notices, never blocks. verified is true only when basis cites the provision's own text; every other entry marks common enforcement practice and still has to be checked against the official rules before relying on it. Administrators can replace this whole file with Data/EcomCraft/claim-words.json in the same format (the same mechanism as platforms.json); a damaged override falls back to this built-in file. This list was written offline on 2026-11-03 without a legal review: no entry is legal advice, and none of it was checked against an official source online.",
+  "words": [
+    {
+      "word": "国家级",
+      "category": "绝对化用语",
+      "basis": "《中华人民共和国广告法》第九条第（三）项：广告不得使用“国家级”、“最高级”、“最佳”等用语。",
+      "verified": true,
+      "suggestion": "改为具体事实，例如认证名称、编号和颁发机构。"
+    },
+    {
+      "word": "最高级",
+      "category": "绝对化用语",
+      "basis": "《中华人民共和国广告法》第九条第（三）项：广告不得使用“国家级”、“最高级”、“最佳”等用语。",
+      "verified": true,
+      "suggestion": "改为具体事实，例如检测数据和适用范围。"
+    },
+    {
+      "word": "最佳",
+      "category": "绝对化用语",
+      "basis": "《中华人民共和国广告法》第九条第（三）项：广告不得使用“国家级”、“最高级”、“最佳”等用语。",
+      "verified": true,
+      "suggestion": "改为具体优点，例如“适合××场景”“××小时保湿”。"
+    },
+    {
+      "word": "最好",
+      "category": "绝对化用语",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "改为具体优点，并写清适用条件。"
+    },
+    {
+      "word": "最强",
+      "category": "绝对化用语",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "改为可查证的数据，例如功率、容量。"
+    },
+    {
+      "word": "最快",
+      "category": "绝对化用语",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "改为实测数据并注明测试条件。"
+    },
+    {
+      "word": "最低价",
+      "category": "绝对化用语",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "改为具体价格或优惠信息。"
+    },
+    {
+      "word": "全网最低",
+      "category": "绝对化用语",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "改为具体价格或优惠信息。"
+    },
+    {
+      "word": "史上最",
+      "category": "绝对化用语",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "删掉“史上最”，只写具体改进点。"
+    },
+    {
+      "word": "第一",
+      "category": "排序或销量声明",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "除非有能公示的评比依据，否则删掉；可改为“热卖”“常回购”等不涉及排名的说法。"
+    },
+    {
+      "word": "销量第一",
+      "category": "排序或销量声明",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "如需保留，写明统计口径和时间段，并留存证明。"
+    },
+    {
+      "word": "排名第一",
+      "category": "排序或销量声明",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "写明评比方、时间和名次依据，并留存证明。"
+    },
+    {
+      "word": "顶级",
+      "category": "绝对化用语",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "改为具体材质、工艺或标准。"
+    },
+    {
+      "word": "极品",
+      "category": "绝对化用语",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "改为具体材质、工艺或标准。"
+    },
+    {
+      "word": "极致",
+      "category": "绝对化用语",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "改为具体表现，例如“贴合度提升”加数据。"
+    },
+    {
+      "word": "世界级",
+      "category": "绝对化用语",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "改为具体认证或标准名称。"
+    },
+    {
+      "word": "唯一",
+      "category": "绝对承诺",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "除非能证明独有，否则改为具体差异点。"
+    },
+    {
+      "word": "独家",
+      "category": "绝对承诺",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "除非有授权文件，否则改为具体差异点。"
+    },
+    {
+      "word": "首选",
+      "category": "排序或销量声明",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "改为适用人群或场景，例如“干皮可用”。"
+    },
+    {
+      "word": "王牌",
+      "category": "排序或销量声明",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "改为“主打”“经典款”等不涉及排名的说法。"
+    },
+    {
+      "word": "冠军",
+      "category": "排序或销量声明",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "写明比赛名称和年份，并留存证明。"
+    },
+    {
+      "word": "100%",
+      "category": "绝对承诺",
+      "basis": "常见执法口径，待核对官方规定。",
+      "verified": false,
+      "suggestion": "改为具体比例或适用范围，例如“99% 成分来自植物提取物”须有检测支持。"
+    }
+  ]
+}

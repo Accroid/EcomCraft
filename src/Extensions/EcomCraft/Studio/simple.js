@@ -25,9 +25,13 @@ class SimpleMode {
     static promptUsed = null;
     static storyboard = { points: [''], shots: [], running: false };
     static selling = { layout: 'banner', running: false, accentTouched: false, prefilled: false };
+    /** The debounce timer of the selling image's advertising-wording check (F79, T99). */
+    static sellingClaimTimer = null;
     static brandKits = [];
     static brandEditor = null;
     static brandSaving = false;
+    /** Whether a prompt model is configured (F79, T99), from the product list; the selling-info dialog hides its suggest button without one. */
+    static suggestReady = false;
     static product = null;
     static products = [];
     /** "Make again with the same settings" (F04): the template, seed and prompt of a filed work, applied to the next single generation with that template. */
@@ -170,6 +174,7 @@ class SimpleMode {
         });
         this.bindBatch();
         this.bindProductControls();
+        this.bindProductInfo();
         this.bindExport();
         this.bindResults();
         let saved = api.readStorage(this.storageKey);
@@ -254,6 +259,7 @@ class SimpleMode {
         this.renderPromptUsed();
         this.renderTasks();
         this.renderProducts();
+        this.renderSellingInfo();
         this.renderStoryboard();
         this.renderVision();
         this.update();

@@ -97,6 +97,8 @@ public class EcomCraft : Extension
         API.RegisterAPICall(PromptService.EcomCraftStudioSetVisionModel, true, Permissions.EditServerSettings);
         API.RegisterAPICall(PromptService.EcomCraftStudioVisionDeviceCheck, true, Permissions.EditServerSettings);
         API.RegisterAPICall(PromptService.EcomCraftStudioStoryboard, false, Permissions.BasicImageGeneration);
+        API.RegisterAPICall(PromptService.EcomCraftStudioProductSuggestPoints, false, Permissions.BasicImageGeneration);
+        API.RegisterAPICall(ClaimWords.EcomCraftStudioClaimCheck, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(PromptService.EcomCraftPromptSettings, true, Permissions.EditServerSettings);
         API.RegisterAPICall(VisionModelInstall.EcomCraftStudioVisionInstall, true, Permissions.EditServerSettings);
         API.RegisterAPICall(VisionModelInstall.EcomCraftStudioVisionInstallStatus, false, Permissions.EditServerSettings);
@@ -108,6 +110,7 @@ public class EcomCraft : Extension
         API.RegisterAPICall(EcomCraftStudio.Studio.Products.ProductLibrary.EcomCraftStudioProducts, false, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(EcomCraftStudio.Studio.Products.ProductLibrary.EcomCraftStudioProductSave, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(EcomCraftStudio.Studio.Products.ProductLibrary.EcomCraftStudioProductUpdate, true, Permissions.FundamentalGenerateTabAccess);
+        API.RegisterAPICall(EcomCraftStudio.Studio.Products.ProductLibrary.EcomCraftStudioProductSaveInfo, true, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(EcomCraftStudio.Studio.Products.ProductLibrary.EcomCraftStudioProductDelete, true, Permissions.FundamentalGenerateTabAccess);
         API.RegisterAPICall(EcomCraftStudio.Studio.Products.ProductLibrary.EcomCraftStudioProductAngleAdd, true, Permissions.BasicImageGeneration);
         API.RegisterAPICall(EcomCraftStudio.Studio.Products.ProductLibrary.EcomCraftStudioProductAngleDelete, true, Permissions.FundamentalGenerateTabAccess);
@@ -151,6 +154,7 @@ public class EcomCraft : Extension
         // current recipe (T118); both read per call, so an administrator's recipe override takes effect without a restart.
         EcomCraftStudio.Studio.NativeWorkflowConverter.RecipeBook = ModelRecipes.Load;
         EcomCraftStudio.Studio.Generation.OutputSizeRules.MaxEdgeSource = () => ModelRecipes.Current().Recipe?.MaxEdge ?? 2048;
+        ClaimWords.Init(FilePath);
         StandardWorkflows.Init(FilePath);
         // The model dropdown scan reads the configured model roots; without this (unit tests) dropdowns narrow to their saved value.
         EcomCraftStudio.Studio.NativeWorkflowConverter.ModelRoots = () => (Environment.CurrentDirectory,

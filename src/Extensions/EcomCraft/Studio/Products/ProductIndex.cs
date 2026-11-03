@@ -59,6 +59,10 @@ public sealed class ProductRecord
     /// <summary>The angle photos (F84); the first is the main image. Never null once <see cref="ProductIndex.Migrate"/> has run.</summary>
     public List<ProductAngle> Angles = [];
 
+    /// <summary>The selling info by language (F79, T99): display name, selling points, parameters and a size line, written by the user for each
+    /// market — never machine-translated. Null or missing entries mean "not filled in"; records saved before T99 simply have none.</summary>
+    public Dictionary<string, ProductSpecs> Info;
+
     /// <summary>The main angle — the first of the list — or null while the record has no angle at all.</summary>
     public ProductAngle MainAngle()
     {
@@ -134,6 +138,35 @@ public sealed class ProductIndex
         return null;
     }
 
+    /// <summary>Saves the selling info of one language of the account's product (F79, T99): an empty entry is removed again, so nothing empty is
+    /// kept. Returns an error when the product is not this account's or the language is unknown; the previous entry is returned so a failed save
+    /// can put it back.</summary>
+    public string SaveInfo(string userId, string id, string language, ProductSpecs specs, out ProductSpecs previous)
+    {
+        previous = null;
+        ProductRecord record = Find(userId, id);
+        if (record is null)
+        {
+            return "商品不存在。";
+        }
+        string known = ProductInfoRules.LanguageId(language);
+        if (known is null)
+        {
+            return "不支持的语言。";
+        }
+        record.Info ??= [];
+        previous = record.Info.TryGetValue(known, out ProductSpecs old) ? old : null;
+        if (ProductInfoRules.IsFilled(specs))
+        {
+            record.Info[known] = specs;
+        }
+        else
+        {
+            record.Info.Remove(known);
+        }
+        return null;
+    }
+
     /// <summary>Removes the account's product and returns it so its files can be deleted, or null when not found.</summary>
     public ProductRecord Remove(string userId, string id)
     {
@@ -158,6 +191,10 @@ public sealed class ProductIndex
             {
                 record.Angles = [new ProductAngle() { Id = ProductAngleRules.MainId, Original = record.Original, Cutout = record.Cutout, X = record.X, Y = record.Y, Size = record.Size }];
             }
+            // Selling info (F79, T99): records saved before it existed have none, which reads as "not filled in"; unknown language keys (only
+            // writable by hand) are dropped so the index keeps only the languages the rules know.
+            record.Info = (record.Info ?? []).Where(entry => ProductInfoRules.LanguageId(entry.Key) is not null && entry.Value is not null)
+                .ToDictionary(entry => entry.Key, entry => entry.Value);
             record.SyncLegacy();
         }
     }

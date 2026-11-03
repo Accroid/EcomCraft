@@ -7,22 +7,23 @@
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 工作台</title>
-    <link rel="icon" href="/favicon.ico?v=0.63.0">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.63.0">
-    <script src="/EcomCraft/lang/en.js?v=0.63.0" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.63.0" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.63.0" defer></script>
-    <script src="/EcomCraft/js/simple/brand.js?v=0.63.0" defer></script>
-    <script src="/EcomCraft/js/simple/storyboard.js?v=0.63.0" defer></script>
-    <script src="/EcomCraft/js/simple/rules.js?v=0.63.0" defer></script>
-    <script src="/EcomCraft/js/simple/prompt.js?v=0.63.0" defer></script>
-    <script src="/EcomCraft/js/simple/export.js?v=0.63.0" defer></script>
-    <script src="/EcomCraft/js/simple/placement.js?v=0.63.0" defer></script>
-    <script src="/EcomCraft/js/simple/products.js?v=0.63.0" defer></script>
-    <script src="/EcomCraft/js/simple/reference.js?v=0.63.0" defer></script>
-    <script src="/EcomCraft/js/simple/batch.js?v=0.63.0" defer></script>
-    <script src="/EcomCraft/js/simple/tasks.js?v=0.63.0" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.63.0" defer></script>
+    <link rel="icon" href="/favicon.ico?v=0.63.1">
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.63.1">
+    <script src="/EcomCraft/lang/en.js?v=0.63.1" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.63.1" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.63.1" defer></script>
+    <script src="/EcomCraft/js/simple/brand.js?v=0.63.1" defer></script>
+    <script src="/EcomCraft/js/simple/storyboard.js?v=0.63.1" defer></script>
+    <script src="/EcomCraft/js/simple/rules.js?v=0.63.1" defer></script>
+    <script src="/EcomCraft/js/simple/prompt.js?v=0.63.1" defer></script>
+    <script src="/EcomCraft/js/simple/export.js?v=0.63.1" defer></script>
+    <script src="/EcomCraft/js/simple/placement.js?v=0.63.1" defer></script>
+    <script src="/EcomCraft/js/simple/products.js?v=0.63.1" defer></script>
+    <script src="/EcomCraft/js/simple/productinfo.js?v=0.63.1" defer></script>
+    <script src="/EcomCraft/js/simple/reference.js?v=0.63.1" defer></script>
+    <script src="/EcomCraft/js/simple/batch.js?v=0.63.1" defer></script>
+    <script src="/EcomCraft/js/simple/tasks.js?v=0.63.1" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.63.1" defer></script>
 </head>
 
 <body>
@@ -308,6 +309,7 @@
                             <input id="simple-selling-point-2" type="text" maxlength="16" autocomplete="off" aria-label="卖点 2">
                             <input id="simple-selling-point-3" type="text" maxlength="16" autocomplete="off" aria-label="卖点 3">
                         </div>
+                        <div class="pinfo-claims" id="simple-selling-claims" aria-live="polite" hidden></div>
                         <span class="fld-label" id="simple-selling-layout-label">版式</span>
                         <div class="simple-chips" id="simple-selling-layouts" role="group" aria-labelledby="simple-selling-layout-label">
                             <button type="button" class="simple-chip" data-layout="banner" aria-pressed="true">底部横幅</button>
@@ -1029,6 +1031,60 @@
                 <div class="recover-actions">
                     <button type="button" class="btn" id="simple-angles-ask-same">同一个商品的不同角度</button>
                     <button type="button" class="btn" id="simple-angles-ask-separate">不同的商品</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 简易模式：商品的卖点信息（F79，T99）：按语言填写展示名、卖点、参数和尺寸，只提示不拦截的用语检查，可选模型建议卖点 -->
+    <div class="modal" id="product-info-modal" hidden>
+        <div class="modal-backdrop" id="product-info-backdrop"></div>
+        <div class="modal-dialog modal-wide" role="dialog" aria-modal="true" aria-labelledby="product-info-title">
+            <div class="modal-head">
+                <div>
+                    <h3 id="product-info-title">卖点信息</h3>
+                    <p class="hint" id="product-info-hint">按语言分别填写，海外平台用哪种语言由你自己写，系统不机器翻译。这里只保存文字，不自动出图。</p>
+                </div>
+                <button type="button" class="icon-btn" id="product-info-close" aria-label="关闭卖点信息">✕</button>
+            </div>
+            <div class="modal-body">
+                <span class="fld-label" id="pinfo-languages-label">语言</span>
+                <div class="simple-chips" id="pinfo-languages" role="group" aria-labelledby="pinfo-languages-label"></div>
+                <div class="fld">
+                    <label for="pinfo-name">展示名<span class="fld-optional">用于上架时的商品名，可不填</span></label>
+                    <input id="pinfo-name" type="text" maxlength="60" autocomplete="off">
+                </div>
+                <div class="fld">
+                    <span class="fld-label" id="pinfo-points-label">卖点<span class="fld-optional">建议 3–5 条，最多 5 条</span></span>
+                    <div class="simple-points" id="pinfo-points" role="group" aria-labelledby="pinfo-points-label"></div>
+                    <button type="button" class="btn btn-sm" id="pinfo-point-add">添加卖点</button>
+                </div>
+                <div class="fld">
+                    <span class="fld-label" id="pinfo-params-label">参数<span class="fld-optional">名称加值，最多 20 组</span></span>
+                    <div class="pinfo-params" id="pinfo-params" role="group" aria-labelledby="pinfo-params-label"></div>
+                    <button type="button" class="btn btn-sm" id="pinfo-param-add">添加参数</button>
+                </div>
+                <div class="fld">
+                    <label for="pinfo-size">尺寸<span class="fld-optional">例如：380 ml / 高 12 cm</span></label>
+                    <input id="pinfo-size" type="text" maxlength="60" autocomplete="off">
+                </div>
+                <div class="pinfo-claims" id="pinfo-claims" aria-live="polite" hidden></div>
+                <details class="pinfo-suggest" id="pinfo-suggest-block">
+                    <summary>模型建议卖点（可选）</summary>
+                    <p class="hint">写一段商品描述，让提示词模型建议卖点。建议只根据你写的文字归纳，不会添加参数、认证、功效、销量或排名；勾选确认后才会填入。</p>
+                    <label class="visually-hidden" for="pinfo-suggest-desc">商品描述</label>
+                    <textarea id="pinfo-suggest-desc" rows="3" maxlength="500" placeholder="例如：双层不锈钢保温杯，380 ml，杯盖可当小碗，适合通勤和露营"></textarea>
+                    <div class="recover-actions">
+                        <button type="button" class="btn" id="pinfo-suggest-run">建议卖点</button>
+                    </div>
+                    <div class="pinfo-suggest-list" id="pinfo-suggest-list" hidden></div>
+                    <div class="recover-actions" id="pinfo-suggest-actions" hidden>
+                        <button type="button" class="btn btn-sm" id="pinfo-suggest-apply">把勾选的建议填入卖点</button>
+                    </div>
+                </details>
+                <p class="hint" id="pinfo-message" aria-live="polite" hidden></p>
+                <div class="recover-actions">
+                    <button type="button" class="btn btn-primary" id="pinfo-save">保存</button>
                 </div>
             </div>
         </div>

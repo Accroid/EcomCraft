@@ -218,7 +218,7 @@
         'workflow_state','invalid_review','review_save_failed',
         'invalid_storage_path','storage_check_failed','storage_save_failed','invalid_storage_action',
         'invalid_template','template_image_failed','prompt_settings_failed','cutout_failed','product_save_failed','invalid_export','export_failed','diagnostics_failed',
-        'backup_failed','backup_invalid','backup_confirm_required','disk_full','invalid_product_type','prompt_service_unavailable','invalid_brand_kit','brand_kit_save_failed','invalid_selling_text','selling_font_missing','project_save_failed','vision_disabled','vision_unreachable','invalid_vision_model','vision_check_unavailable',
+        'backup_failed','backup_invalid','backup_confirm_required','disk_full','invalid_product_type','prompt_service_unavailable','invalid_brand_kit','brand_kit_save_failed','invalid_selling_text','selling_font_missing','project_save_failed','vision_disabled','vision_unreachable','invalid_vision_model','vision_check_unavailable','invalid_product_info',
         'vision_install_busy','vision_install_unsupported','vision_install_missing','vision_install_start_failed',
         'model_download_input','model_download_exists','model_download_limit','model_download_not_found',
         'workflow_too_large','workflow_api_format','workflow_unsupported','workflow_denied','workflow_limit',
@@ -6309,6 +6309,15 @@
                 }
                 else {
                     DialogFocus.trap($('simple-angles-ask-modal'), e);
+                }
+                return;
+            }
+            if (!$('product-info-modal').hidden) {
+                if (e.key == 'Escape') {
+                    SimpleMode.closeProductInfo();
+                }
+                else {
+                    DialogFocus.trap($('product-info-modal'), e);
                 }
                 return;
             }

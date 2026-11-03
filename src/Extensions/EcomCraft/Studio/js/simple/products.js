@@ -4,11 +4,13 @@
  * Simple mode: the product library, the photo picker and the cut-out. Part of simple.js since R15; static methods are copied onto SimpleMode by adopt(), so callers and this stay unchanged.
  */
 class SimpleProductsPart {
-    /** Reads the account's saved products for the "from the product library" list. */
+    /** Reads the account's saved products for the "from the product library" list, and whether a prompt model is configured so the page knows
+     * whether to offer model-suggested selling points (F79, T99). */
     static async loadLibrary() {
         try {
             let result = await this.api.request('EcomCraftStudioProducts');
             this.library = result.products || [];
+            this.suggestReady = result.suggest_ready == true;
         }
         catch (error) {
             this.library = [];
@@ -226,7 +228,7 @@ class SimpleProductsPart {
             this.message(this.api.tr('一次最多 20 张商品图。'), true);
             return;
         }
-        let product = { id: saved.id, name: saved.name, origin: 'library', data: null, source: saved.image, cutout: saved.cutout_image || null, width: 0, height: 0 };
+        let product = { id: saved.id, name: saved.name, origin: 'library', data: null, source: saved.image, cutout: saved.cutout_image || null, width: 0, height: 0, info: saved.info || {} };
         this.applyAngles(product, saved);
         try {
             let image = await this.loadImage(product.cutout || product.source);
@@ -279,6 +281,7 @@ class SimpleProductsPart {
     static applyAngles(product, saved) {
         product.id = saved.id;
         product.name = saved.name;
+        product.info = saved.info || {};
         let angles = (saved.angles || []).map(angle => ({ id: angle.id, image: angle.image, cutout_image: angle.cutout_image || null, placement: angle.placement || null }));
         if (!angles.length) {
             angles = [{ id: 'main', image: saved.image, cutout_image: saved.cutout_image || null, placement: saved.placement || null }];
@@ -931,6 +934,12 @@ class SimpleProductsPart {
             add.addEventListener('click', () => this.openAnglePicker(product));
             box.append(add);
         }
+        // Selling info per product (F79, T99): filled in a dialog from the card, never in the step-2 generation flow (A30).
+        let info = el('button', 'link-btn simple-angle-btn', tr('卖点信息'));
+        info.type = 'button';
+        info.setAttribute('aria-label', tr('打开 {0} 的卖点信息', product.name || tr('商品')));
+        info.addEventListener('click', e => this.openProductInfo(product, e.currentTarget));
+        box.append(info);
         return box;
     }
 
