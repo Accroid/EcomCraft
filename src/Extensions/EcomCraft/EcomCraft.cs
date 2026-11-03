@@ -139,6 +139,8 @@ public class EcomCraft : Extension
         WorkflowDiscovery.Start();
         WorkSync.Start();
         CandidateCleanup.Start();
+        // A34: leftover backend-uploaded images in the local ComfyUI's input folder are removed at startup, next to the F72 process cleanup.
+        EcomCraftStudio.Studio.Storage.InputResidueCleanup.Start();
         EcomCraftStudio.Studio.Generation.BatchService.Start();
         DiskMonitor.Start();
         TemplateStore.Init(FilePath);
@@ -169,6 +171,7 @@ public class EcomCraft : Extension
         StandardWorkflows.Shutdown();
         WorkSync.Shutdown();
         CandidateCleanup.Shutdown();
+        EcomCraftStudio.Studio.Storage.InputResidueCleanup.Shutdown();
         EcomCraftStudio.Studio.Generation.BatchService.Shutdown();
         DiskMonitor.Shutdown();
         VisionModelInstall.Shutdown();

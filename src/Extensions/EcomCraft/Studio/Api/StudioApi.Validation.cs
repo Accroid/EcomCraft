@@ -264,7 +264,8 @@ public static partial class StudioApi
     {
         string detail = result["error"]?.ToString() ?? "";
         string requestId = result["request_id"]?.ToString();
-        Logs.Warning($"EcomCraft {(workflow ? "workflow" : "standard")} generation failed{(string.IsNullOrWhiteSpace(requestId) ? "" : $" (request {requestId})")}: {detail}");
+        // A34: a failure text can quote the workflow's inputs; long base64 runs (embedded images) never reach the log.
+        Logs.Warning($"EcomCraft {(workflow ? "workflow" : "standard")} generation failed{(string.IsNullOrWhiteSpace(requestId) ? "" : $" (request {requestId})")}: {DiagnosticsSanitizer.RemoveBase64(detail)}");
         string message = detail switch
         {
             "Timeout! All backends are occupied with other tasks." => "等待 ComfyUI 执行服务器超时，请检查服务器状态和队列。",

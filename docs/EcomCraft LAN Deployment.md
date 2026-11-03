@@ -85,7 +85,14 @@ ComfyUI has no login: anyone who can reach its port can submit any workflow and 
 3. On the platform server, register the server as a **ComfyUI API By URL** backend and enter its display name as the backend title. Set the name before reviewing the workflows on that server and do not change it afterwards: workflow IDs start with the server name. For detailed steps and the address ranges that can be registered, see [Workflows: LAN execution servers](EcomCraft%20ComfyUI%20Workflows.md#lan-execution-servers).
 4. Check: on another member's computer, `http://192.168.1.21:8188` should **not** open; on the platform server it should.
 
-## 6. Who can see works on shared storage (D9)
+## 6. Images and companion nodes on execution servers (A34)
+
+Reference images, product photos and product canvases ride inside the generation request itself (ComfyUI's `SwarmLoadImageB64` node); they are never written to the execution server's ComfyUI input folder (`input/`), so no user pictures are left behind on execution servers.
+
+1. **Companion nodes**: the standard workflows, the direct-fusion trial and the cut-out need SwarmUI's companion nodes. The local self-starting ComfyUI gets them installed automatically; a LAN execution server needs the `SwarmComfyCommon` (contains `SwarmLoadImageB64`) and `SwarmComfyExtra` (contains `SwarmRemBg`) folders from `src/BuiltinExtensions/ComfyUIBackend/ExtraNodes/` in the SwarmUI folder copied into ComfyUI's `custom_nodes/`, followed by a ComfyUI restart. A server missing the node is never chosen, and there is no fallback to uploading images. Steps: [Workflows: LAN execution servers](EcomCraft%20ComfyUI%20Workflows.md#lan-execution-servers).
+2. **Manual cleanup of leftovers from older versions**: before this change (and whenever the professional mode runs a published native workflow with image parameters), images were written into the execution server's ComfyUI `input/` folder under file names starting with `init_image_sui_backend_`. Leftovers on the local self-starting server are deleted automatically at every startup; leftovers on a LAN server cannot be removed remotely — clean them on that device: in the ComfyUI install's `input/` folder, delete every file whose name starts with `init_image_sui_backend_` and touch nothing else. In the current version, the professional mode with published native workflows that have image parameters still writes such files and deletes them when the task ends (locally); that is SwarmUI's native behavior.
+
+## 7. Who can see works on shared storage (D9)
 
 In the workspace, works are visible only to their owner by default. That is only a platform-level restriction; **the storage layer is not isolated per user**:
 
@@ -94,7 +101,7 @@ In the workspace, works are visible only to their owner by default. That is only
 - Whoever can access the library's shared folder can see everyone's works. To restrict it, grant access on the NAS only to the account the platform server's service runs as, not to team members' accounts. The platform stores no NAS password; the operating system handles authentication to the share: on Windows let the service account access the share (for example run the service as a domain or local account with access), and on Linux / macOS mount it in the system with suitable permissions.
 - No workspace API ever returns storage paths to ordinary users.
 
-## 7. Browser restrictions with an `http://` LAN address
+## 8. Browser restrictions with an `http://` LAN address
 
 Browsers treat addresses like `http://192.168.x.x` as an "insecure context" and disable some features (`http://localhost` is the exception).
 
@@ -108,13 +115,14 @@ Browsers treat addresses like `http://192.168.x.x` as an "insecure context" and 
 
 If you need these features, configure HTTPS for the platform server: put a reverse proxy (for example Caddy, Nginx or IIS) in front of it with a certificate issued by an internal certificate authority, and make every member device trust that certificate. A self-signed LAN certificate that devices do not trust keeps triggering browser warnings and still counts as an insecure context. Do not expose the service to the internet just to get HTTPS.
 
-## 8. Deployment checklist
+## 9. Deployment checklist
 
 - [ ] The platform server's `Host` allows LAN access, and its firewall opens `7801` only to the LAN
 - [ ] The `local` account has a password, `AuthorizationRequired` is on, and `AuthBypassIPs` lists only local addresses
 - [ ] Every member has their own account; the review permission is given only to those who need it
 - [ ] `MaxQueued` of the `User` role is set for the team size
 - [ ] Every LAN execution server runs ComfyUI with `--listen`, its firewall lets only the platform server reach the ComfyUI port, and opening that port from a member's computer fails
+- [ ] Every LAN execution server has SwarmUI's companion nodes (`SwarmComfyCommon`, `SwarmComfyExtra`), and leftover `init_image_sui_backend_*` images from older versions have been cleaned up by hand as in section 6
 - [ ] Execution servers have their display names set before their workflows are reviewed
 - [ ] The platform server's output folder is not shared with team members
 - [ ] No server has a port forwarded to the internet

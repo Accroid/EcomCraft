@@ -130,7 +130,8 @@ public static partial class StudioApi
             }
             catch (Exception ex)
             {
-                Logs.Warning($"EcomCraft background task failed: {ex.ReadableString()}");
+                // A34: an upstream exception text can quote the workflow's inputs; long base64 runs (embedded images) never reach the log.
+                Logs.Warning($"EcomCraft background task failed: {DiagnosticsSanitizer.RemoveBase64(ex.ReadableString())}");
                 failure = Error(workflow ? "无法确认工作流执行结果。请在原生引擎核对队列和个人历史后再重试。"
                     : "无法确认引擎执行结果。请在原生引擎核对队列和个人历史后再重试。", "generation_uncertain");
             }

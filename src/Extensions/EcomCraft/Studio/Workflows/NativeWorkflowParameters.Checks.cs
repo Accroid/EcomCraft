@@ -64,7 +64,8 @@ public static partial class NativeWorkflowParameters
                 }
                 string raw = input.Value.Type == JTokenType.String ? input.Value.ToString() : "";
                 string placeholder = raw.StartsWith("${", StringComparison.Ordinal) && raw.EndsWith('}') ? raw[2..^1] : null;
-                // An image parameter (the standard workflows' product canvas, N10) is uploaded by the backend at generation time, so it is never in the file list.
+                // An image parameter placeholder is filled at generation time (uploaded to the execution server, or embedded as base64 with
+                // image_always_b64 as the standard workflows do, A34), so it is never in the file list.
                 if (placeholder is not null && metadata[placeholder]?["type"]?.ToString() == "image")
                 {
                     continue;

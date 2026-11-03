@@ -329,6 +329,32 @@ public static partial class StudioApi
                     }
                 }
             }
+            // Request-embedded image inputs (A34: the standard workflows' product canvas and the edit trial's photos) no longer pass through the backend's
+            // upload path, which stretched them to the generation size first — reproduce that stretch here, from the same width and height, so the graphs
+            // see exactly the pixels they saw before. Only this server's own data URLs are touched; user output references resolve later, as always.
+            foreach (JProperty property in metadata.Properties())
+            {
+                if (property.Value is not JObject embedDefinition || embedDefinition["type"]?.ToString()?.ToLowerInvariant() != "image"
+                    || embedDefinition.Value<bool?>("image_always_b64") != true
+                    || input[property.Name] is not JValue embedValue || embedValue.Type != JTokenType.String)
+                {
+                    continue;
+                }
+                string imageData = embedValue.Value<string>();
+                if (!imageData.StartsWith("data:", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                try
+                {
+                    input[property.Name] = SwarmUI.Media.ImageFile.FromDataString(imageData).Resize(plan.Width, plan.Height).AsDataString();
+                }
+                catch (Exception ex) when (ex is FormatException or ArgumentException or SixLabors.ImageSharp.UnknownImageFormatException
+                    or SixLabors.ImageSharp.InvalidImageContentException or NotSupportedException or IOException)
+                {
+                    return Error("工作流参数缺失或无效，请刷新列表后重新选择工作流。", "invalid_workflow_parameters");
+                }
+            }
         }
         if (plan.Native && StandardWorkflows.NeedsProductCanvas(workflow.Name) && !StandardCanvasUsable(input[StandardWorkflows.ProductImageParam]?.ToString()))
         {

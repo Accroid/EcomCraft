@@ -1070,6 +1070,7 @@ window.EcomCraftLanguages.en = {
     "error:model_download_not_found": "That download was not found; it may have already finished. Refresh the list.",
     "下载模型": "Download models",
     "把模型下载链接交给平台下载；完成后模型会出现在专业模式的模型列表里。": "Give the platform a model download link; when it finishes, the model appears in the professional mode model list.",
+    "文件不做校验，来源和许可请自行确认。": "Files are not verified; please confirm the source and license yourself.",
     "关闭下载模型": "Close download models",
     "下载链接": "Download link",
     "例如：https://huggingface.co/…/model.safetensors": "e.g. https://huggingface.co/…/model.safetensors",

@@ -24,7 +24,7 @@ public static class StandardWorkflows
     /// <summary>The generated workflows: published ID (matching the templates' "*/ecomcraft/…" names), description, the blueprint file it is built from,
     /// whether the product repainting pass is added (R13) and, above zero, how many product angle photos the reference-edit trial wires in (F84, T123).
     /// Scene and detail share the text-to-image blueprint; the templates differ by prompt, and "with a model" is a prompt fragment (F53).
-    /// The reference-edit kinds share the Image Edit blueprint: they differ only in how many LoadImage inputs are wired.</summary>
+    /// The reference-edit kinds share the Image Edit blueprint: they differ only in how many SwarmLoadImageB64 inputs are wired.</summary>
     private sealed record KindEntry(string Kind, string Id, string Description, string BlueprintFile, bool AddProductInpaint, int EditAngles = 0);
 
     private static readonly KindEntry[] Kinds =
@@ -50,9 +50,10 @@ public static class StandardWorkflows
     public static string ReferenceEditKind(int angles) => $"reference-edit-{Math.Clamp(angles, 1, 3)}";
 
     /// <summary>ID of the product image input added to every generated workflow, so the templates' "@image" field and product preservation work.
-    /// The graph loads it (N10): the product canvas is transparent around the product, its alpha becomes the mask, and only the scene around the product
+    /// The graph loads it (N10) with a SwarmLoadImageB64 node straight from the request (A34: the canvas is never uploaded to the execution server's
+    /// input folder): the product canvas is transparent around the product, its alpha becomes the mask, and only the scene around the product
     /// is generated, so surface, shadows and scale follow the real product. The product is still pasted back after generation.</summary>
-    public const string ProductImageParam = "ecproductimage";
+    public const string ProductImageParam = ProductInpaintRules.ProductParam;
 
     /// <summary>Loader inputs that take the default model names from the settings.</summary>
     private static readonly Dictionary<string, Func<Settings.EcomCraftData, string>> ModelInputs = new()
@@ -195,8 +196,8 @@ public static class StandardWorkflows
         }
         if (kind.EditAngles > 0)
         {
-            // The edit trial (F84) wires its own hidden LoadImage inputs (the reference and up to three product angles) and the pixel-budget parameter instead;
-            // its product inputs are white-flattened photos, so the transparent product canvas does not apply.
+            // The edit trial (F84) wires its own hidden SwarmLoadImageB64 inputs (the reference and up to three product angles) and the pixel-budget
+            // parameter instead; its product inputs are white-flattened photos, so the transparent product canvas does not apply.
             if (!ReferenceEditRules.Apply(prompt, metadata, values, kind.EditAngles))
             {
                 return (null, null, null, null, "unsupported");
@@ -204,77 +205,13 @@ public static class StandardWorkflows
         }
         else
         {
-            metadata[ProductImageParam] = new JObject()
-            {
-                ["id"] = ProductImageParam, ["name"] = "商品图", ["type"] = "image", ["default"] = "", ["visible"] = true, ["form"] = null,
-                ["description"] = "放好商品的透明画布：只重绘商品以外的场景，出图后由平台把原商品贴回画面。"
-            };
-            if (kind.AddProductInpaint && !AddProductInpaint(prompt))
+            metadata[ProductImageParam] = ProductInpaintRules.ProductParamMetadata();
+            if (kind.AddProductInpaint && !ProductInpaintRules.Apply(prompt))
             {
                 return (null, null, null, null, "unsupported");
             }
         }
         return (prompt, metadata, values, json, null);
-    }
-
-    /// <summary>Node IDs of the added nodes, above the converter's numbering (at most 2000).</summary>
-    private const string LoadNode = "9001", EncodeNode = "9002", MaskNode = "9003", GrowNode = "9004", InvertNode = "9005", CompositeNode = "9006",
-        HarmonizeEncodeNode = "9007", HarmonizeNode = "9008", HarmonizeDecodeNode = "9009";
-
-    /// <summary>How far the repainted area reaches into the product's edge, in pixels, so the canvas fill around the product cannot leave a halo.</summary>
-    private const int MaskGrowPx = 12;
-
-    /// <summary>Strength of the second pass over the whole picture: enough to unify light and edges, little enough to keep the composition.</summary>
-    private const double HarmonizeDenoise = 0.35;
-
-    /// <summary>Steps the second pass really runs. KSampler runs its full step count whatever the denoise, so reusing the first pass's steps would double the time.</summary>
-    private const int HarmonizeSteps = 10;
-
-    /// <summary>Turns the converted text-to-image graph into generation around the product (N10): the product canvas is loaded (the backend uploads the
-    /// image parameter and fills in the file name), encoded with the graph's own VAE, and its alpha (LoadImage's mask: 1 where transparent), grown a little
-    /// into the product, limits sampling to the scene; the sampler starts from it instead of the empty latent. Then the product is put on the decoded scene and
-    /// the whole picture is sampled again at low strength, so product and scene share their light; the restored details come from the local paste afterwards.
-    /// False when the graph has no single sampler and decoder to rewire.</summary>
-    private static bool AddProductInpaint(JObject prompt)
-    {
-        List<JObject> samplers = [.. prompt.Properties().Select(property => property.Value).OfType<JObject>().Where(node => node["class_type"]?.ToString() == "KSampler")];
-        List<JProperty> decoders = [.. prompt.Properties().Where(property => property.Value["class_type"]?.ToString() == "VAEDecode")];
-        if (samplers.Count != 1 || decoders.Count != 1 || decoders[0].Value["inputs"]?["vae"] is not JArray vae || samplers[0]["inputs"] is not JObject samplerInputs)
-        {
-            return false;
-        }
-        string decoder = decoders[0].Name;
-        // What saved the first pass's picture now saves the second pass's.
-        foreach (JProperty input in prompt.Properties().Select(property => property.Value["inputs"]).OfType<JObject>().SelectMany(inputs => inputs.Properties()))
-        {
-            if (input.Value is JArray link && link.Count == 2 && link[0].ToString() == decoder)
-            {
-                input.Value = new JArray(HarmonizeDecodeNode, link[1].DeepClone());
-            }
-        }
-        prompt[LoadNode] = new JObject() { ["class_type"] = "LoadImage", ["inputs"] = new JObject() { ["image"] = "${" + ProductImageParam + "}" } };
-        prompt[EncodeNode] = new JObject() { ["class_type"] = "VAEEncode", ["inputs"] = new JObject() { ["pixels"] = new JArray(LoadNode, 0), ["vae"] = vae.DeepClone() } };
-        prompt[GrowNode] = new JObject() { ["class_type"] = "GrowMask", ["inputs"] = new JObject() { ["mask"] = new JArray(LoadNode, 1), ["expand"] = MaskGrowPx, ["tapered_corners"] = true } };
-        prompt[MaskNode] = new JObject() { ["class_type"] = "SetLatentNoiseMask", ["inputs"] = new JObject() { ["samples"] = new JArray(EncodeNode, 0), ["mask"] = new JArray(GrowNode, 0) } };
-        // The empty latent stays in the graph, unconnected, so the width and height parameters keep setting the canvas size.
-        JObject harmonizeInputs = (JObject)samplerInputs.DeepClone();
-        samplerInputs["latent_image"] = new JArray(MaskNode, 0);
-        prompt[InvertNode] = new JObject() { ["class_type"] = "InvertMask", ["inputs"] = new JObject() { ["mask"] = new JArray(LoadNode, 1) } };
-        prompt[CompositeNode] = new JObject()
-        {
-            ["class_type"] = "ImageCompositeMasked",
-            ["inputs"] = new JObject()
-            {
-                ["destination"] = new JArray(decoder, 0), ["source"] = new JArray(LoadNode, 0), ["x"] = 0, ["y"] = 0, ["resize_source"] = false, ["mask"] = new JArray(InvertNode, 0)
-            }
-        };
-        prompt[HarmonizeEncodeNode] = new JObject() { ["class_type"] = "VAEEncode", ["inputs"] = new JObject() { ["pixels"] = new JArray(CompositeNode, 0), ["vae"] = vae.DeepClone() } };
-        harmonizeInputs["latent_image"] = new JArray(HarmonizeEncodeNode, 0);
-        harmonizeInputs["denoise"] = HarmonizeDenoise;
-        harmonizeInputs["steps"] = HarmonizeSteps;
-        prompt[HarmonizeNode] = new JObject() { ["class_type"] = "KSampler", ["inputs"] = harmonizeInputs };
-        prompt[HarmonizeDecodeNode] = new JObject() { ["class_type"] = "VAEDecode", ["inputs"] = new JObject() { ["samples"] = new JArray(HarmonizeNode, 0), ["vae"] = vae.DeepClone() } };
-        return true;
     }
 
     /// <summary>Generates and publishes the standard workflows that are missing or out of date. <paramref name="force"/> (the administrator's
