@@ -8,7 +8,7 @@ internal sealed class GenerateOptions
     /// <summary>Whether the request's prompt is final and must reach the engine as is, without the template's own prefix and suffix (F59 reference mode).</summary>
     public bool RawPrompt;
 
-    /// <summary>Whether the prompt may carry the official <c>&lt;imageN&gt;</c> tags of Qwen Image 2.1 edit workflows: the reference-edit trial's prompt is
+    /// <summary>Whether the prompt may carry the current recipe's image tags (<c>prompt_syntax</c>, T118): the reference-edit trial's prompt is
     /// written by the server with them (F84). Only the exact tags are allowed; a client can never set this flag, and any other native syntax is still refused.</summary>
     public bool AllowImageTagPrompt;
 

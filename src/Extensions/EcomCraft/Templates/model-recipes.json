@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "模型配方（F86 / T117）：'模型 + 硬件变体'两层。模型层声明这个模型怎么跑（蓝图、采样、尺寸、能力、许可）；变体层按操作系统 / 显卡 / 硬件档位声明用哪些文件。文件来源的 region 用 cn（国内镜像）或 global（官方源）；bytes 和 sha256 用于下载校验（A22），未知时留 0 或空。tier 只是推荐目标，不锁功能（A19）；os / gpu / tier 留空表示不限。本文件随版本发布，管理员可在 Data/EcomCraft/model-recipes.json 放一份同格式文件整体覆盖（与 platforms.json 同机制）。文件损坏或条目不合法时，该条目按字段回退或整条跳过，不影响现有配置。数据为 2026-11-03 的现状：UC 主模型的下载来源未记录，待 T92 补齐并核对。",
+  "note": "模型配方（F86 / T117、T118）：‘模型 + 硬件变体’两层。模型层声明这个模型怎么跑：match.encoder_classes 声明转换器怎样认出这个模型的图（命中后套用 cfg 范围、提示文字和尺寸步长）；blueprints 按工作流种类声明蓝图文件，条目可为字符串（T117 写法，无接入点声明）或对象（file + inpaint 接入点：局部重绘接线的采样器和解码器节点，填蓝图里的节点 ID）；second_pass 的 steps 和 denoise 是第二遍参数；reference_edit 声明直接融合的编码器类名、像素预算输入名和按硬件档位的自动预算；max_edge 是出图最长边上限，不得超过 2048（A24）；prompt_syntax 是提示词里的图片标签写法（如 <image1>）。变体层按操作系统 / 显卡 / 硬件档位声明用哪些文件；文件角色可用 unet / text_encoder / vae，以及为放大（T114）预留的 upscale（暂无内容）。文件来源的 region 用 cn（国内镜像）或 global（官方源）；bytes 和 sha256 用于下载校验（A22），未知时留 0 或空。tier 只是推荐目标，不锁功能（A19）；os / gpu / tier 留空表示不限。本文件随版本发布，管理员可在 Data/EcomCraft/model-recipes.json 放一份同格式文件整体覆盖（与 platforms.json 同机制）。文件损坏或条目不合法时，该条目按字段回退或整条跳过，不影响现有配置。数据为 2026-11-03 的现状：UC 主模型的下载来源未记录，待 T92 补齐并核对。",
   "models": [
     {
       "id": "qwen-image-2.1",
@@ -8,9 +8,10 @@
       "license": "模型 Apache-2.0（Qwen 发布）；GGUF 量化来自 unsloth、文本编码器和 VAE 来自 Comfy-Org，均沿用原许可。商用许可方案待定（A31），管理员界面按此处原文展示。",
       "min_comfyui": "0.42.5",
       "nodes": ["UnetLoaderGGUF", "CLIPLoader", "VAELoader", "TextEncodeQwenImage21", "EmptySD3LatentImage", "KSampler", "VAEDecode"],
+      "match": { "encoder_classes": ["TextEncodeQwenImage21"] },
       "blueprints": {
-        "scene": "text-to-image.json",
-        "detail": "text-to-image.json",
+        "scene": { "file": "text-to-image.json", "inpaint": { "sampler": "458", "decoder": "457" } },
+        "detail": { "file": "text-to-image.json", "inpaint": { "sampler": "458", "decoder": "457" } },
         "reference-edit": "image-edit.json"
       },
       "sampling": {
@@ -31,7 +32,12 @@
         "sampler": "euler",
         "scheduler": "simple"
       },
-      "second_pass": { "steps": 10 },
+      "second_pass": { "steps": 10, "denoise": 0.35 },
+      "reference_edit": {
+        "encoder_class": "TextEncodeQwenImage21",
+        "resolution_input": "resolution",
+        "auto_resolution": { "default": 1024, "by_tier": { "unsupported": 512, "unknown": 512 } }
+      },
       "resolution_budget": 1048576,
       "size_step": 16,
       "max_edge": 2048,

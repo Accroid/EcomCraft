@@ -3,6 +3,7 @@ using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.Export;
 using EcomCraftStudio.Studio.PostProcess;
 using EcomCraftStudio.Studio.Prompting;
+using EcomCraftStudio.Studio.Setup;
 using EcomCraftStudio.Studio.Templates;
 using Newtonsoft.Json.Linq;
 using SixLabors.ImageSharp;
@@ -181,7 +182,7 @@ public static partial class BatchService
             ["source"] = "local",
             ["template_id"] = template.Template.Id,
             ["template_params"] = new JObject(),
-            ["prompt"] = PromptRules.ReferenceEditPrompt(angles.Count),
+            ["prompt"] = PromptRules.ReferenceEditPrompt(angles.Count, ModelRecipeRules.EffectivePromptSyntax(ModelRecipes.Current().Recipe?.PromptSyntax)),
             ["negativeprompt"] = batch.Negative,
             ["images"] = batch.Candidates,
             ["platform"] = batch.Platform

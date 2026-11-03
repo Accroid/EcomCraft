@@ -5086,13 +5086,13 @@
     class StandardWorkflowView {
         static busy = false;
 
-        /** Plain-language text of a state; problems name missing nodes or models. */
+        /** Plain-language text of a state; problems name missing nodes or models, or why the recipe cannot build a kind. */
         static stateText(item) {
             let texts = {
                 published: '已发布，内置模板可以直接出图。',
                 taken_down: '已在审核中下架；点“初始化标准工作流”可重新发布。',
-                missing_blueprint: '缺少蓝图文件 Templates/blueprints/text-to-image.json，请更新 EcomCraft。',
-                unsupported: '蓝图文件无法通过校验，请更新 EcomCraft。',
+                missing_blueprint: '缺少标准工作流蓝图文件，请更新 EcomCraft。',
+                unsupported: '当前模型配方无法生成它，请查看原因。',
                 missing_dependencies: '执行服务器缺少节点或模型，安装后点“初始化标准工作流”。',
                 no_server: '没有在线的执行服务器，服务器上线后会自动检查。',
                 failed: '保存失败，请检查服务器数据目录的磁盘空间和权限。',
@@ -5100,10 +5100,14 @@
             };
             let text = tr(texts[item.state] || '状态未知，请稍后刷新。');
             let problems = Array.isArray(item.problems) ? item.problems : [];
-            return problems.length ? text + tr('缺少：{0}', problems.join(tr('、'))) : text;
+            if (!problems.length) {
+                return text;
+            }
+            let prefix = item.state == 'missing_dependencies' ? '缺少：{0}' : '原因：{0}';
+            return text + tr(prefix, problems.join(tr('、')));
         }
 
-        /** Shows the list and the configured default models. */
+        /** Shows the list, the current recipe and the effective model files. */
         static render(result) {
             let names = { scene: '场景图', detail: '细节图' };
             let rows = [];
@@ -5115,6 +5119,20 @@
             $('standard-list').replaceChildren(...rows);
             let models = result.models || {};
             $('standard-models').textContent = tr('默认模型：{0}、{1}、{2}', models.unet || '', models.text_encoder || '', models.vae || '');
+            let recipe = result.recipe || {};
+            let recipeBox = $('standard-recipe');
+            let recipeProblems = Array.isArray(recipe.problems) ? recipe.problems : [];
+            let recipeText = recipe.id
+                ? tr('当前配方：{0} / {1}', recipe.name || recipe.id, recipe.variant || '')
+                : tr('没有可用的模型配方，无法生成标准工作流。');
+            if (recipe.legacy_unmatched) {
+                recipeText += tr('未匹配配方：已按原模型文件名设置继续出图（管理员覆盖）。');
+            }
+            for (let problem of recipeProblems) {
+                recipeText += tr('原因：{0}', problem);
+            }
+            recipeBox.textContent = recipeText;
+            recipeBox.hidden = false;
         }
 
         /** Reads the state, or with "init" generates and publishes now. */

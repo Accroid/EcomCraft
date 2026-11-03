@@ -85,22 +85,29 @@ public class Settings : AutoConfiguration
         [ConfigComment("ComfyUI node types (class names) refused in workflows that accounts upload for their own use, in addition to nodes whose names mark code or shell execution. Uploads with path-like inputs are always refused.")]
         public List<string> DeniedWorkflowNodes = [];
 
-        /// <summary>Diffusion model of the standard workflows EcomCraft generates for its built-in templates.</summary>
-        [ConfigComment("Diffusion model (UNet or checkpoint file name) used by the standard workflows EcomCraft generates for its built-in templates. The model must be installed on an execution server; otherwise the workflows are not published and the administrators' status list names what is missing.")]
+        /// <summary>The recipe the standard workflows generate from: "model id / variant id" (F86, T118).</summary>
+        [ConfigComment("The model recipe the standard workflows and the simple mode generate from, as \"model id / variant id\" of model-recipes.json, for example \"qwen-image-2.1/uc-q4-gguf\". "
+            + "An empty or unresolvable value falls back to the default recipe instead of stopping the server. Blueprints, sampling hints, size step and caps all follow this recipe.")]
+        public string CurrentRecipe = "";
+
+        /// <summary>Diffusion model file-name override of the standard workflows; migrated into the current recipe at startup.</summary>
+        [ConfigComment("Legacy override (migrated at startup): diffusion model (UNet or checkpoint file name) used by the standard workflows instead of the current "
+            + "recipe's file. The startup check matches these three legacy names against the recipe book: a match writes the current recipe and clears them; "
+            + "no match (a file name of your own) keeps them working as an administrator override (A19), shown as unmatched in the standard workflow status.")]
         public string StandardWorkflowUnet = "qwen-image-2.1-UC-Q4_K_M.gguf";
 
-        /// <summary>Text encoder of the standard workflows.</summary>
-        [ConfigComment("Text encoder file name used by the standard workflows EcomCraft generates for its built-in templates.")]
+        /// <summary>Text encoder file-name override of the standard workflows.</summary>
+        [ConfigComment("Legacy override (migrated at startup): text encoder file name used by the standard workflows instead of the current recipe's file.")]
         public string StandardWorkflowTextEncoder = "qwen3vl_8b_int8_convrot.safetensors";
 
-        /// <summary>VAE of the standard workflows.</summary>
-        [ConfigComment("VAE file name used by the standard workflows EcomCraft generates for its built-in templates.")]
+        /// <summary>VAE file-name override of the standard workflows.</summary>
+        [ConfigComment("Legacy override (migrated at startup): VAE file name used by the standard workflows instead of the current recipe's file.")]
         public string StandardWorkflowVae = "qwen_image_2.1_vae_bf16.safetensors";
 
-        /// <summary>Pixel budget of the reference-edit trial's workflows (the encoder's resolution input, F84).</summary>
-        [ConfigComment("Pixel budget (the Qwen Image 2.1 edit encoder's resolution input) of the direct-fusion trial's workflows. 0 picks it automatically from the "
-            + "hardware tier: 512 on the unsupported tier or when probing failed, 1024 otherwise. The value is written by the server into every edit request; "
-            + "clients never see or send it. T118 will move this into the model recipe.")]
+        /// <summary>Pixel-budget override of the reference-edit trial's workflows (the encoder's resolution input, F84).</summary>
+        [ConfigComment("Pixel budget override of the direct-fusion trial's workflows (the edit encoder's resolution input, which class and input the current "
+            + "recipe declares). 0 picks it automatically from the hardware tier, using the recipe's per-tier values (512 on the unsupported tier or when probing "
+            + "failed, 1024 otherwise). The value is written by the server into every edit request; clients never see or send it.")]
         public int ReferenceEditResolution = 0;
     }
 

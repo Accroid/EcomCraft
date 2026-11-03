@@ -1,9 +1,11 @@
+using EcomCraftStudio.Studio.Setup;
 using Newtonsoft.Json.Linq;
 
 namespace EcomCraftStudio.Studio;
 
 /// <summary>The wiring of the reference-edit trial's standard workflows (F84, T123): a converted Image Edit blueprint gains SwarmLoadImageB64
-/// inputs for the reference and the product's angle photos, and the encoder's pixel budget becomes a server-set parameter. The images ride inside the
+/// inputs for the reference and the product's angle photos, and the encoder's pixel budget becomes a server-set parameter; which encoder class and
+/// which of its inputs carries the budget is declared by the recipe (T118). The images ride inside the
 /// request itself (A34): the parameters are marked <c>image_always_b64</c>, so the backend embeds their base64 into the node and never uploads a file to
 /// the execution server's input folder. Pure logic, independent of SwarmUI, so the wiring of one, two and three angles can be unit tested.
 /// The parameters are hidden: they are filled by the batch's server-side options, never by a client.</summary>
@@ -20,7 +22,8 @@ public static class ReferenceEditRules
     /// <summary>The workflow parameter carrying the product's angle photo at this index (0 = the main angle, image_2 of the encoder and up).</summary>
     public static string ProductParam(int index) => index == 0 ? ProductImageParam : $"{ProductImageParam}{(char)('a' + index)}";
 
-    /// <summary>The workflow parameter carrying the encoder's pixel budget (the TextEncodeQwenImage21 resolution input), set by the server per request.</summary>
+    /// <summary>The workflow parameter carrying the encoder's pixel budget, set by the server per request; the encoder class and input it feeds come
+    /// from the recipe's reference-edit declaration (T118).</summary>
     public const string ResolutionParam = "eceditresolution";
 
     /// <summary>The ComfyUI node that reads an image from the request instead of the server's input folder (A34); execution servers without it cannot run these workflows.</summary>
@@ -34,17 +37,20 @@ public static class ReferenceEditRules
 
     /// <summary>Rewires a converted Image Edit graph for the trial with <paramref name="angles"/> product photos (1–3): SwarmLoadImageB64 nodes feed the
     /// encoder's image slots (image_1 the reference, image_2 up the product's angles in order) and the encoder's pixel budget becomes the hidden
-    /// <see cref="ResolutionParam"/>. Returns false when the graph has no single Qwen Image 2.1 encoder or no literal resolution to bind.</summary>
-    public static bool Apply(JObject prompt, JObject metadata, JObject values, int angles)
+    /// <see cref="ResolutionParam"/>. The encoder class and its budget input are the ones the recipe declares (<paramref name="rule"/>, T118).
+    /// Returns false when the recipe declares no rule, or the graph has no single such encoder or no literal budget to bind.</summary>
+    public static bool Apply(JObject prompt, JObject metadata, JObject values, int angles, ModelRecipeRules.ReferenceEditRule rule)
     {
-        List<JProperty> encoders = [.. prompt.Properties().Where(property => (property.Value as JObject)?["class_type"]?.ToString() == "TextEncodeQwenImage21")];
-        if (encoders.Count != 1)
+        string encoderClass = rule?.EncoderClass ?? "";
+        string resolutionInput = string.IsNullOrWhiteSpace(rule?.ResolutionInput) ? "resolution" : rule.ResolutionInput;
+        List<JProperty> encoders = [.. prompt.Properties().Where(property => (property.Value as JObject)?["class_type"]?.ToString() == encoderClass)];
+        if (encoderClass.Length == 0 || encoders.Count != 1)
         {
             return false;
         }
         JObject encoder = (JObject)encoders[0].Value;
         JObject encoderInputs = (JObject)encoder["inputs"];
-        if (encoderInputs?["resolution"] is not JValue resolution || resolution.Type == JTokenType.Null)
+        if (encoderInputs?[resolutionInput] is not JValue resolution || resolution.Type == JTokenType.Null)
         {
             return false;
         }
@@ -63,11 +69,11 @@ public static class ReferenceEditRules
         {
             ["id"] = ResolutionParam, ["name"] = "清晰度预算", ["type"] = "integer", ["default"] = resolution.DeepClone(),
             ["min"] = 0, ["max"] = 2048, ["step"] = 1, ["visible"] = false, ["form"] = null,
-            ["native_node"] = encoders[0].Name, ["native_input"] = "resolution", ["native_class"] = "TextEncodeQwenImage21",
+            ["native_node"] = encoders[0].Name, ["native_input"] = resolutionInput, ["native_class"] = encoderClass,
             ["description"] = "编辑模型的像素总量预算，服务端按硬件自动设置。"
         };
         values[ResolutionParam] = resolution.DeepClone();
-        encoderInputs["resolution"] = "%%_COMFYFIXME_${" + ResolutionParam + "}_ENDFIXME_%%";
+        encoderInputs[resolutionInput] = "%%_COMFYFIXME_${" + ResolutionParam + "}_ENDFIXME_%%";
         return true;
     }
 

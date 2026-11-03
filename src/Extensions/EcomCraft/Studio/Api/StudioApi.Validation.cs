@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using EcomCraftStudio.MagicPrompt.WebAPI;
 using EcomCraftStudio.Studio.Common;
 using EcomCraftStudio.Studio.Generation;
+using EcomCraftStudio.Studio.Setup;
 using EcomCraftStudio.Studio.Storage;
 using EcomCraftStudio.Studio.Templates;
 using EcomCraftStudio.Studio.Prompting;
@@ -24,6 +25,11 @@ namespace EcomCraftStudio.Studio;
 /// <summary>Validation helpers for published-workflow parameters. Part of the StudioApi partial class (R07).</summary>
 public static partial class StudioApi
 {
+    /// <summary>The regex matching every image tag the current recipe's prompt syntax may put in the server-written edit prompt (T118): the tag style
+    /// follows the recipe instead of one model's syntax. Matches pictures 1–10, as many as the encoder takes.</summary>
+    private static string ImageTagPattern() =>
+        ModelRecipeRules.TagPattern(ModelRecipeRules.EffectivePromptSyntax(ModelRecipes.Current().Recipe?.PromptSyntax));
+
     internal static bool ValidatePublishedWorkflowInput(Session session, string id, JToken value, JObject definition, out string error, bool allowImageTags = false)
     {
         error = null;
@@ -39,9 +45,9 @@ public static partial class StudioApi
         switch (type)
         {
             case "text":
-                // The server-written edit prompt (F84) may carry the edit model's official <imageN> tags and nothing else: those are removed
+                // The server-written edit prompt (F84) may carry the current recipe's image tags and nothing else: those are removed
                 // before the check, so any other native syntax still fails.
-                string text = allowImageTags ? Regex.Replace(raw, "<image(?:[1-9]|10)>", "", RegexOptions.CultureInvariant) : raw;
+                string text = allowImageTags ? Regex.Replace(raw, ImageTagPattern(), "", RegexOptions.CultureInvariant) : raw;
                 if (value.Type != JTokenType.String || text.Length > 12000 || text.Contains('<') || text.Contains('>') || text.Contains("__"))
                 {
                     error = $"工作流参数“{id}”必须是普通文本，不能超过 12000 个字符，也不能包含原生指令语法。";

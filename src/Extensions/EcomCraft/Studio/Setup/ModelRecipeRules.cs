@@ -19,6 +19,9 @@ public static class ModelRecipeRules
     /// <summary>File role: the VAE a <c>VAELoader</c>-style loader reads.</summary>
     public const string RoleVae = "vae";
 
+    /// <summary>File role reserved for a future upscaler model (T114): parseable and unit-tested already, but no business code uses it yet.</summary>
+    public const string RoleUpscale = "upscale";
+
     /// <summary>Default sampling steps when the file does not give a usable whole number.</summary>
     private const int DefaultSteps = 20;
 
@@ -30,6 +33,9 @@ public static class ModelRecipeRules
 
     /// <summary>Upper bound of the second pass's steps.</summary>
     private const int MaxSecondPassSteps = 50;
+
+    /// <summary>Default denoise of the second (harmonize) pass.</summary>
+    private const double DefaultSecondPassDenoise = 0.35;
 
     /// <summary>Default cfg bounds when the file does not give usable numbers.</summary>
     private const double DefaultCfg = 1, DefaultCfgMin = 1, DefaultCfgMax = 4;
@@ -46,8 +52,8 @@ public static class ModelRecipeRules
     /// <summary>Default longest-edge cap of generated and exported images (A24: 2K today, changes with the recipe).</summary>
     private const int DefaultMaxEdge = 2048;
 
-    /// <summary>Bounds of the longest-edge cap.</summary>
-    private const int MinMaxEdge = 256, MaxMaxEdge = 8192;
+    /// <summary>Bounds of the longest-edge cap: a recipe may lower it, never raise it past the 2K of A24.</summary>
+    private const int MinMaxEdge = 256, MaxMaxEdge = 2048;
 
     /// <summary>Default encoder pixel budget (F73: about one million pixels).</summary>
     private const long DefaultResolutionBudget = 1024 * 1024;
@@ -60,6 +66,18 @@ public static class ModelRecipeRules
 
     /// <summary>Upper bound of a variant's disk hint in gigabytes; 0 means unknown.</summary>
     private const long MaxDiskGbHint = 10240;
+
+    /// <summary>The recipe the server falls back to when the current-recipe setting is empty, invalid or unresolvable (T118): today's default model.</summary>
+    public const string DefaultRecipeId = "qwen-image-2.1", DefaultVariantId = "uc-q4-gguf";
+
+    /// <summary>The prompt image-tag syntax used when a recipe declares none (T118): the <c>&lt;image1&gt;</c> style of the current model.</summary>
+    public const string DefaultPromptSyntax = "<image1>";
+
+    /// <summary>Default auto pixel budget of the direct-fusion trial per hardware tier, used when no recipe declares one (T118 moved the values here).</summary>
+    private const int DefaultEditResolution = 1024, DefaultEditResolutionWeak = 512;
+
+    /// <summary>Bounds of the direct-fusion trial's pixel budget.</summary>
+    private const int MinEditResolution = 256, MaxEditResolution = 2048;
 
     /// <summary>A bilingual label: the Chinese and English text, either may be empty when the file only gives one.</summary>
     /// <param name="ZhCn">The Simplified Chinese text, or "".</param>
@@ -106,9 +124,62 @@ public static class ModelRecipeRules
     /// <param name="Scheduler">The scheduler name, such as "simple"; "" when the file does not give one.</param>
     public sealed record class SamplingRule(int Steps, CfgRule Cfg, LocalizedText NegativeHint, string Sampler, string Scheduler);
 
+    /// <summary>How a converted graph is recognized as this recipe (T118): the encoder node classes declared under <c>match.encoder_classes</c>.
+    /// A graph containing such an encoder follows the recipe's cfg bounds, hints and size step; empty classes never match.</summary>
+    /// <param name="EncoderClasses">Encoder class names, normalized to lower case.</param>
+    public sealed record class MatchRule(List<string> EncoderClasses);
+
     /// <summary>The second repainting pass (the standard workflows' harmonize pass over the whole picture).</summary>
     /// <param name="Steps">The pass's step count.</param>
-    public sealed record class SecondPassRule(int Steps);
+    /// <param name="Denoise">The pass's denoise strength (0–1).</param>
+    public sealed record class SecondPassRule(int Steps, double Denoise);
+
+    /// <summary>One workflow-kind blueprint entry of a recipe (T118): the shipped blueprint file for that kind, plus — for kinds the standard workflows
+    /// repaint around the product — the blueprint nodes to wire in at (canvas node IDs, resolved through the converter's ID map). A plain string entry
+    /// (the T117 form) means no declared access points: the wiring finds the graph's single sampler and decoder itself.</summary>
+    /// <param name="File">The blueprint file name inside Templates/blueprints.</param>
+    /// <param name="InpaintSampler">The blueprint node ID of the sampler to rewire; "" to look for the single KSampler.</param>
+    /// <param name="InpaintDecoder">The blueprint node ID of the decoder whose picture is repainted; "" to look for the single VAEDecode.</param>
+    public sealed record class BlueprintEntry(string File, string InpaintSampler, string InpaintDecoder);
+
+    /// <summary>The direct-fusion trial's wiring as the recipe declares it (T118): which encoder node class carries the pixel budget and in which input,
+    /// and the automatic pixel budget per hardware tier. A missing block means the recipe cannot run the trial.</summary>
+    /// <param name="EncoderClass">The encoder node class, such as the edit encoder of the current model; "" only on the fallback rule.</param>
+    /// <param name="ResolutionInput">The encoder input carrying the pixel budget, "resolution" when the file does not name one.</param>
+    /// <param name="AutoDefault">The automatic pixel budget for tiers <see cref="AutoByTier"/> does not list.</param>
+    /// <param name="AutoByTier">Per-tier automatic budgets (HardwareRules tier names to values).</param>
+    public sealed record class ReferenceEditRule(string EncoderClass, string ResolutionInput, int AutoDefault, Dictionary<string, int> AutoByTier)
+    {
+        /// <summary>The automatic pixel budget of one hardware tier ("" or an unlisted tier uses <see cref="AutoDefault"/>; a missing tier
+        /// reading counts as unknown); the tier only guides this default and never blocks a run (A19).</summary>
+        public int AutoResolution(string tier) => AutoByTier.TryGetValue(
+            HardwareRules.Normalize(string.IsNullOrWhiteSpace(tier) ? HardwareRules.Unknown : tier), out int value) ? value : AutoDefault;
+    }
+
+    /// <summary>The three model file names the standard workflows fill into their loaders.</summary>
+    /// <param name="Unet">The diffusion model file; "" keeps the blueprint's own saved value.</param>
+    /// <param name="TextEncoder">The text encoder file; "" keeps the blueprint's own value.</param>
+    /// <param name="Vae">The VAE file; "" keeps the blueprint's own value.</param>
+    public sealed record class ModelFiles(string Unet, string TextEncoder, string Vae)
+    {
+        /// <summary>Whether any file name is set.</summary>
+        public bool Any() => (Unet ?? "").Length > 0 || (TextEncoder ?? "").Length > 0 || (Vae ?? "").Length > 0;
+    }
+
+    /// <summary>One resolved recipe choice: the recipe, one of its variants, and a plain-language problem when the choice fell back (T118).</summary>
+    /// <param name="Recipe">The chosen recipe; null when the book has nothing usable.</param>
+    /// <param name="Variant">The chosen variant; null when the recipe has none or the recipe itself is null.</param>
+    /// <param name="Problem">Why the choice fell back, in words for the administrator's status list; null when the choice is exact.</param>
+    public sealed record class CurrentChoice(Recipe Recipe, Variant Variant, string Problem);
+
+    /// <summary>Everything the standard workflows need to build and publish: the resolved recipe with its variant, the effective model file names
+    /// (the recipe's, or the administrator's legacy override), and problems to show in the status (T118).</summary>
+    /// <param name="Recipe">The current recipe; null when no recipe resolves.</param>
+    /// <param name="Variant">The current recipe's variant; null when none.</param>
+    /// <param name="Files">The model file names to fill into the loaders.</param>
+    /// <param name="LegacyUnmatched">Whether non-empty legacy file-name settings are in effect but match no recipe variant (administrator override, A19).</param>
+    /// <param name="Problems">Plain-language notes for the administrator's status list.</param>
+    public sealed record class EffectiveModels(Recipe Recipe, Variant Variant, ModelFiles Files, bool LegacyUnmatched, List<string> Problems);
 
     /// <summary>What the model can do; the page hides entries a recipe does not support.</summary>
     /// <param name="Edit">Whether the model can edit from reference images.</param>
@@ -117,22 +188,24 @@ public static class ModelRecipeRules
     public sealed record class CapabilityRule(bool Edit, bool AlphaChannel, int MaxInputImages);
 
     /// <summary>One model recipe: everything about running one model, plus its hardware variants.</summary>
-    /// <param name="Id">The recipe id, unique in the book (the first entry wins when a file repeats one).</param>
-    /// <param name="Name">The display name.</param>
+    /// <param name="Id">The recipe id, unique in the book (the first entry wins when a file repeats one).</n    /// <param name="Name">The display name.</param>
     /// <param name="License">The license note shown to administrators; EcomCraft itself claims nothing beyond it (A31).</param>
     /// <param name="MinComfyUI">The lowest ComfyUI version the recipe is known to work on; "" when unknown.</param>
     /// <param name="Nodes">The ComfyUI node classes the recipe needs.</param>
-    /// <param name="Blueprints">Workflow kind ("scene", "detail", "reference-edit", ...) to blueprint file; kinds without a blueprint cannot run that way.</param>
+    /// <param name="Match">How a converted graph is recognized as this recipe (T118); never null.</param>
+    /// <param name="Blueprints">Workflow kind ("scene", "detail", "reference-edit", ...) to blueprint entry; kinds without a blueprint cannot run that way.</param>
     /// <param name="Sampling">The sampling rule.</param>
     /// <param name="SecondPass">The second pass rule.</param>
+    /// <param name="ReferenceEdit">The direct-fusion trial's wiring as declared; null when the recipe cannot run the trial (T118).</param>
     /// <param name="ResolutionBudget">The encoder's pixel budget per image.</param>
     /// <param name="SizeStep">Widths and heights must be multiples of this.</param>
-    /// <param name="MaxEdge">The longest edge generated and exported images may have.</param>
+    /// <param name="MaxEdge">The longest edge generated and exported images may have; never above 2048 (A24).</param>
     /// <param name="PromptSyntax">How images are referenced in prompts, such as "&lt;image1&gt;"; "" when plain text.</param>
     /// <param name="Capabilities">The capability flags.</param>
     /// <param name="Variants">The hardware variants, in file order; the first matching one wins.</param>
-    public sealed record class Recipe(string Id, LocalizedText Name, string License, string MinComfyUI, List<string> Nodes,
-        Dictionary<string, string> Blueprints, SamplingRule Sampling, SecondPassRule SecondPass, long ResolutionBudget, int SizeStep, int MaxEdge,
+    public sealed record class Recipe(string Id, LocalizedText Name, string License, string MinComfyUI, List<string> Nodes, MatchRule Match,
+        Dictionary<string, BlueprintEntry> Blueprints, SamplingRule Sampling, SecondPassRule SecondPass, ReferenceEditRule ReferenceEdit,
+        long ResolutionBudget, int SizeStep, int MaxEdge,
         string PromptSyntax, CapabilityRule Capabilities, List<Variant> Variants);
 
     /// <summary>Parses a recipe book from model-recipes.json text. Unreadable text, a missing "models" array, or an entry without an id yields
@@ -210,6 +283,160 @@ public static class ModelRecipeRules
         return null;
     }
 
+    /// <summary>The recipe and variant a "model id / variant id" setting picks (T118): an empty setting takes the default recipe, an unresolvable one
+    /// also takes the default with a plain-language problem, and a variant id that no longer exists falls back to the recipe's first variant.</summary>
+    public static CurrentChoice ResolveCurrent(IEnumerable<Recipe> book, string setting)
+    {
+        List<Recipe> recipes = [.. (book ?? [])];
+        string problem = null;
+        Recipe recipe = null;
+        Variant variant = null;
+        string value = (setting ?? "").Trim();
+        if (value.Length > 0)
+        {
+            string[] parts = value.Split('/', StringSplitOptions.TrimEntries);
+            recipe = parts.Length == 2 ? Find(recipes, parts[0]) : null;
+            if (recipe is not null)
+            {
+                variant = recipe.Variants.FirstOrDefault(item => item.Id == HardwareRules.Normalize(parts[1]));
+            }
+            if (recipe is null || variant is null)
+            {
+                problem = $"当前配方设置“{value}”无效，已回退默认配方。";
+                recipe = null;
+            }
+        }
+        if (recipe is null)
+        {
+            recipe = Find(recipes, DefaultRecipeId);
+            if (recipe is not null)
+            {
+                variant = recipe.Variants.FirstOrDefault(item => item.Id == DefaultVariantId) ?? recipe.Variants.FirstOrDefault();
+                if (variant is null)
+                {
+                    problem = $"默认配方 {DefaultRecipeId} 没有可用变体。";
+                }
+            }
+            else
+            {
+                problem = "没有可用的模型配方。";
+            }
+        }
+        return new CurrentChoice(recipe, variant, problem);
+    }
+
+    /// <summary>The first variant whose files match every non-empty legacy file-name setting, case-insensitively (T118): how the startup migration
+    /// recognizes which recipe the old settings already point at. Null when nothing is set or nothing matches.</summary>
+    public static CurrentChoice MatchLegacy(IEnumerable<Recipe> book, ModelFiles legacy)
+    {
+        if (legacy?.Any() != true)
+        {
+            return null;
+        }
+        foreach (Recipe recipe in book ?? [])
+        {
+            foreach (Variant variant in recipe.Variants)
+            {
+                if (Fits(legacy.Unet, FileFor(variant, RoleUnet)) && Fits(legacy.TextEncoder, FileFor(variant, RoleTextEncoder))
+                    && Fits(legacy.Vae, FileFor(variant, RoleVae)))
+                {
+                    return new CurrentChoice(recipe, variant, null);
+                }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Whether one legacy file name fits a variant file: an unset legacy name sets no constraint, a set one must equal the variant's file name
+    /// for that role (case-insensitively, the way model folders work).</summary>
+    private static bool Fits(string legacyName, FileSpec file)
+    {
+        if (string.IsNullOrWhiteSpace(legacyName))
+        {
+            return true;
+        }
+        return file is not null && string.Equals(file.Filename, legacyName.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Everything the standard workflows need (T118): non-empty legacy file-name settings keep acting as the administrator's override (A19) —
+    /// matching a variant or not — while the recipe itself comes from the current-recipe setting with its default fallback. Never throws and never
+    /// blocks a run; problems are words for the administrator's status list.</summary>
+    public static EffectiveModels Resolve(IEnumerable<Recipe> book, string setting, ModelFiles legacy)
+    {
+        List<string> problems = [];
+        if (legacy is not null && legacy.Any())
+        {
+            CurrentChoice match = MatchLegacy(book, legacy);
+            if (match is not null)
+            {
+                return new EffectiveModels(match.Recipe, match.Variant, legacy, false, problems);
+            }
+            problems.Add("旧的模型文件名设置未匹配任何配方，已按这些文件名继续（管理员覆盖）。");
+            CurrentChoice fallback = ResolveCurrent(book, "");
+            if (fallback.Problem is not null)
+            {
+                problems.Add(fallback.Problem);
+            }
+            return new EffectiveModels(fallback.Recipe, fallback.Variant, legacy, true, problems);
+        }
+        CurrentChoice current = ResolveCurrent(book, setting);
+        if (current.Problem is not null)
+        {
+            problems.Add(current.Problem);
+        }
+        return new EffectiveModels(current.Recipe, current.Variant, FilesOf(current.Variant), false, problems);
+    }
+
+    /// <summary>The model file names of one variant, by role; "" for roles the variant does not declare.</summary>
+    public static ModelFiles FilesOf(Variant variant) => new(
+        FileFor(variant, RoleUnet)?.Filename ?? "",
+        FileFor(variant, RoleTextEncoder)?.Filename ?? "",
+        FileFor(variant, RoleVae)?.Filename ?? "");
+
+    /// <summary>The image tag of one picture under a prompt syntax (T118): the syntax's digit run becomes the picture's index, so "<c>&lt;image1&gt;</c>"
+    /// makes "<c>&lt;image2&gt;</c>" and so on. Null when the syntax has no index to replace.</summary>
+    public static string ImageTag(string promptSyntax, int index)
+    {
+        (int start, int end) = DigitRun(promptSyntax);
+        if (start < 0)
+        {
+            return null;
+        }
+        string syntax = promptSyntax.Trim();
+        return syntax[..start] + index.ToString(System.Globalization.CultureInfo.InvariantCulture) + syntax[end..];
+    }
+
+    /// <summary>The prompt syntax a request path uses: a declared one with a replaceable index, or the default style when the recipe has none.</summary>
+    public static string EffectivePromptSyntax(string promptSyntax) => DigitRun(promptSyntax).Start >= 0 ? promptSyntax.Trim() : DefaultPromptSyntax;
+
+    /// <summary>The regex matching every image tag of a prompt syntax (T118): pictures 1–10, as the server-written edit prompt may carry them. The
+    /// default syntax yields exactly the pattern the checks used before recipes existed.</summary>
+    public static string TagPattern(string promptSyntax)
+    {
+        string syntax = EffectivePromptSyntax(promptSyntax);
+        (int start, int end) = DigitRun(syntax);
+        return System.Text.RegularExpressions.Regex.Escape(syntax[..start]) + "(?:[1-9]|10)" + System.Text.RegularExpressions.Regex.Escape(syntax[end..]);
+    }
+
+    /// <summary>Where the digit run of a prompt syntax sits; start -1 when there is none.</summary>
+    private static (int Start, int End) DigitRun(string promptSyntax)
+    {
+        string syntax = (promptSyntax ?? "").Trim();
+        for (int i = 0; i < syntax.Length; i++)
+        {
+            if (char.IsDigit(syntax[i]))
+            {
+                int end = i;
+                while (end < syntax.Length && char.IsDigit(syntax[end]))
+                {
+                    end++;
+                }
+                return (i, end);
+            }
+        }
+        return (-1, -1);
+    }
+
     /// <summary>Whether a targeting list accepts a value: an empty list means "any", otherwise the value must appear in it (case-insensitive).</summary>
     private static bool Allows(List<string> list, string value)
     {
@@ -256,14 +483,18 @@ public static class ModelRecipeRules
             (entry["license"]?.ToString() ?? "").Trim(),
             (entry["min_comfyui"]?.ToString() ?? "").Trim(),
             ParseList(entry["nodes"]),
-            ParseMap(entry["blueprints"]),
+            new MatchRule(ParseList((entry["match"] as JObject ?? new JObject())["encoder_classes"])),
+            ParseBlueprints(entry["blueprints"]),
             new SamplingRule(
                 StepCount(samplingEntry["steps"], DefaultSteps, MaxSteps),
                 new CfgRule(cfgDefault, cfgMin, cfgMax, ParseText(cfgEntry["hint"])),
                 ParseText(samplingEntry["negative_hint"]),
                 (samplingEntry["sampler"]?.ToString() ?? "").Trim(),
                 (samplingEntry["scheduler"]?.ToString() ?? "").Trim()),
-            new SecondPassRule(StepCount((entry["second_pass"] as JObject ?? new JObject())["steps"], DefaultSecondPassSteps, MaxSecondPassSteps)),
+            new SecondPassRule(
+                StepCount((entry["second_pass"] as JObject ?? new JObject())["steps"], DefaultSecondPassSteps, MaxSecondPassSteps),
+                BoundedDecimal((entry["second_pass"] as JObject ?? new JObject())["denoise"], DefaultSecondPassDenoise, 0, 1)),
+            ParseReferenceEdit(entry["reference_edit"]),
             BoundedWhole(entry["resolution_budget"], DefaultResolutionBudget, MinResolutionBudget, MaxResolutionBudget),
             (int)BoundedWhole(entry["size_step"], DefaultSizeStep, MinSizeStep, MaxSizeStep),
             (int)BoundedWhole(entry["max_edge"], DefaultMaxEdge, MinMaxEdge, MaxMaxEdge),
@@ -369,24 +600,82 @@ public static class ModelRecipeRules
         return [.. (token as JArray ?? new JArray()).Select(item => HardwareRules.Normalize(item?.ToString() ?? "")).Where(item => item.Length > 0)];
     }
 
-    /// <summary>A workflow-kind to blueprint-file map; entries with an empty file name are dropped.</summary>
-    private static Dictionary<string, string> ParseMap(JToken token)
+    /// <summary>A workflow-kind to blueprint-entry map (T118): a plain string is the file alone (the T117 form, no declared access points); an
+    /// object adds the <c>inpaint</c> access points. Entries without a usable file name are dropped.</summary>
+    private static Dictionary<string, BlueprintEntry> ParseBlueprints(JToken token)
     {
-        Dictionary<string, string> map = [];
+        Dictionary<string, BlueprintEntry> map = [];
         if (token is not JObject obj)
         {
             return map;
         }
         foreach (JProperty property in obj.Properties())
         {
-            string file = (property.Value?.ToString() ?? "").Trim();
-            if (file.Length > 0)
+            string kind = HardwareRules.Normalize(property.Name);
+            if (kind.Length == 0)
             {
-                map[HardwareRules.Normalize(property.Name)] = file;
+                continue;
             }
+            if (property.Value?.Type == JTokenType.String)
+            {
+                string file = property.Value.ToString().Trim();
+                if (file.Length > 0)
+                {
+                    map[kind] = new BlueprintEntry(file, "", "");
+                }
+                continue;
+            }
+            if (property.Value is not JObject entry)
+            {
+                continue;
+            }
+            string entryFile = (entry["file"]?.ToString() ?? "").Trim();
+            if (entryFile.Length == 0)
+            {
+                continue;
+            }
+            JObject inpaint = entry["inpaint"] as JObject ?? new JObject();
+            map[kind] = new BlueprintEntry(entryFile,
+                (inpaint["sampler"]?.ToString() ?? "").Trim(),
+                (inpaint["decoder"]?.ToString() ?? "").Trim());
         }
         return map;
     }
+
+    /// <summary>The direct-fusion trial's declaration (T118): a block without an encoder class cannot run the trial; the auto pixel budgets are
+    /// clamped to their bounds per value.</summary>
+    private static ReferenceEditRule ParseReferenceEdit(JToken token)
+    {
+        if (token is not JObject obj)
+        {
+            return null;
+        }
+        string encoderClass = (obj["encoder_class"]?.ToString() ?? "").Trim();
+        if (encoderClass.Length == 0)
+        {
+            return null;
+        }
+        string resolutionInput = (obj["resolution_input"]?.ToString() ?? "").Trim();
+        JObject auto = obj["auto_resolution"] as JObject ?? new JObject();
+        Dictionary<string, int> byTier = [];
+        foreach (JProperty property in (auto["by_tier"] as JObject ?? new JObject()).Properties())
+        {
+            string tier = HardwareRules.Normalize(property.Name);
+            if (tier.Length > 0 && property.Value is JValue value && value.Type == JTokenType.Integer)
+            {
+                byTier[tier] = (int)Math.Clamp(value.Value<long>(), MinEditResolution, MaxEditResolution);
+            }
+        }
+        return new ReferenceEditRule(encoderClass,
+            resolutionInput.Length > 0 ? resolutionInput : "resolution",
+            (int)BoundedWhole(auto["default"], DefaultEditResolution, MinEditResolution, MaxEditResolution),
+            byTier);
+    }
+
+    /// <summary>The auto pixel budgets used when no recipe declares a reference-edit block: today's values, kept so a missing recipe never breaks
+    /// the administrator override of <c>EcomCraft.ReferenceEditResolution</c> (T118).</summary>
+    public static ReferenceEditRule FallbackReferenceEdit() => new("", "resolution", DefaultEditResolution,
+        new Dictionary<string, int>() { [HardwareRules.Unsupported] = DefaultEditResolutionWeak, [HardwareRules.Unknown] = DefaultEditResolutionWeak });
 
     /// <summary>A whole number inside its bounds; a missing, decimal, string or otherwise unusable value — or one outside its bounds — falls
     /// back to the default, the way <see cref="HardwareRules"/> treats thresholds: a mistyped entry never silently clamps into nonsense.</summary>

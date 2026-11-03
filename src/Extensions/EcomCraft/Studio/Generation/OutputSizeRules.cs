@@ -6,9 +6,15 @@ namespace EcomCraftStudio.Studio.Generation;
 /// then scaled to the exact size, so a 2000 × 2000 main image is neither slow nor repeated by generating it directly. Independent of SwarmUI so it can be unit tested.</summary>
 public static class OutputSizeRules
 {
-    /// <summary>Smallest and largest accepted output side: capped at 2K by decision A24 (the cap follows the model recipe once F86/T118 lands).
-    /// Export presets accept the same range, so a platform slot above it is refused.</summary>
-    public const int MinSide = 64, MaxSide = 2048;
+    /// <summary>Smallest accepted output side.</summary>
+    public const int MinSide = 64;
+
+    /// <summary>Where the largest accepted output side comes from: the current recipe's cap, set at startup (T118); tests keep the pre-recipe default.</summary>
+    internal static Func<int> MaxEdgeSource = () => 2048;
+
+    /// <summary>Largest accepted output side: the current recipe's longest-edge cap, never above 2048 (A24: today's 2K; a recipe may lower it).
+    /// Export presets accept the same range, so a platform slot above it is refused. The number also appears in the request error messages.</summary>
+    public static int MaxSide => (int)Math.Clamp(MaxEdgeSource(), MinSide, 2048);
 
     /// <summary>Pixel count pictures are generated at.</summary>
     public const long GenerationPixels = 1024 * 1024;

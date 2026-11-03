@@ -1,13 +1,25 @@
 using Newtonsoft.Json.Linq;
 using System.IO;
+using EcomCraftStudio.Studio.Setup;
 
 namespace EcomCraftStudio.Studio;
 
-/// <summary>Converts saved canvases and embedded ComfyUI subgraphs into validated server-owned prompts.</summary>
+/// <summary>Converts saved canvases and embedded ComfyUI subgraphs into validated server-owned prompts. Model-specific rules (cfg bounds with
+/// their hint texts, the negative-prompt note and the latent size step) follow the recipe book whose match conditions the graph satisfies (T118):
+/// without a book or a match the generic ranges apply.</summary>
 public sealed class NativeWorkflowConverter
 {
     /// <summary>Embedded definitions are resolved only from the saved file, never from client input or external files.</summary>
     private readonly Dictionary<string, JObject> Definitions = new();
+
+    /// <summary>The recipe book this conversion reads its model-specific rules from; null falls back to the startup book.</summary>
+    private readonly List<ModelRecipeRules.Recipe> Book;
+
+    /// <summary>Converts with the given recipe book (the tests pass theirs instead of touching shared state).</summary>
+    private NativeWorkflowConverter(List<ModelRecipeRules.Recipe> book)
+    {
+        Book = book;
+    }
 
     /// <summary>The flattened executable graph.</summary>
     private readonly JObject Prompt = new();
@@ -42,12 +54,27 @@ public sealed class NativeWorkflowConverter
     /// <summary>Publishes saved defaults and server-owned bindings alongside the executable template.</summary>
     public static JObject Convert(JObject canvas, out JObject metadata, out JObject values)
     {
-        NativeWorkflowConverter converter = new();
+        return Convert(canvas, out metadata, out values, out _);
+    }
+
+    /// <summary>Also reports the blueprint's canvas node IDs by their converted node IDs (T118): how a recipe's declared access points
+    /// (the sampler and decoder to rewire) resolve into the flattened graph. An ID used in two scopes is dropped as ambiguous.
+    /// <paramref name="recipeBook"/> overrides the startup book (the unit tests pass theirs instead of touching shared state).</summary>
+    public static JObject Convert(JObject canvas, out JObject metadata, out JObject values, out Dictionary<string, string> canvasNodeIds,
+        List<ModelRecipeRules.Recipe> recipeBook = null)
+    {
+        NativeWorkflowConverter converter = new(recipeBook);
         metadata = converter.Parameters;
         values = converter.Values;
+        canvasNodeIds = new Dictionary<string, string>();
         try
         {
-            return converter.Build(canvas);
+            JObject prompt = converter.Build(canvas);
+            if (prompt is not null)
+            {
+                canvasNodeIds = new Dictionary<string, string>(converter.ApiByCanvasId);
+            }
+            return prompt;
         }
         catch (Exception ex) when (ex is InvalidDataException or ArgumentException or InvalidCastException or FormatException or OverflowException or InvalidOperationException)
         {
@@ -246,6 +273,15 @@ public sealed class NativeWorkflowConverter
                 }
                 Prompt[apiId] = new JObject { ["class_type"] = type == "SaveImageAdvanced" ? "PreviewImage" : type, ["inputs"] = values };
                 scope.Ids.Add(id, apiId);
+                // Blueprint canvas node IDs resolve into the flattened graph through this map (T118); an ID appearing in two scopes is dropped.
+                if (AmbiguousCanvasIds.Add(id))
+                {
+                    ApiByCanvasId.TryAdd(id, apiId);
+                }
+                else if (ApiByCanvasId.TryGetValue(id, out string other) && other != apiId)
+                {
+                    ApiByCanvasId.Remove(id);
+                }
             }
             return new JArray(apiId, slot);
         }
@@ -290,6 +326,7 @@ public sealed class NativeWorkflowConverter
                 }
             }
         }
+        MatchRecipe();
         HashSet<(string Node, string Input)> positive = new(), negative = new();
         foreach (JProperty property in Prompt.Properties())
         {
@@ -315,10 +352,10 @@ public sealed class NativeWorkflowConverter
                 {
                     throw new InvalidDataException();
                 }
-                if (encoder["class_type"]?.ToString() == "TextEncodeQwenImage21")
+                if (MatchedClasses.Contains(HardwareRules.Normalize(encoder["class_type"]?.ToString() ?? "")))
                 {
-                    QwenEncoders.Add(source[0].ToString());
-                    QwenSamplers.Add(property.Name);
+                    MatchedEncoders.Add(source[0].ToString());
+                    MatchedSamplers.Add(property.Name);
                 }
                 (name == "positive" ? positive : negative).Add((source[0].ToString(), field));
             }
@@ -331,7 +368,7 @@ public sealed class NativeWorkflowConverter
         {
             bool isPositive = positive.Contains((nodeId, field));
             Bind(nodeId, field, "text", isPositive ? "创作描述" : "排除内容", isPositive ? "prompt" : "negativeprompt",
-                description: !isPositive && QwenEncoders.Contains(nodeId) ? QwenNegativeHint : null);
+                description: !isPositive && MatchedEncoders.Contains(nodeId) ? Matched.Sampling.NegativeHint.ZhCn : null);
         }
         foreach (JProperty property in Prompt.Properties())
         {
@@ -344,10 +381,10 @@ public sealed class NativeWorkflowConverter
                 Bind(id, "seed", "integer", "随机种子", "seed", -1, 9007199254740991);
                 Bind(id, "noise_seed", "integer", "随机种子", "seed", -1, 9007199254740991);
                 Bind(id, "steps", "integer", "采样步数", "steps", 1, 100);
-                // Qwen Image 2.1 releases with cfg 1 (the engine then skips negative conditioning entirely); 2 follows complex prompts closer, and higher values visibly damage the picture.
-                if (QwenSamplers.Contains(id))
+                // The matched recipe's cfg bounds come with their own hint text (T118); without a recipe the generic range applies.
+                if (MatchedSamplers.Contains(id))
                 {
-                    Bind(id, "cfg", "decimal", "提示词强度", "cfgscale", 1, 4, description: QwenCfgHint);
+                    Bind(id, "cfg", "decimal", "提示词强度", "cfgscale", Matched.Sampling.Cfg.Min, Matched.Sampling.Cfg.Max, description: Matched.Sampling.Cfg.Hint.ZhCn);
                 }
                 else
                 {
@@ -359,9 +396,10 @@ public sealed class NativeWorkflowConverter
             }
             if (type is "EmptyLatentImage" or "EmptySD3LatentImage")
             {
-                // The latent is 16-aligned (A24); Bind moves a saved default that is not a multiple of 16 to the nearest valid value.
-                Bind(id, "width", "integer", "宽度", "width", 256, 2048, 16);
-                Bind(id, "height", "integer", "高度", "height", 256, 2048, 16);
+                // The latent follows the matched recipe's size step (T118); Bind moves a saved default that is not a multiple of it to the nearest valid value.
+                int sizeStep = Matched?.SizeStep ?? 16;
+                Bind(id, "width", "integer", "宽度", "width", 256, 2048, sizeStep);
+                Bind(id, "height", "integer", "高度", "height", 256, 2048, sizeStep);
                 Values["images"] ??= inputs["batch_size"]?.DeepClone() ?? new JValue(1);
                 // SwarmUI schedules each requested image separately, avoiding images squared.
                 inputs["batch_size"] = 1;
@@ -383,17 +421,27 @@ public sealed class NativeWorkflowConverter
     /// <summary>Saved values before placeholders replace literal node inputs.</summary>
     private readonly JObject Values = new();
 
-    /// <summary>Encoders of type <c>TextEncodeQwenImage21</c> in the graph, by prompt node ID.</summary>
-    private readonly HashSet<string> QwenEncoders = new();
+    /// <summary>Converted node IDs by blueprint canvas node ID (T118), for resolving a recipe's declared access points.</summary>
+    private readonly Dictionary<string, string> ApiByCanvasId = new();
 
-    /// <summary>Samplers whose conditioning comes from a <c>TextEncodeQwenImage21</c> encoder, by prompt node ID.</summary>
-    private readonly HashSet<string> QwenSamplers = new();
+    /// <summary>Canvas node IDs that appeared in more than one scope and can no longer be told apart.</summary>
+    private readonly HashSet<string> AmbiguousCanvasIds = new();
 
-    /// <summary>Hint for the negative prompt of Qwen Image 2.1 workflows: at cfg 1 the engine skips negative conditioning, so it has no effect.</summary>
-    private const string QwenNegativeHint = "提示词强度为 1 时负向提示词不生效，需要生效请调高提示词强度。";
+    /// <summary>Encoders whose class the matched recipe declares, by prompt node ID.</summary>
+    private readonly HashSet<string> MatchedEncoders = new();
 
-    /// <summary>Hint for the cfg of Qwen Image 2.1 workflows: released at cfg 1, 2 follows complex prompts closer but sharpens edges, higher values damage the picture.</summary>
-    private const string QwenCfgHint = "Qwen Image 2.1 常用 1–2：1 时不使用排除内容，2 更遵循复杂提示词但边缘略锐；更高会明显损坏画面。";
+    /// <summary>Samplers whose conditioning comes from an encoder the matched recipe declares, by prompt node ID.</summary>
+    private readonly HashSet<string> MatchedSamplers = new();
+
+    /// <summary>The recipe the graph matched, chosen in <see cref="MatchRecipe"/>; null when no recipe's match conditions fit.</summary>
+    private ModelRecipeRules.Recipe Matched;
+
+    /// <summary>The matched recipe's encoder classes, normalized for lookups.</summary>
+    private HashSet<string> MatchedClasses = [];
+
+    /// <summary>The recipe book the model-specific rules come from (T118), set once at startup; null (as in the unit tests until they set it)
+    /// keeps the generic ranges, hints and size step of the pre-recipe behavior.</summary>
+    internal static Func<List<ModelRecipeRules.Recipe>> RecipeBook;
 
     /// <summary>One primary page control per semantic input; additional nodes retain independent editable fields.</summary>
     private readonly HashSet<string> FormBindings = new();
@@ -401,6 +449,30 @@ public sealed class NativeWorkflowConverter
     /// <summary>Model roots the model dropdown scan reads: the working directory and the configured model root paths, set once at startup.
 /// Null (as in the unit tests) narrows every model dropdown to its current value, the behavior before the scan existed.</summary>
     internal static Func<(string BaseDirectory, string[] Roots)> ModelRoots;
+
+    /// <summary>Chooses the recipe the graph follows (T118): the first book entry whose declared encoder classes contain a class present in the
+    /// graph. Book order decides overlaps; no book or no match leaves the generic rules in place.</summary>
+    private void MatchRecipe()
+    {
+        List<ModelRecipeRules.Recipe> book = Book ?? RecipeBook?.Invoke();
+        if (book is null || book.Count == 0)
+        {
+            return;
+        }
+        HashSet<string> classes = [.. Prompt.Properties()
+            .Select(property => ((JObject)property.Value)["class_type"]?.ToString())
+            .Where(type => !string.IsNullOrEmpty(type))
+            .Select(HardwareRules.Normalize)];
+        foreach (ModelRecipeRules.Recipe recipe in book)
+        {
+            if (recipe.Match.EncoderClasses.Any(match => classes.Contains(match)))
+            {
+                Matched = recipe;
+                MatchedClasses = [.. recipe.Match.EncoderClasses];
+                return;
+            }
+        }
+    }
 
     /// <summary>Publishes literal inputs, following only known primitive value links without replacing graph connections.</summary>
     private void Bind(string nodeId, string inputName, string type, string label, string form, double min = 0, double max = 0, double step = 1, bool model = false, string description = null)

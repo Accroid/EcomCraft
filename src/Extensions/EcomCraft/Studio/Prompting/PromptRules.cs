@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using EcomCraftStudio.Studio.Setup;
 using Newtonsoft.Json.Linq;
 
 namespace EcomCraftStudio.Studio.Prompting;
@@ -182,25 +183,30 @@ public static class PromptRules
         + (string.IsNullOrWhiteSpace(styleName) ? "" : $"The chosen visual style is: {styleName}. ")
         + "Reply with the prompt only, on one line, without quotes, labels or explanations.";
 
-    /// <summary>The parts of the direct-fusion trial's prompt that stay the same for every angle count (F84, T123): the replacement instruction of the measured P3
-    /// (EcomCraft 参考图路线实测 4.2) with the official <c>&lt;imageN&gt;</c> tags of Qwen Image 2.1 in place of "image 1 / image 2". Written by the server only;
-    /// a client never submits it.</summary>
-    private const string EditBody =
-        "Replace the main product in <image1> with the product from <image2>.\n"
-        + "Completely remove every headline, caption, badge, icon, logo and watermark from <image1>. Nothing written may remain except what is printed on the product from <image2>.\n"
-        + "Keep the composition, camera angle, background, props, lighting and color mood of <image1>.\n"
-        + "Keep the shape, colors, logo and printed text of the product from <image2> exactly unchanged.\n"
-        + "Match the product's lighting, shadow and perspective to the scene.";
+    /// <summary>The parts of the direct-fusion trial's prompt that stay the same for every angle count (F84, T123): the replacement instruction of the
+    /// measured P3 (EcomCraft 参考图路线实测 4.2) with the current model's image tags in place of "image 1 / image 2" — the tag style comes from the
+    /// recipe's <c>prompt_syntax</c> (T118), so the text stays the same whenever the syntax does. Written by the server only; a client never submits it.</summary>
+    private static string EditBody(string image1, string image2)
+    {
+        return "Replace the main product in " + image1 + " with the product from " + image2 + ".\n"
+            + "Completely remove every headline, caption, badge, icon, logo and watermark from " + image1 + ". Nothing written may remain except what is printed on the product from " + image2 + ".\n"
+            + "Keep the composition, camera angle, background, props, lighting and color mood of " + image1 + ".\n"
+            + "Keep the shape, colors, logo and printed text of the product from " + image2 + " exactly unchanged.\n"
+            + "Match the product's lighting, shadow and perspective to the scene.";
+    }
 
-    /// <summary>The direct-fusion trial's prompt for a product with this many angle photos (F84, T123): the measured P3 instruction with the official
-    /// <c>&lt;imageN&gt;</c> tags, naming the product's photos in order, and with two or three angles a line saying they show the same product from
-    /// different angles. Server-written for every task; the count never changes the number of pictures made.</summary>
-    public static string ReferenceEditPrompt(int productAngles)
+    /// <summary>The direct-fusion trial's prompt for a product with this many angle photos (F84, T123): the measured P3 instruction with the current
+    /// model's image tags (the recipe's <c>prompt_syntax</c>, T118), naming the product's photos in order, and with two or three angles a line saying
+    /// they show the same product from different angles. Server-written for every task; the count never changes the number of pictures made.</summary>
+    public static string ReferenceEditPrompt(int productAngles, string promptSyntax)
     {
         int angles = Math.Clamp(productAngles, 1, 3);
+        string first = ModelRecipeRules.ImageTag(promptSyntax, 1);
+        string second = ModelRecipeRules.ImageTag(promptSyntax, 2);
         string sameProduct = angles == 1 ? "" : angles == 2
-            ? "\nThe <image2> and <image3> pictures show the same product from different angles; use the angle that fits the scene best."
-            : "\nThe <image2>, <image3> and <image4> pictures show the same product from different angles; use the angle that fits the scene best.";
-        return EditBody + sameProduct;
+            ? "\nThe " + second + " and " + ModelRecipeRules.ImageTag(promptSyntax, 3) + " pictures show the same product from different angles; use the angle that fits the scene best."
+            : "\nThe " + second + ", " + ModelRecipeRules.ImageTag(promptSyntax, 3) + " and " + ModelRecipeRules.ImageTag(promptSyntax, 4)
+                + " pictures show the same product from different angles; use the angle that fits the scene best.";
+        return EditBody(first, second) + sameProduct;
     }
 }

@@ -145,6 +145,12 @@ public class EcomCraft : Extension
         DiskMonitor.Start();
         TemplateStore.Init(FilePath);
         PromptService.Init(FilePath);
+        // The legacy model file-name settings migrate into the current recipe once (T118); no match keeps them as the administrator's override.
+        ModelRecipes.MigrateLegacySettings();
+        // The converter reads its model-specific rules (cfg bounds and hints, size step) from the recipe book, and the output cap follows the
+        // current recipe (T118); both read per call, so an administrator's recipe override takes effect without a restart.
+        EcomCraftStudio.Studio.NativeWorkflowConverter.RecipeBook = ModelRecipes.Load;
+        EcomCraftStudio.Studio.Generation.OutputSizeRules.MaxEdgeSource = () => ModelRecipes.Current().Recipe?.MaxEdge ?? 2048;
         StandardWorkflows.Init(FilePath);
         // The model dropdown scan reads the configured model roots; without this (unit tests) dropdowns narrow to their saved value.
         EcomCraftStudio.Studio.NativeWorkflowConverter.ModelRoots = () => (Environment.CurrentDirectory,

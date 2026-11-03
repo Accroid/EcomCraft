@@ -1,6 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+using EcomCraftStudio.Studio.Generation;
 
 namespace EcomCraftStudio.Studio.PostProcess;
 
@@ -201,9 +202,10 @@ public static class ProductComposite
     /// workflow parameter without failing the check (T123fix).</summary>
     public const int MaxReferenceBytes = 5 * 1024 * 1024;
 
-    /// <summary>Largest side of the edit trial's flattened product input (F84): the edit model's own pixel budget stays far below it. A picture whose
-    /// PNG still passes <see cref="MaxReferenceBytes"/> at this size steps down further (<see cref="WhiteFlattened"/>).</summary>
-    public const int EditMaxSide = 2048;
+    /// <summary>Largest side of the edit trial's flattened product input (F84): the current recipe's longest-edge cap (T118), like every generated and
+    /// exported picture. The edit model's own pixel budget stays far below it. A picture whose PNG still passes <see cref="MaxReferenceBytes"/> at
+    /// this size steps down further (<see cref="WhiteFlattened"/>).</summary>
+    public static int EditMaxSide => OutputSizeRules.MaxSide;
 
     /// <summary>Smallest long side the edit trial's flattened input may step down to when its PNG still passes <see cref="MaxReferenceBytes"/>: a fully
     /// incompressible picture is far below the limit at this size already, so the ladder always ends here (T123fix).</summary>

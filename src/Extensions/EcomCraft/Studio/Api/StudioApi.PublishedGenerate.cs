@@ -145,10 +145,10 @@ public static partial class StudioApi
             return Error("请填写创作描述（最多 12000 字符），排除内容最多 6000 字符。", "invalid_prompt");
         }
         // Native prompt directives may change parameters or apply presets after parsing. This adapter accepts plain text only, with one server-side
-        // exception: the reference-edit trial's own prompt uses the official <imageN> tags of the edit model (F84); anything but those exact tags
+        // exception: the reference-edit trial's own prompt uses the current recipe's image tags (F84, T118); anything but those exact tags
         // is still refused, and the flag itself never comes from a request field.
         string tagStripped = options?.AllowImageTagPrompt == true
-            ? Regex.Replace(prompt, "<image(?:[1-9]|10)>", "", RegexOptions.CultureInvariant) : prompt;
+            ? Regex.Replace(prompt, ImageTagPattern(), "", RegexOptions.CultureInvariant) : prompt;
         if (new[] { tagStripped, negative }.Any(p => p.Contains('<') || p.Contains('>') || p.Contains("__")))
         {
             return Error("本版工作台只接受普通描述，不支持原生 <…> 指令、预设或 __通配符__。", "unsupported_prompt_syntax");
@@ -291,7 +291,7 @@ public static partial class StudioApi
         return null;
     }
 
-    /// <summary>Whether the request allows the official <c>&lt;imageN&gt;</c> tags in this parameter's text: only the server-set edit prompt
+    /// <summary>Whether the request allows the current recipe's image tags in this parameter's text: only the server-set edit prompt
     /// (bound to the "prompt" page field) carries them (F84).</summary>
     private static bool ImageTagsAllowed(GenerateOptions options, JObject definition) =>
         options?.AllowImageTagPrompt == true && definition?["form"]?.ToString() == "prompt";
@@ -334,7 +334,7 @@ public static partial class StudioApi
             // see exactly the pixels they saw before. Only this server's own data URLs are touched; user output references resolve later, as always.
             foreach (JProperty property in metadata.Properties())
             {
-                if (property.Value is not JObject embedDefinition || embedDefinition["type"]?.ToString()?.ToLowerInvariant() != "image"
+                if (property.Value is not JObject embedDefinition || embedDefinition.Value<string>("type")?.ToLowerFast() != "image"
                     || embedDefinition.Value<bool?>("image_always_b64") != true
                     || input[property.Name] is not JValue embedValue || embedValue.Type != JTokenType.String)
                 {

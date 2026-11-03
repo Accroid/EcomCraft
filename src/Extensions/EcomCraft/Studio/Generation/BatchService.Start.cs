@@ -334,7 +334,8 @@ public static partial class BatchService
         }
         batch.ReferenceEdit = true;
         batch.Candidates = 1;
-        batch.EditResolution = HardwareRules.ReferenceEditResolution(Program.ServerSettings.EcomCraft.ReferenceEditResolution, await HardwareProbe.CurrentTierAsync());
+        batch.EditResolution = HardwareRules.ReferenceEditResolution(Program.ServerSettings.EcomCraft.ReferenceEditResolution, await HardwareProbe.CurrentTierAsync(),
+            ModelRecipes.Current().Recipe?.ReferenceEdit);
         return null;
     }
 

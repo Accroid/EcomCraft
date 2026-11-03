@@ -228,14 +228,10 @@ public static class HardwareRules
     /// <summary>Video memory rounded to whole megabytes the way memory sizes are usually stated.</summary>
     public static long Megabytes(long bytes) => (bytes + (1024 * 1024) / 2) / (1024 * 1024);
 
-    /// <summary>The direct-fusion trial's pixel budget from the hardware tier (F84, T123): 1024 on any tier the hardware can run on, 512 on the
-    /// unsupported tier or when the probe failed, so a weak card still finishes. The tier only guides this default; it never blocks a run (A19).</summary>
-    public static int ReferenceEditAutoResolution(string tier) => tier is Recommended or Minimum or Conditional ? 1024 : 512;
-
-    /// <summary>The direct-fusion trial's pixel budget as configured (F84): a positive value is used clamped to 256–2048, and 0 or less means automatic
-    /// by <see cref="ReferenceEditAutoResolution"/> of the given tier.</summary>
-    public static int ReferenceEditResolution(int configured, string tier) =>
-        configured > 0 ? (int)Math.Clamp(configured, 256, 2048) : ReferenceEditAutoResolution(tier);
+    /// <summary>The direct-fusion trial's pixel budget as configured (F84): a positive value is used clamped to 256–2048, and 0 or less means
+    /// automatic by the current recipe's per-tier values (T118); <paramref name="rule"/> null falls back to the rules' own defaults.</summary>
+    public static int ReferenceEditResolution(int configured, string tier, ModelRecipeRules.ReferenceEditRule rule) =>
+        configured > 0 ? (int)Math.Clamp(configured, 256, 2048) : (rule ?? ModelRecipeRules.FallbackReferenceEdit()).AutoResolution(tier);
 
     /// <summary>A video memory threshold with the tolerance applied: cards report a little less than their stated size (an "8 GB" card may read
     /// 8176 MB), so the boundary shifts down by the configured percent instead of rejecting such cards (T91 review).</summary>
