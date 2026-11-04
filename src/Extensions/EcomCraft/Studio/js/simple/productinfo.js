@@ -284,6 +284,7 @@ class SimpleProductInfoPart {
 
     /** Saves the current language's fields (F79, T99); an all-empty entry clears the language on the server. */
     static async saveProductInfo() {
+        let tr = this.api.tr;
         let editor = this.productInfo;
         if (!editor || editor.saving) {
             return;
