@@ -7,25 +7,26 @@
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#E8E8E6">
     <title>EcomCraft 工作台</title>
-    <link rel="icon" href="/favicon.ico?v=0.65.3">
-    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.65.3">
-    <script src="/EcomCraft/lang/en.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/i18n.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/simple.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/js/simple/brand.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/js/simple/storyboard.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/js/simple/rules.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/js/simple/prompt.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/js/simple/export.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/js/simple/ai-label.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/js/simple/tone.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/js/simple/placement.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/js/simple/products.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/js/simple/productinfo.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/js/simple/reference.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/js/simple/batch.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/js/simple/tasks.js?v=0.65.3" defer></script>
-    <script src="/EcomCraft/studio.js?v=0.65.3" defer></script>
+    <link rel="icon" href="/favicon.ico?v=0.65.4">
+    <link rel="stylesheet" href="/EcomCraft/studio.css?v=0.65.4">
+    <script src="/EcomCraft/lang/en.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/i18n.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/simple.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/js/simple/brand.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/js/simple/storyboard.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/js/simple/rules.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/js/simple/prompt.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/js/simple/export.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/js/simple/ai-label.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/js/simple/tone.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/js/simple/placement.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/js/simple/products.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/js/simple/productinfo.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/js/simple/reference.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/js/simple/batch.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/js/simple/tasks.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/js/pro/viewer.js?v=0.65.4" defer></script>
+    <script src="/EcomCraft/studio.js?v=0.65.4" defer></script>
 </head>
 
 <body>
@@ -349,92 +350,26 @@
             </ol>
         </section>
 
-        <section class="view" id="view-create" aria-labelledby="page-title" hidden>
-            <div class="workspace">
-                <section class="composer">
-                    <header class="composer-head">
-                        <div>
-                            <h1 class="page-title" id="page-title">生成商品图片</h1>
-                            <p class="composer-sub">创作方式：<span id="workflow-tag">文生图</span></p>
-                        </div>
+        <section class="view" id="view-create" data-layout="pro" aria-labelledby="page-title" hidden>
+            <div class="workspace pro-workbench">
+                <aside class="pro-assets" aria-label="创作方式与初始图">
+                    <div class="pro-panel-head">
+                        <h2 class="pro-panel-title">创作方式</h2>
                         <div class="seg" role="group" aria-label="创作类型">
                             <button type="button" id="mode-image" class="seg-btn selected" aria-pressed="true">图片</button>
                             <button type="button" id="mode-video" class="seg-btn" aria-pressed="false">视频</button>
                         </div>
-                    </header>
-
-                    <div class="banner" id="connection-message" role="status" aria-live="polite">
-                        <span class="banner-text" id="connection-message-text">正在读取账号、模型与执行服务器信息…</span>
-                        <button type="button" class="link-btn" id="open-setup-guide">查看配置指引</button>
                     </div>
-
-                    <div class="seg seg-wide" id="image-mode-tabs" role="group" aria-label="图片创作方式">
-                        <button type="button" class="seg-btn mode-tab selected" data-mode="text2img" aria-pressed="true">文生图</button>
-                        <button type="button" class="seg-btn mode-tab" data-mode="img2img" aria-pressed="false">图生图</button>
-                        <button type="button" class="seg-btn mode-tab" data-mode="inpaint" aria-pressed="false">局部重绘</button>
-                        <button type="button" class="seg-btn mode-tab" data-mode="outpaint" aria-pressed="false">扩图</button>
-                        <button type="button" class="seg-btn mode-tab" data-mode="upscale" aria-pressed="false">放大</button>
-                    </div>
-
-                    <form id="creation-form" autocomplete="off">
-                        <fieldset id="creation-fields" disabled>
-
-                            <div class="fld" id="workflow-select-fld">
-                                <div class="fld-head">
-                                    <label for="workflow-select">创作工作流</label>
-                                    <span class="fld-actions">
-                                        <a class="link-btn" id="edit-comfy-workflow" href="#" target="_blank" rel="noopener" hidden>修改 Comfy 工作流</a>
-                                        <button type="button" class="link-btn" id="refresh-workflows">刷新列表</button>
-                                    </span>
-                                </div>
-                                <select id="workflow-select" name="workflow">
-                                    <option value="">标准参数（不用工作流）</option>
-                                </select>
-                                <p class="hint" id="workflow-description">可选择管理员发布到简单工作台的 ComfyUI 工作流。</p>
-                                <p class="hint workflow-source-hint" id="workflow-source-hint" hidden></p>
-                                <div class="own-workflows" id="own-workflows">
-                                    <div class="inline-row">
-                                        <button type="button" class="btn btn-sm" id="own-workflow-upload">上传工作流</button>
-                                        <input type="file" id="own-workflow-file" accept=".json,application/json" hidden>
-                                    </div>
-                                    <p class="hint">上传 ComfyUI 菜单“保存”得到的工作流文件（不超过 2 MB），上传后只有你自己能用。</p>
-                                    <div class="own-workflow-message" id="own-workflow-message" role="status" aria-live="polite" hidden></div>
-                                    <ul class="own-workflow-list" id="own-workflow-list" aria-label="我的工作流"></ul>
-                                </div>
-                            </div>
-
-                            <div class="fld">
-                                <div class="fld-head">
-                                    <label for="prompt">创作描述<span class="req" aria-hidden="true">*</span></label>
-                                    <span class="counter" id="prompt-count">0 / 12000</span>
-                                </div>
-                                <textarea id="prompt" name="prompt" rows="5" maxlength="12000" required
-                                    placeholder="例如：一瓶透明玻璃精华液，置于浅灰色石台，柔和侧光，突出瓶身质感，画面右侧留白用于排版…"></textarea>
-                                <div class="fld-foot">
-                                    <span class="hint">写清主体、场景、光线和构图</span>
-                                    <span class="fld-actions">
-                                        <button class="link-btn" type="button" id="enhance-prompt">优化提示词</button>
-                                        <button class="link-btn" type="button" id="enhancer-settings" hidden>设置</button>
-                                        <button class="link-btn" type="button" id="insert-example">填入示例</button>
-                                    </span>
-                                </div>
-
-                                <div class="enhance-card" id="enhance-card" hidden aria-live="polite">
-                                    <div class="enhance-loading" id="enhance-loading">
-                                        <span class="spinner spinner-sm" aria-hidden="true"></span>
-                                        <span>正在调用提示词优化服务…</span>
-                                    </div>
-                                    <p class="enhance-result" id="enhance-result" hidden></p>
-                                    <div class="enhance-card-actions" id="enhance-card-actions" hidden>
-                                        <button class="btn btn-primary btn-sm" type="button" id="enhance-apply">采用该描述</button>
-                                        <button class="btn btn-sm" type="button" id="enhance-retry">重新优化</button>
-                                        <button class="btn btn-sm" type="button" id="enhance-dismiss">忽略</button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="fld workflow-params" id="workflow-params" hidden role="group" aria-label="工作流参数"></div>
-
+                    <div class="pro-panel-body">
+                        <div class="seg seg-wide seg-wrap" id="image-mode-tabs" role="group" aria-label="图片创作方式">
+                            <button type="button" class="seg-btn mode-tab selected" data-mode="text2img" aria-pressed="true">文生图</button>
+                            <button type="button" class="seg-btn mode-tab" data-mode="img2img" aria-pressed="false">图生图</button>
+                            <button type="button" class="seg-btn mode-tab" data-mode="inpaint" aria-pressed="false">局部重绘</button>
+                            <button type="button" class="seg-btn mode-tab" data-mode="outpaint" aria-pressed="false">扩图</button>
+                            <button type="button" class="seg-btn mode-tab" data-mode="upscale" aria-pressed="false">放大</button>
+                        </div>
+                        <p class="hint pro-assets-empty" id="pro-assets-empty">当前方式不需要初始图。要改已有的商品图时，选择图生图、局部重绘、扩图或放大，再在这里放入图片。</p>
+                        <fieldset class="pro-assets-fields" id="pro-assets-fields">
                             <div class="fld" id="reference-fld" hidden>
                                 <div class="fld-head">
                                     <span class="fld-label">初始图<span class="fld-optional" id="ref-optional">图生图</span></span>
@@ -521,6 +456,142 @@
                                     <p class="hint">放大后会用模型重新精炼细节，耗时较长。</p>
                                 </div>
                             </div>
+                        </fieldset>
+                    </div>
+                </aside>
+
+                <section class="preview" aria-labelledby="preview-title">
+                    <h2 class="visually-hidden" id="preview-title">画面预览</h2>
+                    <div class="pro-toolbar" role="toolbar" aria-label="画布工具">
+                        <div class="seg" role="group" aria-label="缩放">
+                            <button type="button" class="seg-btn pro-zoom-step" id="pro-zoom-out" aria-label="缩小" title="缩小（-）">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14" /></svg>
+                            </button>
+                            <span class="pro-zoom-label" id="pro-zoom-label">—</span>
+                            <button type="button" class="seg-btn pro-zoom-step" id="pro-zoom-in" aria-label="放大" title="放大（+）">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M12 5v14" /></svg>
+                            </button>
+                            <button type="button" class="seg-btn" id="pro-zoom-fit" aria-pressed="false" title="适应窗口（0），双击画面也可以">适应</button>
+                            <button type="button" class="seg-btn" id="pro-zoom-actual" aria-pressed="false" title="按原图像素显示（1）">100%</button>
+                        </div>
+                        <div class="seg" role="group" aria-label="画布底色" id="pro-backdrop">
+                            <button type="button" class="seg-btn selected" data-backdrop="paper" aria-pressed="true">背景纸</button>
+                            <button type="button" class="seg-btn" data-backdrop="gray" aria-pressed="false" title="18% 中性灰，方便判断商品颜色">18% 灰</button>
+                            <button type="button" class="seg-btn" data-backdrop="black" aria-pressed="false">黑</button>
+                        </div>
+                        <button type="button" class="btn btn-sm" id="pro-fullscreen" disabled>全屏查看</button>
+                        <span class="pro-info" id="pro-info"></span>
+                    </div>
+                    <div class="stage" id="stage">
+                        <div class="state-empty" id="empty-state">
+                            <span class="viewfinder" aria-hidden="true"></span>
+                            <h3 class="stage-title" id="empty-title">下一张商品图，从这里开始</h3>
+                            <p id="empty-desc">填写描述后点击“生成图片”，结果会出现在这里。</p>
+                        </div>
+                        <div class="state-pending" id="pending-state" hidden>
+                            <span class="tally" aria-hidden="true"></span>
+                            <h3 class="stage-title">正在生成</h3>
+                            <p>请勿刷新页面或重复提交。</p>
+                            <span class="elapsed" id="elapsed">已等待 0 秒</span>
+                        </div>
+                        <div class="results pro-viewport" id="results" hidden>
+                            <div class="pro-frame" id="pro-frame"></div>
+                            <span class="pro-hint" aria-hidden="true">滚轮缩放 · 拖动平移 · 双击适应窗口</span>
+                        </div>
+                        <span class="pro-running" id="pro-running" role="status" hidden><span class="pro-running-dot" aria-hidden="true"></span><span id="pro-running-text"></span></span>
+                    </div>
+                    <div class="pro-film" id="pro-film" hidden>
+                        <div class="pro-film-list" id="result-film" role="group" aria-label="本次结果"></div>
+                        <div class="pro-film-actions" id="result-actions"></div>
+                    </div>
+                    <div class="status-line" id="result-status" role="status" aria-live="polite">还没有生成记录。</div>
+                    <div class="recover" id="reassign" role="alert" hidden>
+                        <p id="reassign-text"></p>
+                        <div class="recover-actions">
+                            <button type="button" id="reassign-btn" class="btn">改派到其他服务器</button>
+                            <button type="button" id="reassign-close" class="btn">关闭</button>
+                        </div>
+                    </div>
+                    <div class="recover" id="recover" hidden>
+                        <p>连接中断不代表任务已经停止。请先在原生引擎核对队列和个人历史，避免重复生成。</p>
+                        <div class="recover-actions">
+                            <a class="btn" href="/Text2Image" target="_blank" rel="noopener">打开原生引擎核对</a>
+                            <button type="button" id="unlock" class="btn">已核对，允许重新提交</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="composer">
+                    <header class="composer-head">
+                        <div>
+                            <h1 class="page-title" id="page-title">生成商品图片</h1>
+                            <p class="composer-sub">创作方式：<span id="workflow-tag">文生图</span></p>
+                        </div>
+                    </header>
+
+                    <div class="banner" id="connection-message" role="status" aria-live="polite">
+                        <span class="banner-text" id="connection-message-text">正在读取账号、模型与执行服务器信息…</span>
+                        <button type="button" class="link-btn" id="open-setup-guide">查看配置指引</button>
+                    </div>
+
+                    <form id="creation-form" autocomplete="off">
+                        <fieldset id="creation-fields" disabled>
+
+                            <div class="fld" id="workflow-select-fld">
+                                <div class="fld-head">
+                                    <label for="workflow-select">创作工作流</label>
+                                    <span class="fld-actions">
+                                        <a class="link-btn" id="edit-comfy-workflow" href="#" target="_blank" rel="noopener" hidden>修改 Comfy 工作流</a>
+                                        <button type="button" class="link-btn" id="refresh-workflows">刷新列表</button>
+                                    </span>
+                                </div>
+                                <select id="workflow-select" name="workflow">
+                                    <option value="">标准参数（不用工作流）</option>
+                                </select>
+                                <p class="hint" id="workflow-description">可选择管理员发布到简单工作台的 ComfyUI 工作流。</p>
+                                <p class="hint workflow-source-hint" id="workflow-source-hint" hidden></p>
+                                <div class="own-workflows" id="own-workflows">
+                                    <div class="inline-row">
+                                        <button type="button" class="btn btn-sm" id="own-workflow-upload">上传工作流</button>
+                                        <input type="file" id="own-workflow-file" accept=".json,application/json" hidden>
+                                    </div>
+                                    <p class="hint">上传 ComfyUI 菜单“保存”得到的工作流文件（不超过 2 MB），上传后只有你自己能用。</p>
+                                    <div class="own-workflow-message" id="own-workflow-message" role="status" aria-live="polite" hidden></div>
+                                    <ul class="own-workflow-list" id="own-workflow-list" aria-label="我的工作流"></ul>
+                                </div>
+                            </div>
+
+                            <div class="fld">
+                                <div class="fld-head">
+                                    <label for="prompt">创作描述<span class="req" aria-hidden="true">*</span></label>
+                                    <span class="counter" id="prompt-count">0 / 12000</span>
+                                </div>
+                                <textarea id="prompt" name="prompt" rows="5" maxlength="12000" required
+                                    placeholder="例如：一瓶透明玻璃精华液，置于浅灰色石台，柔和侧光，突出瓶身质感，画面右侧留白用于排版…"></textarea>
+                                <div class="fld-foot">
+                                    <span class="hint">写清主体、场景、光线和构图</span>
+                                    <span class="fld-actions">
+                                        <button class="link-btn" type="button" id="enhance-prompt">优化提示词</button>
+                                        <button class="link-btn" type="button" id="enhancer-settings" hidden>设置</button>
+                                        <button class="link-btn" type="button" id="insert-example">填入示例</button>
+                                    </span>
+                                </div>
+
+                                <div class="enhance-card" id="enhance-card" hidden aria-live="polite">
+                                    <div class="enhance-loading" id="enhance-loading">
+                                        <span class="spinner spinner-sm" aria-hidden="true"></span>
+                                        <span>正在调用提示词优化服务…</span>
+                                    </div>
+                                    <p class="enhance-result" id="enhance-result" hidden></p>
+                                    <div class="enhance-card-actions" id="enhance-card-actions" hidden>
+                                        <button class="btn btn-primary btn-sm" type="button" id="enhance-apply">采用该描述</button>
+                                        <button class="btn btn-sm" type="button" id="enhance-retry">重新优化</button>
+                                        <button class="btn btn-sm" type="button" id="enhance-dismiss">忽略</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="fld workflow-params" id="workflow-params" hidden role="group" aria-label="工作流参数"></div>
 
                             <div class="fld" id="model-fld">
                                 <label class="fld-label" for="model">生成模型</label>
@@ -600,46 +671,13 @@
 
                             <div class="submit">
                                 <button id="generate" type="submit" class="btn btn-primary btn-block" disabled>
-                                    <span id="generate-label">生成图片</span>
+                                    <span id="generate-label">生成图片</span><span class="pro-kbd" aria-hidden="true">Ctrl ↵</span>
                                 </button>
                                 <p class="hint submit-hint" id="submit-hint" aria-live="polite">读取服务器状态后即可提交。</p>
                                 <p class="privacy">提示词和素材不会保存在浏览器里，生成结果保存在你的作品画廊。</p>
                             </div>
                         </fieldset>
                     </form>
-                </section>
-
-                <section class="preview" aria-labelledby="preview-title">
-                    <h2 class="visually-hidden" id="preview-title">画面预览</h2>
-                    <div class="stage" id="stage">
-                        <div class="state-empty" id="empty-state">
-                            <span class="viewfinder" aria-hidden="true"></span>
-                            <h3 class="stage-title" id="empty-title">下一张商品图，从这里开始</h3>
-                            <p id="empty-desc">填写描述后点击“生成图片”，结果会出现在这里。</p>
-                        </div>
-                        <div class="state-pending" id="pending-state" hidden>
-                            <span class="tally" aria-hidden="true"></span>
-                            <h3 class="stage-title">正在生成</h3>
-                            <p>请勿刷新页面或重复提交。</p>
-                            <span class="elapsed" id="elapsed">已等待 0 秒</span>
-                        </div>
-                        <div class="results" id="results" hidden></div>
-                    </div>
-                    <div class="status-line" id="result-status" role="status" aria-live="polite">还没有生成记录。</div>
-                    <div class="recover" id="reassign" role="alert" hidden>
-                        <p id="reassign-text"></p>
-                        <div class="recover-actions">
-                            <button type="button" id="reassign-btn" class="btn">改派到其他服务器</button>
-                            <button type="button" id="reassign-close" class="btn">关闭</button>
-                        </div>
-                    </div>
-                    <div class="recover" id="recover" hidden>
-                        <p>连接中断不代表任务已经停止。请先在原生引擎核对队列和个人历史，避免重复生成。</p>
-                        <div class="recover-actions">
-                            <a class="btn" href="/Text2Image" target="_blank" rel="noopener">打开原生引擎核对</a>
-                            <button type="button" id="unlock" class="btn">已核对，允许重新提交</button>
-                        </div>
-                    </div>
                 </section>
             </div>
         </section>

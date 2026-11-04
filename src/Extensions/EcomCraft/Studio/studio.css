@@ -929,3 +929,110 @@ main:focus:not(:focus-visible) { outline: none; }
     flex: 1;
     min-width: 0;
 }
+
+/* ---------- 专业模式工作台（T127）：创作方式 | 画布 | 参数 三栏，画布可缩放、拖动 ----------
+   设计依据：docs/EcomCraft 工作台界面设计.zh-CN.md 第 2.4.1 节。整个视图占满顶栏以下的窗口，左右两栏各自滚动，
+   画布默认把结果放大到画布的 90%；底色可选背景纸、18% 中性灰或黑，只影响画布，不改主题。 */
+.view[data-layout="pro"] { max-width: none; padding: 0; }
+.pro-workbench {
+    --pro-assets-w: 300px;
+    --pro-inspector-w: 360px;
+    grid-template-columns: var(--pro-assets-w) minmax(0, 1fr) var(--pro-inspector-w);
+    gap: 0; align-items: stretch;
+    height: calc(100vh - var(--topbar-h));
+    height: calc(100dvh - var(--topbar-h));
+    min-height: 560px;
+}
+.pro-assets, .pro-workbench .composer { min-height: 0; overflow-y: auto; background: var(--panel); }
+.pro-assets { border-right: 1px solid var(--line); }
+.pro-panel-head {
+    position: sticky; top: 0; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.pro-panel-title { font-size: var(--fs-13); font-weight: 600; }
+.pro-panel-body { padding: 12px 16px 16px; }
+.pro-assets-empty { margin-top: 12px; }
+.pro-assets .fld { padding-top: 16px; border-bottom: 0; }
+
+.pro-workbench .composer { border: 0; border-left: 1px solid var(--line); border-radius: 0; padding: 0 16px; }
+.pro-workbench .composer-head {
+    position: sticky; top: 0; z-index: 2; margin: 0 -16px; padding: 10px 16px;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.pro-workbench .page-title { font: 600 var(--fs-16)/1.4 var(--font-body); letter-spacing: 0; }
+.pro-workbench .composer-sub { margin-top: 2px; font-size: var(--fs-12); }
+.pro-workbench .composer .banner { margin: 0 -16px; padding-inline: 13px; }
+.pro-workbench .composer .fld { padding: 12px 0; }
+.pro-workbench .submit {
+    position: sticky; bottom: 0; z-index: 2; margin: 0 -16px; padding: 12px 16px;
+    background: var(--panel); border-top: 1px solid var(--line);
+}
+.pro-kbd {
+    display: inline-block; margin-left: 10px; padding: 0 5px; border: 1px solid currentColor; border-radius: 3px;
+    font-size: 11px; line-height: 16px; font-weight: 400; opacity: .8;
+}
+
+.pro-workbench .preview { position: static; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.pro-toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+    padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.pro-toolbar .seg-btn { min-height: 28px; padding: 3px 10px; }
+.pro-toolbar .pro-zoom-step { display: inline-flex; align-items: center; padding-inline: 6px; }
+.pro-zoom-label {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 48px;
+    font-size: var(--fs-12); color: var(--ink-2); font-variant-numeric: tabular-nums;
+}
+.pro-info { margin-left: auto; font-size: var(--fs-12); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.pro-workbench .stage { flex: 1 1 auto; min-height: 0; padding: 24px; border-radius: 0; }
+.pro-workbench .pro-viewport {
+    position: absolute; inset: 0; display: block; overflow: hidden;
+    cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.pro-viewport.is-dragging { cursor: grabbing; }
+.pro-viewport.is-video { cursor: default; }
+.pro-viewport[data-backdrop="gray"] { background: #777777; }
+.pro-viewport[data-backdrop="black"] { background: #111213; }
+.pro-frame { position: absolute; left: 50%; top: 50%; visibility: hidden; }
+.pro-frame.is-ready { visibility: visible; }
+.pro-frame img, .pro-frame video { display: block; width: 100%; height: 100%; }
+.pro-frame img { pointer-events: none; box-shadow: 0 0 0 1px var(--line); }
+.pro-frame.is-pixels img { image-rendering: pixelated; }
+.pro-hint, .pro-running {
+    position: absolute; pointer-events: none; padding: 2px 8px; border-radius: 4px;
+    color: #FFFFFF; font-size: var(--fs-12); font-variant-numeric: tabular-nums;
+}
+.pro-hint { left: 12px; bottom: 12px; background: rgba(0, 0, 0, .55); }
+.pro-viewport.is-video .pro-hint { display: none; }
+.pro-running { top: 12px; right: 12px; z-index: 1; display: inline-flex; align-items: center; gap: 8px; background: rgba(0, 0, 0, .65); }
+.pro-running-dot { width: 8px; height: 8px; border-radius: 50%; background: #FF6A55; animation: tally 1.6s ease-in-out infinite; }
+
+.pro-film {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+    padding: 8px 12px; background: var(--panel); border-top: 1px solid var(--line);
+}
+.pro-film-list { flex: 1 1 280px; min-width: 0; display: flex; gap: 8px; overflow-x: auto; padding: 4px; }
+.pro-thumb {
+    position: relative; flex: 0 0 64px; width: 64px; height: 64px; padding: 0; overflow: hidden;
+    border: 1px solid var(--line); border-radius: 3px; background: var(--field);
+}
+.pro-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.pro-thumb.selected { outline: 2px solid var(--key); outline-offset: 2px; }
+.pro-thumb-video { display: grid; place-items: center; width: 100%; height: 100%; color: var(--ink-2); }
+.pro-thumb-num {
+    position: absolute; left: 3px; top: 3px; padding: 0 4px; border-radius: 2px;
+    background: rgba(0, 0, 0, .6); color: #FFFFFF; font-size: 10px; line-height: 14px; font-variant-numeric: tabular-nums;
+}
+.pro-film-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.pro-workbench .status-line { border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 6px 12px; font-size: var(--fs-12); }
+.pro-workbench .recover { margin: 0; border-top: 1px solid var(--line); }
+
+/* 窄屏：三栏改为上下排列，画布在最上面，左右两栏不再单独滚动 */
+@media (max-width: 1100px) {
+    .pro-workbench { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 0; }
+    .pro-workbench .preview { order: -1; }
+    .pro-workbench .stage { flex: none; height: 60vh; min-height: 360px; }
+    .pro-assets, .pro-workbench .composer { overflow: visible; border: 0; border-top: 1px solid var(--line); }
+    .pro-workbench .composer-head, .pro-panel-head, .pro-workbench .submit { position: static; }
+}

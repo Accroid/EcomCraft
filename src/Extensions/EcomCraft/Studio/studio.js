@@ -200,7 +200,7 @@
         workflowId: '', workflowValues: {},
         busy: false, uncertain: false, submitting: false,
         reference: null, referenceLoading: false, referenceRevision: 0,
-        loras: [], results: [], timer: null, pending: new Set(), pendingTimer: null,
+        loras: [], results: [], resultIndex: 0, timer: null, pending: new Set(), pendingTimer: null,
         gallery: { items: [], filter: 'all', source: 'all', search: '', sort: 'Date', loading: false, current: null },
         queue: { loading: false, timer: null, stopping: new Set() }
     };
@@ -753,6 +753,7 @@
         $('workflow-params').hidden = !selected || !(workflow.inputs || []).length;
         const meta = modeMeta[state.mode] || modeMeta.text2img;
         $('reference-fld').hidden = selected || !meta.needsRef;
+        $('pro-assets-empty').hidden = !$('reference-fld').hidden;
         $('mask-wrap').hidden = selected || !meta.mask || state.mode === 'outpaint';
         $('creativity-fld').hidden = selected || !meta.creativity;
         $('slotfit-fld').hidden = selected || !(meta.outpaint || meta.upscale);
@@ -2698,6 +2699,8 @@
     /** Syncs every form control, the submit button and its explanation with the current state. */
     function updateControls() {
         $('creation-fields').disabled = state.busy;
+        $('pro-assets-fields').disabled = state.busy;
+        updateRunning();
         $('refresh-workflows').disabled = state.catalogLoading || state.busy;
         $('refresh-workflows').textContent = state.catalogLoading ? '刷新中…' : '刷新列表';
         $('model').disabled = state.busy || Boolean(currentWorkflow()?.native);
@@ -2752,60 +2755,152 @@
         } catch { return null; }
     }
 
-    /** Renders the latest results on the backdrop with download, continue and gallery actions. */
+    /** Shows this session's results on the professional canvas (T127): the selected one on the zoomable canvas, all of them in the film
+     * strip below, with download, continue and gallery actions for the selected one. */
     function renderResults() {
         let results = state.results;
-        let holder = $('results');
-        holder.replaceChildren();
-        holder.hidden = !results.length;
-        holder.className = `results count-${Math.min(results.length, 4)}`;
+        state.resultIndex = Math.max(0, Math.min(state.resultIndex, results.length - 1));
+        $('results').hidden = !results.length;
         $('empty-state').hidden = Boolean(results.length) || state.busy;
         $('pending-state').hidden = !state.busy;
+        $('pro-film').hidden = !results.length;
+        let film = $('result-film');
+        film.replaceChildren();
         for (let i = 0; i < results.length; i++) {
             let media = results[i];
-            let card = el('figure', 'result-card');
-            let node = el(media.video ? 'video' : 'img');
-            node.src = media.url;
-            node.addEventListener('error', () => setStatus('服务器返回了结果地址，但当前无法预览。请到原生引擎核对。', true));
+            let thumb = el('button', 'pro-thumb');
+            thumb.type = 'button';
+            setPressed(thumb, i == state.resultIndex);
+            thumb.setAttribute('aria-label', media.video ? tr('第 {0} 条', i + 1) : tr('第 {0} 张', i + 1));
             if (media.video) {
-                node.controls = true;
-                node.preload = 'metadata';
-                node.playsInline = true;
-                let frame = el('div', 'result-open');
-                frame.append(node);
-                card.append(frame);
+                let icon = el('span', 'pro-thumb-video');
+                icon.append(svgIcon('M8 5v14l11-7z'));
+                thumb.append(icon);
             }
             else {
-                node.alt = tr('第 {0} 张生成结果', i + 1);
-                let open = el('button', 'result-open');
-                open.type = 'button';
-                open.setAttribute('aria-label', tr('放大查看第 {0} 张结果', i + 1));
-                open.append(node);
-                open.addEventListener('click', () => Lightbox.open(results, i, 'result', open));
-                card.append(open);
+                let img = el('img');
+                img.src = media.url;
+                img.alt = '';
+                img.loading = 'lazy';
+                thumb.append(img);
             }
-            let actions = el('figcaption', 'result-actions');
-            if (results.length > 1) {
-                actions.append(el('span', 'result-label', media.video ? tr('第 {0} 条', i + 1) : tr('第 {0} 张', i + 1)));
+            thumb.append(el('span', 'pro-thumb-num', String(i + 1)));
+            thumb.addEventListener('click', () => selectResult(i));
+            film.append(thumb);
+        }
+        let current = results[state.resultIndex] || null;
+        renderResultActions(current);
+        proViewer.show(current && {
+            url: current.url, video: current.video, alt: tr('第 {0} 张生成结果', state.resultIndex + 1),
+            onError: () => setStatus('服务器返回了结果地址，但当前无法预览。请到原生引擎核对。', true)
+        });
+        updateCanvasTools();
+    }
+
+    /** Download, continue and gallery actions of the selected result. */
+    function renderResultActions(media) {
+        let actions = $('result-actions');
+        actions.replaceChildren();
+        if (!media) {
+            return;
+        }
+        let download = el('a', 'btn btn-sm', '下载');
+        download.href = media.url;
+        download.download = media.name;
+        actions.append(download);
+        if (!media.video) {
+            let again = el('button', 'btn btn-sm', '以此图继续创作');
+            again.type = 'button';
+            again.addEventListener('click', () => editFromGallery(media));
+            actions.append(again);
+        }
+        if (media.src) {
+            let reveal = el('button', 'btn btn-sm', '在画廊查看');
+            reveal.type = 'button';
+            reveal.addEventListener('click', () => revealInGallery(media.src));
+            actions.append(reveal);
+        }
+    }
+
+    /** Selects a result of the film strip and keeps its thumbnail in view. */
+    function selectResult(index) {
+        state.resultIndex = index;
+        renderResults();
+        $('result-film').children[state.resultIndex]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+
+    /** Puts the images of a finished task first in the film strip and shows the first of them; the strip keeps the latest 40. */
+    function addResults(images) {
+        let media = (images || []).map(safeMedia).filter(Boolean);
+        if (!media.length) {
+            return;
+        }
+        state.results = media.concat(state.results).slice(0, 40);
+        state.resultIndex = 0;
+        renderResults();
+    }
+
+    /** Marks a toggle button of a segmented control as chosen or not. */
+    function setPressed(button, pressed) {
+        button.classList.toggle('selected', pressed);
+        button.setAttribute('aria-pressed', String(pressed));
+    }
+
+    /** Follows the canvas in its toolbar: zoom percent, fit / own-pixels state, backdrop, and the shown result's number and size. */
+    function updateCanvasTools() {
+        let percent = proViewer.zoomPercent();
+        let zoomable = proViewer.canZoom();
+        $('pro-zoom-label').textContent = percent == null ? '—' : `${percent}%`;
+        for (let id of ['pro-zoom-out', 'pro-zoom-in', 'pro-zoom-actual']) {
+            $(id).disabled = !zoomable;
+        }
+        $('pro-zoom-fit').disabled = !proViewer.ready();
+        setPressed($('pro-zoom-fit'), proViewer.ready() && proViewer.fitted);
+        setPressed($('pro-zoom-actual'), zoomable && proViewer.isActual());
+        for (let button of $('pro-backdrop').querySelectorAll('[data-backdrop]')) {
+            setPressed(button, button.dataset.backdrop == proViewer.backdrop);
+        }
+        let count = state.results.length;
+        $('pro-fullscreen').disabled = !count;
+        let info = '';
+        if (count) {
+            info = proViewer.ready()
+                ? tr('第 {0} / {1} 张 · {2}×{3}', state.resultIndex + 1, count, proViewer.width, proViewer.height)
+                : tr('第 {0} / {1} 张', state.resultIndex + 1, count);
+        }
+        $('pro-info').textContent = info;
+    }
+
+    /** Shows on the canvas how many of this page's tasks are still running. */
+    function updateRunning() {
+        let running = state.pending.size;
+        $('pro-running').hidden = !running;
+        $('pro-running-text').textContent = running ? tr('{0} 个任务生成中', running) : '';
+    }
+
+    /** Keyboard shortcuts of the professional mode (T127): Ctrl or ⌘ + Enter submits from anywhere, also from the prompt; outside text
+     * fields the arrow keys pick the previous or next result and + - 0 1 zoom the canvas. */
+    function proShortcut(event) {
+        if (event.key == 'Enter' && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
+            if (!$('generate').disabled) {
+                event.preventDefault();
+                $('generate').click();
             }
-            let download = el('a', 'btn btn-sm', '下载');
-            download.href = media.url;
-            download.download = media.name;
-            actions.append(download);
-            if (!media.video) {
-                let again = el('button', 'btn btn-sm', '以此图继续创作');
-                again.type = 'button';
-                again.addEventListener('click', () => editFromGallery(media));
-                actions.append(again);
+            return;
+        }
+        if (event.ctrlKey || event.metaKey || event.altKey || event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) {
+            return;
+        }
+        let count = state.results.length;
+        if (event.key == 'ArrowLeft' || event.key == 'ArrowRight') {
+            if (count > 1) {
+                event.preventDefault();
+                selectResult((state.resultIndex + (event.key == 'ArrowRight' ? 1 : -1) + count) % count);
             }
-            if (media.src) {
-                let reveal = el('button', 'btn btn-sm', '在画廊查看');
-                reveal.type = 'button';
-                reveal.addEventListener('click', () => revealInGallery(media.src));
-                actions.append(reveal);
-            }
-            card.append(actions);
-            holder.append(card);
+            return;
+        }
+        if (proViewer.keydown(event)) {
+            event.preventDefault();
         }
     }
 
@@ -3033,12 +3128,14 @@
                 }
                 else if (outcome) {
                     setStatus(tr('任务 #{0} 已完成{1}，结果已保存到作品画廊。', id, server));
+                    addResults(outcome.images);
                 }
                 else {
                     setStatus(tr('任务 #{0} 已结束；成功的结果已自动保存到作品画廊。', id));
                 }
                 if (state.view == 'gallery') { loadGallery(); }
             }
+            updateRunning();
             if (!state.pending.size) {
                 clearInterval(state.pendingTimer);
                 state.pendingTimer = null;
@@ -6541,6 +6638,19 @@
                 revealInGallery(item.src);
             }
         });
+        proViewer.attach($('results'), $('pro-frame'), updateCanvasTools);
+        $('pro-zoom-in').addEventListener('click', () => proViewer.zoomBy(ProViewer.step));
+        $('pro-zoom-out').addEventListener('click', () => proViewer.zoomBy(1 / ProViewer.step));
+        $('pro-zoom-fit').addEventListener('click', () => proViewer.fit());
+        $('pro-zoom-actual').addEventListener('click', () => proViewer.actual());
+        for (let button of $('pro-backdrop').querySelectorAll('[data-backdrop]')) {
+            button.addEventListener('click', () => proViewer.setBackdrop(button.dataset.backdrop));
+        }
+        $('pro-fullscreen').addEventListener('click', () => {
+            if (state.results.length) {
+                Lightbox.open(state.results, state.resultIndex, 'result', $('pro-fullscreen'));
+            }
+        });
         window.addEventListener('keydown', e => {
             if (Lightbox.keydown(e) || AdminMenu.keydown(e)) {
                 return;
@@ -6651,6 +6761,10 @@
                 else {
                     DialogFocus.trap($('storage-modal'), e);
                 }
+                return;
+            }
+            if (state.view == 'create') {
+                proShortcut(e);
             }
         });
 
