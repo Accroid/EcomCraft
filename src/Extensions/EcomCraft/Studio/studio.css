@@ -446,6 +446,11 @@ main:focus:not(:focus-visible) { outline: none; }
 .simple-angle.is-main img { border-color: var(--key); }
 .simple-angle.is-main .simple-angle-badge { color: var(--key); font-weight: 600; }
 .simple-angle-actions { display: flex; gap: 10px; font-size: var(--fs-12); }
+/* 角度图去除背景的状态：上传后立刻显示原图，图片底部标“等待去除背景 / 正在去除背景”，处理完后消失 */
+.simple-angle-pic { position: relative; display: block; width: 88px; height: 88px; }
+.simple-angle.is-busy img { opacity: .8; }
+.simple-angle-state { position: absolute; left: 1px; right: 1px; bottom: 1px; border-radius: 0 0 3px 3px; background: rgba(0, 0, 0, .62); color: #FFFFFF; font-size: 11px; line-height: 18px; text-align: center; white-space: nowrap; }
+.simple-angle-state.is-cutting::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: #FF6A55; vertical-align: 1px; animation: tally 1.6s ease-in-out infinite; }
 .simple-upload-actions { margin-top: 8px; }
 .simple-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 .simple-picker-item { display: grid; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--backdrop); color: var(--ink); text-align: left; cursor: pointer; }

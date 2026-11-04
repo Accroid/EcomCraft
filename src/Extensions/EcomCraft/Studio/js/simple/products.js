@@ -435,14 +435,17 @@ class SimpleProductsPart {
                     this.renderQuality();
                 }
             }
-            this.renderProducts();
             // An opaque angle photo gets the same automatic cut-out as the main photo's button (F84), stored on that angle; a transparent
             // photo already carries its own cut-out. The cut-out never blocks the add: a failure only notices below.
+            if (!cutout) {
+                this.setAngleStatus(product, result.angle_id, 'waiting');
+            }
+            this.renderProducts();
             if (!cutout && cutouts) {
                 cutouts.push({ angleId: result.angle_id, data });
             }
             else if (!cutout) {
-                await this.cutoutAngle(product, result.angle_id, data);
+                await this.cutoutAngleWithStatus(product, result.angle_id, data);
             }
             return true;
         }
@@ -482,7 +485,7 @@ class SimpleProductsPart {
                     this.renderQuality();
                 }
             }
-            this.message(tr('这张角度图没有自动抠图成功，已按原图添加：{0}', error.message || tr('请稍后重试，或换一张透明背景的 PNG。')), true);
+            this.message(tr('这张角度图没能去除背景，已按原图添加：{0}', error.message || tr('请稍后重试，或换一张透明背景的 PNG。')), true);
             return false;
         }
     }
@@ -491,12 +494,35 @@ class SimpleProductsPart {
      * another. A cut-out waits for the execution server and can take seconds (much longer while it starts), so it no longer holds back the next
      * photo. Ends with the summary, unless a cut-out failed — its notice stays instead. */
     static async addAngleList(product, list, overflow) {
+        let datas = await this.readAnglePreviews(product, list);
+        await this.uploadAngleList(product, datas, overflow);
+    }
+
+    /** Reads the picked angle photos and shows them in the angle panel right away, marked "waiting for cut-out", before anything is uploaded. */
+    static async readAnglePreviews(product, list) {
+        let datas = [];
+        for (let file of list) {
+            let data = await this.readLocalFile(file);
+            if (data) {
+                datas.push(data);
+            }
+        }
+        product.pendingAngles = (product.pendingAngles || []).concat(datas);
+        this.renderProducts();
+        return datas;
+    }
+
+    /** Uploads angle photos already shown as previews (F84): each preview gives way to the saved angle; then the opaque ones are cut out one after
+     * another, each marked "cutting out" while it runs and "waiting" until its turn. */
+    static async uploadAngleList(product, datas, overflow) {
         let tr = this.api.tr;
         let added = 0;
         let cutouts = [];
-        for (let file of list) {
-            let data = await this.readLocalFile(file);
-            if (data && await this.addAngle(product, data, cutouts)) {
+        for (let data of datas) {
+            let ok = await this.addAngle(product, data, cutouts);
+            product.pendingAngles = (product.pendingAngles || []).filter(item => item != data);
+            this.renderProducts();
+            if (ok) {
                 added++;
             }
         }
@@ -505,11 +531,35 @@ class SimpleProductsPart {
             : tr('已添加 {0} 张其他角度。', added);
         let failed = false;
         for (let [index, job] of cutouts.entries()) {
-            this.message(tr('已添加 {0} 张其他角度，正在自动抠图（{1}/{2}）…', added, index + 1, cutouts.length), false);
-            failed = !(await this.cutoutAngle(product, job.angleId, job.data)) || failed;
+            this.message(tr('已添加 {0} 张其他角度，正在去除背景（{1}/{2}）…', added, index + 1, cutouts.length), false);
+            failed = !(await this.cutoutAngleWithStatus(product, job.angleId, job.data)) || failed;
         }
         if (!failed && (added || overflow > 0)) {
             this.message(summary, overflow > 0);
+        }
+    }
+
+    /** Cuts out one angle while the panel marks it "cutting out"; the mark goes when it ends, whatever the result. */
+    static async cutoutAngleWithStatus(product, angleId, data) {
+        this.setAngleStatus(product, angleId, 'cutting');
+        this.renderProducts();
+        try {
+            return await this.cutoutAngle(product, angleId, data);
+        }
+        finally {
+            this.setAngleStatus(product, angleId, null);
+            this.renderProducts();
+        }
+    }
+
+    /** Sets or clears ('waiting', 'cutting' or null) the cut-out mark of one saved angle; it lives in this page only. */
+    static setAngleStatus(product, angleId, status) {
+        product.angleStatus = product.angleStatus || {};
+        if (status) {
+            product.angleStatus[angleId] = status;
+        }
+        else {
+            delete product.angleStatus[angleId];
         }
     }
 
@@ -679,12 +729,16 @@ class SimpleProductsPart {
         if (!product) {
             return;
         }
+        // The other angles show at once, while the main photo is still being saved.
+        let datas = await this.readAnglePreviews(product, list.slice(1));
         await product.savePromise;
         if (!product.id) {
+            product.pendingAngles = [];
+            this.renderProducts();
             this.message(tr('商品还没有存入商品库，暂时不能添加其他角度，请稍后重试。'), true);
             return;
         }
-        await this.addAngleList(product, list.slice(1), overflow);
+        await this.uploadAngleList(product, datas, overflow);
     }
 
     /** Adds a new product photo (a data URL read from a file up to 64 MB, or a smaller one from the library or gallery pickers) from any entry (F52):
@@ -927,53 +981,82 @@ class SimpleProductsPart {
         let el = this.api.el;
         let tr = this.api.tr;
         let box = el('div', 'simple-angles');
-        let angles = product.angles || [];
-        if (!product.id || !angles.length) {
+        let saved = product.id ? product.angles || [] : [];
+        let pending = product.pendingAngles || [];
+        if (!saved.length && !pending.length) {
             box.hidden = true;
             return box;
         }
+        // While the main photo is still being saved, its own preview leads the picked angles.
+        let angles = saved.length ? saved : [{ id: '', image: product.source || product.data, local: true }];
+        let status = product.angleStatus || {};
         let head = el('div', 'simple-angles-head');
         let actions = el('div', 'simple-angles-actions');
-        if (angles.length < 3) {
+        if (product.id && angles.length + pending.length < 3) {
             let add = el('button', 'btn btn-sm', tr('添加其他角度'));
             add.type = 'button';
             add.addEventListener('click', () => this.openAnglePicker(product));
             actions.append(add);
         }
         // Selling info per product (F79, T99): filled in a dialog from the card, never in the step-2 generation flow (A30).
-        let info = el('button', 'btn btn-sm', tr('卖点信息'));
-        info.type = 'button';
-        info.setAttribute('aria-label', tr('打开 {0} 的卖点信息', product.name || tr('商品')));
-        info.addEventListener('click', e => this.openProductInfo(product, e.currentTarget));
-        actions.append(info);
-        head.append(el('span', 'simple-angles-title', tr('角度图 {0}/3', angles.length)), actions);
+        if (product.id) {
+            let info = el('button', 'btn btn-sm', tr('卖点信息'));
+            info.type = 'button';
+            info.setAttribute('aria-label', tr('打开 {0} 的卖点信息', product.name || tr('商品')));
+            info.addEventListener('click', e => this.openProductInfo(product, e.currentTarget));
+            actions.append(info);
+        }
+        head.append(el('span', 'simple-angles-title', tr('角度图 {0}/3', angles.length + pending.length)), actions);
         box.append(head);
-        let main = this.mainAngle(product);
+        let main = saved.length ? this.mainAngle(product) : angles[0];
         for (let [index, angle] of angles.entries()) {
             let isMain = angle == main;
-            let item = el('div', 'simple-angle');
-            item.classList.toggle('is-main', isMain);
-            let image = el('img');
-            image.src = angle.cutout_image || angle.image;
-            image.alt = '';
-            image.loading = 'lazy';
+            // An angle waiting for or going through its cut-out shows its upload with the state, and offers no actions until it is done.
+            let state = status[angle.id] || null;
             let buttons = el('span', 'simple-angle-actions');
-            if (!isMain) {
-                let mainButton = el('button', 'link-btn simple-angle-btn', tr('设为主图'));
-                mainButton.type = 'button';
-                mainButton.addEventListener('click', () => this.setAngleMain(product, angle.id));
-                buttons.append(mainButton);
+            if (!state && !angle.local) {
+                if (!isMain) {
+                    let mainButton = el('button', 'link-btn simple-angle-btn', tr('设为主图'));
+                    mainButton.type = 'button';
+                    mainButton.addEventListener('click', () => this.setAngleMain(product, angle.id));
+                    buttons.append(mainButton);
+                }
+                if (angles.length > 1) {
+                    let deleteButton = el('button', 'link-btn simple-angle-btn', tr('删除'));
+                    deleteButton.type = 'button';
+                    deleteButton.addEventListener('click', () => this.deleteAngle(product, angle.id));
+                    buttons.append(deleteButton);
+                }
             }
-            if (angles.length > 1) {
-                let deleteButton = el('button', 'link-btn simple-angle-btn', tr('删除'));
-                deleteButton.type = 'button';
-                deleteButton.addEventListener('click', () => this.deleteAngle(product, angle.id));
-                buttons.append(deleteButton);
-            }
-            item.append(image, el('span', 'simple-angle-badge', isMain ? tr('主图') : tr('角度 {0}', index + 1)), buttons);
-            box.append(item);
+            box.append(this.angleItem(angle.cutout_image || angle.image, isMain ? tr('主图') : tr('角度 {0}', index + 1), isMain, state, buttons));
+        }
+        for (let [index, data] of pending.entries()) {
+            box.append(this.angleItem(data, tr('角度 {0}', angles.length + index + 1), false, 'waiting', null));
         }
         return box;
+    }
+
+    /** One thumbnail of the angle panel with its label, its cut-out state ('waiting', 'cutting' or null) over the picture, and its actions. */
+    static angleItem(source, label, isMain, state, buttons) {
+        let el = this.api.el;
+        let tr = this.api.tr;
+        let item = el('div', 'simple-angle');
+        item.classList.toggle('is-main', isMain);
+        let picture = el('span', 'simple-angle-pic');
+        let image = el('img');
+        image.src = source;
+        image.alt = '';
+        image.loading = 'lazy';
+        picture.append(image);
+        if (state) {
+            item.classList.add('is-busy');
+            picture.append(el('span', `simple-angle-state is-${state}`, state == 'cutting' ? tr('正在去除背景') : tr('等待去除背景')));
+        }
+        item.append(picture, el('span', 'simple-angle-badge', label));
+        if (buttons) {
+            item.append(buttons);
+        }
+        return item;
     }
 
     /** Makes a product photo the current one for preview, cut-out and single generation. */
