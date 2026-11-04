@@ -514,10 +514,11 @@ class SimpleProductsPart {
 
     /** Uploads angle photos already shown as previews (F84): each preview gives way to the saved angle; then the opaque ones are cut out one after
      * another, each marked "cutting out" while it runs and "waiting" until its turn. */
-    static async uploadAngleList(product, datas, overflow) {
+    static async uploadAngleList(product, datas, overflow, mainJob) {
         let tr = this.api.tr;
         let added = 0;
-        let cutouts = [];
+        // The main photo of a multi-photo add (addAsAngles) goes first in the background-removal queue.
+        let cutouts = mainJob ? [mainJob] : [];
         for (let data of datas) {
             let ok = await this.addAngle(product, data, cutouts);
             product.pendingAngles = (product.pendingAngles || []).filter(item => item != data);
@@ -544,7 +545,12 @@ class SimpleProductsPart {
         this.setAngleStatus(product, angleId, 'cutting');
         this.renderProducts();
         try {
-            return await this.cutoutAngle(product, angleId, data);
+            let ok = await this.cutoutAngle(product, angleId, data);
+            // The main angle's cut-out is also the page's product cut-out: the preview and the placement stage follow it.
+            if (ok && this.mainAngle(product)?.id == angleId) {
+                await this.refreshMain(product);
+            }
+            return ok;
         }
         finally {
             this.setAngleStatus(product, angleId, null);
@@ -729,16 +735,24 @@ class SimpleProductsPart {
         if (!product) {
             return;
         }
-        // The other angles show at once, while the main photo is still being saved.
+        // The other angles show at once, while the main photo is still being saved. An opaque first photo gets its background removed with
+        // the others, so every angle of the add ends up the same way; a transparent one already is a cut-out.
+        product.mainCutoutPending = !product.cutout;
         let datas = await this.readAnglePreviews(product, list.slice(1));
         await product.savePromise;
+        product.mainCutoutPending = false;
         if (!product.id) {
             product.pendingAngles = [];
             this.renderProducts();
             this.message(tr('商品还没有存入商品库，暂时不能添加其他角度，请稍后重试。'), true);
             return;
         }
-        await this.uploadAngleList(product, datas, overflow);
+        let main = this.mainAngle(product);
+        let mainJob = !product.cutout && main && !main.cutout_image ? { angleId: main.id, data: product.data } : null;
+        if (mainJob) {
+            this.setAngleStatus(product, mainJob.angleId, 'waiting');
+        }
+        await this.uploadAngleList(product, datas, overflow, mainJob);
     }
 
     /** Adds a new product photo (a data URL read from a file up to 64 MB, or a smaller one from the library or gallery pickers) from any entry (F52):
@@ -1012,7 +1026,7 @@ class SimpleProductsPart {
         for (let [index, angle] of angles.entries()) {
             let isMain = angle == main;
             // An angle waiting for or going through its cut-out shows its upload with the state, and offers no actions until it is done.
-            let state = status[angle.id] || null;
+            let state = angle.local ? (product.mainCutoutPending ? 'waiting' : null) : status[angle.id] || null;
             let buttons = el('span', 'simple-angle-actions');
             if (!state && !angle.local) {
                 if (!isMain) {
