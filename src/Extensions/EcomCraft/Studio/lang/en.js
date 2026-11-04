@@ -142,6 +142,7 @@ window.EcomCraftLanguages.en = {
     "设为主图": "Make main",
     "添加其他角度": "Add another angle",
     "已添加 {0} 张其他角度。": "Added {0} more angle photos.",
+    "角度图 {0}/3": "Angle photos {0}/3",
     "已添加 {0} 张其他角度，正在自动抠图（{1}/{2}）…": "Added {0} more angle photos; cutting out the background ({1}/{2})…",
     "已添加 {0} 张其他角度；一个商品最多 3 张（含主图），多出的 {1} 张没有添加。": "Added {0} more angle photos; one product holds at most 3, the main one included, so {1} extra were not added.",
     "一个商品最多 3 张角度图，请先删除不用的角度图。": "One product holds at most 3 angle photos; delete the ones you do not need first.",

@@ -910,17 +910,19 @@ class SimpleProductsPart {
             cell.append(button);
             items.push(cell);
         }
-        // Only the chosen product shows its angle strip, on a row of its own below the thumbnails: with many products the strips of every card
-        // made the list several screens tall and pushed the preview far down.
-        if (this.product && this.products.includes(this.product)) {
-            items.push(this.renderAngles(this.product));
-        }
         list.replaceChildren(...items);
         list.hidden = this.products.length == 0;
+        // Only the chosen product shows its angle panel, below its name row: with many products the strips of every card made the list several
+        // screens tall and pushed the preview far down.
+        let panel = this.api.$('simple-product-angles');
+        let angles = this.product && this.products.includes(this.product) ? this.renderAngles(this.product) : null;
+        panel.replaceChildren(...(angles ? [angles] : []));
+        panel.hidden = !angles || angles.hidden;
     }
 
-    /** The angle strip of a saved product's card (F84): every angle's thumbnail — the first one marked as the main image — with a delete button per
-     * angle, "make main" for the others and "add another angle" while there is room. Nothing is shown before the product has been saved. */
+    /** The panel of the chosen saved product (F84): a header with the angle count, "add another angle" while there is room and the selling info,
+     * then every angle's thumbnail — the main one marked — with "make main" for the others and a delete button per angle. Nothing is shown
+     * before the product has been saved. */
     static renderAngles(product) {
         let el = this.api.el;
         let tr = this.api.tr;
@@ -930,42 +932,47 @@ class SimpleProductsPart {
             box.hidden = true;
             return box;
         }
+        let head = el('div', 'simple-angles-head');
+        let actions = el('div', 'simple-angles-actions');
+        if (angles.length < 3) {
+            let add = el('button', 'btn btn-sm', tr('添加其他角度'));
+            add.type = 'button';
+            add.addEventListener('click', () => this.openAnglePicker(product));
+            actions.append(add);
+        }
+        // Selling info per product (F79, T99): filled in a dialog from the card, never in the step-2 generation flow (A30).
+        let info = el('button', 'btn btn-sm', tr('卖点信息'));
+        info.type = 'button';
+        info.setAttribute('aria-label', tr('打开 {0} 的卖点信息', product.name || tr('商品')));
+        info.addEventListener('click', e => this.openProductInfo(product, e.currentTarget));
+        actions.append(info);
+        head.append(el('span', 'simple-angles-title', tr('角度图 {0}/3', angles.length)), actions);
+        box.append(head);
         let main = this.mainAngle(product);
         for (let [index, angle] of angles.entries()) {
             let isMain = angle == main;
-            let item = el('span', 'simple-angle');
+            let item = el('div', 'simple-angle');
             item.classList.toggle('is-main', isMain);
             let image = el('img');
             image.src = angle.cutout_image || angle.image;
             image.alt = '';
             image.loading = 'lazy';
-            item.append(image, el('span', 'simple-angle-badge', isMain ? tr('主图') : tr('角度 {0}', index + 1)));
+            let buttons = el('span', 'simple-angle-actions');
             if (!isMain) {
                 let mainButton = el('button', 'link-btn simple-angle-btn', tr('设为主图'));
                 mainButton.type = 'button';
                 mainButton.addEventListener('click', () => this.setAngleMain(product, angle.id));
-                item.append(mainButton);
+                buttons.append(mainButton);
             }
             if (angles.length > 1) {
                 let deleteButton = el('button', 'link-btn simple-angle-btn', tr('删除'));
                 deleteButton.type = 'button';
                 deleteButton.addEventListener('click', () => this.deleteAngle(product, angle.id));
-                item.append(deleteButton);
+                buttons.append(deleteButton);
             }
+            item.append(image, el('span', 'simple-angle-badge', isMain ? tr('主图') : tr('角度 {0}', index + 1)), buttons);
             box.append(item);
         }
-        if (angles.length < 3) {
-            let add = el('button', 'link-btn simple-angle-btn', tr('添加其他角度'));
-            add.type = 'button';
-            add.addEventListener('click', () => this.openAnglePicker(product));
-            box.append(add);
-        }
-        // Selling info per product (F79, T99): filled in a dialog from the card, never in the step-2 generation flow (A30).
-        let info = el('button', 'link-btn simple-angle-btn', tr('卖点信息'));
-        info.type = 'button';
-        info.setAttribute('aria-label', tr('打开 {0} 的卖点信息', product.name || tr('商品')));
-        info.addEventListener('click', e => this.openProductInfo(product, e.currentTarget));
-        box.append(info);
         return box;
     }
 

@@ -392,6 +392,8 @@ main:focus:not(:focus-visible) { outline: none; }
 .inline-row > select { width: auto; max-width: 60%; }
 /* Simple mode: three steps, cards that wrap on narrow screens. */
 .simple-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+/* 宽屏：第 1、2 步内容最多，给它们多一些宽度；第 3 步出图前只有说明和两个按钮 */
+@media (min-width: 1200px) { .simple-steps { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, 1fr); } }
 /* Task-first simple mode (F61): three task cards; step 2 shows only the fields marked with the chosen task in data-tasks. */
 .simple-tasks { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 16px; }
 .simple-task { display: grid; gap: 4px; align-content: start; padding: 12px 14px; min-height: 64px; text-align: left; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; cursor: pointer; }
@@ -409,8 +411,8 @@ main:focus:not(:focus-visible) { outline: none; }
 .simple-step-num { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--key); color: var(--on-key); font-size: var(--fs-12); font-weight: 700; }
 .simple-drop { display: grid; place-items: center; gap: 6px; min-height: 180px; padding: 12px; border: 2px dashed var(--line-strong); border-radius: 8px; text-align: center; cursor: pointer; }
 .simple-drop.is-over { border-color: var(--key); }
-.simple-preview { max-width: 100%; max-height: 240px; object-fit: contain; }
-.simple-products { display: flex; flex-wrap: wrap; gap: 6px; }
+.simple-preview { max-width: 100%; max-height: 320px; object-fit: contain; }
+.simple-products { display: flex; flex-wrap: wrap; gap: 8px; }
 .wizard-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .wizard-chips .btn[aria-pressed="true"] { border-color: var(--key); box-shadow: inset 0 0 0 1px var(--key); }
 .wizard-list { margin: 8px 0; padding-left: 20px; display: grid; gap: 4px; font-size: var(--fs-13); }
@@ -427,19 +429,23 @@ main:focus:not(:focus-visible) { outline: none; }
 [data-check-bg="white"] .simple-preview, [data-check-bg="white"] .simple-stage { background: #fff; }
 [data-check-bg="black"] .simple-preview, [data-check-bg="black"] .simple-stage { background: #141414; }
 [data-check-bg="black"] .simple-drop { border-color: var(--line-strong); }
-.simple-product { position: relative; width: 56px; height: 56px; padding: 0; border: 2px solid transparent; border-radius: 6px; background: var(--backdrop); cursor: pointer; }
+.simple-product { position: relative; width: 80px; height: 80px; padding: 0; border: 2px solid transparent; border-radius: 6px; background: var(--backdrop); cursor: pointer; }
 .simple-product[aria-pressed="true"] { border-color: var(--key); }
 .simple-product img { width: 100%; height: 100%; object-fit: contain; border-radius: 4px; }
 .simple-product-meta { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; font-size: var(--fs-13); }
 .simple-product-source { position: absolute; left: 2px; bottom: 2px; max-width: calc(100% - 4px); padding: 0 4px; border-radius: 3px; font-size: 10px; line-height: 16px; background: var(--panel); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 /* 商品多角度（F84）：缩略图一排选择商品，只有当前商品的角度条单独占一行显示在下方，可换行适应窄屏 */
 .simple-product-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.simple-angles { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: flex-start; gap: 6px 12px; flex-basis: 100%; padding-top: 6px; border-top: 1px solid var(--line); }
-.simple-angle { display: flex; flex-direction: column; align-items: center; gap: 1px; }
-.simple-angle img { width: 40px; height: 40px; object-fit: contain; border: 1px solid var(--line); border-radius: 4px; background: var(--backdrop); }
-.simple-angle-badge { font-size: 10px; line-height: 14px; color: var(--ink-2); white-space: nowrap; }
+.simple-angles { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: flex-start; gap: 10px 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); }
+.simple-angles-head { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.simple-angles-title { font-size: var(--fs-13); font-weight: 600; }
+.simple-angles-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.simple-angle { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.simple-angle img { width: 88px; height: 88px; object-fit: contain; border: 1px solid var(--line); border-radius: 4px; background: var(--backdrop); }
+.simple-angle-badge { font-size: var(--fs-12); line-height: 18px; color: var(--ink-2); white-space: nowrap; }
 .simple-angle.is-main img { border-color: var(--key); }
 .simple-angle.is-main .simple-angle-badge { color: var(--key); font-weight: 600; }
+.simple-angle-actions { display: flex; gap: 10px; font-size: var(--fs-12); }
 .simple-upload-actions { margin-top: 8px; }
 .simple-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 .simple-picker-item { display: grid; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--backdrop); color: var(--ink); text-align: left; cursor: pointer; }
