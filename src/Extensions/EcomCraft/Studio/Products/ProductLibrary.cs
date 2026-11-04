@@ -187,7 +187,7 @@ public static class ProductLibrary
         {
             return (null, "这个商品还没有照片，请重新保存。");
         }
-        return ([.. record.Angles.Take(ProductAngleRules.MaxAngles).Select(angle => angle.Id)], null);
+        return ([.. record.AngleIdsMainFirst().Take(ProductAngleRules.MaxAngles)], null);
     }
 
     /// <summary>Whether the account has a saved product with this ID (files are not read).</summary>
@@ -252,7 +252,8 @@ public static class ProductLibrary
         };
     }
 
-    /// <summary>A product as its owner sees it: no file locations. The first angle is the main image (F84); the historical top-level fields mirror it
+    /// <summary>A product as its owner sees it: no file locations. main_angle names the main image (F84) and the angle list keeps the order the angles
+    /// were added in; the historical top-level fields mirror the main image
     /// and keep the plain main-image address, while every entry of the angle list names its own angle (see <see cref="ProductAngleRules.ImageRoute"/>).
     /// The selling info (F79, T99) follows per language; languages nothing was filled into are left out.</summary>
     private static JObject Json(ProductRecord record)
@@ -267,6 +268,7 @@ public static class ProductLibrary
             ["placement"] = new JObject() { ["x"] = main.X, ["y"] = main.Y, ["size"] = main.Size },
             ["image"] = ProductAngleRules.ImageRoute(record.Id, null, false),
             ["cutout_image"] = main.Cutout is null ? null : ProductAngleRules.ImageRoute(record.Id, null, true),
+            ["main_angle"] = main.Id,
             ["info"] = new JObject((record.Info ?? []).Where(entry => ProductInfoRules.IsFilled(entry.Value))
                 .Select(entry => new JProperty(entry.Key, SpecsJson(entry.Value)))),
             ["angles"] = new JArray(record.Angles.Select(angle => new JObject()
@@ -625,7 +627,7 @@ public static class ProductLibrary
         return Task.FromResult(saved);
     }
 
-    [API.APIDescription("Delete one angle of one of the current account's saved products (F84). The next angle becomes the main image; the last angle cannot be deleted — delete the whole product instead.", "product: { id: \"…\" }")]
+    [API.APIDescription("Delete one angle of one of the current account's saved products (F84). When it was the main image, the first remaining angle becomes the main image; the last angle cannot be deleted — delete the whole product instead.", "product: { id: \"…\" }")]
     public static Task<JObject> EcomCraftStudioProductAngleDelete(Session session, string product_id, string angle_id)
     {
         if (!StudioApi.CanView(session))
@@ -640,6 +642,7 @@ public static class ProductLibrary
             {
                 return Task.FromResult(StudioApi.Error("商品里没有这张角度图，请刷新商品库。", "task_not_found"));
             }
+            string previousMain = record.MainAngle().Id;
             string error = index.RemoveAngle(session.User.UserID, product_id, angle_id, out ProductAngle angle, out int position);
             if (error is not null)
             {
@@ -648,6 +651,7 @@ public static class ProductLibrary
             if (!Save())
             {
                 record.Angles.Insert(Math.Clamp(position, 0, record.Angles.Count), angle);
+                record.MainAngleId = previousMain;
                 record.SyncLegacy();
                 return Task.FromResult(SaveFailed());
             }
@@ -658,7 +662,7 @@ public static class ProductLibrary
         }
     }
 
-    [API.APIDescription("Make one angle of one of the current account's saved products the main image (F84); the previous main image becomes a normal angle and the angles keep their IDs and order.", "product: { id: \"…\" }")]
+    [API.APIDescription("Make one angle of one of the current account's saved products the main image (F84); the previous main image becomes a normal angle and the angle list keeps its IDs and order (main_angle names the main image).", "product: { id: \"…\" }")]
     public static Task<JObject> EcomCraftStudioProductAngleMain(Session session, string product_id, string angle_id)
     {
         if (!StudioApi.CanView(session))
@@ -673,7 +677,7 @@ public static class ProductLibrary
             {
                 return Task.FromResult(StudioApi.Error("商品里没有这张角度图，请刷新商品库。", "task_not_found"));
             }
-            string previousMain = record.Angles[0].Id;
+            string previousMain = record.MainAngle().Id;
             string error = index.SetMain(session.User.UserID, product_id, angle_id);
             if (error is not null)
             {

@@ -287,13 +287,21 @@ class SimpleProductsPart {
             angles = [{ id: 'main', image: saved.image, cutout_image: saved.cutout_image || null, placement: saved.placement || null }];
         }
         product.angles = angles;
+        // The list keeps the order the angles were added in; main_angle names the main image (older servers put it first).
+        product.mainAngle = angles.some(angle => angle.id == saved.main_angle) ? saved.main_angle : angles[0].id;
         product.qualityIssues = (product.qualityIssues || []).filter(issue => !issue.angle);
+    }
+
+    /** The product's main angle: the one the server names, else the first. */
+    static mainAngle(product) {
+        let angles = product.angles || [];
+        return angles.find(angle => angle.id == product.mainAngle) || angles[0];
     }
 
     /** Refreshes a product's own photo fields after its angles changed on the server (F84): the main angle's photo, cut-out and placement lead the
      * page again. */
     static async refreshMain(product) {
-        let main = product.angles[0];
+        let main = this.mainAngle(product);
         product.source = main.image;
         product.cutout = main.cutout_image;
         try {
@@ -907,14 +915,17 @@ class SimpleProductsPart {
             box.hidden = true;
             return box;
         }
+        let main = this.mainAngle(product);
         for (let [index, angle] of angles.entries()) {
+            let isMain = angle == main;
             let item = el('span', 'simple-angle');
+            item.classList.toggle('is-main', isMain);
             let image = el('img');
             image.src = angle.cutout_image || angle.image;
             image.alt = '';
             image.loading = 'lazy';
-            item.append(image, el('span', 'simple-angle-badge', index == 0 ? tr('主图') : tr('角度 {0}', index + 1)));
-            if (index > 0) {
+            item.append(image, el('span', 'simple-angle-badge', isMain ? tr('主图') : tr('角度 {0}', index + 1)));
+            if (!isMain) {
                 let mainButton = el('button', 'link-btn simple-angle-btn', tr('设为主图'));
                 mainButton.type = 'button';
                 mainButton.addEventListener('click', () => this.setAngleMain(product, angle.id));

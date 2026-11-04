@@ -438,6 +438,8 @@ main:focus:not(:focus-visible) { outline: none; }
 .simple-angle { display: flex; flex-direction: column; align-items: center; gap: 1px; }
 .simple-angle img { width: 40px; height: 40px; object-fit: contain; border: 1px solid var(--line); border-radius: 4px; background: var(--backdrop); }
 .simple-angle-badge { font-size: 10px; line-height: 14px; color: var(--ink-2); white-space: nowrap; }
+.simple-angle.is-main img { border-color: var(--key); }
+.simple-angle.is-main .simple-angle-badge { color: var(--key); font-weight: 600; }
 .simple-upload-actions { margin-top: 8px; }
 .simple-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 .simple-picker-item { display: grid; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--backdrop); color: var(--ink); text-align: left; cursor: pointer; }

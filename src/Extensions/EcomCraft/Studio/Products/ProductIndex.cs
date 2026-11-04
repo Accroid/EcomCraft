@@ -1,7 +1,7 @@
 namespace EcomCraftStudio.Studio.Products;
 
-/// <summary>One angle photo of a saved product (F84): its own original, cut-out and placement. The first angle of the list is the product's main
-/// image; angle IDs are only ever compared, never used to build file paths.</summary>
+/// <summary>One angle photo of a saved product (F84): its own original, cut-out and placement. <see cref="ProductRecord.MainAngleId"/> names the
+/// product's main image; angle IDs are only ever compared, never used to build file paths.</summary>
 public sealed class ProductAngle
 {
     /// <summary>Angle ID, unique within the product.</summary>
@@ -56,17 +56,29 @@ public sealed class ProductRecord
     /// <summary>Confirmed product size, fraction of the picture's shorter side. Historical field of records saved before angles existed (F84); it always mirrors the main angle.</summary>
     public double Size = 0.55;
 
-    /// <summary>The angle photos (F84); the first is the main image. Never null once <see cref="ProductIndex.Migrate"/> has run.</summary>
+    /// <summary>The angle photos (F84) in the order they were added; <see cref="MainAngleId"/> names the main image. Never null once
+    /// <see cref="ProductIndex.Migrate"/> has run.</summary>
     public List<ProductAngle> Angles = [];
+
+    /// <summary>ID of the main angle. Making another angle the main image only changes this ID, so the list keeps its order; null or an unknown ID
+    /// (records saved before it existed, when the main angle was always the first) means the first angle.</summary>
+    public string MainAngleId;
 
     /// <summary>The selling info by language (F79, T99): display name, selling points, parameters and a size line, written by the user for each
     /// market — never machine-translated. Null or missing entries mean "not filled in"; records saved before T99 simply have none.</summary>
     public Dictionary<string, ProductSpecs> Info;
 
-    /// <summary>The main angle — the first of the list — or null while the record has no angle at all.</summary>
+    /// <summary>The main angle — the one <see cref="MainAngleId"/> names, else the first of the list — or null while the record has no angle at all.</summary>
     public ProductAngle MainAngle()
     {
-        return Angles.Count > 0 ? Angles[0] : null;
+        return Angles.FirstOrDefault(angle => angle.Id == MainAngleId) ?? (Angles.Count > 0 ? Angles[0] : null);
+    }
+
+    /// <summary>The angle IDs with the main angle first and the others in list order: generation reads the first as the main image.</summary>
+    public List<string> AngleIdsMainFirst()
+    {
+        ProductAngle main = MainAngle();
+        return main is null ? [] : [main.Id, .. Angles.Where(angle => angle != main).Select(angle => angle.Id)];
     }
 
     /// <summary>Mirrors the main angle into the historical single-photo fields, so files saved by either version of the index agree.</summary>
@@ -195,6 +207,7 @@ public sealed class ProductIndex
             // writable by hand) are dropped so the index keeps only the languages the rules know.
             record.Info = (record.Info ?? []).Where(entry => ProductInfoRules.LanguageId(entry.Key) is not null && entry.Value is not null)
                 .ToDictionary(entry => entry.Key, entry => entry.Value);
+            record.MainAngleId = record.MainAngle()?.Id;
             record.SyncLegacy();
         }
     }
@@ -231,8 +244,9 @@ public sealed class ProductIndex
         return null;
     }
 
-    /// <summary>Removes one angle of the account's product and reports its old position, so a failed save can put it back; the next angle becomes the
-    /// main image. The last angle is never removed — the product itself has to be deleted — and the historical fields follow the new main angle.</summary>
+    /// <summary>Removes one angle of the account's product and reports its old position, so a failed save can put it back; when it was the main
+    /// image, the first remaining angle becomes the main image. The last angle is never removed — the product itself has to be deleted — and the
+    /// historical fields follow the main angle.</summary>
     public string RemoveAngle(string userId, string productId, string angleId, out ProductAngle removed, out int position)
     {
         removed = null;
@@ -247,14 +261,20 @@ public sealed class ProductIndex
         {
             return $"最后 1 张角度图不能删除；要移除整个商品，请删除商品“{record.Name}”。";
         }
+        bool wasMain = record.MainAngle() == angle;
         position = record.Angles.IndexOf(angle);
         record.Angles.RemoveAt(position);
         removed = angle;
+        if (wasMain)
+        {
+            record.MainAngleId = record.Angles[0].Id;
+        }
         record.SyncLegacy();
         return null;
     }
 
-    /// <summary>Makes one of the account's angles the product's main image (the first of the list, F84); the other angles keep their IDs and order.</summary>
+    /// <summary>Makes one of the account's angles the product's main image (F84). Only the main ID changes: every angle keeps its ID and place in the
+    /// list, so the page shows the angles in the same order.</summary>
     public string SetMain(string userId, string productId, string angleId)
     {
         ProductRecord record = Find(userId, productId);
@@ -263,12 +283,8 @@ public sealed class ProductIndex
         {
             return "商品里没有这张角度图。";
         }
-        if (angle != record.Angles[0])
-        {
-            record.Angles.Remove(angle);
-            record.Angles.Insert(0, angle);
-            record.SyncLegacy();
-        }
+        record.MainAngleId = angle.Id;
+        record.SyncLegacy();
         return null;
     }
 }
