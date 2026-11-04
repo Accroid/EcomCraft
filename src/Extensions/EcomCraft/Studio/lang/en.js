@@ -260,8 +260,7 @@ window.EcomCraftLanguages.en = {
     "卖点图没有生成，请稍后重试。": "The selling-point image could not be made; please try again later.",
     // 卖点信息（F79，T99）：按语言填写、用语提示和模型建议
     "卖点信息": "Selling info",
-    "按语言分别填写，海外平台用哪种语言由你自己写，系统不机器翻译。这里只保存文字，不自动出图。": "Fill it in per language; you write the language for overseas platforms yourself and nothing is machine-translated. Only text is saved here; nothing is generated automatically.",
-    "语言": "Language",
+    "按当前界面语言填写：中文界面填中文卖点，英文界面填英文卖点，切换右上角的语言可以填另一种。系统不机器翻译；这里只保存文字，不自动出图。": "Fill it in for the current interface language: Chinese selling points on the Chinese page, English ones on the English page — switch the language at the top right to fill in the other. Nothing is machine-translated; only text is saved here and nothing is generated automatically.",
     "中文": "Chinese",
     "展示名": "Display name",
     "用于上架时的商品名，可不填": "the listing's product name; optional",

@@ -14,20 +14,25 @@ class SimpleProductInfoPart {
     /** The debounce timer of the claim check; typing only schedules one check. */
     static productInfoClaimTimer = null;
 
+    /** The selling-info language of the page's interface language. */
+    static productInfoPageLanguage() {
+        return I18n.current == 'en' ? 'en' : 'zh-CN';
+    }
+
     /** The languages selling info is kept in, in display order; labels go through the translation table. */
     static productInfoLanguages() {
         return [['zh-CN', '中文'], ['en', 'English']];
     }
 
-    /** Opens the selling-info dialog of one saved product (F79, T99); the language tab falls back to the page's language. Each language keeps its
-     * own tab state for this visit, so switching tabs never mixes or loses what was typed in the other one. */
+    /** Opens the selling-info dialog of one saved product (F79, T99) in the page's language: a Chinese page edits the Chinese entry, an English
+     * page the English one, and switching the page language switches the entry (renderSellingInfo). Each language keeps its own tab state for this
+     * visit, so switching never mixes or loses what was typed in the other one. */
     static openProductInfo(product, opener) {
         if (!product || !product.id) {
             return;
         }
-        let pageLanguage = I18n.current == 'en' ? 'en' : 'zh-CN';
         let info = product.info || {};
-        let language = info[pageLanguage] ? pageLanguage : 'zh-CN';
+        let language = this.productInfoPageLanguage();
         let tabs = {};
         for (let [id] of this.productInfoLanguages()) {
             tabs[id] = this.productInfoTab(info, id);
@@ -95,7 +100,7 @@ class SimpleProductInfoPart {
         return Boolean(fields.display_name || (fields.points || []).some(point => point) || (fields.params || []).some(param => param.name || param.value) || fields.size);
     }
 
-    /** Shows the dialog: language tabs, fields, suggestions and the save state. Structural changes re-render; typing only updates the state. */
+    /** Shows the dialog in the page language: fields, suggestions and the save state. Structural changes re-render; typing only updates the state. */
     static renderProductInfo() {
         let tr = this.api.tr;
         let el = this.api.el;
@@ -110,15 +115,6 @@ class SimpleProductInfoPart {
         }
         editor.points = tab.points;
         editor.params = tab.params;
-        let chips = [];
-        for (let [id, label] of this.productInfoLanguages()) {
-            let chip = el('button', 'simple-chip', tr(label));
-            chip.type = 'button';
-            chip.setAttribute('aria-pressed', id == editor.language ? 'true' : 'false');
-            chip.addEventListener('click', () => this.switchProductInfoLanguage(id));
-            chips.push(chip);
-        }
-        this.api.$('pinfo-languages').replaceChildren(...chips);
         // The state is updated on every keystroke, so a structural re-render can always take the inputs' values from it.
         this.api.$('pinfo-name').value = tab.name;
         this.api.$('pinfo-size').value = tab.size;
@@ -457,8 +453,13 @@ class SimpleProductInfoPart {
         $('pinfo-suggest-apply').addEventListener('click', () => this.applySuggestedPoints());
     }
 
-    /** Re-renders the dialog after a language switch of the page; typed text of the open tab stays. */
+    /** Follows a language switch of the page: the open dialog moves to that language's entry, and typed text of the other language stays on
+     * its own tab. */
     static renderSellingInfo() {
+        if (this.productInfo && this.productInfo.language != this.productInfoPageLanguage()) {
+            this.switchProductInfoLanguage(this.productInfoPageLanguage());
+            return;
+        }
         this.renderProductInfo();
     }
 }
