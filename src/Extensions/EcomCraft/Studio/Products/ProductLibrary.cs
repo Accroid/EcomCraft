@@ -22,6 +22,10 @@ public static class ProductLibrary
     /// <summary>Largest photo accepted, as a data URL.</summary>
     private const int MaxDataLength = (5 * 1024 * 1024 + 2) / 3 * 4 + 40;
 
+    /// <summary>Longest cut-out data URL a product update accepts: a cut-out is a PNG with an alpha channel and often larger than the photo it came from
+    /// (an opaque 5 MB photo can give a 6 MB cut-out), so it gets more room than an upload; generation reads saved files, not data URLs.</summary>
+    private const int MaxCutoutDataLength = (24 * 1024 * 1024 + 2) / 3 * 4 + 40;
+
     /// <summary>The loaded index.</summary>
     private static ProductIndex Index;
 
@@ -90,10 +94,11 @@ public static class ProductLibrary
         return Path.GetFullPath(Path.Combine(root, userId, id));
     }
 
-    /// <summary>Decodes a PNG, JPEG or WebP data URL, returning the bytes and a file extension, or null.</summary>
-    private static (byte[] Bytes, string Extension) Decode(string data)
+    /// <summary>Decodes a PNG, JPEG or WebP data URL of at most <paramref name="maxLength"/> characters (an upload's limit by default), returning the bytes
+    /// and a file extension, or null.</summary>
+    private static (byte[] Bytes, string Extension) Decode(string data, int maxLength = MaxDataLength)
     {
-        if (data?.Length > MaxDataLength || !ImageDataUrl.TryParse(data, ImageDataUrl.ImageDataFormats.PngJpegWebp, int.MaxValue, out byte[] bytes, out string extension))
+        if (data?.Length > maxLength || !ImageDataUrl.TryParse(data, ImageDataUrl.ImageDataFormats.PngJpegWebp, int.MaxValue, out byte[] bytes, out string extension))
         {
             return (null, null);
         }
@@ -454,10 +459,10 @@ public static class ProductLibrary
             }
             if (rawInput["cutout"]?.Type == JTokenType.String)
             {
-                (byte[] cut, _) = Decode(rawInput.Value<string>("cutout"));
+                (byte[] cut, _) = Decode(rawInput.Value<string>("cutout"), MaxCutoutDataLength);
                 if (cut is null)
                 {
-                    return Task.FromResult(StudioApi.Error("抠图须为不超过 5 MB 的 PNG、JPEG 或 WebP 图片。", "invalid_reference"));
+                    return Task.FromResult(StudioApi.Error("抠图须为不超过 24 MB 的 PNG、JPEG 或 WebP 图片。", "invalid_reference"));
                 }
                 try
                 {
