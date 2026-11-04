@@ -897,8 +897,13 @@ class SimpleProductsPart {
             image.alt = '';
             button.append(image, el('span', 'simple-product-source', origin));
             button.addEventListener('click', () => this.selectProduct(product));
-            cell.append(button, this.renderAngles(product));
+            cell.append(button);
             items.push(cell);
+        }
+        // Only the chosen product shows its angle strip, on a row of its own below the thumbnails: with many products the strips of every card
+        // made the list several screens tall and pushed the preview far down.
+        if (this.product && this.products.includes(this.product)) {
+            items.push(this.renderAngles(this.product));
         }
         list.replaceChildren(...items);
         list.hidden = this.products.length == 0;
