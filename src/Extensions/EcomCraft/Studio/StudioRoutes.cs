@@ -98,6 +98,15 @@ public static class StudioRoutes
             }
             context.Response.Headers.CacheControl = "private, no-cache";
             context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            // The same address can serve another photo after a main-image change or a new cut-out, so the browser keeps asking ("no-cache"); the
+            // content tag lets it reuse its copy with a 304 instead of downloading a multi-megabyte photo for every thumbnail redraw.
+            string tag = $"\"{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes), 0, 12)}\"";
+            context.Response.Headers.ETag = tag;
+            if (context.Request.Headers.IfNoneMatch.ToString() == tag)
+            {
+                context.Response.StatusCode = StatusCodes.Status304NotModified;
+                return;
+            }
             context.Response.ContentType = extension switch { "png" => "image/png", "webp" => "image/webp", _ => "image/jpeg" };
             await context.Response.Body.WriteAsync(bytes, context.RequestAborted);
         });

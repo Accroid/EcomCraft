@@ -387,23 +387,13 @@ class SimpleProductsPart {
         if (overflow > 0) {
             list = list.slice(0, room);
         }
-        let added = 0;
-        for (let file of list) {
-            let data = await this.readLocalFile(file);
-            if (data && await this.addAngle(product, data)) {
-                added++;
-            }
-        }
-        if (added || overflow > 0) {
-            this.message(overflow > 0
-                ? tr('已添加 {0} 张其他角度；一个商品最多 3 张（含主图），多出的 {1} 张没有添加。', added, overflow)
-                : tr('已添加 {0} 张其他角度。', added), overflow > 0);
-        }
+        await this.addAngleList(product, list, overflow);
     }
 
     /** Sends one angle photo to a saved product after the browser-side checks (F84); resolves true when it was added. An opaque photo then goes
-     * through the same automatic cut-out as the main photo's button and the result is stored on that angle (cutoutAngle). */
-    static async addAngle(product, data) {
+     * through the same automatic cut-out as the main photo's button and the result is stored on that angle (cutoutAngle) — right away, or, when
+     * a <cutouts> list is given, later by the caller once every photo of the add is shown. */
+    static async addAngle(product, data, cutouts) {
         let tr = this.api.tr;
         let cutout = '';
         let issues = [];
@@ -448,7 +438,10 @@ class SimpleProductsPart {
             this.renderProducts();
             // An opaque angle photo gets the same automatic cut-out as the main photo's button (F84), stored on that angle; a transparent
             // photo already carries its own cut-out. The cut-out never blocks the add: a failure only notices below.
-            if (!cutout) {
+            if (!cutout && cutouts) {
+                cutouts.push({ angleId: result.angle_id, data });
+            }
+            else if (!cutout) {
                 await this.cutoutAngle(product, result.angle_id, data);
             }
             return true;
@@ -478,6 +471,7 @@ class SimpleProductsPart {
                 }
             }
             this.renderProducts();
+            return true;
         }
         catch (error) {
             // The failure notice also becomes a quality notice of that angle, so it stays visible after the add flow's summary banner.
@@ -489,6 +483,33 @@ class SimpleProductsPart {
                 }
             }
             this.message(tr('这张角度图没有自动抠图成功，已按原图添加：{0}', error.message || tr('请稍后重试，或换一张透明背景的 PNG。')), true);
+            return false;
+        }
+    }
+
+    /** Adds several angle photos to a saved product (F84): every photo is uploaded and shown first, then the opaque ones are cut out one after
+     * another. A cut-out waits for the execution server and can take seconds (much longer while it starts), so it no longer holds back the next
+     * photo. Ends with the summary, unless a cut-out failed — its notice stays instead. */
+    static async addAngleList(product, list, overflow) {
+        let tr = this.api.tr;
+        let added = 0;
+        let cutouts = [];
+        for (let file of list) {
+            let data = await this.readLocalFile(file);
+            if (data && await this.addAngle(product, data, cutouts)) {
+                added++;
+            }
+        }
+        let summary = overflow > 0
+            ? tr('已添加 {0} 张其他角度；一个商品最多 3 张（含主图），多出的 {1} 张没有添加。', added, overflow)
+            : tr('已添加 {0} 张其他角度。', added);
+        let failed = false;
+        for (let [index, job] of cutouts.entries()) {
+            this.message(tr('已添加 {0} 张其他角度，正在自动抠图（{1}/{2}）…', added, index + 1, cutouts.length), false);
+            failed = !(await this.cutoutAngle(product, job.angleId, job.data)) || failed;
+        }
+        if (!failed && (added || overflow > 0)) {
+            this.message(summary, overflow > 0);
         }
     }
 
@@ -663,18 +684,7 @@ class SimpleProductsPart {
             this.message(tr('商品还没有存入商品库，暂时不能添加其他角度，请稍后重试。'), true);
             return;
         }
-        let added = 0;
-        for (let file of list.slice(1)) {
-            let data = await this.readLocalFile(file);
-            if (data && await this.addAngle(product, data)) {
-                added++;
-            }
-        }
-        if (added || overflow > 0) {
-            this.message(overflow > 0
-                ? tr('已添加 {0} 张其他角度；一个商品最多 3 张（含主图），多出的 {1} 张没有添加。', added, overflow)
-                : tr('已添加 {0} 张其他角度。', added), overflow > 0);
-        }
+        await this.addAngleList(product, list.slice(1), overflow);
     }
 
     /** Adds a new product photo (a data URL read from a file up to 64 MB, or a smaller one from the library or gallery pickers) from any entry (F52):
